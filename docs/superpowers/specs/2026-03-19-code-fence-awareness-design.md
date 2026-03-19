@@ -10,8 +10,8 @@ Five deferred audit items share this root cause (PAT-004):
 |----|------------|
 | FA-001 | `### BH-NNN:` inside fences creates phantom items |
 | FA-003 | `**Status:**` etc. inside fences poisons field extraction |
-| FA-005 | `- [ ]` inside fences fakes acceptance criteria |
-| FA-006 | FA-005 code-block variant (same code path) |
+| FA-005 | `- [ ]` outside fences but in wrong section (e.g., Problem) fakes acceptance criteria |
+| FA-006 | `- [ ]` inside fences fakes acceptance criteria |
 | FA-009 | `**Status:**` inside fences inflates convergence counts |
 
 The sample punchlist already uses code fences in Evidence sections (TypeScript snippets). The format spec puts code in Evidence. This is structural to how punchlists work, not hypothetical.
@@ -44,15 +44,16 @@ def mask_code_fences(content: str) -> tuple[str, str]:
 1. Replace `\r\n` with `\n`
 2. Split into lines
 3. Walk lines tracking fence state:
-   - A line matching `^(`{3,})(\w*)$` (3+ backticks, optional language tag, nothing else) opens a fence. Record the backtick count.
-   - While in a fence, replace each line with an empty string
-   - A line with >= the recorded backtick count and nothing else closes the fence. This line is also blanked.
-   - The opening fence line is also blanked.
+   - A line matching opening fence regex `^(`{3,})[^`]*$` (3+ backticks, followed by an optional info string that contains no backticks) opens a fence. Record the backtick count N. The opening fence line is blanked in the masked output.
+   - While in a fence, replace each line with an empty string in the masked output
+   - A line matching closing fence regex `^`{N,}[ \t]*$` (N or more backticks followed by optional whitespace only) closes the fence. This line is also blanked.
 4. If a fence is never closed (EOF), all content from the opening fence onward is blanked
 5. Rejoin lines with `\n`
-6. Return `(normalized, masked)` — both have LF line endings, `masked` additionally has fence interiors blanked
+6. Return `(normalized, masked)` — both have LF line endings, `masked` additionally has fence interiors and delimiters blanked
 
 The function is pure. No side effects, no file I/O.
+
+**Scope limitation:** Indented fences (up to 3 spaces before backticks, per CommonMark) are not recognized. Punchlist files never use indented fences. Tilde (`~~~`) fences are not recognized for the same reason.
 
 ### Integration: validate_punchlist.py
 
@@ -68,7 +69,9 @@ The function is pure. No side effects, no file I/O.
 6. Checkbox detection (line 115) runs against `masked_block` — prevents FA-005/FA-006
 7. Section content regex and validation command regex run against `original_block` — preserves Evidence code fences
 
-**Position mapping:** Masking replaces line content with empty strings but preserves line count. Character positions differ between normalized and masked. Rather than mapping positions, item headers are found independently in each version by ID. Since item IDs are unique (the validator enforces this), the re-search is unambiguous.
+**Position mapping:** Masking blanks fence content but preserves line count, so the `### BH-NNN:` headers that appear outside fences exist at the same line positions in both `masked` and `normalized`. Character offsets differ (blanked lines are shorter), so the implementation finds all item headers in both `masked` and `normalized` independently, then pairs them by index — the match lists have identical length and ordering since masking only removes headers that are inside fences. The `original_block` for each item is sliced from `normalized` using the positions from the normalized match list.
+
+**Validation command regex:** The validation command regex (`**Validation Command:**...```...````) is the one structural regex that must see fence delimiters to function. It runs against `original_block`, which preserves all fence content. This is explicitly called out because it is the exception to the "structural regexes use masked content" rule.
 
 ### Integration: convergence_check.py
 
@@ -82,11 +85,13 @@ The function is pure. No side effects, no file I/O.
 
 ### Testing
 
-**New: `tests/test_markdown_utils.py`** (~7 tests):
+**New: `tests/test_markdown_utils.py`** (~9 tests):
 - Basic fence masking: content between ` ``` ` pairs becomes blank lines
+- Fence delimiter lines themselves are blanked (not just content between them)
 - Language-tagged fences (` ```python `): handled correctly
 - Nested fences: 4-backtick fence containing 3-backtick content — inner backticks are content, not boundaries
 - Unclosed fence at EOF: everything after opening fence is masked
+- Fence on first line of file: handled correctly
 - Content outside fences: untouched
 - CRLF normalization: `\r\n` becomes `\n` in both outputs
 - Return type: `(normalized, masked)` tuple, `normalized` preserves original content
@@ -94,7 +99,7 @@ The function is pure. No side effects, no file I/O.
 **Updated: `tests/test_validate_punchlist.py`** (+3 tests):
 - FA-001: `### BH-NNN:` inside a code fence does not create a phantom item
 - FA-003: `**Status:** RESOLVED` inside a code fence does not poison extracted status
-- FA-005: `- [ ]` inside a code fence does not satisfy acceptance criteria when no real AC section exists
+- FA-006: `- [ ]` inside a code fence does not satisfy acceptance criteria when no real AC section exists (FA-005 — checkboxes in wrong section outside fences — is a scoping issue beyond code-fence awareness; masking alone does not fix it since the checkbox is in unmasked content)
 
 **Updated: `tests/test_convergence_check.py`** (+1 test):
 - FA-009: `**Status:** OPEN` inside a code fence does not inflate the count
