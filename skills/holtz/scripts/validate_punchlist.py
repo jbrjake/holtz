@@ -83,16 +83,16 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         masked_block = masked[masked_start:masked_end]
 
         # Find this item's header in normalized content by ID.
-        # Use the first match for this ID (real headers appear before any
-        # phantom copies in code fences, since code fences are in Evidence
-        # sections which come after the header).
-        norm_match = norm_matches_by_id.get(item_id, [None])[0]
+        # Pop from the front so duplicate IDs consume matches in order.
+        id_matches = norm_matches_by_id.get(item_id, [])
+        norm_match = id_matches.pop(0) if id_matches else None
         if norm_match:
             norm_start = norm_match.end()
             # Find end: next real item's position in normalized, or EOF
             next_id = masked_matches[i + 1].group(1) if i + 1 < len(masked_matches) else None
-            if next_id and next_id in norm_matches_by_id:
-                norm_end = norm_matches_by_id[next_id][0].start()
+            if next_id:
+                next_matches = norm_matches_by_id.get(next_id, [])
+                norm_end = next_matches[0].start() if next_matches else len(normalized)
             else:
                 norm_end = len(normalized)
             original_block = normalized[norm_start:norm_end]
