@@ -106,6 +106,7 @@ def load_history() -> list:
 
 def save_history(history: list):
     """Save convergence history to JSON file."""
+    Path(HISTORY_FILE).parent.mkdir(parents=True, exist_ok=True)
     Path(HISTORY_FILE).write_text(json.dumps(history, indent=2))
 
 
