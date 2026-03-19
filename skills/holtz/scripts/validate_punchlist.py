@@ -206,7 +206,7 @@ def validate(items: list[PunchlistItem]) -> ValidationResult:
         "total_items": len(items),
         "by_status": dict(status_counts),
         "by_severity": dict(severity_counts),
-        "by_category": dict(category_counts.most_common()),
+        "by_category": category_counts.most_common(),
         "patterns_referenced": sorted(pattern_refs),
     }
 
