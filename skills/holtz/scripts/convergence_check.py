@@ -47,10 +47,10 @@ def detect_test_runner() -> str | None:
     for runner, files in markers.items():
         for f in files:
             if Path(f).exists():
-                # Extra check for pytest in pyproject.toml
-                if runner == "pytest" and f == "pyproject.toml":
+                # Extra check for pytest in config files that may not be pytest-related
+                if runner == "pytest" and f in ("pyproject.toml", "setup.cfg"):
                     content = Path(f).read_text()
-                    if "pytest" not in content and "tool.pytest" not in content:
+                    if "pytest" not in content and "tool.pytest" not in content and "tool:pytest" not in content:
                         continue
                 return runner
     return None
