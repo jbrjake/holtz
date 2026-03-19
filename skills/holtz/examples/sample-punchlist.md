@@ -73,6 +73,7 @@ npm test -- --grep "pool.*timeout"
 **Location:** `src/handlers/uploads.ts:31`
 **Status:** RESOLVED
 **Pattern:** PAT-001
+**Determinism:** deterministic
 
 **Problem:** Uploaded filename from multipart form data is used directly in the filesystem path. Path traversal attack can write files outside the upload directory.
 
