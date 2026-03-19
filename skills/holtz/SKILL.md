@@ -1,5 +1,5 @@
 ---
-name: bug-hunter
+name: holtz
 description: >
   This skill should be used when the user asks to find bugs, audit code quality, review
   a codebase, validate test coverage, create a punchlist, check for regressions, polish

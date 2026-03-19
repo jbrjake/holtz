@@ -1,0 +1,1 @@
+- [user_identity.md](user_identity.md) — User's full name, GitHub handle, email, copyright year
