@@ -23,6 +23,7 @@ HISTORY_FILE = "docs/holtz/HISTORY.json"
 def count_items(punchlist_path: Path) -> dict:
     """Count punchlist items by status."""
     content = punchlist_path.read_text() if punchlist_path.exists() else ""
+    content = content.replace('\r\n', '\n')
     counts = {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0}
 
     for match in re.finditer(r'\*\*Status:\*\*[ \t]*(\w[\w ]*\w)', content):
@@ -169,25 +170,41 @@ def save_history(history: list):
     Path(HISTORY_FILE).write_text(json.dumps(history, indent=2))
 
 
+def _get_punchlist(entry: dict) -> dict:
+    """Safely extract punchlist counts from a history entry."""
+    default = {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0, "total": 0}
+    pl = entry.get("punchlist")
+    if not isinstance(pl, dict):
+        return default
+    return {k: pl.get(k, 0) for k in default}
+
+
 def check_convergence(history: list) -> tuple[bool, str]:
     """Determine if the fix loop has converged."""
     if len(history) < 3:
         return False, f"Not enough data points (need at least 3 iterations, have {len(history)})"
 
-    curr = history[-1]
-    unknown_items = curr["punchlist"].get("unknown", 0)
-    open_items = curr["punchlist"]["OPEN"] + curr["punchlist"]["IN PROGRESS"] + unknown_items
+    curr_pl = _get_punchlist(history[-1])
+    unknown_items = curr_pl.get("unknown", 0)
+    open_items = curr_pl["OPEN"] + curr_pl["IN PROGRESS"] + unknown_items
 
     # Convergence requires that items were actually found and resolved at some point.
     # A punchlist that has always been empty (total == 0 across all history) cannot converge.
-    max_total = max(h["punchlist"]["total"] for h in history)
+    max_total = max(_get_punchlist(h)["total"] for h in history)
     if max_total == 0:
         return False, "NO ITEMS: Punchlist has never contained any items. Run audit phases first."
 
+    # Convergence requires items to have been resolved/deferred, not just deleted.
+    # If items existed but current total is 0, they were deleted not resolved.
+    curr_resolved_deferred = curr_pl["RESOLVED"] + curr_pl["DEFERRED"]
+    if max_total > 0 and curr_resolved_deferred == 0 and open_items == 0:
+        return False, "ITEMS DELETED: Items existed previously but none are resolved or deferred. Resolve items, don't delete them."
+
     # Convergence requires 2 consecutive clean iterations (3 data points)
     last_3 = history[-3:]
+    last_3_pls = [_get_punchlist(h) for h in last_3]
     no_new_2_iters = all(
-        last_3[i+1]["punchlist"]["total"] <= last_3[i]["punchlist"]["total"]
+        last_3_pls[i+1]["total"] <= last_3_pls[i]["total"]
         for i in range(2)
     )
 
@@ -217,10 +234,10 @@ def check_convergence(history: list) -> tuple[bool, str]:
 
     # Stall detection: 3+ iterations with no progress on open items
     if len(history) >= 4:
-        last_4 = history[-4:]
+        last_4_pls = [_get_punchlist(h) for h in history[-4:]]
         no_open_progress = all(
-            (last_4[i+1]["punchlist"]["OPEN"] + last_4[i+1]["punchlist"]["IN PROGRESS"])
-            >= (last_4[i]["punchlist"]["OPEN"] + last_4[i]["punchlist"]["IN PROGRESS"])
+            (last_4_pls[i+1]["OPEN"] + last_4_pls[i+1]["IN PROGRESS"] + last_4_pls[i+1].get("unknown", 0))
+            >= (last_4_pls[i]["OPEN"] + last_4_pls[i]["IN PROGRESS"] + last_4_pls[i].get("unknown", 0))
             for i in range(3)
         )
         if no_open_progress and open_items > 0:
@@ -229,9 +246,9 @@ def check_convergence(history: list) -> tuple[bool, str]:
                 f"in last 3 iterations. Consider deferring remaining items."
             )
 
-    prev = history[-2]
-    new_items = curr["punchlist"]["total"] - prev["punchlist"]["total"]
-    items_resolved = curr["punchlist"]["RESOLVED"] - prev["punchlist"]["RESOLVED"]
+    prev_pl = _get_punchlist(history[-2])
+    new_items = curr_pl["total"] - prev_pl["total"]
+    items_resolved = curr_pl["RESOLVED"] - prev_pl["RESOLVED"]
     return False, (
         f"IN PROGRESS: {open_items} items open, "
         f"+{max(0, new_items)} new, {max(0, items_resolved)} resolved this iteration"

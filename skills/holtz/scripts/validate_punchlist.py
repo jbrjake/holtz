@@ -61,6 +61,7 @@ VALID_CATEGORIES = {
 
 def parse_punchlist(content: str) -> list[PunchlistItem]:
     """Parse markdown punchlist into structured items."""
+    content = content.replace('\r\n', '\n')
     items = []
     # Split on item headers (### BH-NNN: title)
     item_pattern = re.compile(r'^### (BH-\d+):\s+(.+)$', re.MULTILINE)

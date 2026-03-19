@@ -182,3 +182,43 @@ def test_stability_across_test_data_gap():
     assert not converged, (
         f"Should NOT converge when failures increased across a data gap. Got: {message}"
     )
+
+
+# --- FA-007: History entries missing punchlist key ---
+
+def test_convergence_missing_punchlist_key():
+    """History entries missing 'punchlist' key should not crash."""
+    history = [
+        {"timestamp": "2026-01-01", "tests": None},  # no punchlist key
+        {"timestamp": "2026-01-02", "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 1, "DEFERRED": 0, "total": 1}, "tests": None},
+        {"timestamp": "2026-01-03", "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 1, "DEFERRED": 0, "total": 1}, "tests": None},
+    ]
+    # Should not raise KeyError
+    converged, message = cc.check_convergence(history)
+    assert isinstance(converged, bool)
+
+
+# --- FA-010: Deletion-based false convergence ---
+
+def test_deletion_does_not_converge():
+    """Deleting all items (total drops to 0) should NOT declare convergence."""
+    snap1 = {
+        "timestamp": "2026-03-19T01:00:00",
+        "punchlist": {"OPEN": 5, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "total": 5},
+        "tests": None,
+    }
+    snap2 = {
+        "timestamp": "2026-03-19T02:00:00",
+        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "total": 0},
+        "tests": None,
+    }
+    snap3 = {
+        "timestamp": "2026-03-19T03:00:00",
+        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "total": 0},
+        "tests": None,
+    }
+    history = [snap1, snap2, snap3]
+    converged, message = cc.check_convergence(history)
+    assert not converged, (
+        f"Should NOT converge when items were deleted, not resolved. Got: {message}"
+    )

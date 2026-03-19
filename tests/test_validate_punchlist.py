@@ -301,3 +301,171 @@ def test_validation_command_empty_code_block():
     assert not items[0].has_validation_command, (
         "Validation command header without code block should not pass"
     )
+
+
+# --- FA-002: CRLF line endings ---
+
+def test_crlf_line_endings():
+    """CRLF files should be parsed correctly."""
+    content = (
+        "### BH-001: Test item\r\n"
+        "**Severity:** HIGH\r\n"
+        "**Category:** bug/logic\r\n"
+        "**Location:** `file.py:1`\r\n"
+        "**Status:** OPEN\r\n"
+        "\r\n"
+        "**Problem:** This is a real problem that describes what went wrong in enough detail.\r\n"
+        "\r\n"
+        "**Evidence:** Here is the evidence showing the problem with code references.\r\n"
+        "\r\n"
+        "**Acceptance Criteria:**\r\n"
+        "- [ ] Fix the bug\r\n"
+        "\r\n"
+        "**Validation Command:**\r\n"
+        "```bash\r\n"
+        "echo test\r\n"
+        "```\r\n"
+    )
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    item = items[0]
+    assert item.severity == "HIGH"
+    assert item.status == "OPEN"
+    assert item.has_problem
+    assert item.has_validation_command, "CRLF file should still detect validation command"
+
+
+# --- FA-004: Bold text on continuation line truncates section ---
+
+def test_bold_text_in_problem_continuation():
+    """Bold text on continuation lines should not truncate the section."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** Found a bug where the system fails when
+**bold emphasis** is used in the description and continues here with more detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].has_problem, (
+        "Problem with bold continuation line should not be truncated"
+    )
+
+
+# --- FA-014: Invalid severity validation ---
+
+def test_invalid_severity_produces_error():
+    """Invalid severity value should produce a validation error."""
+    content = """\
+### BH-001: Test item
+**Severity:** URGENT
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items)
+    sev_errors = [e for e in result.errors if "severity" in e.lower()]
+    assert len(sev_errors) > 0, (
+        f"Expected invalid severity error, got errors: {result.errors}"
+    )
+
+
+# --- FA-015: RESOLVED without resolution ---
+
+def test_resolved_without_resolution_produces_error():
+    """RESOLVED item without Resolution section should produce error."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** RESOLVED
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [x] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items)
+    res_errors = [e for e in result.errors if "resolution" in e.lower() or "resolved" in e.lower()]
+    assert len(res_errors) > 0, (
+        f"Expected resolved-without-resolution error, got errors: {result.errors}"
+    )
+
+
+# --- FA-017: Normal item should produce zero errors ---
+
+def test_well_formed_item_no_errors():
+    """A well-formed item should produce zero validation errors."""
+    content = """\
+# Holtz Punchlist
+> Generated: 2026-03-19 | Project: test | Baseline: 10 pass, 0 fail, 0 skip
+
+## Summary
+| Severity | Open | Resolved | Deferred |
+|----------|------|----------|----------|
+| HIGH | 1 | 0 | 0 |
+
+## Patterns
+
+## Items
+
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+**Determinism:** deterministic
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items, content)
+    assert len(result.errors) == 0, (
+        f"Well-formed item should have zero errors, got: {result.errors}"
+    )
