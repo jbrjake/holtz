@@ -123,8 +123,62 @@ def test_convergence_no_test_data():
     }
     history = [snap1, snap2, snap3]
     converged, message = cc.check_convergence(history)
-    # Should still converge but message should mention test verification
-    if converged:
-        assert "test" in message.lower(), (
-            f"Convergence message should mention test verification status: {message}"
+    # Should converge AND message should mention test verification not possible
+    assert converged, f"Should converge when test data absent. Got: {message}"
+    assert "test" in message.lower(), (
+        f"Convergence message should mention test verification status: {message}"
         )
+
+
+# --- CS2-002: Unknown status items block convergence ---
+
+def test_unknown_status_blocks_convergence():
+    """Items with unrecognized status should count as open and block convergence."""
+    # History where items have unknown status
+    snap1 = {
+        "timestamp": "2026-03-19T01:00:00",
+        "punchlist": {"OPEN": 1, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0, "total": 1},
+        "tests": None,
+    }
+    snap2 = {
+        "timestamp": "2026-03-19T02:00:00",
+        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 1, "total": 1},
+        "tests": None,
+    }
+    snap3 = {
+        "timestamp": "2026-03-19T03:00:00",
+        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 1, "total": 1},
+        "tests": None,
+    }
+    history = [snap1, snap2, snap3]
+    converged, message = cc.check_convergence(history)
+    assert not converged, (
+        f"Should NOT converge with unknown status items. Got: {message}"
+    )
+
+
+# --- CS2-005: Test stability across data gaps ---
+
+def test_stability_across_test_data_gap():
+    """Failures increasing across a None gap should be detected."""
+    snap1 = {
+        "timestamp": "2026-03-19T01:00:00",
+        "punchlist": {"OPEN": 1, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "total": 1},
+        "tests": {"passed": 10, "failed": 0, "skipped": 0},
+    }
+    snap2 = {
+        "timestamp": "2026-03-19T02:00:00",
+        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 1, "DEFERRED": 0, "total": 1},
+        "tests": None,  # test run timed out
+    }
+    snap3 = {
+        "timestamp": "2026-03-19T03:00:00",
+        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 1, "DEFERRED": 0, "total": 1},
+        "tests": {"passed": 5, "failed": 5, "skipped": 0},
+    }
+    history = [snap1, snap2, snap3]
+    converged, message = cc.check_convergence(history)
+    # Should detect the regression from 0 to 5 failures even across the None gap
+    assert not converged, (
+        f"Should NOT converge when failures increased across a data gap. Got: {message}"
+    )

@@ -241,3 +241,63 @@ echo test
     assert len(structure_warnings) > 0, (
         f"Expected structure warnings, got warnings: {result.warnings}"
     )
+
+
+# --- CS2-001: Empty Category field should not capture next line ---
+
+def test_empty_category_does_not_capture_next_line():
+    """Empty Category field should result in missing category, not capturing Location."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:**
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    result = vp.validate(items)
+    # Should have a missing category error, not a non-standard category warning
+    cat_errors = [e for e in result.errors if "category" in e.lower()]
+    assert len(cat_errors) > 0, (
+        f"Expected missing category error, got errors: {result.errors}, warnings: {result.warnings}"
+    )
+
+
+# --- CS2-003: Validation command must have actual content ---
+
+def test_validation_command_empty_code_block():
+    """Validation command header without actual command content should fail."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert not items[0].has_validation_command, (
+        "Validation command header without code block should not pass"
+    )

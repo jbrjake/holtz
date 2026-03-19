@@ -175,7 +175,8 @@ def check_convergence(history: list) -> tuple[bool, str]:
         return False, f"Not enough data points (need at least 3 iterations, have {len(history)})"
 
     curr = history[-1]
-    open_items = curr["punchlist"]["OPEN"] + curr["punchlist"]["IN PROGRESS"]
+    unknown_items = curr["punchlist"].get("unknown", 0)
+    open_items = curr["punchlist"]["OPEN"] + curr["punchlist"]["IN PROGRESS"] + unknown_items
 
     # Convergence requires that items were actually found and resolved at some point.
     # A punchlist that has always been empty (total == 0 across all history) cannot converge.
@@ -190,16 +191,21 @@ def check_convergence(history: list) -> tuple[bool, str]:
         for i in range(2)
     )
 
-    # Test suite must be stable or improving across the window
+    # Test suite must be stable or improving across the window.
+    # Compare all snapshots with test data, not just adjacent pairs,
+    # so a None gap doesn't hide a regression.
     tests_stable = True
     tests_verified = False
-    for i in range(2):
-        a, b = last_3[i], last_3[i+1]
-        if a.get("tests") and b.get("tests"):
-            if "failed" in a["tests"] and "failed" in b["tests"]:
-                tests_verified = True
-                if b["tests"]["failed"] > a["tests"]["failed"]:
-                    tests_stable = False
+    snapshots_with_tests = [
+        s for s in last_3
+        if s.get("tests") and "failed" in s.get("tests", {})
+    ]
+    if len(snapshots_with_tests) >= 2:
+        tests_verified = True
+        first_failures = snapshots_with_tests[0]["tests"]["failed"]
+        last_failures = snapshots_with_tests[-1]["tests"]["failed"]
+        if last_failures > first_failures:
+            tests_stable = False
 
     test_note = "" if tests_verified else " (test stability not verified — no test data)"
 

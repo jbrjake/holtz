@@ -74,15 +74,15 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         item = PunchlistItem(id=match.group(1), title=match.group(2).strip())
 
         # Extract fields
-        sev = re.search(r'\*\*Severity:\*\*\s*(\w+)', block)
+        sev = re.search(r'\*\*Severity:\*\*[ \t]*(\w+)', block)
         if sev:
             item.severity = sev.group(1)
 
-        cat = re.search(r'\*\*Category:\*\*\s*(.+)', block)
+        cat = re.search(r'\*\*Category:\*\*[ \t]*(.+)', block)
         if cat:
             item.category = cat.group(1).strip()
 
-        loc = re.search(r'\*\*Location:\*\*\s*(.+)', block)
+        loc = re.search(r'\*\*Location:\*\*[ \t]*(.+)', block)
         if loc:
             item.location = loc.group(1).strip()
 
@@ -90,19 +90,19 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         if stat:
             item.status = stat.group(1).strip()
 
-        pat = re.search(r'\*\*Pattern:\*\*\s*(PAT-\d+)', block)
+        pat = re.search(r'\*\*Pattern:\*\*[ \t]*(PAT-\d+)', block)
         if pat:
             item.pattern = pat.group(1)
 
-        det = re.search(r'\*\*Determinism:\*\*\s*(\w+)', block)
+        det = re.search(r'\*\*Determinism:\*\*[ \t]*(\w+)', block)
         if det:
             item.determinism = det.group(1).strip()
 
-        inv = re.search(r'\*\*Investigation:\*\*\s*(.+)', block)
+        inv = re.search(r'\*\*Investigation:\*\*[ \t]*(.+)', block)
         if inv:
             item.investigation = inv.group(1).strip()
 
-        rcc = re.search(r'\*\*Root Cause Confidence:\*\*\s*(\w+)', block)
+        rcc = re.search(r'\*\*Root Cause Confidence:\*\*[ \t]*(\w+)', block)
         if rcc:
             item.root_cause_confidence = rcc.group(1).strip()
 
@@ -112,11 +112,10 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         evidence_m = re.search(section_re % 'Evidence', block)
         item.has_evidence = bool(evidence_m and len(evidence_m.group(1).strip()) > 10)
         item.has_acceptance_criteria = '- [ ]' in block or '- [x]' in block or '- [X]' in block
-        item.has_validation_command = '**Validation Command:**' in block
-
-        val_cmd = re.search(r'\*\*Validation Command:\*\*\s*```\w*\n(.+?)\n```', block, re.DOTALL)
+        val_cmd = re.search(r'\*\*Validation Command:\*\*[ \t]*\n?```\w*\n(.+?)\n```', block, re.DOTALL)
         if val_cmd:
             item.validation_command = val_cmd.group(1).strip()
+        item.has_validation_command = bool(item.validation_command)
 
         resolution_m = re.search(section_re % 'Resolution', block)
         item.has_resolution = bool(resolution_m and len(resolution_m.group(1).strip()) > 5)
