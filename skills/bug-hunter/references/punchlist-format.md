@@ -7,7 +7,7 @@
 **Severity:** CRITICAL | HIGH | MEDIUM | LOW
 **Category:** {from taxonomy below}
 **Location:** `path/to/file.py:NN`
-**Status:** 🔴 OPEN | 🟡 IN PROGRESS | ✅ RESOLVED | ⏸️ DEFERRED
+**Status:** OPEN | IN PROGRESS | RESOLVED | DEFERRED
 **Pattern:** {PAT-NNN if applicable}
 
 **Problem:** {What's wrong. Actual vs expected behavior. 1-3 sentences.}
@@ -27,10 +27,10 @@
 ```
 
 ## Severities
-- **CRITICAL:** Data loss, security vuln, crash in production path → fix immediately
-- **HIGH:** Incorrect documented behavior, test hiding bugs → this cycle
-- **MEDIUM:** Edge case failures, missing tests, doc drift → next cycle
-- **LOW:** Code quality, minor inconsistencies → as time permits
+- **CRITICAL:** Data loss, security vuln, crash in production path. Fix immediately.
+- **HIGH:** Incorrect documented behavior, test hiding bugs. This cycle.
+- **MEDIUM:** Edge case failures, missing tests, doc drift. Next cycle.
+- **LOW:** Code quality, minor inconsistencies. As time permits.
 
 ## Categories
 `bug/logic` `bug/state` `bug/error-handling` `bug/security` `bug/type`

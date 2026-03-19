@@ -1,0 +1,8 @@
+.DS_Store
+__pycache__/
+*.pyc
+.claude/*.local.md
+BUG-HUNTER-*.md
+BUG-HUNTER-*.json
+recon/
+audit/

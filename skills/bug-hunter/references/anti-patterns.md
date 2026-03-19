@@ -18,7 +18,7 @@
 
 **7. Time Bomb** — Hardcoded dates or time-dependent behavior. Detection: hardcoded years, `time.sleep`/`setTimeout` in tests, intermittent failures.
 
-**8. Schrödinger Test** — Passes alone, fails in combination (or vice versa). Detection: run tests in random order. Shared mutable state: globals, DB records, temp files, env vars set by other tests.
+**8. Schrodinger Test** — Passes alone, fails in combination (or vice versa). Detection: run tests in random order. Shared mutable state: globals, DB records, temp files, env vars set by other tests.
 
 ## Tier 3: Missed Opportunities
 

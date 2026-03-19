@@ -1,0 +1,13 @@
+{
+  "name": "holtz",
+  "description": "Systematic TDD-driven bug hunting. Finds every defect, documents every finding, fixes everything with tests. Keeps coming back until the codebase converges. Will steal your joy.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jon Rubin",
+    "email": "jb.rubin@gmail.com",
+    "url": "https://github.com/jbrjake"
+  },
+  "repository": "https://github.com/jbrjake/holtz",
+  "license": "MIT",
+  "keywords": ["bugs", "testing", "audit", "tdd", "punchlist", "code-review", "quality", "adversarial"]
+}

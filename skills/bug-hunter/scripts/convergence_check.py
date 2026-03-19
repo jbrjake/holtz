@@ -25,7 +25,7 @@ def count_items(punchlist_path: Path) -> dict:
     content = punchlist_path.read_text() if punchlist_path.exists() else ""
     counts = {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0}
 
-    for match in re.finditer(r'\*\*Status:\*\*\s*[🔴🟡✅⏸️]+\s*(\w[\w\s]*\w)', content):
+    for match in re.finditer(r'\*\*Status:\*\*\s*(\w[\w\s]*\w)', content):
         status = match.group(1).strip()
         if status in counts:
             counts[status] += 1
@@ -131,7 +131,7 @@ def check_convergence(history: list) -> tuple[bool, str]:
             tests_stable = curr["tests"]["failed"] <= prev["tests"]["failed"]
 
     if open_items == 0 and new_items <= 0:
-        return True, "✅ CONVERGED: No open items, no new items generated"
+        return True, "CONVERGED: No open items, no new items generated"
 
     if len(history) >= 3:
         last_3 = history[-3:]
@@ -146,12 +146,12 @@ def check_convergence(history: list) -> tuple[bool, str]:
         )
         if no_new and no_open_change and open_items > 0:
             return False, (
-                f"⚠️ STALLED: {open_items} items remain open but no progress "
+                f"STALLED: {open_items} items remain open but no progress "
                 f"in last 3 iterations. Consider deferring remaining items."
             )
 
     return False, (
-        f"🔄 IN PROGRESS: {open_items} items open, "
+        f"IN PROGRESS: {open_items} items open, "
         f"+{max(0, new_items)} new, {items_resolved} resolved this iteration"
     )
 
@@ -181,7 +181,7 @@ def main():
 
     # Report
     print(f"\n{'='*60}")
-    print(f"Bug Hunter Convergence Check — Iteration {len(history)}")
+    print(f"Bug Hunter Convergence Check -- Iteration {len(history)}")
     print(f"{'='*60}")
     print(f"\nPunchlist: {punchlist_counts}")
     if test_counts:
@@ -189,7 +189,7 @@ def main():
     print(f"\n{message}")
 
     if converged:
-        print("\n🏁 The fix loop has converged. Run a final Phase 1-3 sweep to confirm.")
+        print("\nThe fix loop has converged. Run a final Phase 1-3 sweep to confirm.")
         sys.exit(0)
     else:
         sys.exit(1)  # non-zero = keep going

@@ -80,7 +80,7 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         if loc:
             item.location = loc.group(1).strip()
 
-        stat = re.search(r'\*\*Status:\*\*\s*[🔴🟡✅⏸️]+\s*(\w[\w\s]*\w)', block)
+        stat = re.search(r'\*\*Status:\*\*\s*(\w[\w\s]*\w)', block)
         if stat:
             item.status = stat.group(1).strip()
 
@@ -197,21 +197,21 @@ def main():
     print(f"Top categories: {dict(result.stats['by_category'][:5])}")
 
     if result.errors:
-        print(f"\n❌ ERRORS ({len(result.errors)}):")
+        print(f"\nERRORS ({len(result.errors)}):")
         for e in result.errors:
             print(f"  - {e}")
 
     if result.warnings:
-        print(f"\n⚠️  WARNINGS ({len(result.warnings)}):")
+        print(f"\nWARNINGS ({len(result.warnings)}):")
         for w in result.warnings:
             print(f"  - {w}")
 
     if not result.errors and not result.warnings:
-        print("\n✅ All items valid")
+        print("\nAll items valid")
 
     open_critical = sum(1 for i in items if i.severity == "CRITICAL" and i.status == "OPEN")
     if open_critical:
-        print(f"\n🚨 {open_critical} CRITICAL items still OPEN")
+        print(f"\n{open_critical} CRITICAL items still OPEN")
 
     sys.exit(1 if result.errors else 0)
 
