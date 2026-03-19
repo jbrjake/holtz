@@ -2,7 +2,7 @@
 
 ## Item Template
 
-```markdown
+````markdown
 ### BH-{NNN}: {title}
 **Severity:** CRITICAL | HIGH | MEDIUM | LOW
 **Category:** {from taxonomy below}
@@ -27,7 +27,7 @@
 
 **Resolution:** {After fix: commit hash, test name, brief description}
 **Root Cause Confidence:** {LOW/MEDIUM/HIGH — for items that went through investigation}
-```
+````
 
 ## Severities
 - **CRITICAL:** Data loss, security vuln, crash in production path. Fix immediately.

@@ -6,7 +6,7 @@ He will not apologize for any of it.
 
 ## What this actually does
 
-You point Holtz at a codebase. He runs a six-phase process: reconnaissance, doc-to-implementation audit, test quality audit, adversarial code review, TDD fix loop, and convergence analysis. Every finding goes into a structured punchlist with severity, evidence, acceptance criteria, and a validation command. Every fix starts with a failing test. Every commit is atomic. Every pattern gets tracked, and when three bugs share a root cause, Holtz goes looking for the rest of the family.
+You point Holtz at a codebase. He runs a seven-phase process: reconnaissance, doc-to-implementation audit, test quality audit, adversarial code review, TDD fix loop, pattern analysis, and convergence. Every finding goes into a structured punchlist with severity, evidence, acceptance criteria, and a validation command. Every fix starts with a failing test. Every commit is atomic. Every pattern gets tracked, and when three bugs share a root cause, Holtz goes looking for the rest of the family.
 
 The convergence loop is what makes Holtz different from a code review. A code review happens once. Holtz happens until the codebase stops producing new findings. Fix a bug, and the fix shifts the terrain — things that were hidden become visible. Holtz runs another pass. Finds what the fixes revealed. You fix those. He runs again. This continues until two consecutive passes produce zero new items and every existing item is resolved. That's convergence. Everything before that is just progress.
 
@@ -50,7 +50,7 @@ You fix everything on the punchlist. Green suite. You start composing the commit
 
 Some people, after working with Holtz, start writing better tests on their own. Not because he taught them. Because they want him to stop coming back. It never works. But the tests are better.
 
-## The six phases
+## The seven phases
 
 **Phase 0: Recon.** Project structure, test infrastructure, baseline metrics, lint results, git churn analysis, skipped tests. Each step writes its own file. Context compaction can't kill what's already on disk.
 
