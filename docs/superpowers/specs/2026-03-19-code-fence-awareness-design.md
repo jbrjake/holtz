@@ -113,7 +113,7 @@ All existing 26 tests must continue to pass unchanged.
 | `skills/holtz/scripts/markdown_utils.py` | New. ~30 lines. |
 | `skills/holtz/scripts/validate_punchlist.py` | Import utility. Restructure `parse_punchlist` to use masked/original split. Remove CRLF line. |
 | `skills/holtz/scripts/convergence_check.py` | Import utility. Use masked content in `count_items`. Remove CRLF line. |
-| `tests/test_markdown_utils.py` | New. ~7 tests. |
+| `tests/test_markdown_utils.py` | New. ~9 tests. |
 | `tests/test_validate_punchlist.py` | +3 tests. |
 | `tests/test_convergence_check.py` | +1 test. |
 
