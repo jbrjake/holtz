@@ -101,3 +101,30 @@ def test_return_tuple_normalized_preserves_content():
     assert "```python" in normalized
     assert "code_here" in normalized
     assert "code_here" not in masked
+
+
+# --- BH-004: Tilde fence support ---
+
+def test_tilde_fence_masking():
+    """Content between ~~~ pairs should be masked like backtick fences."""
+    content = "before\n~~~\nfenced line\n~~~\nafter\n"
+    _, masked = mu.mask_code_fences(content)
+    assert "before" in masked
+    assert "after" in masked
+    assert "fenced line" not in masked
+
+
+def test_tilde_fence_with_language():
+    """Tilde fences with language tag (~~~python) should be recognized."""
+    content = "text\n~~~python\ncode_here\n~~~\nmore text\n"
+    _, masked = mu.mask_code_fences(content)
+    assert "code_here" not in masked
+    assert "more text" in masked
+
+
+def test_tilde_fence_does_not_close_backtick():
+    """~~~ should not close a backtick fence and vice versa."""
+    content = "```\n~~~\nstill fenced\n```\nafter\n"
+    _, masked = mu.mask_code_fences(content)
+    assert "still fenced" not in masked
+    assert "after" in masked
