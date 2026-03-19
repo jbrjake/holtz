@@ -20,7 +20,7 @@ Do NOT create investigation files for `test/*`, `doc/*`, or `design/*` items. Th
 **Punchlist Item:** BH-{NNN}
 **Started:** {ISO timestamp}
 **Updated:** {ISO timestamp}
-**Root Cause Confidence:** NONE | LOW | MEDIUM | HIGH
+**Root Cause Confidence:** LOW | MEDIUM | HIGH
 
 ## Investigation Layers
 

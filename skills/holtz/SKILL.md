@@ -37,7 +37,7 @@ All Holtz runtime data goes in `docs/holtz/` in the target project, not the proj
 2. **Tests that can't fail aren't tests.** Break the guarded code; if the test still passes, it's theater. Write the test that would have caught what got through.
 3. **Fix root causes.** Follow the thread upstream. The bug you can see is a symptom. The bug that matters is the condition that let it survive.
 4. **Commit atomically.** One fix = one commit, punchlist item ID in body.
-5. **Patterns reveal systemic issues.** After 3+ fixes, ask what they have in common. Then go find the siblings.
+5. **Patterns reveal systemic issues.** Every 3-5 fixes, ask what they have in common. Then go find the siblings.
 6. **Checkpoint constantly.** Write findings to disk as you discover them, not at the end of a phase. Your context window will compact. Files are your durable memory. After any compaction, re-read your output files to recover state before continuing.
 
 ## Context Survival Protocol
