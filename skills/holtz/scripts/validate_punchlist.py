@@ -134,12 +134,23 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         if rcc:
             item.root_cause_confidence = rcc.group(1).strip()
 
-        # Section content and validation command use original block
-        # (Evidence sections contain code fences with the actual evidence)
+        # Section content uses a two-step approach:
+        # 1. Find the field header in masked_block (ensures it's not inside a code fence)
+        # 2. Extract content from original_block at the corresponding line
+        # This preserves code fence content in Evidence while preventing
+        # field headers inside code fences from poisoning other fields.
         section_re = r'\*\*%s:\*\*[ \t]*((?:[^\n]*(?:\n(?!\*\*\w)[^\n]*)*))'
-        problem_m = re.search(section_re % 'Problem', original_block)
+        header_re = r'\*\*%s:\*\*'
+
+        def _section_from_original(field_name):
+            """Find header in masked, extract content from original."""
+            if not re.search(header_re % field_name, masked_block):
+                return None
+            return re.search(section_re % field_name, original_block)
+
+        problem_m = _section_from_original('Problem')
         item.has_problem = bool(problem_m and len(problem_m.group(1).strip()) > 10)
-        evidence_m = re.search(section_re % 'Evidence', original_block)
+        evidence_m = _section_from_original('Evidence')
         item.has_evidence = bool(evidence_m and len(evidence_m.group(1).strip()) > 10)
 
         # Checkbox detection: scoped to Acceptance Criteria section in masked block
@@ -147,13 +158,14 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         ac_content = ac_m.group(1) if ac_m else ""
         item.has_acceptance_criteria = '- [ ]' in ac_content or '- [x]' in ac_content or '- [X]' in ac_content
 
-        # Validation command uses original block (the command IS in a code fence)
-        val_cmd = re.search(r'\*\*Validation Command:\*\*[ \t]*\n?```\w*\n(.+?)\n```', original_block, re.DOTALL)
-        if val_cmd:
-            item.validation_command = val_cmd.group(1).strip()
+        # Validation command: header must exist in masked, content from original
+        if re.search(header_re % 'Validation Command', masked_block):
+            val_cmd = re.search(r'\*\*Validation Command:\*\*[ \t]*\n?```\w*\n(.+?)\n```', original_block, re.DOTALL)
+            if val_cmd:
+                item.validation_command = val_cmd.group(1).strip()
         item.has_validation_command = bool(item.validation_command)
 
-        resolution_m = re.search(section_re % 'Resolution', original_block)
+        resolution_m = _section_from_original('Resolution')
         item.has_resolution = bool(resolution_m and len(resolution_m.group(1).strip()) > 5)
 
         items.append(item)

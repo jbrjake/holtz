@@ -593,3 +593,67 @@ echo test
     assert not items[0].has_acceptance_criteria, (
         "Checkbox in Problem section should not count as acceptance criteria"
     )
+
+
+# --- BH-001: Code fence content poisons original_block field extraction ---
+
+def test_resolution_inside_code_fence_not_extracted():
+    """**Resolution:** inside a code fence should not satisfy has_resolution."""
+    content = """\
+### BH-001: Real item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:**
+```markdown
+**Resolution:** Fixed in commit abc123. This is example text inside a code fence.
+```
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert not items[0].has_resolution, (
+        "**Resolution:** inside a code fence should not satisfy has_resolution"
+    )
+
+
+def test_problem_inside_code_fence_not_extracted():
+    """**Problem:** inside a code fence should not satisfy has_problem for a different item."""
+    content = """\
+### BH-001: Real item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:**
+**Evidence:** Here is the real evidence, which includes an example:
+```markdown
+**Problem:** This fake problem text is inside a code fence and should not count.
+```
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    # The real Problem section is empty (just the header with nothing after it)
+    assert not items[0].has_problem, (
+        "**Problem:** inside a code fence should not satisfy has_problem"
+    )
