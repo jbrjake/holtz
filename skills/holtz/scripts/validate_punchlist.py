@@ -105,19 +105,20 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         if rcc:
             item.root_cause_confidence = rcc.group(1).strip()
 
-        item.has_problem = '**Problem:**' in block and len(
-            block.split('**Problem:**')[1].split('**')[0].strip()) > 10
-        item.has_evidence = '**Evidence:**' in block and len(
-            block.split('**Evidence:**')[1].split('**')[0].strip()) > 10
-        item.has_acceptance_criteria = '- [ ]' in block or '- [x]' in block
+        section_re = r'\*\*%s:\*\*\s*(.+?)(?=\n\*\*\w[\w\s]*?:\*\*|\Z)'
+        problem_m = re.search(section_re % 'Problem', block, re.DOTALL)
+        item.has_problem = bool(problem_m and len(problem_m.group(1).strip()) > 10)
+        evidence_m = re.search(section_re % 'Evidence', block, re.DOTALL)
+        item.has_evidence = bool(evidence_m and len(evidence_m.group(1).strip()) > 10)
+        item.has_acceptance_criteria = '- [ ]' in block or '- [x]' in block or '- [X]' in block
         item.has_validation_command = '**Validation Command:**' in block
 
         val_cmd = re.search(r'\*\*Validation Command:\*\*\s*```\w*\n(.+?)\n```', block, re.DOTALL)
         if val_cmd:
             item.validation_command = val_cmd.group(1).strip()
 
-        item.has_resolution = '**Resolution:**' in block and len(
-            block.split('**Resolution:**')[1].split('**')[0].strip()) > 5
+        resolution_m = re.search(section_re % 'Resolution', block, re.DOTALL)
+        item.has_resolution = bool(resolution_m and len(resolution_m.group(1).strip()) > 5)
 
         items.append(item)
 
