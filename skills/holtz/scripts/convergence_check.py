@@ -23,12 +23,14 @@ HISTORY_FILE = "docs/holtz/HISTORY.json"
 def count_items(punchlist_path: Path) -> dict:
     """Count punchlist items by status."""
     content = punchlist_path.read_text() if punchlist_path.exists() else ""
-    counts = {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0}
+    counts = {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0}
 
-    for match in re.finditer(r'\*\*Status:\*\*\s*(\w[\w\s]*\w)', content):
+    for match in re.finditer(r'\*\*Status:\*\*[ \t]*(\w[\w ]*\w)', content):
         status = match.group(1).strip()
         if status in counts:
             counts[status] += 1
+        else:
+            counts["unknown"] += 1
 
     counts["total"] = sum(counts.values())
     return counts
@@ -78,7 +80,6 @@ def get_test_counts(runner: str | None) -> dict | None:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         output = result.stdout + result.stderr
 
-        # Parse based on runner
         if runner == "pytest":
             m = re.search(r'(\d+) passed', output)
             f = re.search(r'(\d+) failed', output)
@@ -89,7 +90,57 @@ def get_test_counts(runner: str | None) -> dict | None:
                 "skipped": int(s.group(1)) if s else 0,
             }
 
-        # Generic fallback: count lines
+        if runner == "jest":
+            # Jest output: Tests: N failed, N passed, N total
+            m = re.search(r'Tests:\s+(?:(\d+) failed,\s+)?(\d+) passed', output)
+            if m:
+                return {
+                    "passed": int(m.group(2)),
+                    "failed": int(m.group(1)) if m.group(1) else 0,
+                    "skipped": 0,
+                }
+
+        if runner == "vitest":
+            # Vitest output: Tests N passed | N failed (N)
+            p = re.search(r'(\d+) passed', output)
+            f = re.search(r'(\d+) failed', output)
+            return {
+                "passed": int(p.group(1)) if p else 0,
+                "failed": int(f.group(1)) if f else 0,
+                "skipped": 0,
+            }
+
+        if runner == "cargo":
+            # Cargo: test result: ok. N passed; N failed; N ignored
+            m = re.search(r'(\d+) passed;\s*(\d+) failed;\s*(\d+) ignored', output)
+            if m:
+                return {
+                    "passed": int(m.group(1)),
+                    "failed": int(m.group(2)),
+                    "skipped": int(m.group(3)),
+                }
+
+        if runner == "go":
+            # Go: ok/FAIL per package, count lines
+            passed = len(re.findall(r'^ok\s', output, re.MULTILINE))
+            failed = len(re.findall(r'^FAIL\s', output, re.MULTILINE))
+            return {
+                "passed": passed,
+                "failed": failed,
+                "skipped": 0,
+            }
+
+        if runner == "mocha":
+            # Mocha min reporter: N passing, N failing
+            p = re.search(r'(\d+) passing', output)
+            f = re.search(r'(\d+) failing', output)
+            return {
+                "passed": int(p.group(1)) if p else 0,
+                "failed": int(f.group(1)) if f else 0,
+                "skipped": 0,
+            }
+
+        # Fallback
         return {"raw_output_lines": len(output.splitlines())}
 
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -100,7 +151,15 @@ def load_history() -> list:
     """Load convergence history from JSON file."""
     path = Path(HISTORY_FILE)
     if path.exists():
-        return json.loads(path.read_text())
+        try:
+            data = json.loads(path.read_text())
+        except (json.JSONDecodeError, ValueError):
+            print(f"WARNING: {path} is corrupted, starting fresh history", file=sys.stderr)
+            return []
+        if not isinstance(data, list):
+            print(f"WARNING: {path} is not a JSON array, starting fresh history", file=sys.stderr)
+            return []
+        return data
     return []
 
 
@@ -118,6 +177,12 @@ def check_convergence(history: list) -> tuple[bool, str]:
     curr = history[-1]
     open_items = curr["punchlist"]["OPEN"] + curr["punchlist"]["IN PROGRESS"]
 
+    # Convergence requires that items were actually found and resolved at some point.
+    # A punchlist that has always been empty (total == 0 across all history) cannot converge.
+    max_total = max(h["punchlist"]["total"] for h in history)
+    if max_total == 0:
+        return False, "NO ITEMS: Punchlist has never contained any items. Run audit phases first."
+
     # Convergence requires 2 consecutive clean iterations (3 data points)
     last_3 = history[-3:]
     no_new_2_iters = all(
@@ -127,15 +192,19 @@ def check_convergence(history: list) -> tuple[bool, str]:
 
     # Test suite must be stable or improving across the window
     tests_stable = True
+    tests_verified = False
     for i in range(2):
         a, b = last_3[i], last_3[i+1]
         if a.get("tests") and b.get("tests"):
             if "failed" in a["tests"] and "failed" in b["tests"]:
+                tests_verified = True
                 if b["tests"]["failed"] > a["tests"]["failed"]:
                     tests_stable = False
 
+    test_note = "" if tests_verified else " (test stability not verified — no test data)"
+
     if open_items == 0 and no_new_2_iters and tests_stable:
-        return True, "CONVERGED: No open items, no new items in 2 consecutive iterations, tests stable"
+        return True, f"CONVERGED: No open items, no new items in 2 consecutive iterations, tests stable{test_note}"
 
     if open_items == 0 and no_new_2_iters and not tests_stable:
         return False, "BLOCKED: No open punchlist items, but test failures increased"
@@ -159,7 +228,7 @@ def check_convergence(history: list) -> tuple[bool, str]:
     items_resolved = curr["punchlist"]["RESOLVED"] - prev["punchlist"]["RESOLVED"]
     return False, (
         f"IN PROGRESS: {open_items} items open, "
-        f"+{max(0, new_items)} new, {items_resolved} resolved this iteration"
+        f"+{max(0, new_items)} new, {max(0, items_resolved)} resolved this iteration"
     )
 
 

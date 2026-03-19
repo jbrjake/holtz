@@ -3,3 +3,9 @@ __pycache__/
 *.pyc
 .claude/*.local.md
 docs/holtz/
+.venv/
+recon/
+audit/
+BUG-HUNTER-STATUS.md
+BUG-HUNTER-PUNCHLIST.md
+BUG-HUNTER-SUMMARY.md

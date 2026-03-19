@@ -6,7 +6,7 @@ Parses PUNCHLIST.md files and validates:
 - All items have required fields (severity, category, status, problem, acceptance criteria, validation command)
 - Severity, status, and category values are from valid sets
 - Resolved items have a resolution documented
-- Deferred bug items have an investigation link
+- Deferred bug items have reproduction evidence or an investigation link
 - Validation commands are present
 
 Usage: python validate_punchlist.py [path-to-punchlist.md]
@@ -86,7 +86,7 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         if loc:
             item.location = loc.group(1).strip()
 
-        stat = re.search(r'\*\*Status:\*\*\s*(\w[\w\s]*\w)', block)
+        stat = re.search(r'\*\*Status:\*\*[ \t]*(\w[\w ]*\w)', block)
         if stat:
             item.status = stat.group(1).strip()
 
@@ -106,10 +106,10 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         if rcc:
             item.root_cause_confidence = rcc.group(1).strip()
 
-        section_re = r'\*\*%s:\*\*[ \t]*(.+?)(?=\n\*\*\w[\w\s]*?:\*\*|\Z)'
-        problem_m = re.search(section_re % 'Problem', block, re.DOTALL)
+        section_re = r'\*\*%s:\*\*[ \t]*((?:[^\n]*(?:\n(?!\*\*\w)[^\n]*)*))'
+        problem_m = re.search(section_re % 'Problem', block)
         item.has_problem = bool(problem_m and len(problem_m.group(1).strip()) > 10)
-        evidence_m = re.search(section_re % 'Evidence', block, re.DOTALL)
+        evidence_m = re.search(section_re % 'Evidence', block)
         item.has_evidence = bool(evidence_m and len(evidence_m.group(1).strip()) > 10)
         item.has_acceptance_criteria = '- [ ]' in block or '- [x]' in block or '- [X]' in block
         item.has_validation_command = '**Validation Command:**' in block
@@ -118,7 +118,7 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         if val_cmd:
             item.validation_command = val_cmd.group(1).strip()
 
-        resolution_m = re.search(section_re % 'Resolution', block, re.DOTALL)
+        resolution_m = re.search(section_re % 'Resolution', block)
         item.has_resolution = bool(resolution_m and len(resolution_m.group(1).strip()) > 5)
 
         items.append(item)
@@ -126,16 +126,31 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
     return items
 
 
-def validate(items: list[PunchlistItem]) -> ValidationResult:
+def validate(items: list[PunchlistItem], content: str = "") -> ValidationResult:
     """Validate parsed punchlist items."""
     result = ValidationResult()
     status_counts = Counter()
     severity_counts = Counter()
     category_counts = Counter()
     pattern_refs = set()
+    seen_ids: set[str] = set()
+
+    # File structure validation
+    if content:
+        if '# Holtz Punchlist' not in content and '# Bug Hunter Punchlist' not in content:
+            result.warnings.append("Missing punchlist header section")
+        if '## Summary' not in content:
+            result.warnings.append("Missing Summary section")
+        if '## Items' not in content:
+            result.warnings.append("Missing Items section")
 
     for item in items:
         prefix = f"{item.id}"
+
+        # Duplicate ID check
+        if item.id in seen_ids:
+            result.errors.append(f"{prefix}: duplicate item ID")
+        seen_ids.add(item.id)
 
         # Required fields
         if not item.severity:
@@ -225,10 +240,10 @@ def main():
     items = parse_punchlist(content)
 
     if not items:
-        print(f"WARNING: No punchlist items found in {path}")
-        sys.exit(0)
+        print(f"ERROR: No punchlist items found in {path}")
+        sys.exit(1)
 
-    result = validate(items)
+    result = validate(items, content)
 
     # Print report
     print(f"\n{'='*60}")
