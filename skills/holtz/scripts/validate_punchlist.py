@@ -139,7 +139,10 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         # 2. Extract content from original_block at the corresponding line
         # This preserves code fence content in Evidence while preventing
         # field headers inside code fences from poisoning other fields.
-        section_re = r'\*\*%s:\*\*[ \t]*((?:[^\n]*(?:\n(?!\*\*\w)[^\n]*)*))'
+        # Match section content: first line after header, then continuation lines
+        # that don't start with a field header (**FieldName:**). The previous pattern
+        # (?!\*\*\w) incorrectly stopped at bold emphasis like **text**.
+        section_re = r'\*\*%s:\*\*[ \t]*((?:[^\n]*(?:\n(?!\*\*[A-Z][\w ]*:\*\*)[^\n]*)*))'
         header_re = r'\*\*%s:\*\*'
 
         def _section_from_original(field_name):

@@ -366,6 +366,41 @@ echo test
     )
 
 
+# --- BH-003: section_re truncates on bold continuation lines ---
+
+def test_bold_continuation_full_content():
+    """Problem where all meaningful content starts with bold should still be detected."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** Short.
+**This is important context** that continues the problem description with
+enough detail to matter. Without this content the problem is incomplete.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    # The Problem section has "Short." on the first line (6 chars, under 10 threshold)
+    # and the real content on bold continuation lines. If the regex truncates at
+    # the bold line, has_problem is False because "Short." is too short.
+    assert items[0].has_problem, (
+        "Problem with meaningful content on bold continuation lines should be detected"
+    )
+
+
 # --- FA-014: Invalid severity validation ---
 
 def test_invalid_severity_produces_error():
