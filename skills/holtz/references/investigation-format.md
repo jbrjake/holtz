@@ -5,7 +5,7 @@ For complex punchlist items where the root cause is not obvious from the finding
 ## When to create
 
 Create an investigation file when:
-- The item is categorized `bug/logic`, `bug/state`, `bug/security`, or `bug/type`
+- The item is any `bug/*` category (`bug/logic`, `bug/state`, `bug/error-handling`, `bug/security`, `bug/type`)
 - The reproduction test does not fail on the first attempt (can't-reproduce path)
 - The root cause is not obvious from the Problem and Evidence sections
 - Multiple hypotheses need to be tested before fixing
