@@ -112,52 +112,51 @@ def save_history(history: list):
 
 def check_convergence(history: list) -> tuple[bool, str]:
     """Determine if the fix loop has converged."""
-    if len(history) < 2:
-        return False, "Not enough data points (need at least 2 iterations)"
+    if len(history) < 3:
+        return False, f"Not enough data points (need at least 3 iterations, have {len(history)})"
 
-    recent = history[-2:]
-    prev, curr = recent
-
-    # Convergence criteria:
-    # 1. No new items added in last iteration
-    new_items = curr["punchlist"]["total"] - prev["punchlist"]["total"]
-    items_resolved = curr["punchlist"]["RESOLVED"] - prev["punchlist"]["RESOLVED"]
-
-    # 2. No open items remaining
+    curr = history[-1]
     open_items = curr["punchlist"]["OPEN"] + curr["punchlist"]["IN PROGRESS"]
 
-    # 3. Test suite is stable or improving
+    # Convergence requires 2 consecutive clean iterations (3 data points)
+    last_3 = history[-3:]
+    no_new_2_iters = all(
+        last_3[i+1]["punchlist"]["total"] <= last_3[i]["punchlist"]["total"]
+        for i in range(2)
+    )
+
+    # Test suite must be stable or improving across the window
     tests_stable = True
-    if curr.get("tests") and prev.get("tests"):
-        if "failed" in curr["tests"] and "failed" in prev["tests"]:
-            tests_stable = curr["tests"]["failed"] <= prev["tests"]["failed"]
+    for i in range(2):
+        a, b = last_3[i], last_3[i+1]
+        if a.get("tests") and b.get("tests"):
+            if "failed" in a["tests"] and "failed" in b["tests"]:
+                if b["tests"]["failed"] > a["tests"]["failed"]:
+                    tests_stable = False
 
-    if open_items == 0 and new_items <= 0 and tests_stable:
-        return True, "CONVERGED: No open items, no new items generated, tests stable"
+    if open_items == 0 and no_new_2_iters and tests_stable:
+        return True, "CONVERGED: No open items, no new items in 2 consecutive iterations, tests stable"
 
-    if open_items == 0 and new_items <= 0 and not tests_stable:
-        return False, (
-            f"BLOCKED: No open punchlist items, but test failures increased "
-            f"({prev['tests'].get('failed', 0)} -> {curr['tests'].get('failed', 0)})"
-        )
+    if open_items == 0 and no_new_2_iters and not tests_stable:
+        return False, "BLOCKED: No open punchlist items, but test failures increased"
 
-    if len(history) >= 3:
-        last_3 = history[-3:]
-        no_new = all(
-            last_3[i+1]["punchlist"]["total"] <= last_3[i]["punchlist"]["total"]
-            for i in range(len(last_3)-1)
+    # Stall detection: 3+ iterations with no progress on open items
+    if len(history) >= 4:
+        last_4 = history[-4:]
+        no_open_progress = all(
+            (last_4[i+1]["punchlist"]["OPEN"] + last_4[i+1]["punchlist"]["IN PROGRESS"])
+            >= (last_4[i]["punchlist"]["OPEN"] + last_4[i]["punchlist"]["IN PROGRESS"])
+            for i in range(3)
         )
-        no_open_change = all(
-            (last_3[i+1]["punchlist"]["OPEN"] + last_3[i+1]["punchlist"]["IN PROGRESS"])
-            >= (last_3[i]["punchlist"]["OPEN"] + last_3[i]["punchlist"]["IN PROGRESS"])
-            for i in range(len(last_3)-1)
-        )
-        if no_new and no_open_change and open_items > 0:
+        if no_open_progress and open_items > 0:
             return False, (
                 f"STALLED: {open_items} items remain open but no progress "
                 f"in last 3 iterations. Consider deferring remaining items."
             )
 
+    prev = history[-2]
+    new_items = curr["punchlist"]["total"] - prev["punchlist"]["total"]
+    items_resolved = curr["punchlist"]["RESOLVED"] - prev["punchlist"]["RESOLVED"]
     return False, (
         f"IN PROGRESS: {open_items} items open, "
         f"+{max(0, new_items)} new, {items_resolved} resolved this iteration"

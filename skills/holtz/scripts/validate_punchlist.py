@@ -3,10 +3,11 @@
 Holtz Punchlist Validator
 
 Parses PUNCHLIST.md files and validates:
-- All items have required fields
-- Status counts match summary table
-- Validation commands are present and executable
-- Pattern references are consistent
+- All items have required fields (severity, category, status, problem, acceptance criteria, validation command)
+- Severity, status, and category values are from valid sets
+- Resolved items have a resolution documented
+- Deferred bug items have an investigation link
+- Validation commands are present
 
 Usage: python validate_punchlist.py [path-to-punchlist.md]
 """
