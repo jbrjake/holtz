@@ -13,7 +13,6 @@ Usage: python validate_punchlist.py [path-to-punchlist.md]
 
 import re
 import sys
-import subprocess
 from pathlib import Path
 from dataclasses import dataclass, field
 from collections import Counter
