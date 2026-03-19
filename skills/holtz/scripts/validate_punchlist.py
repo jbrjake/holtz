@@ -69,35 +69,35 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
     item_pattern = re.compile(r'^### (BH-\d+):\s+(.+)$', re.MULTILINE)
     masked_matches = list(item_pattern.finditer(masked))
 
-    # Build an index of header positions in normalized content by ID.
-    # normalized may contain phantom headers inside code fences that
-    # masked does not, so we cannot pair by array index — we match by ID.
-    norm_matches_by_id: dict[str, list[re.Match]] = {}
-    for m in item_pattern.finditer(normalized):
-        norm_matches_by_id.setdefault(m.group(1), []).append(m)
+    # Map character offsets between masked and normalized using line numbers.
+    # mask_code_fences preserves line count, so line N in masked = line N in
+    # normalized. This avoids the phantom header problem: ID-based matching
+    # could grab a phantom header inside a code fence that shares an ID with
+    # a real item. Line-number mapping is immune to phantoms.
+    norm_line_offsets = [0]
+    for ci, ch in enumerate(normalized):
+        if ch == '\n':
+            norm_line_offsets.append(ci + 1)
+
+    def _masked_offset_to_norm(masked_offset: int) -> int:
+        """Convert a character offset in masked to the same line's offset in normalized."""
+        line_num = masked[:masked_offset].count('\n')
+        if line_num < len(norm_line_offsets):
+            return norm_line_offsets[line_num]
+        return len(normalized)
 
     for i, match in enumerate(masked_matches):
-        item_id = match.group(1)
         masked_start = match.end()
         masked_end = masked_matches[i + 1].start() if i + 1 < len(masked_matches) else len(masked)
         masked_block = masked[masked_start:masked_end]
 
-        # Find this item's header in normalized content by ID.
-        # Pop from the front so duplicate IDs consume matches in order.
-        id_matches = norm_matches_by_id.get(item_id, [])
-        norm_match = id_matches.pop(0) if id_matches else None
-        if norm_match:
-            norm_start = norm_match.end()
-            # Find end: next real item's position in normalized, or EOF
-            next_id = masked_matches[i + 1].group(1) if i + 1 < len(masked_matches) else None
-            if next_id:
-                next_matches = norm_matches_by_id.get(next_id, [])
-                norm_end = next_matches[0].start() if next_matches else len(normalized)
-            else:
-                norm_end = len(normalized)
-            original_block = normalized[norm_start:norm_end]
+        # Map masked header position to normalized content via line number.
+        norm_start = _masked_offset_to_norm(masked_start)
+        if i + 1 < len(masked_matches):
+            norm_end = _masked_offset_to_norm(masked_matches[i + 1].start())
         else:
-            original_block = masked_block  # fallback (shouldn't happen)
+            norm_end = len(normalized)
+        original_block = normalized[norm_start:norm_end]
 
         item = PunchlistItem(id=match.group(1), title=match.group(2).strip())
 

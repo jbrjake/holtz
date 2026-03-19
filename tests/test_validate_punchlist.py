@@ -657,3 +657,80 @@ echo test
     assert not items[0].has_problem, (
         "**Problem:** inside a code fence should not satisfy has_problem"
     )
+
+
+# --- BH-002: Phantom header with same ID corrupts boundary matching ---
+
+def test_phantom_same_id_before_real_item():
+    """Code fence example with same ID before real item should not corrupt parsing."""
+    content = """\
+Here is an example of a punchlist item:
+````markdown
+### BH-001: Example item
+**Severity:** CRITICAL
+**Status:** RESOLVED
+**Resolution:** Fixed in commit abc123. Verified and deployed.
+````
+
+### BH-001: Real item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is the real problem description with enough detail to pass validation.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1, f"Expected 1 item, got {len(items)}: {[i.id for i in items]}"
+    item = items[0]
+    assert item.severity == "HIGH", f"Expected HIGH, got '{item.severity}'"
+    assert item.status == "OPEN", f"Expected OPEN, got '{item.status}'"
+    assert item.has_problem, "Real item should have problem"
+    assert not item.has_resolution, "Real item should NOT have resolution from phantom"
+
+
+def test_phantom_same_id_problem_content_from_phantom():
+    """Phantom with same ID should not provide Problem content to real item."""
+    content = """\
+Here is an example:
+````markdown
+### BH-001: Example
+**Problem:** This is a long fake problem description that lives inside a code fence example.
+**Status:** RESOLVED
+````
+
+### BH-001: Real item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:**
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    item = items[0]
+    # The real item's Problem section is empty. The phantom inside the code fence
+    # has a long Problem, but it should NOT count for the real item.
+    assert not item.has_problem, (
+        "Empty Problem on real item should not be filled by phantom's Problem from code fence"
+    )
