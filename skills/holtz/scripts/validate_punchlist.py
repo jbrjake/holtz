@@ -15,6 +15,7 @@ Usage: python validate_punchlist.py [path-to-punchlist.md]
 import re
 import sys
 from pathlib import Path
+from markdown_utils import mask_code_fences
 from dataclasses import dataclass, field
 from collections import Counter
 
@@ -61,64 +62,96 @@ VALID_CATEGORIES = {
 
 def parse_punchlist(content: str) -> list[PunchlistItem]:
     """Parse markdown punchlist into structured items."""
-    content = content.replace('\r\n', '\n')
+    normalized, masked = mask_code_fences(content)
     items = []
-    # Split on item headers (### BH-NNN: title)
+    # Split on item headers (### BH-NNN: title) in masked content
+    # so headers inside code fences are not matched
     item_pattern = re.compile(r'^### (BH-\d+):\s+(.+)$', re.MULTILINE)
-    matches = list(item_pattern.finditer(content))
+    masked_matches = list(item_pattern.finditer(masked))
 
-    for i, match in enumerate(matches):
-        start = match.end()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
-        block = content[start:end]
+    # Build an index of header positions in normalized content by ID.
+    # normalized may contain phantom headers inside code fences that
+    # masked does not, so we cannot pair by array index — we match by ID.
+    norm_matches_by_id: dict[str, list[re.Match]] = {}
+    for m in item_pattern.finditer(normalized):
+        norm_matches_by_id.setdefault(m.group(1), []).append(m)
+
+    for i, match in enumerate(masked_matches):
+        item_id = match.group(1)
+        masked_start = match.end()
+        masked_end = masked_matches[i + 1].start() if i + 1 < len(masked_matches) else len(masked)
+        masked_block = masked[masked_start:masked_end]
+
+        # Find this item's header in normalized content by ID.
+        # Use the first match for this ID (real headers appear before any
+        # phantom copies in code fences, since code fences are in Evidence
+        # sections which come after the header).
+        norm_match = norm_matches_by_id.get(item_id, [None])[0]
+        if norm_match:
+            norm_start = norm_match.end()
+            # Find end: next real item's position in normalized, or EOF
+            next_id = masked_matches[i + 1].group(1) if i + 1 < len(masked_matches) else None
+            if next_id and next_id in norm_matches_by_id:
+                norm_end = norm_matches_by_id[next_id][0].start()
+            else:
+                norm_end = len(normalized)
+            original_block = normalized[norm_start:norm_end]
+        else:
+            original_block = masked_block  # fallback (shouldn't happen)
 
         item = PunchlistItem(id=match.group(1), title=match.group(2).strip())
 
-        # Extract fields
-        sev = re.search(r'\*\*Severity:\*\*[ \t]*(\w+)', block)
+        # Extract fields from masked block (code fence content hidden)
+        sev = re.search(r'\*\*Severity:\*\*[ \t]*(\w+)', masked_block)
         if sev:
             item.severity = sev.group(1)
 
-        cat = re.search(r'\*\*Category:\*\*[ \t]*(.+)', block)
+        cat = re.search(r'\*\*Category:\*\*[ \t]*(.+)', masked_block)
         if cat:
             item.category = cat.group(1).strip()
 
-        loc = re.search(r'\*\*Location:\*\*[ \t]*(.+)', block)
+        loc = re.search(r'\*\*Location:\*\*[ \t]*(.+)', masked_block)
         if loc:
             item.location = loc.group(1).strip()
 
-        stat = re.search(r'\*\*Status:\*\*[ \t]*(\w[\w ]*\w)', block)
+        stat = re.search(r'\*\*Status:\*\*[ \t]*(\w[\w ]*\w)', masked_block)
         if stat:
             item.status = stat.group(1).strip()
 
-        pat = re.search(r'\*\*Pattern:\*\*[ \t]*(PAT-\d+)', block)
+        pat = re.search(r'\*\*Pattern:\*\*[ \t]*(PAT-\d+)', masked_block)
         if pat:
             item.pattern = pat.group(1)
 
-        det = re.search(r'\*\*Determinism:\*\*[ \t]*(\w+)', block)
+        det = re.search(r'\*\*Determinism:\*\*[ \t]*(\w+)', masked_block)
         if det:
             item.determinism = det.group(1).strip()
 
-        inv = re.search(r'\*\*Investigation:\*\*[ \t]*(.+)', block)
+        inv = re.search(r'\*\*Investigation:\*\*[ \t]*(.+)', masked_block)
         if inv:
             item.investigation = inv.group(1).strip()
 
-        rcc = re.search(r'\*\*Root Cause Confidence:\*\*[ \t]*(\w+)', block)
+        rcc = re.search(r'\*\*Root Cause Confidence:\*\*[ \t]*(\w+)', masked_block)
         if rcc:
             item.root_cause_confidence = rcc.group(1).strip()
 
+        # Section content and validation command use original block
+        # (Evidence sections contain code fences with the actual evidence)
         section_re = r'\*\*%s:\*\*[ \t]*((?:[^\n]*(?:\n(?!\*\*\w)[^\n]*)*))'
-        problem_m = re.search(section_re % 'Problem', block)
+        problem_m = re.search(section_re % 'Problem', original_block)
         item.has_problem = bool(problem_m and len(problem_m.group(1).strip()) > 10)
-        evidence_m = re.search(section_re % 'Evidence', block)
+        evidence_m = re.search(section_re % 'Evidence', original_block)
         item.has_evidence = bool(evidence_m and len(evidence_m.group(1).strip()) > 10)
-        item.has_acceptance_criteria = '- [ ]' in block or '- [x]' in block or '- [X]' in block
-        val_cmd = re.search(r'\*\*Validation Command:\*\*[ \t]*\n?```\w*\n(.+?)\n```', block, re.DOTALL)
+
+        # Checkbox detection uses masked block (ignore checkboxes in code fences)
+        item.has_acceptance_criteria = '- [ ]' in masked_block or '- [x]' in masked_block or '- [X]' in masked_block
+
+        # Validation command uses original block (the command IS in a code fence)
+        val_cmd = re.search(r'\*\*Validation Command:\*\*[ \t]*\n?```\w*\n(.+?)\n```', original_block, re.DOTALL)
         if val_cmd:
             item.validation_command = val_cmd.group(1).strip()
         item.has_validation_command = bool(item.validation_command)
 
-        resolution_m = re.search(section_re % 'Resolution', block)
+        resolution_m = re.search(section_re % 'Resolution', original_block)
         item.has_resolution = bool(resolution_m and len(resolution_m.group(1).strip()) > 5)
 
         items.append(item)

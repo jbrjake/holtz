@@ -469,3 +469,98 @@ echo test
     assert len(result.errors) == 0, (
         f"Well-formed item should have zero errors, got: {result.errors}"
     )
+
+
+# --- FA-001: Phantom item inside code fence ---
+
+def test_item_header_inside_code_fence_ignored():
+    """### BH-NNN: inside a code fence should not create a phantom item."""
+    content = """\
+### BH-001: Real item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:**
+```markdown
+### BH-002: This is an example inside a code fence, not a real item
+**Status:** RESOLVED
+```
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1, f"Expected 1 item, got {len(items)}: {[i.id for i in items]}"
+    assert items[0].id == "BH-001"
+
+
+# --- FA-003: Field poisoning from code fence ---
+
+def test_status_inside_code_fence_not_extracted():
+    """**Status:** inside a code fence should not poison the real status."""
+    content = """\
+### BH-001: Real item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:**
+```
+**Status:** RESOLVED
+```
+
+**Status:** OPEN
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].status == "OPEN", f"Expected OPEN, got '{items[0].status}'"
+
+
+# --- FA-006: Checkbox inside code fence ---
+
+def test_checkbox_inside_code_fence_not_counted():
+    """- [ ] inside a code fence should not satisfy acceptance criteria."""
+    content = """\
+### BH-001: Real item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:**
+```markdown
+- [ ] this checkbox is inside a code fence
+- [x] so is this one
+```
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert not items[0].has_acceptance_criteria, (
+        "Checkbox inside code fence should not count as acceptance criteria"
+    )
