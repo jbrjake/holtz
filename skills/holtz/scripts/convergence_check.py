@@ -67,6 +67,7 @@ def get_test_counts(runner: str | None) -> dict | None:
         "vitest": ["npx", "vitest", "run", "--reporter=verbose"],
         "cargo": ["cargo", "test", "--", "--format=terse"],
         "go": ["go", "test", "./..."],
+        "mocha": ["npx", "mocha", "--reporter=min"],
     }
 
     cmd = commands.get(runner)
