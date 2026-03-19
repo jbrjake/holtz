@@ -105,7 +105,7 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         if rcc:
             item.root_cause_confidence = rcc.group(1).strip()
 
-        section_re = r'\*\*%s:\*\*\s*(.+?)(?=\n\*\*\w[\w\s]*?:\*\*|\Z)'
+        section_re = r'\*\*%s:\*\*[ \t]*(.+?)(?=\n\*\*\w[\w\s]*?:\*\*|\Z)'
         problem_m = re.search(section_re % 'Problem', block, re.DOTALL)
         item.has_problem = bool(problem_m and len(problem_m.group(1).strip()) > 10)
         evidence_m = re.search(section_re % 'Evidence', block, re.DOTALL)
