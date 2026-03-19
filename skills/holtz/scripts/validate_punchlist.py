@@ -19,6 +19,9 @@ from dataclasses import dataclass, field
 from collections import Counter
 
 
+VALID_DETERMINISM = {"deterministic", "intermittent", "theoretical"}
+
+
 @dataclass
 class PunchlistItem:
     id: str
@@ -28,6 +31,9 @@ class PunchlistItem:
     location: str = ""
     status: str = ""
     pattern: str = ""
+    determinism: str = ""
+    investigation: str = ""
+    root_cause_confidence: str = ""
     has_problem: bool = False
     has_evidence: bool = False
     has_acceptance_criteria: bool = False
@@ -87,6 +93,18 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         pat = re.search(r'\*\*Pattern:\*\*\s*(PAT-\d+)', block)
         if pat:
             item.pattern = pat.group(1)
+
+        det = re.search(r'\*\*Determinism:\*\*\s*(\w+)', block)
+        if det:
+            item.determinism = det.group(1).strip()
+
+        inv = re.search(r'\*\*Investigation:\*\*\s*(.+)', block)
+        if inv:
+            item.investigation = inv.group(1).strip()
+
+        rcc = re.search(r'\*\*Root Cause Confidence:\*\*\s*(\w+)', block)
+        if rcc:
+            item.root_cause_confidence = rcc.group(1).strip()
 
         item.has_problem = '**Problem:**' in block and len(
             block.split('**Problem:**')[1].split('**')[0].strip()) > 10
@@ -152,6 +170,30 @@ def validate(items: list[PunchlistItem]) -> ValidationResult:
         # Resolved items must have resolution
         if item.status == "RESOLVED" and not item.has_resolution:
             result.errors.append(f"{prefix}: marked RESOLVED but no resolution documented")
+
+        # Optional field validation
+        is_bug = item.category.startswith("bug/")
+
+        if item.determinism and item.determinism not in VALID_DETERMINISM:
+            result.warnings.append(
+                f"{prefix}: non-standard determinism '{item.determinism}' "
+                f"(expected: {', '.join(sorted(VALID_DETERMINISM))})"
+            )
+
+        if is_bug and not item.determinism:
+            result.warnings.append(f"{prefix}: bug/* item missing Determinism field")
+
+        if item.root_cause_confidence:
+            if item.root_cause_confidence not in {"LOW", "MEDIUM", "HIGH"}:
+                result.warnings.append(
+                    f"{prefix}: invalid Root Cause Confidence '{item.root_cause_confidence}'"
+                )
+
+        # Deferred items should have evidence of reproduction attempts
+        if item.status == "DEFERRED" and is_bug and not item.investigation:
+            result.warnings.append(
+                f"{prefix}: bug item DEFERRED without Investigation file link"
+            )
 
         # Track counts
         status_counts[item.status] += 1

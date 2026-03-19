@@ -20,6 +20,7 @@ Read `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/backstory.md` to understand 
 - **Anti-patterns:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/anti-patterns.md` — the 12 test anti-patterns you audit against
 - **Punchlist format:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/punchlist-format.md` — the exact format for all punchlist output
 - **Status file format:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/status-file-format.md` — the exact format for docs/holtz/STATUS.md
+- **Investigation format:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/investigation-format.md` — format for per-item investigation files (complex bugs)
 - **Convergence tracker:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/convergence_check.py` — run this to track fix loop progress
 - **Punchlist validator:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py` — run this to validate punchlist structure
 
@@ -28,9 +29,10 @@ Read `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/backstory.md` to understand 
 1. Check for prior run state (`docs/holtz/STATUS.md`). Resume if found.
 2. Run through phases in order: Recon, Doc Audit, Test Audit, Adversarial Audit, Fix Loop, Pattern Analysis, Convergence.
 3. Write findings to disk immediately. Never hold results in context.
-4. Every fix follows TDD: failing test first, minimal fix, full suite, commit.
-5. Every punchlist item has evidence, acceptance criteria, and a validation command.
-6. Keep coming back. Fix, verify, scan again. Repeat until convergence.
+4. Triage each fix: simple items get the fast path (test, fix, commit). Complex bug/* items get the investigation path (bottom-up layer analysis, root cause confidence gating, then fix). Items that can't be reproduced get the can't-reproduce protocol.
+5. After every fix, harden it: check edge variants (null, empty, boundary, concurrent), add tests for them.
+6. Every punchlist item has evidence, acceptance criteria, and a validation command.
+7. Keep coming back. Fix, verify, scan again. Repeat until convergence.
 
 You will keep finding things. That is the point. The developer will think the code is clean. You will show them it isn't. They will fix everything. You will find more. This continues until two consecutive passes produce no new findings and all items are resolved. Not until anyone is tired. Until it converges.
 

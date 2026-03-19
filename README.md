@@ -24,7 +24,7 @@ Once installed, the skill activates when you ask Claude to find bugs, audit test
 
 ## What's inside
 
-1 skill, 1 agent, 2 reference docs, 2 Python scripts, 1 backstory you probably shouldn't read late at night, and a man who will find what's wrong with your code whether you want him to or not.
+1 skill, 1 agent, 5 reference docs, 2 Python scripts, 1 backstory you probably shouldn't read late at night, and a man who will find what's wrong with your code whether you want him to or not.
 
 ## Who Holtz is
 
@@ -58,9 +58,9 @@ Some people, after working with Holtz, start writing better tests on their own. 
 
 **Phase 2: Test Quality Audit.** Every test file scored against twelve anti-patterns: tautology tests, green bar addicts, mockingbirds, happy path tourists, snapshot traps, and the rest. A test that can't fail isn't a test. Holtz will prove it.
 
-**Phase 3: Adversarial Code Audit.** Source modules reviewed in priority order: error paths, boundaries, state transitions, external integrations, security. High-churn files first, because that's where the bodies are.
+**Phase 3: Adversarial Code Audit.** Source modules reviewed in priority order: error paths, boundaries, state transitions, external integrations, security. High-churn files first, because that's where the bodies are. Each bug gets a determinism assessment — is it deterministic, intermittent, or theoretical? The answer determines how Phase 4 handles it.
 
-**Phase 4: Fix Loop (TDD).** For each punchlist item: write failing test, verify it fails, minimal fix, full suite, atomic commit. Punchlist updated immediately after each fix. No batching. No "I'll update it later."
+**Phase 4: Fix Loop (TDD).** Triaged by complexity. Simple items (missing tests, doc drift, bogus assertions) take the fast path: write test, fix, commit. Complex bugs take the investigation path: bottom-up layer analysis (data, dependencies, state, logic, integration, timing), root cause confidence gating (don't fix until confidence is HIGH), and a full investigation trail. Bugs that can't be reproduced get their own protocol — widen conditions, statistical reproduction, git bisect, instrumentation — before being deferred with evidence. Every fix, simple or complex, gets hardened: edge variants (null, empty, boundary, concurrent) tested before moving on.
 
 **Phase 5: Pattern Analysis.** After every 3-5 fixes, group resolved items by category. If two or more share a root cause, identify the pattern, search for siblings, add new items. The bugs you found are a sample. The pattern tells you the population.
 
@@ -68,9 +68,9 @@ Some people, after working with Holtz, start writing better tests on their own. 
 
 ## The punchlist
 
-Every finding follows a structured format with severity (CRITICAL/HIGH/MEDIUM/LOW), category, location, evidence, acceptance criteria, and a validation command. Resolved items stay in the punchlist as an audit trail. Patterns get their own blocks with root cause analysis and detection rules.
+Every finding follows a structured format with severity (CRITICAL/HIGH/MEDIUM/LOW), category, location, evidence, acceptance criteria, and a validation command. Bug items get a determinism assessment. Complex bugs get a linked investigation file with an append-only evidence trail, ranked theories, ruled-out hypotheses, and a root cause confidence level. Resolved items stay in the punchlist as an audit trail. Patterns get their own blocks with root cause analysis and detection rules.
 
-Holtz won't call something CRITICAL unless data loss, security, or a production crash is on the line. He won't call something HIGH unless documented behavior is wrong or a test is hiding bugs. Severity inflation is its own kind of lie.
+Holtz won't call something CRITICAL unless data loss, security, or a production crash is on the line. He won't call something HIGH unless documented behavior is wrong or a test is hiding bugs. Severity inflation is its own kind of lie. And he won't fix a complex bug until his root cause confidence is HIGH — guessing at fixes is how bugs survive and come back wearing different clothes.
 
 ## Part of a family
 

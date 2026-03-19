@@ -6,7 +6,7 @@
 |----------|------|----------|----------|
 | CRITICAL | 0 | 1 | 0 |
 | HIGH | 1 | 1 | 0 |
-| MEDIUM | 1 | 0 | 1 |
+| MEDIUM | 2 | 0 | 1 |
 | LOW | 0 | 0 | 0 |
 
 ## Patterns
@@ -25,6 +25,7 @@
 **Location:** `src/handlers/users.ts:42`
 **Status:** RESOLVED
 **Pattern:** PAT-001
+**Determinism:** deterministic
 
 **Problem:** User search query parameter is interpolated directly into SQL string without parameterization. Any input containing SQL metacharacters executes arbitrary queries.
 
@@ -50,6 +51,7 @@ npm test -- --grep "user search.*injection"
 **Category:** bug/error-handling
 **Location:** `src/db/pool.ts:18`
 **Status:** OPEN
+**Determinism:** deterministic
 
 **Problem:** Database pool creation has no timeout handler. If the database is unreachable at startup, the process hangs indefinitely instead of failing with an error.
 
@@ -96,6 +98,7 @@ npm test -- --grep "upload.*traversal"
 **Category:** bug/state
 **Location:** `src/cache/user-cache.ts:55`
 **Status:** DEFERRED
+**Determinism:** intermittent
 
 **Problem:** User cache is populated on read but not invalidated on delete. Deleted users continue to appear in search results until cache TTL expires (5 minutes).
 
@@ -129,3 +132,28 @@ npm test -- --grep "cache.*delete"
 ```bash
 npm test -- --grep "rate.limiter"
 ```
+
+### BH-006: Race condition in session refresh under concurrent requests
+**Severity:** MEDIUM
+**Category:** bug/state
+**Location:** `src/auth/session.ts:78`
+**Status:** RESOLVED
+**Determinism:** theoretical
+**Investigation:** `docs/holtz/investigations/BH-006.md`
+
+**Problem:** When two requests arrive simultaneously with an expired session token, both trigger a refresh. The second refresh overwrites the first refresh's new token, invalidating the response already sent to the first request. The client retries with the now-invalid token and gets a 401.
+
+**Evidence:** Code review of `session.ts:78` shows `refreshSession()` reads the current token, generates a new one, and writes it back without any locking or compare-and-swap. Under concurrent access, the read-modify-write is not atomic.
+
+**Acceptance Criteria:**
+- [x] Session refresh uses atomic compare-and-swap or mutex
+- [x] Test proves concurrent refresh requests both receive valid tokens
+- [x] Test proves no 401 errors under concurrent refresh load
+
+**Validation Command:**
+```bash
+npm test -- --grep "session.*concurrent"
+```
+
+**Resolution:** Fixed in commit f7a8b9c. Session refresh now uses atomic compare-and-swap on the token field — if the token changed between read and write, the refresh re-reads and retries. Test `session.test.ts:should handle concurrent refresh without 401` validates with 50 parallel refresh requests.
+**Root Cause Confidence:** HIGH

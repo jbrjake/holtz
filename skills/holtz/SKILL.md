@@ -22,6 +22,7 @@ Operate as Holtz — see [references/backstory.md](references/backstory.md) for 
 - [references/anti-patterns.md](references/anti-patterns.md) — test quality detection (12 anti-patterns with audit checklist)
 - [references/punchlist-format.md](references/punchlist-format.md) — required format for all punchlist output
 - [references/status-file-format.md](references/status-file-format.md) — required format for docs/holtz/STATUS.md
+- [references/investigation-format.md](references/investigation-format.md) — format for per-item investigation files (complex bugs only)
 - [examples/sample-punchlist.md](examples/sample-punchlist.md) — example punchlist with filled-in items
 - `scripts/validate_punchlist.py` — validate punchlist structure
 - `scripts/convergence_check.py` — track fix loop progress
@@ -103,18 +104,77 @@ Same subagent strategy. Partition source modules into batches.
 
 1. Read `docs/holtz/recon/0g-recon-summary.md` and `docs/holtz/recon/0e-churn.md` (high-churn files first)
 2. For each module batch: review for bugs, write punchlist items IMMEDIATELY
-3. Update `docs/holtz/STATUS.md`
+3. **For `bug/*` items:** assess determinism and record in the punchlist item's `**Determinism:**` field. Is this bug deterministic (specific trigger), intermittent (timing/load/ordering dependent), or theoretical (identified from code analysis, not yet observed)? This determines the reproduction strategy in Phase 4.
+4. Update `docs/holtz/STATUS.md`
 
 Priority order: error paths, boundaries, state transitions, external integrations, security.
 
 ### Phase 4: Fix Loop (TDD)
 
 1. **Re-read `docs/holtz/PUNCHLIST.md`** — this is your worklist
-2. For each item in priority order:
-   - Write failing test. Verify it fails. Minimal fix. Full suite. Commit.
-   - **Update `docs/holtz/PUNCHLIST.md` with resolution IMMEDIATELY after each commit** (status, commit hash, validating test)
-   - Update `docs/holtz/STATUS.md` with last completed item ID
-3. Commit format: `fix(<scope>): <desc>` with punchlist ID in body
+2. **Triage each item** by category before starting work on it:
+   - `test/*`, `doc/*`, `design/*` items → **Fast Path**
+   - `bug/*` items with determinism = deterministic → **Fast Path**
+   - `bug/*` items with determinism = intermittent or theoretical → **Investigation Path**
+   - Any item where the reproduction test unexpectedly passes → **Can't-Reproduce Path**
+3. After fixing each item (regardless of path), run **Per-Fix Hardening**
+4. Commit format: `fix(<scope>): <desc>` with punchlist ID in body
+
+#### Fast Path
+
+For straightforward items where the root cause is obvious from the finding:
+
+1. Write failing test. Verify it fails. Minimal fix. Full suite. Commit.
+2. **Update `docs/holtz/PUNCHLIST.md` with resolution IMMEDIATELY after each commit** (status, commit hash, validating test)
+3. Update `docs/holtz/STATUS.md` with last completed item ID
+
+#### Investigation Path
+
+For `bug/*` items where the root cause is not obvious, the bug is intermittent or theoretical, or multiple hypotheses need testing. See [references/investigation-format.md](references/investigation-format.md) for the investigation file format.
+
+1. Create `docs/holtz/investigations/BH-{NNN}.md` and link it from the punchlist item's `**Investigation:**` field
+2. **Investigate bottom-up** through the layer stack. Check each layer before moving up:
+
+   | Layer | Check |
+   |-------|-------|
+   | **Data** | Is the input what you think it is? Log actual values, types, shapes at entry point |
+   | **Dependencies** | Are called systems working? DB connected, API reachable, file exists, permissions correct? |
+   | **State** | Is state correct at each step? Add assertions/logging at intermediate points |
+   | **Logic** | Does the code do what it says? Trace actual execution path, not intended one |
+   | **Integration** | Do pieces work together? Boundary serialization, type mismatches, contract violations |
+   | **Timing** | Race condition, async ordering, cache staleness, concurrency issue? |
+
+   At each layer: form a specific, falsifiable hypothesis. Design the smallest check that confirms or refutes it. Run it. Record in the investigation file's Evidence section. Update Theories or Ruled Out.
+
+3. **For regressions** (behavior that previously worked): use `git bisect` to find the breaking commit before investigating layers. The bisect narrows the root cause to a specific change.
+4. **Require HIGH confidence** before fixing. Write your root cause in the investigation file. If confidence is LOW or MEDIUM, design one more check to raise it. Do not write production code until confidence is HIGH.
+5. Once root cause is confirmed at HIGH confidence: write failing test, verify it fails, minimal fix, full suite, commit.
+6. **Update punchlist** with resolution, root cause confidence, and commit hash IMMEDIATELY.
+7. Update `docs/holtz/STATUS.md` with last completed item ID.
+
+#### Can't-Reproduce Path
+
+When the reproduction test passes (bug not triggered), do NOT skip the item. Escalate:
+
+1. **Widen conditions:** Try different inputs, orderings, timing, data sizes, concurrency levels
+2. **Check environment:** Different OS, runtime version, dependency versions, config differences between test and production
+3. **Statistical reproduction:** For intermittent bugs, run the test in a loop (100-1000x) and measure failure rate
+4. **Git bisect:** If the behavior "used to work," find the breaking commit
+5. **Add instrumentation:** If still not reproducible, add logging/tracing to capture state when the condition occurs in the wild
+
+Log every attempt in the investigation file. Failed reproduction attempts are evidence — they narrow the conditions.
+
+If not reproducible after structured attempts: mark the item DEFERRED with evidence of all reproduction attempts in the investigation file. Do not silently drop it.
+
+#### Per-Fix Hardening
+
+After each fix passes the reproduction test and full suite, ask:
+
+1. **Edge variants:** Does the fix handle null, empty, boundary, and concurrent cases for the same input path? If not, write tests for them.
+2. **Regression risk:** Could this specific fix regress? If the fix is in a path without existing test coverage, add a regression test beyond the reproduction test.
+3. Run full suite again after any hardening tests are added.
+
+This is per-fix robustness, not pattern analysis. Phase 5 looks across fixes for systemic issues. Hardening makes each individual fix durable. Particularly important for `bug/error-handling` and `bug/security` items where edge cases are the entire point.
 
 ### Phase 5: Pattern Analysis (every 3-5 fixes)
 
