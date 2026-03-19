@@ -564,3 +564,32 @@ echo test
     assert not items[0].has_acceptance_criteria, (
         "Checkbox inside code fence should not count as acceptance criteria"
     )
+
+
+# --- FA-005: Checkbox in wrong section outside fence ---
+
+def test_checkbox_in_wrong_section_not_counted():
+    """- [ ] in Problem section should not satisfy acceptance criteria."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** Here is a checklist in the wrong section:
+- [ ] not a real acceptance criterion
+- [ ] also not
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert not items[0].has_acceptance_criteria, (
+        "Checkbox in Problem section should not count as acceptance criteria"
+    )

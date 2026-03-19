@@ -142,8 +142,10 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         evidence_m = re.search(section_re % 'Evidence', original_block)
         item.has_evidence = bool(evidence_m and len(evidence_m.group(1).strip()) > 10)
 
-        # Checkbox detection uses masked block (ignore checkboxes in code fences)
-        item.has_acceptance_criteria = '- [ ]' in masked_block or '- [x]' in masked_block or '- [X]' in masked_block
+        # Checkbox detection: scoped to Acceptance Criteria section in masked block
+        ac_m = re.search(section_re % 'Acceptance Criteria', masked_block)
+        ac_content = ac_m.group(1) if ac_m else ""
+        item.has_acceptance_criteria = '- [ ]' in ac_content or '- [x]' in ac_content or '- [X]' in ac_content
 
         # Validation command uses original block (the command IS in a code fence)
         val_cmd = re.search(r'\*\*Validation Command:\*\*[ \t]*\n?```\w*\n(.+?)\n```', original_block, re.DOTALL)
