@@ -243,3 +243,21 @@ def test_status_inside_code_fence_not_counted(tmp_path):
     assert counts["OPEN"] == 1, f"Expected 1 OPEN, got {counts}"
     assert counts["RESOLVED"] == 0, f"Expected 0 RESOLVED, got {counts}"
     assert counts["total"] == 1, f"Expected total 1, got {counts}"
+
+
+# --- BH-007: Unparseable test output returns None ---
+
+def test_get_test_counts_unparseable_output(monkeypatch):
+    """Unparseable test output should return None, not zero counts."""
+    import subprocess
+
+    class FakeResult:
+        stdout = "INTERNAL ERROR: pytest crashed with a traceback\n"
+        stderr = "Traceback (most recent call last):\n  ...\nSystemExit: 3\n"
+        returncode = 3
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: FakeResult())
+    result = cc.get_test_counts("pytest")
+    assert result is None, (
+        f"Unparseable pytest output should return None, got {result}"
+    )

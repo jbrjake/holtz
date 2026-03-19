@@ -87,6 +87,8 @@ def get_test_counts(runner: str | None) -> dict | None:
             m = re.search(r'(\d+) passed', output)
             f = re.search(r'(\d+) failed', output)
             s = re.search(r'(\d+) skipped', output)
+            if not m and not f and not s:
+                return None  # unparseable output (crash, permission error, etc.)
             return {
                 "passed": int(m.group(1)) if m else 0,
                 "failed": int(f.group(1)) if f else 0,
@@ -107,6 +109,8 @@ def get_test_counts(runner: str | None) -> dict | None:
             # Vitest output: Tests N passed | N failed (N)
             p = re.search(r'(\d+) passed', output)
             f = re.search(r'(\d+) failed', output)
+            if not p and not f:
+                return None
             return {
                 "passed": int(p.group(1)) if p else 0,
                 "failed": int(f.group(1)) if f else 0,
@@ -127,6 +131,8 @@ def get_test_counts(runner: str | None) -> dict | None:
             # Go: ok/FAIL per package, count lines
             passed = len(re.findall(r'^ok\s', output, re.MULTILINE))
             failed = len(re.findall(r'^FAIL\s', output, re.MULTILINE))
+            if passed == 0 and failed == 0:
+                return None
             return {
                 "passed": passed,
                 "failed": failed,
