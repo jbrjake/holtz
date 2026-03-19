@@ -132,8 +132,14 @@ def check_convergence(history: list) -> tuple[bool, str]:
         if "failed" in curr["tests"] and "failed" in prev["tests"]:
             tests_stable = curr["tests"]["failed"] <= prev["tests"]["failed"]
 
-    if open_items == 0 and new_items <= 0:
-        return True, "CONVERGED: No open items, no new items generated"
+    if open_items == 0 and new_items <= 0 and tests_stable:
+        return True, "CONVERGED: No open items, no new items generated, tests stable"
+
+    if open_items == 0 and new_items <= 0 and not tests_stable:
+        return False, (
+            f"BLOCKED: No open punchlist items, but test failures increased "
+            f"({prev['tests'].get('failed', 0)} -> {curr['tests'].get('failed', 0)})"
+        )
 
     if len(history) >= 3:
         last_3 = history[-3:]

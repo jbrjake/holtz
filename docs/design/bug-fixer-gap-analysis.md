@@ -2,7 +2,7 @@
 
 Source: `docs/references/bug-fixer/SKILL.md` and `journal-format.md`
 
-Bug-fixer is a single-bug debugger with a 7-step protocol. Holtz is a codebase-wide auditor with a 6-phase lifecycle. They overlap in Phase 4 (Fix Loop), where Holtz fixes individual punchlist items using TDD. The comparison below focuses on that overlap — what bug-fixer does during individual bug resolution that Holtz currently doesn't.
+Bug-fixer is a single-bug debugger with a 7-step protocol. Holtz is a codebase-wide auditor with a 7-phase lifecycle. They overlap in Phase 4 (Fix Loop), where Holtz fixes individual punchlist items using TDD. The comparison below focuses on that overlap — what bug-fixer does during individual bug resolution that Holtz currently doesn't.
 
 ## What Holtz already covers
 

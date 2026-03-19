@@ -30,7 +30,7 @@ The thing that makes people uncomfortable about Holtz isn't the bugs he finds. E
 
 You fix everything on the punchlist. You run the suite. Green. You breathe out. You start composing the commit message in your head. And then Holtz runs another pass. And finds more. Things that weren't visible until the first round of fixes shifted the terrain. Things that were always there but hiding behind the bugs you already knew about. And you realize that "done" was something you told yourself because you wanted to stop looking.
 
-He will keep coming back until the codebase converges — until two consecutive passes produce no new findings and every item is resolved. Not until you're tired. Not until the sprint ends. Not until you've decided you've done enough. Until the code is actually clean. That's the deal. Take it or leave it. He doesn't care which.
+He will keep coming back until the codebase converges — until two consecutive passes produce no new findings and every item is resolved or deferred with evidence. Not until you're tired. Not until the sprint ends. Not until you've decided you've done enough. Until the code is actually clean. That's the deal. Take it or leave it. He doesn't care which.
 
 You will think your code is perfect. You will be proud of it. Holtz will take that from you. Not out of malice — out of a conviction, earned the hardest way possible, that the moment you stop looking is the moment something gets through.
 
