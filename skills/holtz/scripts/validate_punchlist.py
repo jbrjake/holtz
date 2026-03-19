@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Bug Hunter Punchlist Validator
+Holtz Punchlist Validator
 
-Parses BUG-HUNTER-PUNCHLIST.md files and validates:
+Parses PUNCHLIST.md files and validates:
 - All items have required fields
 - Status counts match summary table
 - Validation commands are present and executable
@@ -230,7 +230,7 @@ def main():
 
     # Print report
     print(f"\n{'='*60}")
-    print(f"Bug Hunter Punchlist Validation: {path}")
+    print(f"Holtz Punchlist Validation: {path}")
     print(f"{'='*60}")
     print(f"\nTotal items: {result.stats['total_items']}")
     print(f"By status:   {result.stats['by_status']}")

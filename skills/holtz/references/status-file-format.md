@@ -5,7 +5,7 @@ This file is Holtz's program counter. Located at `docs/holtz/STATUS.md` in the t
 ## Template
 
 ```markdown
-# Bug Hunter Status
+# Holtz Status
 
 **Project:** {project name}
 **Started:** {ISO date}

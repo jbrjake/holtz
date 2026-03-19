@@ -62,7 +62,7 @@ This informs the reproduction strategy in Phase 4. Deterministic bugs get a stan
 
 ## File Structure
 ```markdown
-# Bug Hunter Punchlist
+# Holtz Punchlist
 > Generated: {date} | Project: {name} | Baseline: {N pass, M fail, K skip}
 
 ## Summary

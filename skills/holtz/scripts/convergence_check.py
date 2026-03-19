@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Bug Hunter Convergence Tracker
+Holtz Convergence Tracker
 
 Tracks progress across fix iterations and determines when the codebase
-has converged to a stable, clean state. Reads BUG-HUNTER-PUNCHLIST.md
+has converged to a stable, clean state. Reads PUNCHLIST.md
 and test suite output to compute convergence metrics.
 
 Usage: python convergence_check.py [punchlist_path]
@@ -182,7 +182,7 @@ def main():
 
     # Report
     print(f"\n{'='*60}")
-    print(f"Bug Hunter Convergence Check -- Iteration {len(history)}")
+    print(f"Holtz Convergence Check -- Iteration {len(history)}")
     print(f"{'='*60}")
     print(f"\nPunchlist: {punchlist_counts}")
     if test_counts:
