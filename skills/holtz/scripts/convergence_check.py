@@ -52,11 +52,17 @@ def detect_test_runner() -> str | None:
     for runner, files in markers.items():
         for f in files:
             if Path(f).exists():
-                # Extra check for pytest in config files that may not be pytest-related
+                # Extra check for pytest in config files that may not be pytest-related.
+                # Check for TOML section headers or INI sections, not bare substrings,
+                # to avoid false positives from comments or unrelated text.
                 if runner == "pytest" and f in ("pyproject.toml", "setup.cfg"):
                     content = Path(f).read_text()
-                    if "pytest" not in content and "tool.pytest" not in content and "tool:pytest" not in content:
-                        continue
+                    if f == "pyproject.toml":
+                        if "[tool.pytest" not in content:
+                            continue
+                    else:  # setup.cfg
+                        if "[tool:pytest]" not in content:
+                            continue
                 return runner
     return None
 

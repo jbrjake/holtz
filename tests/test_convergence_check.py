@@ -305,6 +305,20 @@ def test_detect_pyproject_without_pytest(tmp_path, monkeypatch):
     )
 
 
+def test_detect_pyproject_with_pytest_in_comment(tmp_path, monkeypatch):
+    """pyproject.toml mentioning pytest only in a comment should not trigger detection."""
+    (tmp_path / "pyproject.toml").write_text(
+        "[build-system]\n"
+        "requires = ['setuptools']\n"
+        "# we considered pytest but decided against it\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    result = cc.detect_test_runner()
+    assert result != "pytest", (
+        f"pyproject.toml with 'pytest' only in a comment should not detect pytest, got '{result}'"
+    )
+
+
 # --- BH-009: Multi-item punchlist parsing ---
 
 def test_multi_item_punchlist_field_isolation(tmp_path):
