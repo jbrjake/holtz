@@ -17,7 +17,7 @@ from pathlib import Path
 from datetime import datetime
 
 
-HISTORY_FILE = "BUG-HUNTER-HISTORY.json"
+HISTORY_FILE = "docs/holtz/HISTORY.json"
 
 
 def count_items(punchlist_path: Path) -> dict:
@@ -157,7 +157,7 @@ def check_convergence(history: list) -> tuple[bool, str]:
 
 
 def main():
-    punchlist_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("BUG-HUNTER-PUNCHLIST.md")
+    punchlist_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("docs/holtz/PUNCHLIST.md")
 
     # Gather current state
     punchlist_counts = count_items(punchlist_path)

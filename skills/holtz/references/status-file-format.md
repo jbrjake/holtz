@@ -1,6 +1,6 @@
-# BUG-HUNTER-STATUS.md Format
+# docs/holtz/STATUS.md Format
 
-This file is Holtz's program counter. It is the first file read after any context compaction and the last file updated after completing any step.
+This file is Holtz's program counter. Located at `docs/holtz/STATUS.md` in the target project. It is the first file read after any context compaction and the last file updated after completing any step.
 
 ## Template
 

@@ -172,7 +172,7 @@ def validate(items: list[PunchlistItem]) -> ValidationResult:
 
 
 def main():
-    path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("BUG-HUNTER-PUNCHLIST.md")
+    path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("docs/holtz/PUNCHLIST.md")
 
     if not path.exists():
         print(f"ERROR: {path} not found")

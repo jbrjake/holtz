@@ -2,7 +2,4 @@
 __pycache__/
 *.pyc
 .claude/*.local.md
-BUG-HUNTER-*.md
-BUG-HUNTER-*.json
-recon/
-audit/
+docs/holtz/
