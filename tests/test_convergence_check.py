@@ -261,3 +261,97 @@ def test_get_test_counts_unparseable_output(monkeypatch):
     assert result is None, (
         f"Unparseable pytest output should return None, got {result}"
     )
+
+
+# --- BH-010: Tests for detect_test_runner ---
+
+def test_detect_pytest_by_conftest(tmp_path, monkeypatch):
+    """detect_test_runner should find pytest via conftest.py."""
+    (tmp_path / "conftest.py").write_text("# pytest config")
+    monkeypatch.chdir(tmp_path)
+    assert cc.detect_test_runner() == "pytest"
+
+
+def test_detect_jest_by_config(tmp_path, monkeypatch):
+    """detect_test_runner should find jest via jest.config.js."""
+    (tmp_path / "jest.config.js").write_text("module.exports = {}")
+    monkeypatch.chdir(tmp_path)
+    assert cc.detect_test_runner() == "jest"
+
+
+def test_detect_cargo_by_toml(tmp_path, monkeypatch):
+    """detect_test_runner should find cargo via Cargo.toml."""
+    (tmp_path / "Cargo.toml").write_text("[package]\nname = 'test'")
+    monkeypatch.chdir(tmp_path)
+    assert cc.detect_test_runner() == "cargo"
+
+
+def test_detect_no_runner(tmp_path, monkeypatch):
+    """detect_test_runner should return None when no config files found."""
+    monkeypatch.chdir(tmp_path)
+    assert cc.detect_test_runner() is None
+
+
+def test_detect_pyproject_without_pytest(tmp_path, monkeypatch):
+    """pyproject.toml without pytest config should not trigger pytest detection."""
+    (tmp_path / "pyproject.toml").write_text(
+        "[build-system]\nrequires = ['setuptools']\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    # Should not detect pytest since there's no pytest config in pyproject.toml
+    result = cc.detect_test_runner()
+    assert result != "pytest", (
+        f"pyproject.toml without pytest config should not detect pytest, got '{result}'"
+    )
+
+
+# --- BH-009: Multi-item punchlist parsing ---
+
+def test_multi_item_punchlist_field_isolation(tmp_path):
+    """Multiple items should have isolated field values."""
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text("""\
+### BH-001: First item
+**Status:** OPEN
+
+### BH-002: Second item
+**Status:** RESOLVED
+
+### BH-003: Third item
+**Status:** DEFERRED
+""")
+    counts = cc.count_items(punchlist)
+    assert counts["OPEN"] == 1, f"Expected 1 OPEN, got {counts}"
+    assert counts["RESOLVED"] == 1, f"Expected 1 RESOLVED, got {counts}"
+    assert counts["DEFERRED"] == 1, f"Expected 1 DEFERRED, got {counts}"
+    assert counts["total"] == 3, f"Expected total 3, got {counts}"
+
+
+# --- BH-012: Test output parsing ---
+
+def test_get_test_counts_pytest_output(monkeypatch):
+    """Pytest output parsing should extract correct counts."""
+    import subprocess
+
+    class FakeResult:
+        stdout = "5 passed, 2 failed, 1 skipped in 0.5s\n"
+        stderr = ""
+        returncode = 1
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: FakeResult())
+    result = cc.get_test_counts("pytest")
+    assert result == {"passed": 5, "failed": 2, "skipped": 1}
+
+
+def test_get_test_counts_jest_output(monkeypatch):
+    """Jest output parsing should extract correct counts."""
+    import subprocess
+
+    class FakeResult:
+        stdout = "Tests:  2 failed, 8 passed, 10 total\n"
+        stderr = ""
+        returncode = 1
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: FakeResult())
+    result = cc.get_test_counts("jest")
+    assert result == {"passed": 8, "failed": 2, "skipped": 0}

@@ -769,3 +769,87 @@ echo test
     assert not item.has_problem, (
         "Empty Problem on real item should not be filled by phantom's Problem from code fence"
     )
+
+
+# --- BH-009: Multi-item punchlist parsing ---
+
+def test_multi_item_field_isolation():
+    """Multiple items should have isolated field values, no cross-contamination."""
+    content = """\
+### BH-001: First item
+**Severity:** CRITICAL
+**Category:** bug/security
+**Location:** `auth.py:1`
+**Status:** RESOLVED
+
+**Problem:** SQL injection in user search allows arbitrary query execution.
+
+**Evidence:** Direct string interpolation of user input into SQL query.
+
+**Acceptance Criteria:**
+- [x] Parameterized queries used
+- [x] Injection test passes
+
+**Validation Command:**
+```bash
+pytest -k injection
+```
+
+**Resolution:** Fixed in commit abc123. Parameterized query validated by test.
+
+### BH-002: Second item
+**Severity:** LOW
+**Category:** doc/drift
+**Location:** `README.md:15`
+**Status:** OPEN
+
+**Problem:** README claims feature X exists but it was removed in v2.
+
+**Evidence:** grep for feature X in codebase returns no results.
+
+**Acceptance Criteria:**
+- [ ] README updated to remove feature X reference
+
+**Validation Command:**
+```bash
+grep -r "feature X" README.md
+```
+
+### BH-003: Third item
+**Severity:** MEDIUM
+**Category:** test/missing
+**Location:** `utils.py:42`
+**Status:** DEFERRED
+**Determinism:** theoretical
+
+**Problem:** Edge case with empty input array not covered by any test.
+
+**Evidence:** Code review shows no test passes empty array to process_items().
+
+**Acceptance Criteria:**
+- [ ] Test for empty input array added
+
+**Validation Command:**
+```bash
+pytest -k empty_input
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 3, f"Expected 3 items, got {len(items)}"
+
+    assert items[0].id == "BH-001"
+    assert items[0].severity == "CRITICAL"
+    assert items[0].category == "bug/security"
+    assert items[0].status == "RESOLVED"
+    assert items[0].has_resolution
+
+    assert items[1].id == "BH-002"
+    assert items[1].severity == "LOW"
+    assert items[1].category == "doc/drift"
+    assert items[1].status == "OPEN"
+    assert not items[1].has_resolution
+
+    assert items[2].id == "BH-003"
+    assert items[2].severity == "MEDIUM"
+    assert items[2].status == "DEFERRED"
+    assert items[2].determinism == "theoretical"
