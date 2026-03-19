@@ -16,6 +16,8 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 
+from markdown_utils import mask_code_fences
+
 
 HISTORY_FILE = "docs/holtz/HISTORY.json"
 
@@ -23,10 +25,10 @@ HISTORY_FILE = "docs/holtz/HISTORY.json"
 def count_items(punchlist_path: Path) -> dict:
     """Count punchlist items by status."""
     content = punchlist_path.read_text() if punchlist_path.exists() else ""
-    content = content.replace('\r\n', '\n')
+    _, masked = mask_code_fences(content)
     counts = {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0}
 
-    for match in re.finditer(r'\*\*Status:\*\*[ \t]*(\w[\w ]*\w)', content):
+    for match in re.finditer(r'\*\*Status:\*\*[ \t]*(\w[\w ]*\w)', masked):
         status = match.group(1).strip()
         if status in counts:
             counts[status] += 1

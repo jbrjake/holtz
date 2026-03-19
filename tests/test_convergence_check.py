@@ -222,3 +222,24 @@ def test_deletion_does_not_converge():
     assert not converged, (
         f"Should NOT converge when items were deleted, not resolved. Got: {message}"
     )
+
+
+# --- FA-009: Status inside code fence inflates count ---
+
+def test_status_inside_code_fence_not_counted(tmp_path):
+    """**Status:** inside a code fence should not inflate the item count."""
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text("""\
+### BH-001: Real item
+**Status:** OPEN
+
+**Evidence:**
+```
+**Status:** OPEN
+**Status:** RESOLVED
+```
+""")
+    counts = cc.count_items(punchlist)
+    assert counts["OPEN"] == 1, f"Expected 1 OPEN, got {counts}"
+    assert counts["RESOLVED"] == 0, f"Expected 0 RESOLVED, got {counts}"
+    assert counts["total"] == 1, f"Expected total 1, got {counts}"
