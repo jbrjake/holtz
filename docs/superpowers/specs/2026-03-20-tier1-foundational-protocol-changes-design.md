@@ -34,7 +34,7 @@ A sequence of short statements connected by `→`, showing the auditor's reasoni
 |------|--------|
 | `references/punchlist-format.md` | Add `**Discovery Chain:**` to item template between Evidence and Acceptance Criteria. Add format description and example. |
 | `examples/sample-punchlist.md` | Add Discovery Chain to all sample items. |
-| `scripts/validate_punchlist.py` | Add Discovery Chain to required fields check. Validate presence in masked content using existing field detection pattern. |
+| `scripts/validate_punchlist.py` | Add `Discovery Chain` to `_field_names` tuple (section boundary terminator list). Add Discovery Chain to required fields check — presence check only (header exists in masked content), no minimum content length threshold. |
 | `skills/holtz/SKILL.md` | Add to Core Rules or Phase 4: each finding must include a Discovery Chain. |
 | `tests/test_validate_punchlist.py` | Add tests: item missing Discovery Chain produces error; item with Discovery Chain passes. |
 
@@ -45,6 +45,7 @@ A sequence of short statements connected by `→`, showing the auditor's reasoni
 - [ ] Discovery Chain field is correctly extracted from masked content (not poisoned by code-fence content)
 - [ ] Sample punchlist passes validation with new field
 - [ ] Punchlist format spec documents the field, its position, and its format
+- [ ] Discovery Chain is required for all items regardless of status (OPEN, RESOLVED, DEFERRED) — it documents how the finding was discovered, which doesn't change after resolution
 
 ### Test Cases
 
@@ -109,9 +110,11 @@ No script changes for this item — STATUS.md is not programmatically validated.
 
 ### Protocol
 
-During Phase 0, after step 0f (skipped tests) and before 0g (recon summary):
+Recommendation escalation is a prose instruction in the Phase 0 "After all steps" block (alongside the existing 0g recon summary instruction), not a table row. It does not produce its own output file — its output goes directly into `docs/holtz/PUNCHLIST.md` as punchlist items.
 
-**Step 0f.1:** Read `docs/holtz-prior-*/SUMMARY.md` Recommendations sections. Identify any recommendation that appears in substance (semantic match, not verbatim) in 2 or more prior summaries. For each match, create a `design/inconsistency` punchlist item at MEDIUM severity.
+**After step 0f, before writing 0g recon summary:** Read `docs/holtz-prior-*/SUMMARY.md` Recommendations sections. Identify any recommendation that appears in substance (semantic match, not verbatim) in 2 or more prior summaries. For each match, create a `design/inconsistency` punchlist item at MEDIUM severity.
+
+> **Note:** The self-reflection essay (Section X) suggested a threshold of 3 consecutive appearances. Reduced to 2 to catch persistent recommendations earlier, per design discussion.
 
 ### Escalated Item Format
 
@@ -148,7 +151,7 @@ Default severity is MEDIUM. The auditor may upgrade if the recommendation addres
 
 | File | Change |
 |------|--------|
-| `skills/holtz/SKILL.md` | Add step 0f.1 to Phase 0 table. Add description of recommendation escalation protocol. |
+| `skills/holtz/SKILL.md` | Add recommendation escalation instruction to Phase 0 "After all steps" block. Add description of recommendation escalation protocol. |
 
 ### Why No Script Change
 
@@ -156,7 +159,7 @@ Recommendation matching requires semantic understanding ("add mypy" and "configu
 
 ### Acceptance Criteria
 
-- [ ] SKILL.md Phase 0 includes step 0f.1 for recommendation scanning
+- [ ] SKILL.md Phase 0 includes recommendation scanning instruction in the "After all steps" block
 - [ ] The escalation protocol specifies: threshold (2+ appearances), default severity (MEDIUM), category (`design/inconsistency`), and the punchlist item format
 - [ ] Escalated items include Discovery Chain per Section 1
 - [ ] The protocol uses semantic matching, not verbatim string comparison
@@ -192,6 +195,10 @@ No script changes — this is a SKILL.md protocol addition. Testing is behaviora
 ### Rolling Policy
 
 The brief has a **cap of 20 active entries**. When a new pattern would push the count past 20, the 5 oldest entries (by discovery date) are moved in a single batch to `docs/holtz/patterns-brief-archive.md`. The archive has the same format but is not read by subagents by default — it's reference material available for investigation when a specific historical pattern may be relevant.
+
+### Relationship to STATUS.md Pattern Library
+
+The Pattern Library in STATUS.md (Section 2) is a compact index for context recovery — one line per pattern (PAT-NNN + description + instance count). The patterns-brief.md is a detailed briefing document with detection heuristics and examples, designed for subagent consumption. Phase 5 updates both: one-liner to STATUS.md Pattern Library, full entry to patterns-brief.md.
 
 ### Persistence Rules
 
@@ -232,6 +239,8 @@ All four items are independent and can be implemented in parallel. However, the 
 4. **Subagent Pattern Brief** — SKILL.md only
 
 Items 2-4 are SKILL.md-only changes and could be done in a single commit. Item 1 requires validator changes and new tests.
+
+**Sequencing caveat:** Section 3 (Recommendation Escalation) references Discovery Chain in its escalated item template. If implementing 3 before 1, the Discovery Chain field in escalated items will not be validated until Section 1's validator changes are in place. For clean implementation, do Section 1 first.
 
 ## Dependencies
 
