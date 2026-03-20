@@ -207,13 +207,15 @@ def validate(items: list[PunchlistItem], content: str = "") -> ValidationResult:
     pattern_refs = set()
     seen_ids: set[str] = set()
 
-    # File structure validation
+    # File structure validation — use masked content so headers inside
+    # code fences don't suppress structural warnings.
     if content:
-        if '# Holtz Punchlist' not in content and '# Bug Hunter Punchlist' not in content:
+        _, masked_content = mask_code_fences(content)
+        if '# Holtz Punchlist' not in masked_content and '# Bug Hunter Punchlist' not in masked_content:
             result.warnings.append("Missing punchlist header section")
-        if '## Summary' not in content:
+        if '## Summary' not in masked_content:
             result.warnings.append("Missing Summary section")
-        if '## Items' not in content:
+        if '## Items' not in masked_content:
             result.warnings.append("Missing Items section")
 
     for item in items:

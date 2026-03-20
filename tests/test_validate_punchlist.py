@@ -968,3 +968,41 @@ echo test
         "**HTTP Status:** on continuation line should not truncate Problem. "
         "Without continuation lines, 'Short.' (6 chars) is below the 10-char threshold."
     )
+
+
+# --- BH-004 (run 2): file structure checks use raw content ---
+
+def test_structure_in_code_fence_not_counted():
+    """## Items inside a code fence should NOT suppress the missing-structure warning."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Example punchlist structure:
+```markdown
+# Holtz Punchlist
+## Summary
+## Items
+```
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items, content)
+    # The file has NO real top-level structure — only inside a code fence.
+    # All 3 warnings should fire.
+    structure_warnings = [w for w in result.warnings if "section" in w.lower() or "header" in w.lower()]
+    assert len(structure_warnings) >= 2, (
+        f"Expected structure warnings (sections only in code fence), got: {result.warnings}"
+    )
