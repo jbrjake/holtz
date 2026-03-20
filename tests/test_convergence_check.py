@@ -673,6 +673,99 @@ Previous audit found items with **Status:** RESOLVED that were not fixed.
     )
 
 
+def test_cross_parser_agreement(tmp_path):
+    """count_items and parse_punchlist must agree on item counts and statuses."""
+    import validate_punchlist as vp
+
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text("""\
+# Holtz Punchlist
+
+## Summary
+## Patterns
+
+Previous audit found items with **Status:** RESOLVED that were not fixed.
+
+## Items
+
+### BH-001: First item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** The system shows **Status:** RESOLVED in its output incorrectly.
+
+**Evidence:** Grep found the misleading status string in output logs.
+
+**Acceptance Criteria:**
+- [ ] Fix the output
+
+**Validation Command:**
+```bash
+echo test
+```
+
+### BH-002: Second item
+**Severity:** MEDIUM
+**Category:** test/missing
+**Location:** `test.py:5`
+**Status:** RESOLVED
+
+**Problem:** Missing test for edge case with enough detail to be valid.
+
+**Evidence:** No test covers the empty input path as shown in code review.
+
+**Acceptance Criteria:**
+- [x] Test added
+
+**Validation Command:**
+```bash
+echo test
+```
+
+**Resolution:** Fixed in commit abc123. Test added for empty input.
+
+### BH-003: Third item
+**Severity:** LOW
+**Category:** doc/drift
+**Location:** `README.md:10`
+**Status:** DEFERRED
+**Determinism:** theoretical
+
+**Problem:** README claims feature exists but it was removed last quarter.
+
+**Evidence:** grep for feature name returns no code results, only README.
+
+**Acceptance Criteria:**
+- [ ] README updated
+
+**Validation Command:**
+```bash
+echo test
+```
+""")
+    # count_items (convergence tracker's view)
+    counts = cc.count_items(punchlist)
+    # parse_punchlist (validator's view)
+    items = vp.parse_punchlist(punchlist.read_text())
+
+    # Total items must agree
+    assert counts["total"] == len(items), (
+        f"count_items sees {counts['total']} items, "
+        f"parse_punchlist sees {len(items)}: DISAGREEMENT"
+    )
+
+    # Status distribution must agree
+    from collections import Counter
+    parsed_statuses = Counter(item.status for item in items)
+    for status in ("OPEN", "RESOLVED", "DEFERRED", "IN PROGRESS"):
+        assert counts.get(status, 0) == parsed_statuses.get(status, 0), (
+            f"Status '{status}': count_items={counts.get(status, 0)}, "
+            f"parse_punchlist={parsed_statuses.get(status, 0)}"
+        )
+
+
 def test_status_in_problem_section_not_counted(tmp_path):
     """**Status:** in an item's Problem prose should not create a phantom item."""
     punchlist = tmp_path / "PUNCHLIST.md"
