@@ -853,3 +853,83 @@ pytest -k empty_input
     assert items[2].severity == "MEDIUM"
     assert items[2].status == "DEFERRED"
     assert items[2].determinism == "theoretical"
+
+
+# --- BH-001 (run 2): dual-instance field header in code fence + real content ---
+
+def test_resolution_dual_instance_extracts_real():
+    """When Resolution appears in both code fence and real content, real one wins."""
+    # The code fence Resolution has NO content after the header.
+    # If the parser grabs the code-fence instance, captured content is just the
+    # fence closer (```), which is 3 chars stripped — below the >5 threshold.
+    # The real Resolution has plenty of content. has_resolution should be True.
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** RESOLVED
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** The prior punchlist had this item:
+```markdown
+**Resolution:**
+```
+
+**Acceptance Criteria:**
+- [x] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+
+**Resolution:** Fixed in commit abc123. Full description of the fix that is long enough.
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    item = items[0]
+    assert item.has_resolution, (
+        "Real Resolution outside code fence should be detected even when "
+        "code fence contains an empty **Resolution:** earlier in document order"
+    )
+
+
+def test_validation_command_dual_instance_extracts_real():
+    """When Validation Command appears in both code fence and real content, real one wins."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Example validation:
+````markdown
+**Validation Command:**
+```bash
+echo fake
+```
+````
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo real_test_command
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    item = items[0]
+    assert item.has_validation_command, (
+        "Real Validation Command should be detected even when code fence "
+        "contains **Validation Command:** earlier in document order"
+    )
+    assert "real_test_command" in item.validation_command, (
+        f"Should extract real command, got: '{item.validation_command}'"
+    )

@@ -134,22 +134,33 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         if rcc:
             item.root_cause_confidence = rcc.group(1).strip()
 
-        # Section content uses a two-step approach:
+        # Section content uses a three-step approach:
         # 1. Find the field header in masked_block (ensures it's not inside a code fence)
-        # 2. Extract content from original_block at the corresponding line
-        # This preserves code fence content in Evidence while preventing
-        # field headers inside code fences from poisoning other fields.
-        # Match section content: first line after header, then continuation lines
-        # that don't start with a field header (**FieldName:**). The previous pattern
-        # (?!\*\*\w) incorrectly stopped at bold emphasis like **text**.
+        # 2. Map the header's line position to original_block (same line number)
+        # 3. Extract content from original_block starting at the mapped position
+        # This prevents code fence field headers from interfering with extraction
+        # even when the same header appears in both a code fence and real content.
         section_re = r'\*\*%s:\*\*[ \t]*((?:[^\n]*(?:\n(?!\*\*[A-Z][\w ]*:\*\*)[^\n]*)*))'
         header_re = r'\*\*%s:\*\*'
 
+        def _masked_pos_to_orig_offset(pos_in_masked):
+            """Map a character position in masked_block to the line start in original_block."""
+            line_num = masked_block[:pos_in_masked].count('\n')
+            offset = 0
+            for _ in range(line_num):
+                nl = original_block.find('\n', offset)
+                if nl == -1:
+                    return len(original_block)
+                offset = nl + 1
+            return offset
+
         def _section_from_original(field_name):
-            """Find header in masked, extract content from original."""
-            if not re.search(header_re % field_name, masked_block):
+            """Find header in masked, extract content from original at the same line."""
+            masked_match = re.search(header_re % field_name, masked_block)
+            if not masked_match:
                 return None
-            return re.search(section_re % field_name, original_block)
+            orig_offset = _masked_pos_to_orig_offset(masked_match.start())
+            return re.search(section_re % field_name, original_block[orig_offset:])
 
         problem_m = _section_from_original('Problem')
         item.has_problem = bool(problem_m and len(problem_m.group(1).strip()) > 10)
@@ -162,8 +173,10 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         item.has_acceptance_criteria = '- [ ]' in ac_content or '- [x]' in ac_content or '- [X]' in ac_content
 
         # Validation command: header must exist in masked, content from original
-        if re.search(header_re % 'Validation Command', masked_block):
-            val_cmd = re.search(r'\*\*Validation Command:\*\*[ \t]*\n?```\w*\n(.+?)\n```', original_block, re.DOTALL)
+        vc_match = re.search(header_re % 'Validation Command', masked_block)
+        if vc_match:
+            orig_offset = _masked_pos_to_orig_offset(vc_match.start())
+            val_cmd = re.search(r'\*\*Validation Command:\*\*[ \t]*\n?```\w*\n(.+?)\n```', original_block[orig_offset:], re.DOTALL)
             if val_cmd:
                 item.validation_command = val_cmd.group(1).strip()
         item.has_validation_command = bool(item.validation_command)
