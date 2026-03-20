@@ -164,17 +164,51 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
             return offset
 
         def _section_from_original(field_name):
-            """Find header in masked, extract content from original at the same line."""
-            masked_match = re.search(header_re % field_name, masked_block)
+            """Find section boundaries in masked, extract content from original.
+
+            Uses masked_block for boundary detection (immune to code-fenced
+            field headers) and original_block for content extraction.
+            Returns the section content as a string, or None.
+            """
+            masked_match = re.search(section_re % field_name, masked_block)
             if not masked_match:
                 return None
-            orig_offset = _masked_pos_to_orig_offset(masked_match.start())
-            return re.search(section_re % field_name, original_block[orig_offset:])
 
-        problem_m = _section_from_original('Problem')
-        item.has_problem = bool(problem_m and len(problem_m.group(1).strip()) > 10)
-        evidence_m = _section_from_original('Evidence')
-        item.has_evidence = bool(evidence_m and len(evidence_m.group(1).strip()) > 10)
+            cap_start = masked_match.start(1)
+            cap_end = masked_match.end(1)
+            start_line = masked_block[:cap_start].count('\n')
+            end_line = masked_block[:cap_end].count('\n')
+
+            orig_lines = original_block.split('\n')
+            masked_lines_list = masked_block.split('\n')
+
+            if start_line >= len(orig_lines):
+                return None
+
+            # First line: extract content after the field header.
+            # The header line itself is never inside a code fence, so the
+            # column offset is the same in masked and original.
+            first_masked_line = masked_lines_list[start_line]
+            header_m = re.search(
+                r'\*\*' + re.escape(field_name) + r':\*\*[ \t]*',
+                first_masked_line,
+            )
+            if not header_m:
+                return None
+
+            col_offset = header_m.end()
+            parts = [orig_lines[start_line][col_offset:]]
+
+            # Remaining lines: take from original_block directly.
+            for ln in range(start_line + 1, min(end_line + 1, len(orig_lines))):
+                parts.append(orig_lines[ln])
+
+            return '\n'.join(parts)
+
+        problem_content = _section_from_original('Problem')
+        item.has_problem = bool(problem_content and len(problem_content.strip()) > 10)
+        evidence_content = _section_from_original('Evidence')
+        item.has_evidence = bool(evidence_content and len(evidence_content.strip()) > 10)
 
         # Checkbox detection: scoped to Acceptance Criteria section in masked block
         ac_m = re.search(section_re % 'Acceptance Criteria', masked_block)
@@ -190,8 +224,8 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
                 item.validation_command = val_cmd.group(1).strip()
         item.has_validation_command = bool(item.validation_command)
 
-        resolution_m = _section_from_original('Resolution')
-        item.has_resolution = bool(resolution_m and len(resolution_m.group(1).strip()) > 5)
+        resolution_content = _section_from_original('Resolution')
+        item.has_resolution = bool(resolution_content and len(resolution_content.strip()) > 5)
 
         items.append(item)
 

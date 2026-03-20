@@ -1074,3 +1074,48 @@ pytest -k load_test
     assert len(deferred_warnings) > 0, (
         f"DEFERRED bug without Evidence or Investigation should warn. Got warnings: {result.warnings}"
     )
+
+
+# --- BH-001 (run 4): section_re truncates at code-fenced field header ---
+
+def test_code_fence_field_header_no_truncate_problem():
+    """Code-fenced **Evidence:** should not truncate Problem section — content
+    after the code fence must be included in the Problem capture."""
+    # The "continuation" text after the code fence is the real test signal.
+    # If section_re terminates at the code-fenced **Evidence:**, the
+    # continuation is lost. Only pre-fence + fence delimiter survive.
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:**
+````
+**Evidence:** This is inside a code fence, not a real Evidence header.
+````
+This continuation IS part of Problem and MUST be captured by the parser.
+
+**Evidence:** Real evidence with enough content to pass the threshold check.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    item = items[0]
+    # The ONLY meaningful Problem content is the post-fence continuation.
+    # The Problem header line is empty, the code fence content is an example.
+    # If section_re truncates at the code-fenced **Evidence:**, has_problem
+    # is False because only the empty header + fence delimiter are captured.
+    assert item.has_problem, (
+        "Problem section should include post-fence continuation text. "
+        "If section_re terminates at code-fenced **Evidence:**, the "
+        "continuation is lost and has_problem is False."
+    )
