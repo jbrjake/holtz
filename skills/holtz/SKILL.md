@@ -111,6 +111,8 @@ Priority order: error paths, boundaries, state transitions, external integration
 
 ### Phase 4: Fix Loop (TDD)
 
+Each finding written to the punchlist must include a **Discovery Chain** showing the reasoning from observation to conclusion (1-4 steps connected by `→`). This is required for all items regardless of status — it documents *how* the finding was discovered, which does not change after resolution.
+
 1. **Re-read `docs/holtz/PUNCHLIST.md`** — this is your worklist
 2. **Triage each item** by category before starting work on it:
    - `test/*`, `doc/*`, `design/*` items → **Fast Path**

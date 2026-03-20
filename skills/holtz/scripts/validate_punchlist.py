@@ -37,6 +37,7 @@ class PunchlistItem:
     root_cause_confidence: str = ""
     has_problem: bool = False
     has_evidence: bool = False
+    has_discovery_chain: bool = False
     has_acceptance_criteria: bool = False
     has_validation_command: bool = False
     has_resolution: bool = False
@@ -145,8 +146,8 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         _field_names = (
             'Severity', 'Category', 'Location', 'Status', 'Pattern',
             'Determinism', 'Investigation', 'Root Cause Confidence',
-            'Problem', 'Evidence', 'Acceptance Criteria',
-            'Validation Command', 'Resolution',
+            'Problem', 'Evidence', 'Discovery Chain',
+            'Acceptance Criteria', 'Validation Command', 'Resolution',
         )
         _field_alt = '|'.join(re.escape(f) for f in _field_names)
         section_re = r'\*\*%s:\*\*[ \t]*((?:[^\n]*(?:\n(?!\*\*(?:' + _field_alt + r'):\*\*)[^\n]*)*))'
@@ -209,6 +210,9 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         item.has_problem = bool(problem_content and len(problem_content.strip()) > 10)
         evidence_content = _section_from_original('Evidence')
         item.has_evidence = bool(evidence_content and len(evidence_content.strip()) > 10)
+
+        # Discovery Chain: presence check only (header exists in masked content)
+        item.has_discovery_chain = bool(re.search(header_re % 'Discovery Chain', masked_block))
 
         # Checkbox detection: scoped to Acceptance Criteria section in masked block
         ac_m = re.search(section_re % 'Acceptance Criteria', masked_block)
@@ -290,6 +294,9 @@ def validate(items: list[PunchlistItem], content: str = "") -> ValidationResult:
 
         if not item.has_problem:
             result.errors.append(f"{prefix}: missing or empty Problem section")
+
+        if not item.has_discovery_chain:
+            result.errors.append(f"{prefix}: missing Discovery Chain")
 
         if not item.has_evidence:
             result.warnings.append(f"{prefix}: missing or empty Evidence section")

@@ -491,6 +491,8 @@ def test_well_formed_item_no_errors():
 
 **Evidence:** Here is the evidence showing the problem with code references.
 
+**Discovery Chain:** observed X in source code → leads to Y → causes Z
+
 **Acceptance Criteria:**
 - [ ] Fix the bug
 
@@ -1218,4 +1220,162 @@ echo quad_test
     )
     assert "quad_test" in items[0].validation_command, (
         f"Should extract 'quad_test', got: '{items[0].validation_command}'"
+    )
+
+
+# --- Discovery Chain tests ---
+
+def test_missing_discovery_chain_produces_error():
+    """Item missing Discovery Chain should produce a validation error."""
+    content = """\
+# Holtz Punchlist
+## Summary
+## Items
+
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+**Determinism:** deterministic
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items, content)
+    dc_errors = [e for e in result.errors if "discovery chain" in e.lower()]
+    assert len(dc_errors) == 1, (
+        f"Expected 1 Discovery Chain error for BH-001, got: {result.errors}"
+    )
+    assert "BH-001" in dc_errors[0]
+
+
+def test_present_discovery_chain_passes():
+    """Item with Discovery Chain should pass validation with no Discovery Chain errors."""
+    content = """\
+# Holtz Punchlist
+## Summary
+## Items
+
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+**Determinism:** deterministic
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Discovery Chain:** observed missing validation in handler
+→ user input flows directly to database query
+→ SQL injection possible
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items, content)
+    assert len(result.errors) == 0, (
+        f"Item with Discovery Chain should have zero errors, got: {result.errors}"
+    )
+
+
+def test_discovery_chain_inside_code_fence_not_counted():
+    """**Discovery Chain:** inside a code fence should not satisfy the requirement."""
+    content = """\
+# Holtz Punchlist
+## Summary
+## Items
+
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+**Determinism:** deterministic
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Example punchlist item:
+```markdown
+**Discovery Chain:** this is inside a code fence and should not count
+→ fake reasoning chain
+```
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert not items[0].has_discovery_chain, (
+        "**Discovery Chain:** inside a code fence should not satisfy the requirement"
+    )
+    result = vp.validate(items, content)
+    dc_errors = [e for e in result.errors if "discovery chain" in e.lower()]
+    assert len(dc_errors) == 1, (
+        f"Expected Discovery Chain error (only in code fence), got errors: {result.errors}"
+    )
+
+
+def test_multi_step_discovery_chain_accepted():
+    """Discovery Chain with 4 arrow-connected steps should be accepted."""
+    content = """\
+# Holtz Punchlist
+## Summary
+## Items
+
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+**Determinism:** deterministic
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Discovery Chain:** `_section_from_original` calls `re.search` on `original_block`
+→ `original_block` contains code fences with bold text
+→ `section_re` stops at bold text
+→ section content silently truncated
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].has_discovery_chain, (
+        "Multi-step Discovery Chain with 4 arrow-connected steps should be accepted"
+    )
+    result = vp.validate(items, content)
+    assert len(result.errors) == 0, (
+        f"Item with multi-step Discovery Chain should have zero errors, got: {result.errors}"
     )

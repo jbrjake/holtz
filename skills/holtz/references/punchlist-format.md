@@ -16,6 +16,8 @@
 
 **Evidence:** {How found. Code snippet, doc quote, or grep result.}
 
+**Discovery Chain:** {observation} → {inference} → {conclusion}
+
 **Acceptance Criteria:**
 - [ ] {Testable condition that must be true when fixed}
 - [ ] {Validation: the test that proves it}
@@ -50,6 +52,21 @@ For `bug/*` categories, assess determinism during Phase 3 (adversarial audit):
 - **theoretical** — identified from code analysis, not yet observed in practice (race conditions, uncovered paths)
 
 This informs the reproduction strategy in Phase 4. Deterministic bugs get a standard reproduction test. Intermittent bugs get statistical reproduction (loop test N times). Theoretical bugs may require the can't-reproduce protocol.
+
+## Discovery Chain
+
+A required field on every punchlist item, positioned between **Evidence** and **Acceptance Criteria**. It captures the auditor's reasoning from observation to conclusion as a sequence of short statements connected by `→`.
+
+**Format:** 1-4 steps, each step one clause, connected by `→`.
+
+```markdown
+**Discovery Chain:** `_section_from_original` calls `re.search` on `original_block`
+→ `original_block` contains code fences with bold text
+→ `section_re` stops at bold text
+→ section content silently truncated
+```
+
+Discovery Chain is required for all items regardless of status (OPEN, RESOLVED, DEFERRED). It documents how the finding was discovered, which does not change after resolution.
 
 ## Pattern Block
 ```markdown
