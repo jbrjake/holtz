@@ -3,10 +3,12 @@
 import re
 
 
-_BACKTICK_OPEN = re.compile(r'^(`{3,})[^`]*$')
-_TILDE_OPEN = re.compile(r'^(~{3,})[^~]*$')
-_BACKTICK_CLOSE_TMPL = r'^`{%d,}[ \t]*$'
-_TILDE_CLOSE_TMPL = r'^~{%d,}[ \t]*$'
+# CommonMark allows code fences to be indented 0-3 spaces.
+# 4+ spaces is an indented code block, not a fenced code block.
+_BACKTICK_OPEN = re.compile(r'^( {0,3})(`{3,})[^`]*$')
+_TILDE_OPEN = re.compile(r'^( {0,3})(~{3,})[^~]*$')
+_BACKTICK_CLOSE_TMPL = r'^ {0,3}`{%d,}[ \t]*$'
+_TILDE_CLOSE_TMPL = r'^ {0,3}~{%d,}[ \t]*$'
 
 
 def mask_code_fences(content: str) -> tuple[str, str]:
@@ -18,6 +20,7 @@ def mask_code_fences(content: str) -> tuple[str, str]:
 
     Handles both backtick (```) and tilde (~~~) fences per CommonMark spec.
     A tilde fence cannot close a backtick fence and vice versa.
+    Opening and closing fences may be indented 0-3 spaces independently.
     """
     content = content.replace('\r\n', '\n')
     lines = content.split('\n')
@@ -31,14 +34,14 @@ def mask_code_fences(content: str) -> tuple[str, str]:
         if not in_fence:
             m = _BACKTICK_OPEN.match(line)
             if m:
-                fence_char_count = len(m.group(1))
+                fence_char_count = len(m.group(2))
                 fence_close_tmpl = _BACKTICK_CLOSE_TMPL
                 in_fence = True
                 masked_lines[i] = ''
                 continue
             m = _TILDE_OPEN.match(line)
             if m:
-                fence_char_count = len(m.group(1))
+                fence_char_count = len(m.group(2))
                 fence_close_tmpl = _TILDE_CLOSE_TMPL
                 in_fence = True
                 masked_lines[i] = ''

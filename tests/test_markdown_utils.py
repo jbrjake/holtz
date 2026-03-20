@@ -128,3 +128,48 @@ def test_tilde_fence_does_not_close_backtick():
     _, masked = mu.mask_code_fences(content)
     assert "still fenced" not in masked
     assert "after" in masked
+
+
+# --- BH-003 (run 2): indented code fences ---
+
+def test_indented_backtick_fence_1_space():
+    """Backtick fence indented 1 space should be recognized."""
+    content = "before\n ```\n fenced\n ```\nafter\n"
+    _, masked = mu.mask_code_fences(content)
+    assert "before" in masked
+    assert "after" in masked
+    assert "fenced" not in masked
+
+
+def test_indented_backtick_fence_3_spaces():
+    """Backtick fence indented 3 spaces (max per CommonMark) should be recognized."""
+    content = "before\n   ```python\n   code\n   ```\nafter\n"
+    _, masked = mu.mask_code_fences(content)
+    assert "before" in masked
+    assert "after" in masked
+    assert "code" not in masked
+
+
+def test_indented_4_spaces_not_code_fence():
+    """4+ space indent is an indented code block, NOT a fenced code block."""
+    content = "before\n    ```\n    code\n    ```\nafter\n"
+    _, masked = mu.mask_code_fences(content)
+    # 4-space-indented ``` is NOT a fence opener per CommonMark
+    assert "code" in masked
+
+
+def test_indented_tilde_fence():
+    """Tilde fence indented up to 3 spaces should be recognized."""
+    content = "before\n  ~~~\n  fenced\n  ~~~\nafter\n"
+    _, masked = mu.mask_code_fences(content)
+    assert "before" in masked
+    assert "after" in masked
+    assert "fenced" not in masked
+
+
+def test_indented_close_fence():
+    """Closing fence may have different indentation than opening fence."""
+    content = "before\n ```\nfenced\n  ```\nafter\n"
+    _, masked = mu.mask_code_fences(content)
+    assert "fenced" not in masked
+    assert "after" in masked
