@@ -4,7 +4,7 @@
 **Status:** Draft
 **Source:** `docs/holtz-self-reflection.md` Sections II, III, IV, VI
 **Depends on:** Tier 1 (Discovery Chain, Strategy Journal, Pattern Brief)
-**Scope:** Four components implemented bottom-up: Knowledge Graph → Blast Radius Analysis → Lens Registry → Predictive Recon
+**Scope:** Four components implemented bottom-up: Knowledge Graph → Lens Registry → Predictive Recon → Blast Radius Analysis
 
 ## Overview
 
@@ -24,6 +24,23 @@ Implementation order matters. The knowledge graph is the foundation. Blast radiu
 
 **Change:** A new Python script `scripts/impact_graph.py` and a persisted JSON data structure at `docs/holtz/impact-graph.json`. The graph encodes relationships between code entities that Holtz discovers during auditing. It persists across runs and grows richer over time.
 
+### Top-Level JSON Schema
+
+```json
+{
+  "nodes": {
+    "<id>": { "type": "...", "file": "...", "line": N, "last_audited": "...", "audit_count": N, "risk_score": 0.0 },
+    ...
+  },
+  "edges": [
+    { "source": "<id>", "target": "<id>", "type": "...", "metadata": { ... } },
+    ...
+  ]
+}
+```
+
+Nodes are stored as a dict keyed by ID for O(1) lookup. Edges are stored as a list.
+
 ### Node Format
 
 ```json
@@ -40,7 +57,24 @@ Implementation order matters. The knowledge graph is the foundation. Blast radiu
 
 Node types: `function`, `class`, `module`, `test`, `config`, `doc`.
 
-The `risk_score` is a float 0.0-1.0 that Holtz updates based on findings — a function that has produced 3 bugs has a higher risk score than one that's been clean across 4 audits.
+**Node ID conventions by type:**
+
+| Type | ID Format | Example |
+|------|-----------|---------|
+| `module` | `filename` | `validate_punchlist.py` |
+| `function` | `filename::function_name` | `validate_punchlist.py::parse_punchlist` |
+| `class` | `filename::ClassName` | `models.py::PunchlistItem` |
+| `test` | `filename::test_function_name` | `test_validate_punchlist.py::test_parse_items` |
+| `config` | `filename` | `pyproject.toml` |
+| `doc` | `filename` | `README.md` |
+
+**Field semantics:**
+
+- `risk_score`: Float 0.0-1.0. Updated via `update_risk`. A function that has produced 3 bugs has a higher risk score than one that's been clean across 4 audits.
+- `audit_count`: Integer. Incremented each time `add_node` is called on an existing node ID (i.e., each time the node is re-confirmed during a run). Not incremented by queries, risk updates, or edge operations.
+- `last_audited`: ISO date string. Updated each time `add_node` is called on an existing node ID.
+
+**`add_node` update semantics (existing node):** When `add_node` is called with an ID that already exists: `file`, `line`, `type`, and `last_audited` are overwritten with new values. `risk_score` is preserved. `audit_count` is incremented by 1.
 
 ### Edge Format
 
@@ -56,6 +90,12 @@ The `risk_score` is a float 0.0-1.0 that Holtz updates based on findings — a f
   }
 }
 ```
+
+**Edge identity and deduplication:** Edges are identified by the `(source, target, type)` tuple. Adding an edge with the same triple updates the metadata on the existing edge rather than creating a duplicate. Multiple edges between the same two nodes are allowed if they have different types (e.g., A `calls` B and A `assumes` B are two distinct edges).
+
+**Edge metadata `confidence` values:** `high`, `medium`, `low`. Free text is also allowed in the `note` field.
+
+**`add_edge` with nonexistent endpoints:** Returns an error if either the source or target node does not exist. Edges are not created for phantom nodes.
 
 ### Edge Types
 
@@ -76,13 +116,30 @@ The `risk_score` is a float 0.0-1.0 that Holtz updates based on findings — a f
 | `add_node <id> <type> <file> [--line N]` | Add or update a node |
 | `add_edge <source> <target> <type> [--note "..."]` | Add a typed edge |
 | `neighbors <id> [--type calls,assumes]` | Return direct neighbors, optionally filtered by edge type |
-| `blast_radius <id> [--depth 2] [--type calls,imports]` | Return all nodes within N hops, optionally filtered by edge type |
+| `blast_radius <id> [--depth 2] [--type calls,imports]` | Return all nodes within N hops (bidirectional traversal), optionally filtered by edge type |
 | `risk_hotspots [--top 10]` | Return highest risk_score nodes |
 | `update_risk <id> <delta>` | Adjust risk score (clamped to 0.0-1.0) |
-| `stats` | Node count, edge count, edge type distribution |
+| `stats` | Return JSON: `{"nodes": N, "edges": N, "edge_types": {"calls": N, ...}}` |
 | `prune_node <id>` | Remove node and all connected edges, return list of removed edges |
-| `prune_missing --project-root <path>` | Remove nodes whose backing files no longer exist |
-| `drift_check --project-root <path>` | Flag nodes whose file exists but entity is missing or relocated |
+| `prune_missing --project-root <path>` | Remove nodes whose backing files no longer exist. Return JSON summary: `{"removed_nodes": [...], "removed_edges": N}` |
+| `drift_check --project-root <path>` | Flag nodes whose file exists but entity is missing or relocated. Return JSON: `{"drifted": [{"id": ..., "reason": ...}, ...]}` |
+
+**`blast_radius` traversal direction:** Bidirectional. The graph is treated as undirected for reachability purposes. If A `calls` B, then B is in A's blast radius AND A is in B's blast radius. This is because a change to B can break A (the caller), and a change to A can change what B receives. The edge types are still directional for query purposes (`neighbors B --type calls` returns only nodes that B calls, not nodes that call B), but `blast_radius` ignores direction to capture the full impact zone.
+
+**`drift_check` detection strategy:**
+
+| Node Type | Detection Method | Drift Threshold |
+|-----------|-----------------|-----------------|
+| `module` | File exists at `node.file` | N/A (file existence only — if missing, handled by `prune_missing`) |
+| `function` | Grep for `def {name}` (Python), `function {name}` (JS/TS), `func {name}` (Go) in `node.file` | Line shifted by >10 lines from recorded `node.line` |
+| `class` | Grep for `class {name}` in `node.file` | Line shifted by >10 lines |
+| `test` | Same as `function` (tests are functions) | Line shifted by >10 lines |
+| `config` | File exists at `node.file` | N/A (file existence only) |
+| `doc` | File exists at `node.file` | N/A (file existence only) |
+
+Entity name is extracted from the node ID (everything after `::` for function/class/test types). For node types without `::` (module, config, doc), drift_check only verifies file existence — which is already covered by `prune_missing`, so these types are skipped by drift_check.
+
+`drift_check` output lists flagged nodes with reason (`"entity_missing"` or `"line_shifted"` with old and new line numbers). The LLM resolves each flag: update the node's line number (preserving risk_score/edges), or prune if the entity was truly removed.
 
 ### Graph Lifecycle & Maintenance
 
@@ -94,7 +151,7 @@ Before adding new nodes, Holtz reconciles the graph against the current filesyst
 
 1. **`prune_missing`** — Remove nodes for deleted files. All edges connected to removed nodes are cascade-deleted.
 2. **`drift_check`** — Flag nodes whose file exists but entity is absent or line number has shifted significantly. Flagged nodes are presented to the LLM for resolution (update in place, or prune if truly removed). Nodes updated in place preserve their `risk_score` and edge history.
-3. **Stale edge verification** — For `calls` and `imports` edges, verify the relationship still exists (grep for the call/import). Remove severed relationships. `assumes` and `diverges_from` edges are NOT auto-pruned during this step — they require LLM re-evaluation during Phases 1-3, since the semantic relationship may still hold even if code moved.
+3. **Stale edge verification (LLM-driven)** — The LLM (not the script) verifies `calls` and `imports` edges by grepping for the call/import in the source file. This is LLM work because function name disambiguation (same name in different modules) requires judgment. Remove severed relationships via `prune_node` or manual edge removal. `assumes` and `diverges_from` edges are NOT verified during this step — they require LLM re-evaluation during Phases 1-3, since the semantic relationship may still hold even if code moved.
 4. **Add new nodes** — Files and functions discovered in recon that aren't in the graph get new nodes.
 
 **Note on semantic edges and deletion:** `assumes` and `diverges_from` edges survive stale-edge-detection (step 3) because they encode semantic knowledge that can't be verified by grep. However, they ARE removed via cascade when either endpoint node is deleted (steps 1-2) — if the code is gone, the assumption is moot.
@@ -157,7 +214,7 @@ Before adding new nodes, Holtz reconciles the graph against the current filesyst
 9. **Depth 0:** `blast_radius A --depth 0` → empty set.
 10. **Nonexistent node:** `blast_radius nonexistent_id` → empty set or clear error, no crash.
 11. **Disconnected subgraphs:** {A→B→C} and {X→Y→Z}. `blast_radius A --depth 10` → {B, C} only.
-12. **Hub node:** H connects to 50 leaf nodes. `blast_radius H --depth 1` → all 50. `blast_radius leaf_1 --depth 2` → {H} + 49 other leaves.
+12. **Hub node (bidirectional):** H `calls` 50 leaf nodes. `blast_radius H --depth 1` → all 50. `blast_radius leaf_1 --depth 1` → {H} (bidirectional traversal reaches H even though the edge points H→leaf). `blast_radius leaf_1 --depth 2` → {H} + 49 other leaves.
 13. **Blast radius with edge type filter:** A `calls` B `assumes` C. `blast_radius A --depth 2 --type calls` → {B} only.
 
 **Cycle handling:**
@@ -192,9 +249,16 @@ Before adding new nodes, Holtz reconciles the graph against the current filesyst
 32. **Drift check:** Node for `foo.py::bar` at line 50. Function moves to line 80. `drift_check` flags as drifted.
 33. **Semantic edge survives stale detection:** `assumes` edge between A and B. `calls` edge also exists. During stale edge verification, `calls` edge confirmed or removed by grep. `assumes` edge untouched (requires LLM re-eval). But: if A is deleted via `prune_node`, both edges cascade-deleted.
 
+**Node updates:**
+
+34. **Add node with existing ID:** Add node `foo.py::bar` with line 50. Call `add_node foo.py::bar function foo.py --line 80`. Verify: line updated to 80, `audit_count` incremented by 1, `risk_score` preserved at original value.
+35. **Prune missing with all files present:** 5 nodes, all backing files exist. `prune_missing` → no-op, all nodes and edges remain.
+36. **Neighbors on nonexistent node:** `neighbors nonexistent_id` → empty set or clear error, no crash.
+37. **Add edge with nonexistent endpoint:** Nodes A exists, Z does not. `add_edge A Z calls` → error, no edge created, no phantom node.
+
 **Large graph:**
 
-34. **200-node round-trip:** Build 200 nodes, 500 edges. Write. Reload. All data identical.
+38. **200-node round-trip:** Build 200 nodes, 500 edges. Write. Reload. All data identical.
 
 ---
 
@@ -266,7 +330,7 @@ WHILE open items remain OR unlensed perspectives exist:
 
     IF current lens should switch (any of):
         - current lens marked COMPLETE
-        - last 3 consecutive findings are all LOW severity
+        - last 3 consecutive findings added to the punchlist under the current lens are all LOW severity
     THEN:
         - select next lens from registry (skip completed lenses)
         - update Active Lens in STATUS.md
@@ -301,9 +365,9 @@ Findings discovered under a specific lens include `**Lens:** {lens name}` as an 
 | File | Change |
 |------|--------|
 | `skills/holtz/SKILL.md` | Phase 6 rewritten with lens-aware convergence loop. Phase 0 reads lens registry. |
-| `references/status-file-format.md` | Active Lens section: `Lenses Completed This Run` as a checklist. |
-| `references/punchlist-format.md` | Add optional `**Lens:**` field to item template. |
-| `scripts/validate_punchlist.py` | Add `Lens` to `_field_names` tuple (section boundary terminator). No required-field check. |
+| `skills/holtz/references/status-file-format.md` | Active Lens section: `Lenses Completed This Run` as a checklist. |
+| `skills/holtz/references/punchlist-format.md` | Add optional `**Lens:**` field to item template. |
+| `skills/holtz/scripts/validate_punchlist.py` | Add `Lens` to `_field_names` tuple (section boundary terminator). No required-field check. |
 | `tests/test_validate_punchlist.py` | Test that Lens field is accepted without error when present and not required when absent. |
 
 ### Acceptance Criteria
@@ -311,7 +375,7 @@ Findings discovered under a specific lens include `**Lens:** {lens name}` as an 
 - [ ] Lens registry file defines 6 default lenses with Focus, Audit priorities, Failure modes, Entry point
 - [ ] Registry format is documented so users can add custom lenses
 - [ ] SKILL.md Phase 6 implements lens-aware convergence: per-lens convergence → lens switch → all-lens convergence
-- [ ] Lens switch triggers on: current lens complete, OR last 3 findings all LOW
+- [ ] Lens switch triggers on: current lens complete, OR last 3 consecutive findings under current lens all LOW
 - [ ] Final convergence requires all lenses clean in the same sweep
 - [ ] STATUS.md Active Lens section tracks current lens, completed lenses, and finding rate
 - [ ] Lens priority order defaults to registry order but can be reordered by recon/graph signals
@@ -406,8 +470,8 @@ Appended to `docs/holtz/SUMMARY.md`:
 | File | Change |
 |------|--------|
 | `skills/holtz/SKILL.md` | Add step 0h to Phase 0. Add prediction prioritization to Phases 1-3. Add CONFIRMED/UNCONFIRMED protocol. Add Prediction Accuracy to SUMMARY.md requirements. |
-| `references/punchlist-format.md` | Add optional `**Predicted:**` field to item template (after Pattern, before Determinism). |
-| `scripts/validate_punchlist.py` | Add `Predicted` to `_field_names` tuple. No required-field check. |
+| `skills/holtz/references/punchlist-format.md` | Add optional `**Predicted:**` field to item template (after Pattern, before Determinism). |
+| `skills/holtz/scripts/validate_punchlist.py` | Add `Predicted` to `_field_names` tuple. No required-field check. |
 | `tests/test_validate_punchlist.py` | Test Predicted field accepted when present, not required when absent, poisoning-resistant. |
 
 ### Acceptance Criteria
@@ -419,7 +483,7 @@ Appended to `docs/holtz/SUMMARY.md`:
 - [ ] Predictions file updated with CONFIRMED/UNCONFIRMED as phases complete
 - [ ] SUMMARY.md includes Prediction Accuracy table
 - [ ] `validate_punchlist.py` recognizes `Predicted` in `_field_names` without requiring it
-- [ ] Prediction generation draws from all 6 input sources
+- [ ] SKILL.md step 0h instructions reference all 6 input sources (pattern brief, graph risk scores, graph semantic edges, churn, prior run findings, recon observations)
 
 ### Test Cases
 
