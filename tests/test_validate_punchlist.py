@@ -933,3 +933,38 @@ echo real_test_command
     assert "real_test_command" in item.validation_command, (
         f"Should extract real command, got: '{item.validation_command}'"
     )
+
+
+# --- BH-002 (run 2): section_re stops at non-field bold-colon patterns ---
+
+def test_non_field_bold_colon_does_not_truncate():
+    """**HTTP Status:** in Problem content should not truncate the section."""
+    # First line is too short (6 chars). If section_re stops at **HTTP Status:**,
+    # has_problem is False because only "Short." is captured.
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** Short.
+**HTTP Status:** 404 causes the system to return wrong data to the client
+and this additional context should not be lost.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].has_problem, (
+        "**HTTP Status:** on continuation line should not truncate Problem. "
+        "Without continuation lines, 'Short.' (6 chars) is below the 10-char threshold."
+    )

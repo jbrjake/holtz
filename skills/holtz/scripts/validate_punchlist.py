@@ -140,7 +140,16 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         # 3. Extract content from original_block starting at the mapped position
         # This prevents code fence field headers from interfering with extraction
         # even when the same header appears in both a code fence and real content.
-        section_re = r'\*\*%s:\*\*[ \t]*((?:[^\n]*(?:\n(?!\*\*[A-Z][\w ]*:\*\*)[^\n]*)*))'
+        # Known punchlist field names that terminate section capture.
+        # Only these patterns stop the regex — not arbitrary **Bold Colon:** text.
+        _field_names = (
+            'Severity', 'Category', 'Location', 'Status', 'Pattern',
+            'Determinism', 'Investigation', 'Root Cause Confidence',
+            'Problem', 'Evidence', 'Acceptance Criteria',
+            'Validation Command', 'Resolution',
+        )
+        _field_alt = '|'.join(re.escape(f) for f in _field_names)
+        section_re = r'\*\*%s:\*\*[ \t]*((?:[^\n]*(?:\n(?!\*\*(?:' + _field_alt + r'):\*\*)[^\n]*)*))'
         header_re = r'\*\*%s:\*\*'
 
         def _masked_pos_to_orig_offset(pos_in_masked):
