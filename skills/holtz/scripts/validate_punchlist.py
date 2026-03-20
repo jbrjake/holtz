@@ -215,11 +215,20 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         ac_content = ac_m.group(1) if ac_m else ""
         item.has_acceptance_criteria = '- [ ]' in ac_content or '- [x]' in ac_content or '- [X]' in ac_content
 
-        # Validation command: header must exist in masked, content from original
+        # Validation command: header must exist in masked, content from original.
+        # Supports backtick and tilde fences of any length (3+), with optional
+        # blank lines between header and fence, per CommonMark spec.
         vc_match = re.search(header_re % 'Validation Command', masked_block)
         if vc_match:
             orig_offset = _masked_pos_to_orig_offset(vc_match.start())
-            val_cmd = re.search(r'\*\*Validation Command:\*\*[ \t]*\n?```\w*\n(.+?)\n```', original_block[orig_offset:], re.DOTALL)
+            vc_region = original_block[orig_offset:]
+            _vc_header = r'\*\*Validation Command:\*\*[ \t]*\n(?:\s*\n)*'
+            # Try backtick fence (3+), then tilde fence (3+).
+            val_cmd = re.search(
+                _vc_header + r'`{3,}\w*\n(.+?)\n`{3,}', vc_region, re.DOTALL)
+            if not val_cmd:
+                val_cmd = re.search(
+                    _vc_header + r'~{3,}\w*\n(.+?)\n~{3,}', vc_region, re.DOTALL)
             if val_cmd:
                 item.validation_command = val_cmd.group(1).strip()
         item.has_validation_command = bool(item.validation_command)

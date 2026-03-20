@@ -190,7 +190,11 @@ WHILE open items remain:
     Read docs/holtz/STATUS.md (recover position)
     Read docs/holtz/PUNCHLIST.md (recover worklist)
     Phase 4 (next batch) -> Phase 5 (every 3-5) -> full suite + linters
-    IF no new items in 2 iterations -> final Phase 1-3 sweep -> if clean, BREAK
+    IF all of:
+        - zero OPEN/IN PROGRESS items
+        - no new items in 2 consecutive iterations
+        - test suite stable or improving (no increase in failures)
+    THEN -> final Phase 1-3 sweep -> if clean, BREAK
 ```
 **Final:** Updated punchlist + `docs/holtz/SUMMARY.md` (totals, patterns, recommendations, before/after metrics)
 

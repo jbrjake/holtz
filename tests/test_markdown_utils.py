@@ -173,3 +173,22 @@ def test_indented_close_fence():
     _, masked = mu.mask_code_fences(content)
     assert "fenced" not in masked
     assert "after" in masked
+
+
+# --- BH-006 (run 5): Tilde fence info string with tildes ---
+
+def test_tilde_fence_info_string_with_tilde():
+    """Tilde fence with tilde in info string should be recognized per CommonMark.
+
+    CommonMark only restricts backtick characters in backtick fence info strings.
+    Tilde fences have no such restriction. If not handled, the opener is rejected
+    and the closer is misinterpreted as an opener, causing a cascading misparse.
+    """
+    content = "before\n~~~my~lang\nfenced content\n~~~\nafter\n"
+    _, masked = mu.mask_code_fences(content)
+    assert "fenced content" not in masked, (
+        "Content inside tilde fence with tilde in info string should be masked"
+    )
+    assert "after" in masked, (
+        "Content after tilde fence should NOT be masked — cascading misparse detected"
+    )

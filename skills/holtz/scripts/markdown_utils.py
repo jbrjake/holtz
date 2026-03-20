@@ -6,7 +6,7 @@ import re
 # CommonMark allows code fences to be indented 0-3 spaces.
 # 4+ spaces is an indented code block, not a fenced code block.
 _BACKTICK_OPEN = re.compile(r'^( {0,3})(`{3,})[^`]*$')
-_TILDE_OPEN = re.compile(r'^( {0,3})(~{3,})[^~]*$')
+_TILDE_OPEN = re.compile(r'^( {0,3})(~{3,}).*$')
 _BACKTICK_CLOSE_TMPL = r'^ {0,3}`{%d,}[ \t]*$'
 _TILDE_CLOSE_TMPL = r'^ {0,3}~{%d,}[ \t]*$'
 

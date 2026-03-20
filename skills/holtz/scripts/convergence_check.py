@@ -49,6 +49,8 @@ def count_items(punchlist_path: Path) -> dict:
                 counts[status] += 1
             else:
                 counts["unknown"] += 1
+        else:
+            counts["unknown"] += 1
 
     counts["total"] = sum(counts.values())
     return counts
@@ -74,10 +76,10 @@ def detect_test_runner() -> str | None:
                 if runner == "pytest" and f in ("pyproject.toml", "setup.cfg"):
                     content = Path(f).read_text()
                     if f == "pyproject.toml":
-                        if "[tool.pytest" not in content:
+                        if not re.search(r'^\[tool\.pytest[\].]', content, re.MULTILINE):
                             continue
                     else:  # setup.cfg
-                        if "[tool:pytest]" not in content:
+                        if "[tool:pytest]" not in content and not re.search(r'^\[pytest\]', content, re.MULTILINE):
                             continue
                 return runner
     return None

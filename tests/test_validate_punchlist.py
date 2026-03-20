@@ -1119,3 +1119,103 @@ echo test
         "If section_re terminates at code-fenced **Evidence:**, the "
         "continuation is lost and has_problem is False."
     )
+
+
+# --- BH-003 (run 5): Validation Command blank line before code fence ---
+
+def test_validation_command_blank_line_before_fence():
+    """Blank line between VC header and code fence should still extract the command."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+
+```bash
+echo real_test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].has_validation_command, (
+        "Blank line between **Validation Command:** and ```bash should not prevent extraction"
+    )
+    assert "real_test" in items[0].validation_command, (
+        f"Should extract 'real_test', got: '{items[0].validation_command}'"
+    )
+
+
+# --- BH-004 (run 5): Validation Command with tilde fence ---
+
+def test_validation_command_tilde_fence():
+    """Validation command in tilde fence should be extracted."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+~~~bash
+echo tilde_test
+~~~
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].has_validation_command, (
+        "Tilde-fenced validation command should be extracted"
+    )
+    assert "tilde_test" in items[0].validation_command, (
+        f"Should extract 'tilde_test', got: '{items[0].validation_command}'"
+    )
+
+
+# --- BH-005 (run 5): Validation Command with 4+ backtick fence ---
+
+def test_validation_command_4backtick_fence():
+    """Validation command in 4-backtick fence should be extracted."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+````bash
+echo quad_test
+````
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].has_validation_command, (
+        "4-backtick-fenced validation command should be extracted"
+    )
+    assert "quad_test" in items[0].validation_command, (
+        f"Should extract 'quad_test', got: '{items[0].validation_command}'"
+    )

@@ -784,3 +784,109 @@ def test_status_in_problem_section_not_counted(tmp_path):
     assert counts["total"] == 2, (
         f"Expected total 2 (only real items), Status in Problem prose should not count. Got {counts}"
     )
+
+
+# --- BH-001 (run 5): count_items drops items without Status field ---
+
+def test_item_without_status_counted_as_unknown(tmp_path):
+    """An item with ### BH-NNN: header but no **Status:** should count as unknown, not be dropped."""
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text("""\
+### BH-001: Item with status
+**Status:** OPEN
+
+### BH-002: Item without status field
+**Severity:** HIGH
+**Category:** bug/logic
+
+### BH-003: Another normal item
+**Status:** RESOLVED
+""")
+    counts = cc.count_items(punchlist)
+    assert counts["total"] == 3, (
+        f"Expected total 3 (including item without Status), got {counts}. "
+        f"Items without Status must be counted as 'unknown', not silently dropped."
+    )
+    assert counts["unknown"] == 1, (
+        f"Expected 1 unknown (item with no Status field), got {counts}"
+    )
+
+
+def test_cross_parser_agreement_missing_status(tmp_path):
+    """count_items and parse_punchlist must agree even when an item lacks Status."""
+    import validate_punchlist as vp
+
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text("""\
+### BH-001: Normal item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is evidence with enough detail to pass the threshold check.
+
+**Acceptance Criteria:**
+- [ ] Fix it
+
+**Validation Command:**
+```bash
+echo test
+```
+
+### BH-002: Item missing Status
+**Severity:** MEDIUM
+**Category:** test/missing
+**Location:** `test.py:5`
+
+**Problem:** This item has no Status field — a common malformation.
+
+**Evidence:** Grep shows the Status line was accidentally deleted during editing.
+
+**Acceptance Criteria:**
+- [ ] Add status back
+
+**Validation Command:**
+```bash
+echo test
+```
+""")
+    counts = cc.count_items(punchlist)
+    items = vp.parse_punchlist(punchlist.read_text())
+
+    assert counts["total"] == len(items), (
+        f"count_items sees {counts['total']} items, "
+        f"parse_punchlist sees {len(items)}: DISAGREEMENT on item with missing Status"
+    )
+
+
+# --- BH-002 (run 5): detect_test_runner misses [pytest] in setup.cfg ---
+
+def test_detect_setup_cfg_bare_pytest_section(tmp_path, monkeypatch):
+    """setup.cfg with [pytest] section (not [tool:pytest]) should detect pytest."""
+    (tmp_path / "setup.cfg").write_text(
+        "[pytest]\naddopts = -v\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    result = cc.detect_test_runner()
+    assert result == "pytest", (
+        f"setup.cfg with [pytest] section should detect pytest, got '{result}'"
+    )
+
+
+# --- BH-007 (run 5): pyproject.toml imprecise substring match ---
+
+def test_detect_pyproject_bracket_in_comment(tmp_path, monkeypatch):
+    """pyproject.toml with [tool.pytest in a comment should NOT trigger detection."""
+    (tmp_path / "pyproject.toml").write_text(
+        "[build-system]\n"
+        "requires = ['setuptools']\n"
+        "# see [tool.pytest docs for configuration options\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    result = cc.detect_test_runner()
+    assert result != "pytest", (
+        f"pyproject.toml with [tool.pytest only in a comment should not detect pytest, got '{result}'"
+    )
