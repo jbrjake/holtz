@@ -57,14 +57,18 @@ Every behavioral difference is motivated by the backstory:
 | **Aggressive severity** | The dosing bug was "only a MEDIUM" by Holtz's calibration — edge case, not a crash in the main path. Mira is dead. Justine rates on potential impact, not observed impact. | Holtz rates conservatively: "severity inflation is its own kind of lie." |
 | **Direct prediction testing** | Three approved test suites, all theater. If you think something is wrong, write the test that proves it. Don't audit around it — test it. | Holtz uses predictions to prioritize audit order but doesn't skip phases. |
 | **All-lens convergence** | The integration bug was invisible for three component-focused passes. Justine refuses to focus on one lens at a time — she runs all lenses in every pass. | Holtz exhausts one lens, then switches to the next. |
-| **Checks values, not formats** | "The test that killed Mira checked the format but not the value." Justine's anti-pattern radar is tuned to Rubber Stamp and Permissive Validator above all others. | Holtz weighs all 12 anti-patterns equally. |
+| **Integration-first lens order** | Mira's bug was a cross-component failure — the unit conversion happened at the boundary between two modules that were individually correct. The integration lens catches what killed Mira. Security second, because unvalidated inputs are the same class of negligence. | Holtz starts with component (broadest, most methodical). |
+| **Checks values, not formats** | "The test that killed Mira checked the format but not the value." During Phase 2 (test audit), Justine checks Rubber Stamp (#11) and Permissive Validator (#12) first, and flags them at one severity level higher than her normal calibration. The other 10 anti-patterns are still checked but at standard priority. | Holtz weighs all 12 anti-patterns equally. |
 
 ### Modified Phase Structure
 
 ```
 Phase 0: Recon (same as Holtz — uses same scripts, same output format)
     - Additionally: run global pattern library detection heuristics
-    - Generate predictions with more aggressive confidence levels
+    - Generate predictions with aggressive confidence: a single strong
+      signal (known pattern match, high risk_score, or semantic edge)
+      is sufficient for HIGH confidence. Holtz requires multiple
+      converging signals for HIGH.
 
 Phase 1-3: Non-sequential audit
     - Read recon + predictions
@@ -85,15 +89,34 @@ Phase 4: Fix loop
     - Same per-fix hardening
     - Severity calibration: rates on potential impact, not observed
 
-Phase 5: Pattern analysis (same as Holtz)
+Phase 5: Pattern analysis (same protocol as Holtz — group resolved
+    items, identify shared root causes, search for siblings. Because
+    Justine's findings span multiple lenses in a single pass, her
+    patterns may naturally cross lens boundaries. This is expected
+    and does not require special handling — the pattern format already
+    supports items from different categories/lenses.)
 
 Phase 6: Convergence
     - NO per-lens sequential convergence
-    - Run all lenses in a single pass
+    - Justine reads the lens registry to know what lenses exist,
+      but does NOT cycle through them one at a time
+    - "All lenses in a single pass" means: for each code area,
+      she considers all lens perspectives in one read-through
+      rather than reading the same code N times under N lenses
     - If zero findings across all lenses → converged
     - If findings → fix → single-pass again
     - Faster convergence, lower depth guarantee
 ```
+
+### Context Survival Protocol
+
+Justine follows the same core protocol as Holtz: write to disk immediately, re-read STATUS.md after compaction, checkpoint after every step. However, her non-sequential phase structure requires an adaptation:
+
+- Holtz's STATUS.md "Current Position" tracks a linear path (Phase 2, batch 3). After compaction, he resumes at the next sequential step.
+- Justine's STATUS.md "Current Position" tracks a **priority queue**: which areas have been examined, which remain, and what hunches are being followed. After compaction, she re-reads the queue and picks the highest-priority unexamined area, not the "next" one in a fixed sequence.
+- Her "Next Action" field must be especially specific, because there is no implicit "next step" in a non-sequential process. It should name the specific code area and lens perspective, not just "continue Phase 2."
+
+The STATUS.md format (from Tier 1) is flexible enough to support this — the Completed section becomes a checklist of areas examined rather than phases completed, and the Strategy section (also Tier 1) captures the current priority ordering.
 
 ### Shared Infrastructure (no duplication)
 
@@ -108,7 +131,7 @@ Justine references Holtz's infrastructure via `${CLAUDE_PLUGIN_ROOT}/skills/holt
 - `skills/holtz/scripts/convergence_check.py`
 - `skills/holtz/scripts/impact_graph.py`
 - `skills/holtz/scripts/markdown_utils.py`
-- `skills/holtz/patterns/*.md` (global pattern library)
+- `skills/holtz/patterns/*.md` (global pattern library — created by Section 2 of this spec)
 
 ### Shared Project State
 
@@ -150,9 +173,14 @@ The merge protocol (Tier 4, Adversarial Self-Play) compares `docs/holtz/PUNCHLIS
 - [ ] Output goes to `docs/justine/` (separate from `docs/holtz/`)
 - [ ] Impact graph and pattern brief are shared (read/written by both auditors)
 - [ ] Shared resources referenced via `${CLAUDE_PLUGIN_ROOT}/skills/holtz/...` paths
-- [ ] Agent definition includes dispatch examples matching Holtz's agent definition pattern
-- [ ] Anti-pattern audit weights Rubber Stamp and Permissive Validator above other anti-patterns
-- [ ] Backstory is written in third person with a noticeably different tone from Holtz — rawer, more direct, matching her personality
+- [ ] Agent definition includes dispatch examples matching Holtz's agent definition pattern (YAML frontmatter with model, description containing examples)
+- [ ] Anti-pattern audit: during Phase 2, Rubber Stamp and Permissive Validator are checked first and flagged one severity level higher than standard calibration
+- [ ] `.claude-plugin/plugin.json` description updated to mention both Holtz and Justine
+- [ ] Context Survival Protocol adapted for non-sequential phases: STATUS.md tracks priority queue of areas, not linear phase progression
+
+**Design constraints** (verified by review, not automation):
+- Backstory motivates all behavioral differences — each divergence from Holtz traces to a specific element of Justine's story
+- Backstory is written in third person with a noticeably different tone from Holtz — rawer, more direct, matching her personality
 
 ### Test Cases
 
@@ -225,8 +253,8 @@ re.search(r'\*\*Status:\*\*[ \t]*(.*)', content)  # [ \t]* stays on same line
 
 - **YAML frontmatter** with structured metadata (name, version, languages, categories) for machine-readable filtering
 - **Language tags** so the auditor can skip patterns irrelevant to the current project's language
-- **Version number** incremented when detection heuristics are refined based on new manifestations
-- **Detection heuristic** is a concrete grep or structural check, not prose — executable by the auditor or a subagent
+- **Version number** incremented when detection heuristics are refined. The PR submitter increments the version when updating an existing pattern; the reviewer verifies the increment.
+- **Detection heuristic** is a concrete grep or structural check, not prose — executable by the auditor or a subagent. For patterns where grep is insufficient (e.g., `doc-spec-drift` requires comparing docs against code), the heuristic is a structured LLM check: a specific question to ask about each file pair, with clear pass/fail criteria.
 - **Example** shows before/after code with generic names, not project-specific identifiers
 
 ### How Auditors Use the Library
@@ -333,7 +361,7 @@ The library ships with 6 patterns derived from the six self-audit runs:
 - [ ] SKILL.md Phase 0 reads pattern library, filters by project language, runs detection heuristics
 - [ ] Pattern library hits feed into 0h-predictions.md as HIGH-confidence predictions
 - [ ] PR submission protocol asks user permission before any GitHub interaction
-- [ ] PR submission scrubs all project-specific details (paths, names, domain terminology, API keys, URLs)
+- [ ] PR submission scrubs all project-specific details (paths, names, domain terminology, API keys, URLs) — verified by checking that no project-specific identifiers appear in the generated pattern file
 - [ ] Tier 1 (gh CLI): fork, branch, add files, open PR via `gh pr create`
 - [ ] Tier 2 (MCP): fork, branch, commit, open PR via MCP tools
 - [ ] Tier 3 (no access): stage files at `docs/holtz/pattern-submissions/`, generate `PR-BODY.md`, present fork link `https://github.com/jbrjake/holtz/fork`
@@ -345,7 +373,7 @@ The library ships with 6 patterns derived from the six self-audit runs:
 
 1. **Seed pattern frontmatter validation:** Each of the 6 seed pattern files has valid YAML frontmatter with all required keys (name, version, discovered, languages, categories).
 2. **Seed pattern section validation:** Each seed pattern file contains all required sections (Description, Detection Heuristic, Indicators, Example, Related Patterns).
-3. **Detection heuristic executability:** Each seed pattern's detection heuristic can be executed as a shell command without syntax errors (may return zero results, but must not fail).
+3. **Detection heuristic executability:** Each seed pattern's grep-based detection heuristic can be executed as a shell command against the holtz repo root without syntax errors (may return zero results, but must not fail). For patterns with LLM-based heuristics (e.g., `doc-spec-drift`), verify the heuristic is a specific, answerable question with clear pass/fail criteria.
 4. **PII scrubbing verification:** No seed pattern file contains project-specific paths, function names from this codebase (`parse_punchlist`, `mask_code_fences`, etc.), or other identifying details.
 5. **Tier 3 fallback:** When neither `gh` CLI nor GitHub MCP are available, the protocol produces `docs/holtz/pattern-submissions/` with pattern file(s) and `PR-BODY.md`. (Behavioral test.)
 
