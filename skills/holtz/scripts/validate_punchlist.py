@@ -279,10 +279,12 @@ def validate(items: list[PunchlistItem], content: str = "") -> ValidationResult:
                     f"{prefix}: invalid Root Cause Confidence '{item.root_cause_confidence}'"
                 )
 
-        # Deferred items should have evidence of reproduction attempts
-        if item.status == "DEFERRED" and is_bug and not item.investigation:
+        # Deferred bug items should have evidence of reproduction attempts
+        # (in the Evidence section OR the linked investigation file).
+        # Only warn when BOTH are missing — per punchlist-format.md spec.
+        if item.status == "DEFERRED" and is_bug and not item.investigation and not item.has_evidence:
             result.warnings.append(
-                f"{prefix}: bug item DEFERRED without Investigation file link"
+                f"{prefix}: bug item DEFERRED without Evidence or Investigation file link"
             )
 
         # Track counts

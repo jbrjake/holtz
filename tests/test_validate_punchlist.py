@@ -1006,3 +1006,71 @@ echo test
     assert len(structure_warnings) >= 2, (
         f"Expected structure warnings (sections only in code fence), got: {result.warnings}"
     )
+
+
+# --- BH-003 (run 3): deferred bug with evidence should not warn ---
+
+def test_deferred_bug_with_evidence_no_warning():
+    """DEFERRED bug with Evidence but no Investigation link should NOT warn."""
+    content = """\
+# Holtz Punchlist
+## Summary
+## Items
+
+### BH-001: Stale cache after user deletion
+**Severity:** MEDIUM
+**Category:** bug/state
+**Location:** `cache.py:55`
+**Status:** DEFERRED
+**Determinism:** intermittent
+
+**Problem:** Cache not invalidated on delete. Deleted users appear for up to 5 minutes.
+
+**Evidence:** cache.py has set() in getUser() but deleteUser() does not call cache.del().
+
+**Acceptance Criteria:**
+- [ ] deleteUser() invalidates cache entry
+
+**Validation Command:**
+```bash
+pytest -k cache_delete
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items, content)
+    deferred_warnings = [w for w in result.warnings if "deferred" in w.lower() or "investigation" in w.lower()]
+    assert len(deferred_warnings) == 0, (
+        f"DEFERRED bug with Evidence should not warn about missing Investigation. Got: {deferred_warnings}"
+    )
+
+
+def test_deferred_bug_without_evidence_or_investigation_warns():
+    """DEFERRED bug without Evidence AND without Investigation should warn."""
+    content = """\
+# Holtz Punchlist
+## Summary
+## Items
+
+### BH-001: Intermittent failure
+**Severity:** MEDIUM
+**Category:** bug/state
+**Location:** `handler.py:12`
+**Status:** DEFERRED
+**Determinism:** intermittent
+
+**Problem:** Handler occasionally returns 500 under load.
+
+**Acceptance Criteria:**
+- [ ] Reproduce under load test
+
+**Validation Command:**
+```bash
+pytest -k load_test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items, content)
+    deferred_warnings = [w for w in result.warnings if "deferred" in w.lower() or "evidence" in w.lower() or "investigation" in w.lower()]
+    assert len(deferred_warnings) > 0, (
+        f"DEFERRED bug without Evidence or Investigation should warn. Got warnings: {result.warnings}"
+    )
