@@ -3,7 +3,7 @@
 **Date:** 2026-03-20
 **Status:** Draft
 **Source:** `docs/holtz-self-reflection.md` Sections IX, XII
-**Depends on:** Tier 1 (all), Tier 2 (all), Tier 3 (Justine, Pattern Library)
+**Depends on:** Tier 1 (all), Tier 2 (Impact Graph, Predictive Recon, Lens Registry), Tier 3 (Justine, Pattern Library)
 **Scope:** Three components: Adversarial Self-Play (parallel audit + merge), Mutation-Guided Auditing (external tool integration), Temporal Awareness (architectural drift + living punchlist)
 
 ## Overview
@@ -29,18 +29,20 @@ Agent(prompt="Run full Holtz audit", subagent_type="general-purpose")
 Agent(prompt="Run full Justine audit", subagent_type="general-purpose")
 ```
 
-Both run independently. Holtz writes to `docs/holtz/`. Justine writes to `docs/justine/`. Both read and write the shared impact graph and pattern brief — concurrent writes are mostly disjoint because they examine different areas first (different lens ordering).
+Both run independently. Holtz writes to `docs/holtz/`. Justine writes to `docs/justine/`.
+
+**Impact graph during parallel dispatch:** Each auditor writes to its own graph file during the run — Holtz to `docs/holtz/impact-graph.json` (the canonical location) and Justine to `docs/justine/impact-graph.json` (temporary). The merge step reconciles them into the canonical file. This avoids concurrent write conflicts. The pattern brief (`docs/holtz/patterns-brief.md`) is read-only during the audit phases — both auditors read it during Phase 0 but new patterns are only written during Phase 5, which happens after the merge (only Holtz runs Phase 5 on the merged punchlist).
 
 ### Merge Protocol
 
-After both auditors reach convergence (or one converges and the other stalls), the parent process runs the merge:
+After both auditors reach convergence (or one converges and the other stalls), the parent process runs the merge. An auditor is considered **stalled** if its STATUS.md has not been updated in more than 30 minutes, or if it has completed 3 consecutive fix loop iterations with no reduction in open punchlist items. If one auditor stalls, the parent proceeds with the merge using whatever findings the stalled auditor produced.
 
 1. Read `docs/holtz/PUNCHLIST.md` and `docs/justine/PUNCHLIST.md`
 2. For each item in either punchlist, classify:
 
 | Classification | Condition | Action |
 |---------------|-----------|--------|
-| **Agreement** | Same bug found by both (same location within ~5 lines AND same category) | Keep one, note `**Found by:** both auditors`, use the higher severity |
+| **Agreement** | Same bug found by both (same file AND same category, with location lines within 5 of each other if both specify line numbers, or same function/class name if specified) | Keep one, note `**Found by:** both auditors`, use the higher severity |
 | **Holtz-only** | Found by Holtz, not by Justine | Keep. Tag `**Found by:** Holtz only`. Likely a deep/subtle bug that breadth-first scanning missed. |
 | **Justine-only** | Found by Justine, not by Holtz | Keep. Tag `**Found by:** Justine only`. Likely a surface/obvious bug or an aggressively-rated risk that depth-first auditing walked past. |
 | **Severity disagreement** | Same bug, different severity | Flag: `**Severity disagreement:** Holtz={X}, Justine={Y}`. Use the higher severity but note the disagreement. |
@@ -91,13 +93,13 @@ Justine's severity ratings are preserved in the merged list (the higher rating w
 
 1. Holtz reads `PUNCHLIST-MERGED.md` as his worklist
 2. Holtz runs Phases 4-6 (fix loop, pattern analysis, convergence) on the merged items
-3. `docs/justine/` is archived to `docs/justine-prior-{date}/` — Justine's run is complete
+3. The parent process archives `docs/justine/` to `docs/justine-prior-{date}/` and `docs/justine/impact-graph.json` is deleted (its data has been merged into the canonical graph) — Justine's run is complete
 4. Justine is not re-dispatched for the fix loop
 5. If a full re-audit is needed after fixes, a new adversarial self-play round can be initiated
 
-### Impact Graph Conflict Resolution
+### Impact Graph Merge
 
-Both auditors write to `docs/holtz/impact-graph.json`. Since they examine different areas first (different lens ordering), their graph writes are mostly disjoint. For conflicts:
+After both auditors complete, the parent process merges Justine's graph (`docs/justine/impact-graph.json`) into the canonical graph (`docs/holtz/impact-graph.json`). Since they examine different areas first (different lens ordering), most nodes and edges are disjoint. For conflicts:
 
 - **Same node updated by both:** Keep the higher `risk_score`, merge `audit_count` (sum of both increments), use the most recent `last_audited`.
 - **Same edge added by both with different metadata:** Keep the edge with the more recent timestamp, append the other's `note` to the metadata field.
@@ -113,7 +115,7 @@ Both auditors write to `docs/holtz/impact-graph.json`. Since they examine differ
 
 | File | Change |
 |------|--------|
-| `skills/holtz/SKILL.md` | Add "Adversarial Self-Play" invocation mode. Document dispatch + merge protocol. Document post-merge fix ownership. |
+| `skills/holtz/SKILL.md` | Add "Adversarial Self-Play" invocation mode. Document dispatch + merge protocol. Document post-merge fix ownership. Update Phase 4: if `docs/holtz/PUNCHLIST-MERGED.md` exists, read it as the worklist instead of `docs/holtz/PUNCHLIST.md`. |
 | `skills/justine/SKILL.md` | Note that Justine can be dispatched in parallel with Holtz. Note that her role ends at convergence — she does not run the fix loop on merged items. |
 
 ### Acceptance Criteria
@@ -130,7 +132,11 @@ Both auditors write to `docs/holtz/impact-graph.json`. Since they examine differ
 - [ ] Impact graph conflict resolution defined (higher risk_score wins, notes merged, audit_count summed)
 - [ ] SKILL.md documents adversarial self-play as an invocation mode
 - [ ] Both auditors can be dispatched in parallel via Agent tool
-- [ ] Merge report includes worked examples of each classification type
+- [ ] Stall condition defined (STATUS.md not updated in 30 minutes, or 3 fix iterations with no progress)
+- [ ] SKILL.md Phase 4 updated: if `PUNCHLIST-MERGED.md` exists, use it as worklist instead of `PUNCHLIST.md`
+- [ ] Parent process archives `docs/justine/` to `docs/justine-prior-{date}/` after merge
+- [ ] Justine writes to her own impact graph (`docs/justine/impact-graph.json`) during parallel dispatch, merged into canonical graph post-merge
+- [ ] Merge protocol document includes worked examples of each classification type, including a near-miss location match (items 4 lines apart = match, items 6 lines apart = separate)
 
 ### Test Cases
 
@@ -157,6 +163,8 @@ No script changes — the merge is performed by the parent process reading two m
 | Java/Kotlin | PIT | `pitest` in `pom.xml` or `build.gradle` |
 
 **When no mutation tool is available:** Skip step 0e.1 entirely. No error, no warning — mutation-guided auditing is an optional enhancement. The audit proceeds normally.
+
+**Output parsing:** Each tool produces output in a different format (mutmut: JSON via `mutmut results`, Stryker: JSON via `--reporters json`, cargo-mutants: text summary, go-mutesting: text summary, PIT: XML report). The LLM runs the tool with its default or JSON output flag, reads the native output, and manually compiles the per-function survival table for `0e1-mutation-scan.md`. No output parsing script is needed — the LLM interprets each tool's format directly.
 
 ### New Recon Step
 
@@ -201,7 +209,7 @@ No script changes — the merge is performed by the parent process reading two m
 | **Predictions (0h)** | Functions with >40% mutation survival become HIGH-confidence predictions for `test/shallow` or `test/missing` findings. Specific surviving mutations become predicted issues with concrete descriptions (e.g., "boundary check at line 47 is not tested"). |
 | **Impact graph** | `update_risk` on nodes based on survival rate: >50% survival → +0.3, 30-50% → +0.2, 10-30% → +0.1. |
 | **Phase 2 (test audit)** | When auditing a test file, check whether the tests for a function kill its mutations. A test that passes but doesn't kill mutations is a Rubber Stamp (#11) or Permissive Validator (#12). Mutation data provides concrete evidence for these anti-pattern classifications. |
-| **Phase 4 (fix loop)** | After writing a reproduction test and fix, re-run mutations on the changed function to verify the new test improves the kill rate. This is a post-fix quality check, not a gate — a fix can proceed even if mutation score doesn't improve, but it should be noted. |
+| **Phase 4 (fix loop)** | After writing a reproduction test and fix, re-run mutations on the changed function to verify the new test improves the kill rate. Record the before/after mutation score in the punchlist item's Resolution notes (e.g., "Mutation kill rate: 67% → 92%"). This is a post-fix quality check, not a gate — a fix can proceed even if mutation score doesn't improve, but it should be noted. |
 
 ### Files Changed
 
@@ -297,7 +305,11 @@ On the first run, Holtz establishes a baseline by capturing both documented inte
 
 ### Drift Detection (Phase 0, Step 0a.1)
 
-After reading project structure (step 0a), if `docs/holtz/architecture-baseline.md` exists:
+After reading project structure (step 0a) and completing impact graph reconciliation (Tier 2):
+
+**If `docs/holtz/architecture-baseline.md` does NOT exist (first run):** Create it by extracting documented intent from project docs and inferring the structural snapshot from code, as described in the Architecture Baseline section above. This is a distinct step from Tier 2's graph reconciliation, which checks individual node locations — architectural drift detection operates at the structural/module level, comparing the overall dependency graph shape and layering patterns against the baseline.
+
+**If `docs/holtz/architecture-baseline.md` exists (subsequent runs):**
 
 1. Re-infer current structural snapshot (same analysis as baseline creation)
 2. Compare against baseline's Structural Snapshot for structural drift:
@@ -406,6 +418,7 @@ to this project. Derived from patterns and risk hotspots.
 | Start of each run (Phase 0) | Read living punchlist. Proactive checks feed into 0h predictions as HIGH-confidence items. |
 | Risk hotspot cools (risk_score drops below 0.3) | Move from Risk Hotspots to History: "resolved after {N} clean audits" |
 | Pattern addressed architecturally | Move from Active Patterns to History: "addressed by {architectural change}" |
+| Proactive check's source retired | When a hotspot cools or a pattern is addressed, the proactive check derived from it is also moved to History with a note linking to the source retirement |
 
 ### Proactive Checks
 
@@ -442,7 +455,8 @@ These checks could eventually be integrated into CI or Snyder (the real-time cod
 ### Acceptance Criteria
 
 - [ ] Architecture baseline format spec defines Documented Intent, Structural Snapshot, and Drift Log sections
-- [ ] Phase 0 step 0a.1 establishes baseline on first run, performs drift check on subsequent runs
+- [ ] Phase 0 step 0a.1: on first run (no existing baseline), creates `docs/holtz/architecture-baseline.md` with Documented Intent and Structural Snapshot populated from current project state
+- [ ] Phase 0 step 0a.1: on subsequent runs, performs drift check against existing baseline
 - [ ] Drift detection compares both documented intent and structural snapshot against current state
 - [ ] Four drift types defined with default severities (dependency-reversal MEDIUM, boundary-erosion MEDIUM, convention-violation LOW, layering-breach HIGH)
 - [ ] Significant drifts (MEDIUM+) create punchlist items
@@ -470,15 +484,15 @@ No script changes — both features are SKILL.md protocol additions with format 
 
 1. **Mutation-Guided Auditing** — SKILL.md protocol addition, no dependencies beyond Tier 2 (impact graph for risk updates, predictions for feeding mutation data)
 2. **Temporal Awareness** — format specs + SKILL.md protocol, depends on impact graph (risk hotspots), pattern brief (active patterns), recommendation escalation (persistent gaps)
-3. **Adversarial Self-Play** — merge protocol + SKILL.md, depends on Justine (Tier 3) being fully operational
+3. **Adversarial Self-Play** — merge protocol + SKILL.md, depends on Justine being fully operational (defined as: `skills/justine/SKILL.md` and `agents/justine.md` exist and Justine can be dispatched via the Agent tool; no prior successful run required)
 
 Items 1 and 2 are independent and can be parallelized. Item 3 must come last.
 
 ## Dependencies
 
 - **Tier 2 → Tier 4:** Impact Graph (mutation updates risk scores, living punchlist reads hotspots), Predictive Recon (mutation data feeds predictions), Lens Registry (adversarial self-play uses different lens defaults per auditor)
-- **Tier 3 → Tier 4:** Justine (adversarial self-play dispatches her), Pattern Library (living punchlist references active patterns)
-- **Tier 1 → Tier 4:** Recommendation Escalation (living punchlist includes persistent gaps), Strategy Journal (drift check results update strategy), Pattern Brief (living punchlist references it)
+- **Tier 3 → Tier 4:** Justine (adversarial self-play dispatches her)
+- **Tier 1 → Tier 4:** Recommendation Escalation (living punchlist includes persistent gaps), Strategy Journal (drift check results update strategy), Pattern Brief (living punchlist's "Patterns This Project Is Susceptible To" references project-specific patterns from the brief)
 
 ## Out of Scope
 
