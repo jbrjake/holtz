@@ -77,7 +77,7 @@ def get_test_counts(runner: str | None) -> dict | None:
         "jest": ["npx", "jest", "--silent", "--no-coverage"],
         "vitest": ["npx", "vitest", "run", "--reporter=verbose"],
         "cargo": ["cargo", "test", "--", "--format=terse"],
-        "go": ["go", "test", "./..."],
+        "go": ["go", "test", "-v", "./..."],
         "mocha": ["npx", "mocha", "--reporter=min"],
     }
 
@@ -104,17 +104,56 @@ def get_test_counts(runner: str | None) -> dict | None:
         if runner == "jest":
             # Jest output: Tests: N failed, N passed, N total
             m = re.search(r'Tests:\s+(?:(\d+) failed,\s+)?(\d+) passed', output)
-            if m:
-                return {
-                    "passed": int(m.group(2)),
-                    "failed": int(m.group(1)) if m.group(1) else 0,
-                    "skipped": 0,
-                }
+            if not m:
+                return None
+            return {
+                "passed": int(m.group(2)),
+                "failed": int(m.group(1)) if m.group(1) else 0,
+                "skipped": 0,
+            }
 
         if runner == "vitest":
-            # Vitest output: Tests N passed | N failed (N)
-            p = re.search(r'(\d+) passed', output)
-            f = re.search(r'(\d+) failed', output)
+            # Vitest summary line: "Tests  N passed" or "Tests  N failed | N passed"
+            # Must match the Tests summary line specifically to avoid counting
+            # "Test Files  N passed" which is a different metric.
+            p = re.search(r'^\s*Tests\s+(?:(\d+) failed \| )?(\d+) passed', output, re.MULTILINE)
+            if not p:
+                return None
+            return {
+                "passed": int(p.group(2)),
+                "failed": int(p.group(1)) if p.group(1) else 0,
+                "skipped": 0,
+            }
+
+        if runner == "cargo":
+            # Cargo: test result: ok. N passed; N failed; N ignored
+            m = re.search(r'(\d+) passed;\s*(\d+) failed;\s*(\d+) ignored', output)
+            if not m:
+                return None
+            return {
+                "passed": int(m.group(1)),
+                "failed": int(m.group(2)),
+                "skipped": int(m.group(3)),
+            }
+
+        if runner == "go":
+            # Go verbose output: individual test results as --- PASS/FAIL/SKIP lines.
+            # Only count top-level tests (no slash in name) to avoid double-counting subtests.
+            passed = len(re.findall(r'^--- PASS: \w+[ (]', output, re.MULTILINE))
+            failed = len(re.findall(r'^--- FAIL: \w+[ (]', output, re.MULTILINE))
+            skipped = len(re.findall(r'^--- SKIP: \w+[ (]', output, re.MULTILINE))
+            if passed == 0 and failed == 0 and skipped == 0:
+                return None
+            return {
+                "passed": passed,
+                "failed": failed,
+                "skipped": skipped,
+            }
+
+        if runner == "mocha":
+            # Mocha min reporter: N passing, N failing
+            p = re.search(r'(\d+) passing', output)
+            f = re.search(r'(\d+) failing', output)
             if not p and not f:
                 return None
             return {
@@ -123,40 +162,8 @@ def get_test_counts(runner: str | None) -> dict | None:
                 "skipped": 0,
             }
 
-        if runner == "cargo":
-            # Cargo: test result: ok. N passed; N failed; N ignored
-            m = re.search(r'(\d+) passed;\s*(\d+) failed;\s*(\d+) ignored', output)
-            if m:
-                return {
-                    "passed": int(m.group(1)),
-                    "failed": int(m.group(2)),
-                    "skipped": int(m.group(3)),
-                }
-
-        if runner == "go":
-            # Go: ok/FAIL per package, count lines
-            passed = len(re.findall(r'^ok\s', output, re.MULTILINE))
-            failed = len(re.findall(r'^FAIL\s', output, re.MULTILINE))
-            if passed == 0 and failed == 0:
-                return None
-            return {
-                "passed": passed,
-                "failed": failed,
-                "skipped": 0,
-            }
-
-        if runner == "mocha":
-            # Mocha min reporter: N passing, N failing
-            p = re.search(r'(\d+) passing', output)
-            f = re.search(r'(\d+) failing', output)
-            return {
-                "passed": int(p.group(1)) if p else 0,
-                "failed": int(f.group(1)) if f else 0,
-                "skipped": 0,
-            }
-
-        # Fallback
-        return {"raw_output_lines": len(output.splitlines())}
+        # Unknown runner (shouldn't reach here — checked at function entry)
+        return None
 
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return None

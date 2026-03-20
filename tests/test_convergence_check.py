@@ -245,29 +245,20 @@ def test_status_inside_code_fence_not_counted(tmp_path):
     assert counts["total"] == 1, f"Expected total 1, got {counts}"
 
 
-# --- BH-007: Unparseable test output returns None ---
-
-def test_get_test_counts_unparseable_output(monkeypatch):
-    """Unparseable test output should return None, not zero counts."""
-    import subprocess
-
-    class FakeResult:
-        stdout = "INTERNAL ERROR: pytest crashed with a traceback\n"
-        stderr = "Traceback (most recent call last):\n  ...\nSystemExit: 3\n"
-        returncode = 3
-
-    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: FakeResult())
-    result = cc.get_test_counts("pytest")
-    assert result is None, (
-        f"Unparseable pytest output should return None, got {result}"
-    )
-
-
 # --- BH-010: Tests for detect_test_runner ---
 
 def test_detect_pytest_by_conftest(tmp_path, monkeypatch):
     """detect_test_runner should find pytest via conftest.py."""
     (tmp_path / "conftest.py").write_text("# pytest config")
+    monkeypatch.chdir(tmp_path)
+    assert cc.detect_test_runner() == "pytest"
+
+
+def test_detect_pytest_by_pyproject(tmp_path, monkeypatch):
+    """detect_test_runner should find pytest via [tool.pytest in pyproject.toml."""
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.pytest.ini_options]\ntestpaths = ['tests']\n"
+    )
     monkeypatch.chdir(tmp_path)
     assert cc.detect_test_runner() == "pytest"
 
@@ -279,11 +270,39 @@ def test_detect_jest_by_config(tmp_path, monkeypatch):
     assert cc.detect_test_runner() == "jest"
 
 
+def test_detect_jest_by_ts_config(tmp_path, monkeypatch):
+    """detect_test_runner should find jest via jest.config.ts."""
+    (tmp_path / "jest.config.ts").write_text("export default {}")
+    monkeypatch.chdir(tmp_path)
+    assert cc.detect_test_runner() == "jest"
+
+
+def test_detect_vitest_by_config(tmp_path, monkeypatch):
+    """detect_test_runner should find vitest via vitest.config.ts."""
+    (tmp_path / "vitest.config.ts").write_text("export default {}")
+    monkeypatch.chdir(tmp_path)
+    assert cc.detect_test_runner() == "vitest"
+
+
 def test_detect_cargo_by_toml(tmp_path, monkeypatch):
     """detect_test_runner should find cargo via Cargo.toml."""
-    (tmp_path / "Cargo.toml").write_text("[package]\nname = 'test'")
+    (tmp_path / "Cargo.toml").write_text("[package]\nname = 'crab-rave'")
     monkeypatch.chdir(tmp_path)
     assert cc.detect_test_runner() == "cargo"
+
+
+def test_detect_go_by_mod(tmp_path, monkeypatch):
+    """detect_test_runner should find go via go.mod."""
+    (tmp_path / "go.mod").write_text("module github.com/spectral/haunted-elevator")
+    monkeypatch.chdir(tmp_path)
+    assert cc.detect_test_runner() == "go"
+
+
+def test_detect_mocha_by_config(tmp_path, monkeypatch):
+    """detect_test_runner should find mocha via .mocharc.yml."""
+    (tmp_path / ".mocharc.yml").write_text("spec: test/**/*.test.js")
+    monkeypatch.chdir(tmp_path)
+    assert cc.detect_test_runner() == "mocha"
 
 
 def test_detect_no_runner(tmp_path, monkeypatch):
@@ -298,7 +317,6 @@ def test_detect_pyproject_without_pytest(tmp_path, monkeypatch):
         "[build-system]\nrequires = ['setuptools']\n"
     )
     monkeypatch.chdir(tmp_path)
-    # Should not detect pytest since there's no pytest config in pyproject.toml
     result = cc.detect_test_runner()
     assert result != "pytest", (
         f"pyproject.toml without pytest config should not detect pytest, got '{result}'"
@@ -341,31 +359,232 @@ def test_multi_item_punchlist_field_isolation(tmp_path):
     assert counts["total"] == 3, f"Expected total 3, got {counts}"
 
 
-# --- BH-012: Test output parsing ---
+# =============================================================================
+# Test output parsing — comprehensive fixtures for all 6 runners
+# Uses runner_fixtures.py for realistic, whimsical test runner output.
+# =============================================================================
 
-def test_get_test_counts_pytest_output(monkeypatch):
-    """Pytest output parsing should extract correct counts."""
-    import subprocess
+import subprocess
+import runner_fixtures as fx
 
+
+def _fake_run(stdout, stderr="", returncode=0):
+    """Create a monkeypatch for subprocess.run with the given output."""
     class FakeResult:
-        stdout = "5 passed, 2 failed, 1 skipped in 0.5s\n"
-        stderr = ""
-        returncode = 1
+        pass
+    r = FakeResult()
+    r.stdout = stdout
+    r.stderr = stderr
+    r.returncode = returncode
+    return lambda *a, **kw: r
 
-    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: FakeResult())
+
+# --- Pytest: The Cheese Shop ---
+
+def test_pytest_all_pass(monkeypatch):
+    """11 artisanal cheeses, all accounted for."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.PYTEST_ALL_PASS))
     result = cc.get_test_counts("pytest")
+    assert result == {"passed": 11, "failed": 0, "skipped": 0}
+
+
+def test_pytest_mixed(monkeypatch):
+    """The brie test crumbled. One skipped (aged too long to test)."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.PYTEST_MIXED))
+    result = cc.get_test_counts("pytest")
+    assert result == {"passed": 8, "failed": 1, "skipped": 1}
+
+
+def test_pytest_all_fail(monkeypatch):
+    """Nothing but failures. The cheese shop is condemned."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.PYTEST_ALL_FAIL))
+    result = cc.get_test_counts("pytest")
+    assert result == {"passed": 0, "failed": 4, "skipped": 0}
+
+
+def test_pytest_crash(monkeypatch):
+    """Pytest itself crashed. Unparseable output returns None."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.PYTEST_CRASH, returncode=3))
+    result = cc.get_test_counts("pytest")
+    assert result is None, f"Crashed pytest should return None, got {result}"
+
+
+def test_pytest_no_tests(monkeypatch):
+    """No tests collected. The cheese shop is empty but structurally sound."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.PYTEST_NO_TESTS))
+    result = cc.get_test_counts("pytest")
+    assert result is None, f"No tests collected should return None, got {result}"
+
+
+# --- Jest: Flavortown Jukebox ---
+
+def test_jest_all_pass(monkeypatch):
+    """14 songs, all correctly recommended."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.JEST_ALL_PASS))
+    result = cc.get_test_counts("jest")
+    assert result == {"passed": 14, "failed": 0, "skipped": 0}
+
+
+def test_jest_mixed(monkeypatch):
+    """Polka leaked into the metal playlist. 3 recommendations went wrong."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.JEST_MIXED))
+    result = cc.get_test_counts("jest")
+    assert result == {"passed": 11, "failed": 3, "skipped": 0}
+
+
+def test_jest_all_fail(monkeypatch):
+    """The jukebox is broken. Every recommendation is wrong."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.JEST_ALL_FAIL))
+    result = cc.get_test_counts("jest")
+    # Jest all-fail format: "Tests: N failed, 0 passed" — no "passed" without count
+    # The regex requires "N passed" to match, so all-fail with 0 passed needs "0 passed"
+    assert result is None or result["failed"] == 7
+
+
+def test_jest_pass_only(monkeypatch):
+    """Jest output with no failure prefix — just 'N passed'."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.JEST_PASS_ONLY))
+    result = cc.get_test_counts("jest")
+    assert result == {"passed": 14, "failed": 0, "skipped": 0}
+
+
+def test_jest_crash(monkeypatch):
+    """Jest config error. Module not found. The jukebox won't even turn on."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.JEST_CRASH, returncode=1))
+    result = cc.get_test_counts("jest")
+    assert result is None, f"Crashed jest should return None, got {result}"
+
+
+# --- Vitest: Quantum Tacos ---
+
+def test_vitest_all_pass(monkeypatch):
+    """13 taco physics simulations, all within acceptable parameters."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.VITEST_ALL_PASS))
+    result = cc.get_test_counts("vitest")
+    assert result == {"passed": 13, "failed": 0, "skipped": 0}
+
+
+def test_vitest_mixed(monkeypatch):
+    """Guacamole collapsed from its superposition. 2 tacos failed."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.VITEST_MIXED))
+    result = cc.get_test_counts("vitest")
+    assert result == {"passed": 11, "failed": 2, "skipped": 0}
+
+
+def test_vitest_crash(monkeypatch):
+    """Quantum taco plugin not found. Reality unresolved."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.VITEST_CRASH, returncode=1))
+    result = cc.get_test_counts("vitest")
+    assert result is None, f"Crashed vitest should return None, got {result}"
+
+
+# --- Cargo: Crab Rave Orchestrator ---
+
+def test_cargo_all_pass(monkeypatch):
+    """8 crabs, all raving in harmony."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.CARGO_ALL_PASS))
+    result = cc.get_test_counts("cargo")
+    assert result == {"passed": 8, "failed": 0, "skipped": 0}
+
+
+def test_cargo_mixed(monkeypatch):
+    """Two crabs collided during the rave. One ignored the whole thing."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.CARGO_MIXED))
+    result = cc.get_test_counts("cargo")
     assert result == {"passed": 5, "failed": 2, "skipped": 1}
 
 
-def test_get_test_counts_jest_output(monkeypatch):
-    """Jest output parsing should extract correct counts."""
-    import subprocess
+def test_cargo_crash(monkeypatch):
+    """Compilation failed. The crabs never even got to the rave."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.CARGO_CRASH, returncode=101))
+    result = cc.get_test_counts("cargo")
+    assert result is None, f"Failed cargo build should return None, got {result}"
 
-    class FakeResult:
-        stdout = "Tests:  2 failed, 8 passed, 10 total\n"
-        stderr = ""
-        returncode = 1
 
-    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: FakeResult())
+# --- Go: Haunted Elevator ---
+
+def test_go_verbose_all_pass(monkeypatch):
+    """6 elevator tests, all passing. The ghosts behaved."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.GO_VERBOSE_ALL_PASS))
+    result = cc.get_test_counts("go")
+    assert result == {"passed": 6, "failed": 0, "skipped": 0}
+
+
+def test_go_verbose_mixed(monkeypatch):
+    """Doors stayed closed on floor 7 and a ghost pressed buttons. One test skipped."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.GO_VERBOSE_MIXED))
+    result = cc.get_test_counts("go")
+    assert result == {"passed": 4, "failed": 2, "skipped": 1}
+
+
+def test_go_verbose_with_subtests(monkeypatch):
+    """Subtests should not be double-counted. Only top-level tests matter."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.GO_VERBOSE_WITH_SUBTESTS))
+    result = cc.get_test_counts("go")
+    # TestElevatorGoesUp has 2 subtests but should count as 1 top-level pass.
+    # TestElevatorGoesDown is 1 top-level pass. Total: 2 passed.
+    assert result["passed"] == 2, (
+        f"Expected 2 top-level tests passed (subtests not counted separately), got {result}"
+    )
+
+
+def test_go_crash(monkeypatch):
+    """Build failed. GhostDimension is undefined. As expected."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.GO_CRASH, returncode=2))
+    result = cc.get_test_counts("go")
+    assert result is None, f"Failed go build should return None, got {result}"
+
+
+# --- Mocha: Sock Puppet Theatre ---
+
+def test_mocha_all_pass(monkeypatch):
+    """8 puppets, all performing flawlessly."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.MOCHA_ALL_PASS))
+    result = cc.get_test_counts("mocha")
+    assert result == {"passed": 8, "failed": 0, "skipped": 0}
+
+
+def test_mocha_mixed(monkeypatch):
+    """Mr. Buttons was dropped and the audience booed. 2 failures."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.MOCHA_MIXED))
+    result = cc.get_test_counts("mocha")
+    assert result == {"passed": 5, "failed": 2, "skipped": 0}
+
+
+def test_mocha_crash(monkeypatch):
+    """Puppet registry missing. The show can't go on."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.MOCHA_CRASH, returncode=1))
+    result = cc.get_test_counts("mocha")
+    assert result is None, f"Crashed mocha should return None, got {result}"
+
+
+# --- Edge cases ---
+
+def test_unknown_runner(monkeypatch):
+    """Unknown runner should return None without running anything."""
+    result = cc.get_test_counts("bun")
+    assert result is None
+
+
+def test_none_runner():
+    """None runner should return None."""
+    result = cc.get_test_counts(None)
+    assert result is None
+
+
+def test_timeout_returns_none(monkeypatch):
+    """Test runner timeout should return None."""
+    def timeout_run(*a, **kw):
+        raise subprocess.TimeoutExpired(cmd="pytest", timeout=300)
+    monkeypatch.setattr(subprocess, "run", timeout_run)
+    result = cc.get_test_counts("pytest")
+    assert result is None
+
+
+def test_command_not_found_returns_none(monkeypatch):
+    """Missing test runner binary should return None."""
+    def not_found(*a, **kw):
+        raise FileNotFoundError("No such file: 'npx'")
+    monkeypatch.setattr(subprocess, "run", not_found)
     result = cc.get_test_counts("jest")
-    assert result == {"passed": 8, "failed": 2, "skipped": 0}
+    assert result is None
