@@ -1,1 +1,3 @@
 - [user_identity.md](user_identity.md) — User's full name, GitHub handle, email, copyright year
+- [feedback_thoroughness.md](feedback_thoroughness.md) — Build fixtures to validate everything, never defer for lack of test infra; make fixtures whimsical but useful
+- [feedback_use_project_skills.md](feedback_use_project_skills.md) — When user says "use skills/holtz/", read that SKILL.md directly instead of invoking a superpowers skill with similar keywords
