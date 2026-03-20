@@ -47,6 +47,7 @@ def detect_test_runner() -> str | None:
         "vitest": ["vitest.config.ts", "vitest.config.js"],
         "cargo": ["Cargo.toml"],
         "go": ["go.mod"],
+        "swift": ["Package.swift"],
         "mocha": [".mocharc.yml", ".mocharc.json"],
     }
     for runner, files in markers.items():
@@ -78,6 +79,7 @@ def get_test_counts(runner: str | None) -> dict | None:
         "vitest": ["npx", "vitest", "run", "--reporter=verbose"],
         "cargo": ["cargo", "test", "--", "--format=terse"],
         "go": ["go", "test", "-v", "./..."],
+        "swift": ["swift", "test"],
         "mocha": ["npx", "mocha", "--reporter=min"],
     }
 
@@ -142,6 +144,19 @@ def get_test_counts(runner: str | None) -> dict | None:
             passed = len(re.findall(r'^--- PASS: \w+[ (]', output, re.MULTILINE))
             failed = len(re.findall(r'^--- FAIL: \w+[ (]', output, re.MULTILINE))
             skipped = len(re.findall(r'^--- SKIP: \w+[ (]', output, re.MULTILINE))
+            if passed == 0 and failed == 0 and skipped == 0:
+                return None
+            return {
+                "passed": passed,
+                "failed": failed,
+                "skipped": skipped,
+            }
+
+        if runner == "swift":
+            # Swift XCTest output: individual "Test Case '...' passed/failed/skipped" lines.
+            passed = len(re.findall(r"^Test Case '.*' passed", output, re.MULTILINE))
+            failed = len(re.findall(r"^Test Case '.*' failed", output, re.MULTILINE))
+            skipped = len(re.findall(r"^Test Case '.*' skipped", output, re.MULTILINE))
             if passed == 0 and failed == 0 and skipped == 0:
                 return None
             return {

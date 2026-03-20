@@ -298,6 +298,16 @@ def test_detect_go_by_mod(tmp_path, monkeypatch):
     assert cc.detect_test_runner() == "go"
 
 
+def test_detect_swift_by_package(tmp_path, monkeypatch):
+    """detect_test_runner should find swift via Package.swift."""
+    (tmp_path / "Package.swift").write_text(
+        '// swift-tools-version: 5.9\nimport PackageDescription\n'
+        'let package = Package(name: "AstralPostalService")\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    assert cc.detect_test_runner() == "swift"
+
+
 def test_detect_mocha_by_config(tmp_path, monkeypatch):
     """detect_test_runner should find mocha via .mocharc.yml."""
     (tmp_path / ".mocharc.yml").write_text("spec: test/**/*.test.js")
@@ -533,6 +543,29 @@ def test_go_crash(monkeypatch):
     monkeypatch.setattr(subprocess, "run", _fake_run(fx.GO_CRASH, returncode=2))
     result = cc.get_test_counts("go")
     assert result is None, f"Failed go build should return None, got {result}"
+
+
+# --- Swift: Astral Postal Service ---
+
+def test_swift_all_pass(monkeypatch):
+    """5 parcels across dimensions, all delivered intact."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.SWIFT_ALL_PASS))
+    result = cc.get_test_counts("swift")
+    assert result == {"passed": 5, "failed": 0, "skipped": 0}
+
+
+def test_swift_mixed(monkeypatch):
+    """Package came out inside-out. Ink phase-shifted. Void postmark skipped."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.SWIFT_MIXED))
+    result = cc.get_test_counts("swift")
+    assert result == {"passed": 3, "failed": 2, "skipped": 1}
+
+
+def test_swift_crash(monkeypatch):
+    """DimensionalTransit module not found. Mail undeliverable."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.SWIFT_CRASH, returncode=1))
+    result = cc.get_test_counts("swift")
+    assert result is None, f"Failed swift build should return None, got {result}"
 
 
 # --- Mocha: Sock Puppet Theatre ---

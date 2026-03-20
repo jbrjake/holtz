@@ -294,3 +294,74 @@ Error: Cannot find module './puppet-registry'
     at Function.Module._resolveFilename (internal/modules/cjs/loader.js:885:15)
     at Function.Module._load (internal/modules/cjs/loader.js:730:27)
 """
+
+# =============================================================================
+# SWIFT — "Astral Postal Service" (interdimensional mail routing in Swift)
+# =============================================================================
+
+SWIFT_ALL_PASS = """\
+Building for debugging...
+Build complete! (1.23s)
+Test Suite 'All tests' started at 2026-03-19 14:00:00.000.
+Test Suite 'AstralPostalServiceTests.xctest' started at 2026-03-19 14:00:00.001.
+Test Suite 'MailRouterTests' started at 2026-03-19 14:00:00.001.
+Test Case 'MailRouterTests.testLetterReachesDimension7' started.
+Test Case 'MailRouterTests.testLetterReachesDimension7' passed (0.003 seconds).
+Test Case 'MailRouterTests.testPackageSurvivesWormhole' started.
+Test Case 'MailRouterTests.testPackageSurvivesWormhole' passed (0.001 seconds).
+Test Case 'MailRouterTests.testReturnToSenderFromVoid' started.
+Test Case 'MailRouterTests.testReturnToSenderFromVoid' passed (0.002 seconds).
+Test Suite 'MailRouterTests' passed at 2026-03-19 14:00:00.007.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.006 (0.007) seconds
+Test Suite 'PostmarkTests' started at 2026-03-19 14:00:00.008.
+Test Case 'PostmarkTests.testStampValidInAllDimensions' started.
+Test Case 'PostmarkTests.testStampValidInAllDimensions' passed (0.001 seconds).
+Test Case 'PostmarkTests.testInkDoesNotPhaseShift' started.
+Test Case 'PostmarkTests.testInkDoesNotPhaseShift' passed (0.001 seconds).
+Test Suite 'PostmarkTests' passed at 2026-03-19 14:00:00.010.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'AstralPostalServiceTests.xctest' passed at 2026-03-19 14:00:00.010.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.008 (0.009) seconds
+Test Suite 'All tests' passed at 2026-03-19 14:00:00.010.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.008 (0.009) seconds
+"""
+
+SWIFT_MIXED = """\
+Building for debugging...
+Build complete! (1.45s)
+Test Suite 'All tests' started at 2026-03-19 14:00:00.000.
+Test Suite 'AstralPostalServiceTests.xctest' started at 2026-03-19 14:00:00.001.
+Test Suite 'MailRouterTests' started at 2026-03-19 14:00:00.001.
+Test Case 'MailRouterTests.testLetterReachesDimension7' started.
+Test Case 'MailRouterTests.testLetterReachesDimension7' passed (0.003 seconds).
+Test Case 'MailRouterTests.testPackageSurvivesWormhole' started.
+/Users/dev/AstralPostalService/Tests/MailRouterTests.swift:42: error: MailRouterTests.testPackageSurvivesWormhole : XCTAssertFalse failed - package was inside-out after wormhole transit
+Test Case 'MailRouterTests.testPackageSurvivesWormhole' failed (0.005 seconds).
+Test Case 'MailRouterTests.testReturnToSenderFromVoid' started.
+Test Case 'MailRouterTests.testReturnToSenderFromVoid' passed (0.002 seconds).
+Test Suite 'MailRouterTests' failed at 2026-03-19 14:00:00.011.
+	 Executed 3 tests, with 1 failure (1 unexpected) in 0.010 (0.011) seconds
+Test Suite 'PostmarkTests' started at 2026-03-19 14:00:00.012.
+Test Case 'PostmarkTests.testStampValidInAllDimensions' started.
+Test Case 'PostmarkTests.testStampValidInAllDimensions' passed (0.001 seconds).
+Test Case 'PostmarkTests.testInkDoesNotPhaseShift' started.
+/Users/dev/AstralPostalService/Tests/PostmarkTests.swift:28: error: PostmarkTests.testInkDoesNotPhaseShift : XCTAssertEqual failed: ("ultraviolet") is not equal to ("infrared") - ink phase-shifted during dimensional transit
+Test Case 'PostmarkTests.testInkDoesNotPhaseShift' failed (0.003 seconds).
+Test Case 'PostmarkTests.testVoidPostmarkIsIllegible' started.
+Test Case 'PostmarkTests.testVoidPostmarkIsIllegible' skipped (0.000 seconds).
+Test Suite 'PostmarkTests' failed at 2026-03-19 14:00:00.016.
+	 Executed 3 tests, with 1 failure (1 unexpected) in 0.004 (0.004) seconds
+Test Suite 'AstralPostalServiceTests.xctest' failed at 2026-03-19 14:00:00.016.
+	 Executed 6 tests, with 2 failures (2 unexpected) in 0.014 (0.015) seconds
+Test Suite 'All tests' failed at 2026-03-19 14:00:00.016.
+	 Executed 6 tests, with 2 failures (2 unexpected) in 0.014 (0.015) seconds
+"""
+
+SWIFT_CRASH = """\
+Building for debugging...
+/Users/dev/AstralPostalService/Sources/MailRouter.swift:7:8: error: no such module 'DimensionalTransit'
+import DimensionalTransit
+       ^
+error: fatalError
+"""
+
