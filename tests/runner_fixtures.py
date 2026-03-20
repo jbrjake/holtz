@@ -192,16 +192,7 @@ error: aborting due to 1 previous error
 
 # =============================================================================
 # GO — "Haunted Elevator" (a building simulation with unpredictable floors)
-# The Go output needs BOTH the old package-level format AND the verbose format
 # =============================================================================
-
-# Old format (non-verbose): only package-level results
-GO_PACKAGE_LEVEL = """\
-ok  	github.com/spectral/haunted-elevator/floors	0.003s
-ok  	github.com/spectral/haunted-elevator/buttons	0.005s
-FAIL	github.com/spectral/haunted-elevator/ghosts	0.002s
-ok  	github.com/spectral/haunted-elevator/cables	0.001s
-"""
 
 # Verbose format: individual test results
 GO_VERBOSE_ALL_PASS = """\
