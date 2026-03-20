@@ -446,9 +446,27 @@ def test_jest_all_fail(monkeypatch):
     """The jukebox is broken. Every recommendation is wrong."""
     monkeypatch.setattr(subprocess, "run", _fake_run(fx.JEST_ALL_FAIL))
     result = cc.get_test_counts("jest")
-    # Jest all-fail format: "Tests: N failed, 0 passed" — no "passed" without count
-    # The regex requires "N passed" to match, so all-fail with 0 passed needs "0 passed"
-    assert result is None or result["failed"] == 7
+    # The fixture includes "0 passed" so the regex matches deterministically.
+    assert result == {"passed": 0, "failed": 7, "skipped": 0}
+
+
+def test_jest_all_fail_no_passed_label(monkeypatch):
+    """Jest versions that omit '0 passed' from all-fail output return None."""
+    # Some Jest versions output "Tests: 7 failed, 7 total" with no "passed" mention.
+    output = """\
+ FAIL  src/jukebox/__tests__/playlist.test.ts
+ FAIL  src/jukebox/__tests__/recommendations.test.ts
+
+Test Suites: 2 failed, 2 total
+Tests:       7 failed, 7 total
+Snapshots:   0 total
+Time:        1.892 s
+"""
+    monkeypatch.setattr(subprocess, "run", _fake_run(output))
+    result = cc.get_test_counts("jest")
+    assert result is None, (
+        f"Jest all-fail without 'N passed' should return None, got {result}"
+    )
 
 
 def test_jest_pass_only(monkeypatch):
