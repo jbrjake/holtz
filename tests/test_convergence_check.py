@@ -550,9 +550,9 @@ def test_go_verbose_with_subtests(monkeypatch):
     monkeypatch.setattr(subprocess, "run", _fake_run(fx.GO_VERBOSE_WITH_SUBTESTS))
     result = cc.get_test_counts("go")
     # TestElevatorGoesUp has 2 subtests but should count as 1 top-level pass.
-    # TestElevatorGoesDown is 1 top-level pass. Total: 2 passed.
-    assert result["passed"] == 2, (
-        f"Expected 2 top-level tests passed (subtests not counted separately), got {result}"
+    # TestElevatorGoesDown is 1 top-level pass. Total: 2 passed, 0 failed, 0 skipped.
+    assert result == {"passed": 2, "failed": 0, "skipped": 0}, (
+        f"Expected 2 top-level tests (subtests not counted separately), got {result}"
     )
 
 
