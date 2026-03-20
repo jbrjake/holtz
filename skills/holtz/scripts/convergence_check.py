@@ -23,17 +23,32 @@ HISTORY_FILE = "docs/holtz/HISTORY.json"
 
 
 def count_items(punchlist_path: Path) -> dict:
-    """Count punchlist items by status."""
+    """Count punchlist items by status.
+
+    Only counts Status fields that appear within item blocks (between
+    ``### BH-NNN:`` headers).  Status fields in Pattern descriptions,
+    preamble text, or item prose outside the first Status field per block
+    are ignored.
+    """
     content = punchlist_path.read_text() if punchlist_path.exists() else ""
     _, masked = mask_code_fences(content)
     counts = {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0}
 
-    for match in re.finditer(r'\*\*Status:\*\*[ \t]*(\w[\w ]*\w)', masked):
-        status = match.group(1).strip()
-        if status in counts:
-            counts[status] += 1
-        else:
-            counts["unknown"] += 1
+    # Split on item headers so we only look inside item blocks.
+    item_pattern = re.compile(r'^### BH-\d+:', re.MULTILINE)
+    item_starts = [m.start() for m in item_pattern.finditer(masked)]
+
+    for idx, start in enumerate(item_starts):
+        end = item_starts[idx + 1] if idx + 1 < len(item_starts) else len(masked)
+        block = masked[start:end]
+        # Take only the FIRST Status field per item block.
+        status_match = re.search(r'\*\*Status:\*\*[ \t]*(\w[\w ]*\w)', block)
+        if status_match:
+            status = status_match.group(1).strip()
+            if status in counts:
+                counts[status] += 1
+            else:
+                counts["unknown"] += 1
 
     counts["total"] = sum(counts.values())
     return counts

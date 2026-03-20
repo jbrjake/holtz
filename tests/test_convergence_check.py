@@ -639,3 +639,55 @@ def test_command_not_found_returns_none(monkeypatch):
     monkeypatch.setattr(subprocess, "run", not_found)
     result = cc.get_test_counts("jest")
     assert result is None
+
+
+# --- BH-002 (run 4): count_items matches Status outside item blocks ---
+
+def test_status_outside_item_block_not_counted(tmp_path):
+    """**Status:** in Pattern description or preamble should not inflate count."""
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text("""\
+# Holtz Punchlist
+
+## Patterns
+
+## Pattern: PAT-001: Incomplete checks
+**Instances:** BH-001
+**Root Cause:** Missing validation
+**Systemic Fix:** Add validation layer
+**Detection Rule:** grep for unchecked returns
+
+Previous audit found items with **Status:** RESOLVED that were not fixed.
+
+## Items
+
+### BH-001: Missing validation
+**Status:** OPEN
+""")
+    counts = cc.count_items(punchlist)
+    assert counts["OPEN"] == 1, (
+        f"Expected 1 OPEN (only the real item), got {counts}"
+    )
+    assert counts["total"] == 1, (
+        f"Expected total 1, Status in Pattern description should not count. Got {counts}"
+    )
+
+
+def test_status_in_problem_section_not_counted(tmp_path):
+    """**Status:** in an item's Problem prose should not create a phantom item."""
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text("""\
+### BH-001: Real item
+**Status:** OPEN
+
+**Problem:** The system shows **Status:** RESOLVED for items that are actually broken.
+
+### BH-002: Second item
+**Status:** DEFERRED
+""")
+    counts = cc.count_items(punchlist)
+    assert counts["OPEN"] == 1, f"Expected 1 OPEN, got {counts}"
+    assert counts["DEFERRED"] == 1, f"Expected 1 DEFERRED, got {counts}"
+    assert counts["total"] == 2, (
+        f"Expected total 2 (only real items), Status in Problem prose should not count. Got {counts}"
+    )
