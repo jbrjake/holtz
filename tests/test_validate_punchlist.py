@@ -225,11 +225,11 @@ echo test
 """
     items = vp.parse_punchlist(content)
     result = vp.validate(items)
-    # Should have an error about duplicate IDs
     dup_errors = [e for e in result.errors if "duplicate" in e.lower()]
-    assert len(dup_errors) > 0, (
-        f"Expected duplicate ID error, got errors: {result.errors}"
+    assert len(dup_errors) == 1, (
+        f"Expected exactly 1 duplicate ID error, got: {result.errors}"
     )
+    assert "BH-001" in dup_errors[0]
 
 
 # --- BH-010: Empty punchlist validation ---
@@ -267,10 +267,10 @@ echo test
 """
     items = vp.parse_punchlist(content)
     result = vp.validate(items, content)
-    # Should have warnings about missing structure
-    structure_warnings = [w for w in result.warnings if "header" in w.lower() or "structure" in w.lower() or "section" in w.lower()]
-    assert len(structure_warnings) > 0, (
-        f"Expected structure warnings, got warnings: {result.warnings}"
+    # Missing header, Summary, and Items sections — should produce 3 warnings
+    structure_warnings = [w for w in result.warnings if w.startswith("Missing")]
+    assert len(structure_warnings) == 3, (
+        f"Expected 3 structure warnings (header, Summary, Items), got: {result.warnings}"
     )
 
 
@@ -300,10 +300,9 @@ echo test
     items = vp.parse_punchlist(content)
     assert len(items) == 1
     result = vp.validate(items)
-    # Should have a missing category error, not a non-standard category warning
-    cat_errors = [e for e in result.errors if "category" in e.lower()]
-    assert len(cat_errors) > 0, (
-        f"Expected missing category error, got errors: {result.errors}, warnings: {result.warnings}"
+    cat_errors = [e for e in result.errors if "missing category" in e.lower()]
+    assert len(cat_errors) == 1, (
+        f"Expected exactly 1 'missing category' error, got errors: {result.errors}"
     )
 
 
@@ -457,10 +456,11 @@ echo test
 """
     items = vp.parse_punchlist(content)
     result = vp.validate(items)
-    sev_errors = [e for e in result.errors if "severity" in e.lower()]
-    assert len(sev_errors) > 0, (
-        f"Expected invalid severity error, got errors: {result.errors}"
+    sev_errors = [e for e in result.errors if "invalid severity" in e.lower()]
+    assert len(sev_errors) == 1, (
+        f"Expected exactly 1 'invalid severity' error, got errors: {result.errors}"
     )
+    assert "'URGENT'" in sev_errors[0]
 
 
 # --- FA-015: RESOLVED without resolution ---
@@ -488,9 +488,9 @@ echo test
 """
     items = vp.parse_punchlist(content)
     result = vp.validate(items)
-    res_errors = [e for e in result.errors if "resolution" in e.lower() or "resolved" in e.lower()]
-    assert len(res_errors) > 0, (
-        f"Expected resolved-without-resolution error, got errors: {result.errors}"
+    res_errors = [e for e in result.errors if "RESOLVED" in e and "resolution" in e.lower()]
+    assert len(res_errors) == 1, (
+        f"Expected exactly 1 'resolved but no resolution' error, got errors: {result.errors}"
     )
 
 
@@ -1035,9 +1035,9 @@ echo test
     result = vp.validate(items, content)
     # The file has NO real top-level structure — only inside a code fence.
     # All 3 warnings should fire.
-    structure_warnings = [w for w in result.warnings if "section" in w.lower() or "header" in w.lower()]
-    assert len(structure_warnings) >= 2, (
-        f"Expected structure warnings (sections only in code fence), got: {result.warnings}"
+    structure_warnings = [w for w in result.warnings if w.startswith("Missing")]
+    assert len(structure_warnings) == 3, (
+        f"Expected 3 structure warnings (header, Summary, Items), got: {result.warnings}"
     )
 
 
@@ -1103,9 +1103,9 @@ pytest -k load_test
 """
     items = vp.parse_punchlist(content)
     result = vp.validate(items, content)
-    deferred_warnings = [w for w in result.warnings if "deferred" in w.lower() or "evidence" in w.lower() or "investigation" in w.lower()]
-    assert len(deferred_warnings) > 0, (
-        f"DEFERRED bug without Evidence or Investigation should warn. Got warnings: {result.warnings}"
+    deferred_warnings = [w for w in result.warnings if "DEFERRED" in w and "Evidence" in w]
+    assert len(deferred_warnings) == 1, (
+        f"Expected exactly 1 deferred-without-evidence warning, got warnings: {result.warnings}"
     )
 
 
@@ -1679,9 +1679,9 @@ echo test
 """
     items = vp.parse_punchlist(content)
     result = vp.validate(items)
-    loc_warnings = [w for w in result.warnings if "location" in w.lower()]
-    assert len(loc_warnings) > 0, (
-        f"Expected missing location warning, got warnings: {result.warnings}"
+    loc_warnings = [w for w in result.warnings if "missing location" in w.lower()]
+    assert len(loc_warnings) == 1, (
+        f"Expected exactly 1 'missing location' warning, got warnings: {result.warnings}"
     )
 
 
@@ -1710,10 +1710,11 @@ echo test
 """
     items = vp.parse_punchlist(content)
     result = vp.validate(items)
-    cat_warnings = [w for w in result.warnings if "category" in w.lower()]
-    assert len(cat_warnings) > 0, (
-        f"Expected non-standard category warning, got warnings: {result.warnings}"
+    cat_warnings = [w for w in result.warnings if "non-standard category" in w.lower()]
+    assert len(cat_warnings) == 1, (
+        f"Expected exactly 1 'non-standard category' warning, got warnings: {result.warnings}"
     )
+    assert "'bug/mystical'" in cat_warnings[0]
 
 
 def test_bug_item_missing_determinism_produces_warning():
@@ -1741,9 +1742,9 @@ echo test
 """
     items = vp.parse_punchlist(content)
     result = vp.validate(items)
-    det_warnings = [w for w in result.warnings if "determinism" in w.lower()]
-    assert len(det_warnings) > 0, (
-        f"Expected missing determinism warning for bug/* item, got warnings: {result.warnings}"
+    det_warnings = [w for w in result.warnings if "missing Determinism" in w]
+    assert len(det_warnings) == 1, (
+        f"Expected exactly 1 'missing Determinism' warning, got warnings: {result.warnings}"
     )
 
 
@@ -1773,10 +1774,11 @@ echo test
 """
     items = vp.parse_punchlist(content)
     result = vp.validate(items)
-    det_warnings = [w for w in result.warnings if "determinism" in w.lower()]
-    assert len(det_warnings) > 0, (
-        f"Expected non-standard determinism warning, got warnings: {result.warnings}"
+    det_warnings = [w for w in result.warnings if "non-standard determinism" in w.lower()]
+    assert len(det_warnings) == 1, (
+        f"Expected exactly 1 'non-standard determinism' warning, got warnings: {result.warnings}"
     )
+    assert "'sometimes'" in det_warnings[0]
 
 
 def test_invalid_root_cause_confidence_produces_warning():
@@ -1805,10 +1807,11 @@ echo test
 """
     items = vp.parse_punchlist(content)
     result = vp.validate(items)
-    rcc_warnings = [w for w in result.warnings if "root cause confidence" in w.lower()]
-    assert len(rcc_warnings) > 0, (
-        f"Expected invalid Root Cause Confidence warning, got warnings: {result.warnings}"
+    rcc_warnings = [w for w in result.warnings if "invalid Root Cause Confidence" in w]
+    assert len(rcc_warnings) == 1, (
+        f"Expected exactly 1 'invalid Root Cause Confidence' warning, got warnings: {result.warnings}"
     )
+    assert "'MAYBE'" in rcc_warnings[0]
 
 
 # --- BH-003 (run 4): validate() stats dict ---
