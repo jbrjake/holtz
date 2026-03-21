@@ -458,7 +458,7 @@ def test_jest_all_fail(monkeypatch):
 
 
 def test_jest_all_fail_no_passed_label(monkeypatch):
-    """Jest versions that omit '0 passed' from all-fail output return None."""
+    """Jest versions that omit '0 passed' should still return failure counts."""
     # Some Jest versions output "Tests: 7 failed, 7 total" with no "passed" mention.
     output = """\
  FAIL  src/jukebox/__tests__/playlist.test.ts
@@ -471,8 +471,8 @@ Time:        1.892 s
 """
     monkeypatch.setattr(subprocess, "run", _fake_run(output))
     result = cc.get_test_counts("jest")
-    assert result is None, (
-        f"Jest all-fail without 'N passed' should return None, got {result}"
+    assert result == {"passed": 0, "failed": 7, "skipped": 0}, (
+        f"Jest all-fail without 'N passed' should return counts, got {result}"
     )
 
 

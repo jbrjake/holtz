@@ -122,14 +122,23 @@ def get_test_counts(runner: str | None) -> dict | None:
 
         if runner == "jest":
             # Jest output: Tests: N failed, N passed, N total
+            # Some versions omit "0 passed" when all tests fail.
             m = re.search(r'Tests:\s+(?:(\d+) failed,\s+)?(\d+) passed', output)
-            if not m:
-                return None
-            return {
-                "passed": int(m.group(2)),
-                "failed": int(m.group(1)) if m.group(1) else 0,
-                "skipped": 0,
-            }
+            if m:
+                return {
+                    "passed": int(m.group(2)),
+                    "failed": int(m.group(1)) if m.group(1) else 0,
+                    "skipped": 0,
+                }
+            # All-fail: "Tests: N failed, N total" with no "passed"
+            m_fail = re.search(r'Tests:\s+(\d+) failed,\s+\d+ total', output)
+            if m_fail:
+                return {
+                    "passed": 0,
+                    "failed": int(m_fail.group(1)),
+                    "skipped": 0,
+                }
+            return None
 
         if runner == "vitest":
             # Vitest summary line: "Tests  N passed" or "Tests  N failed | N passed"
