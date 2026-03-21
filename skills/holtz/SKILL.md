@@ -57,7 +57,7 @@ Before starting ANY work, check for existing output files in `docs/holtz/`:
 1. **If `docs/holtz/STATUS.md` exists:** Read it. It tells you exactly where the last run stopped. Resume from that point — do not restart from Phase 0.
 2. **If `docs/holtz/recon/` dir exists but no STATUS file:** A prior run crashed in Phase 0. Check which `docs/holtz/recon/0*.md` files exist. Resume from the first missing step.
 3. **If `docs/holtz/PUNCHLIST.md` exists:** A prior run got past recon. Read it + STATUS to determine if you're in audit (Phases 1-3) or fix loop (Phases 4-6). Resume accordingly.
-4. **If the user says "start fresh" or "re-audit":** Move existing `docs/holtz/` to `docs/holtz-prior-{date}/` as a backup, then start from Phase 0.
+4. **If the user says "start fresh" or "re-audit":** Move existing `docs/holtz/` to `docs/holtz-prior-{date}/` as a backup, then start from Phase 0. **Exception:** Do NOT move `docs/holtz/patterns-brief.md` or `docs/holtz/patterns-brief-archive.md` — these persist across runs. Copy them back into the fresh `docs/holtz/` after archiving.
 5. **If `docs/holtz/SUMMARY.md` exists:** A prior run completed. Ask the user if they want a fresh audit or to review/extend the prior findings.
 
 **Default behavior is RESUME, not restart.** Never discard prior work without explicit user instruction.
@@ -76,6 +76,8 @@ Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is 
 | 0d | Run linters/type checkers if configured | `docs/holtz/recon/0d-lint-results.md` |
 | 0e | Git churn analysis (top 20 most-changed files in last 50 commits) | `docs/holtz/recon/0e-churn.md` |
 | 0f | Find skipped/disabled tests | `docs/holtz/recon/0f-skipped-tests.md` |
+
+**Pattern Brief:** If `docs/holtz/patterns-brief.md` exists, read it to load known patterns from prior runs. These patterns inform what to look for during audit phases. Optionally read `docs/holtz/patterns-brief-archive.md` for additional historical context if investigating a specific pattern class.
 
 **When creating STATUS.md:** set the initial Active Lens to `component`. Initialize the Pattern Library and Strategy sections (High-Risk Areas from recon findings, Last Insight and Approach as "—" until first insight).
 
@@ -126,8 +128,9 @@ Use **Agent subagents** for this phase when possible — each subagent audits a 
 
 1. Read `docs/holtz/recon/0g-recon-summary.md` for test file locations
 2. Partition test files into batches (3-5 files each)
-3. For each batch: audit per [references/anti-patterns.md](references/anti-patterns.md), write punchlist items to `docs/holtz/PUNCHLIST.md` IMMEDIATELY after each batch
-4. Update `docs/holtz/STATUS.md`
+3. **Subagent brief:** Instruct each subagent to read `docs/holtz/patterns-brief.md` before starting its audit batch. Known patterns from prior runs should be checked against the code being reviewed.
+4. For each batch: audit per [references/anti-patterns.md](references/anti-patterns.md), write punchlist items to `docs/holtz/PUNCHLIST.md` IMMEDIATELY after each batch
+5. Update `docs/holtz/STATUS.md`
 
 If not using subagents: audit one file at a time, write findings before opening the next file.
 
@@ -136,9 +139,10 @@ If not using subagents: audit one file at a time, write findings before opening 
 Same subagent strategy. Partition source modules into batches.
 
 1. Read `docs/holtz/recon/0g-recon-summary.md` and `docs/holtz/recon/0e-churn.md` (high-churn files first)
-2. For each module batch: review for bugs, write punchlist items IMMEDIATELY
-3. **For `bug/*` items:** assess determinism and record in the punchlist item's `**Determinism:**` field. Is this bug deterministic (specific trigger), intermittent (timing/load/ordering dependent), or theoretical (identified from code analysis, not yet observed)? This determines the reproduction strategy in Phase 4.
-4. Update `docs/holtz/STATUS.md`
+2. **Subagent brief:** Instruct each subagent to read `docs/holtz/patterns-brief.md` before starting its audit batch. Known patterns from prior runs should be checked against the code being reviewed.
+3. For each module batch: review for bugs, write punchlist items IMMEDIATELY
+4. **For `bug/*` items:** assess determinism and record in the punchlist item's `**Determinism:**` field. Is this bug deterministic (specific trigger), intermittent (timing/load/ordering dependent), or theoretical (identified from code analysis, not yet observed)? This determines the reproduction strategy in Phase 4.
+5. Update `docs/holtz/STATUS.md`
 
 Priority order: error paths, boundaries, state transitions, external integrations, security.
 
@@ -217,6 +221,27 @@ This is per-fix robustness, not pattern analysis. Phase 5 looks across fixes for
 2. Group resolved items by category. For groups of 2+: identify pattern, search for siblings, write new items to punchlist IMMEDIATELY
 3. Write pattern blocks to punchlist per format spec
 4. **Update `docs/holtz/STATUS.md`:** add new PAT-NNN entries to Pattern Library for each newly identified pattern (one-line description, instance count, run number). Update position fields (Phase, Step, Next Action).
+5. **Update `docs/holtz/patterns-brief.md`:** For each newly identified pattern, append an entry to the patterns brief. Use this format:
+
+   ```markdown
+   ## PAT-{NNN}: {name} (Run {R}, {date})
+   **What to look for:** {1-2 sentences: the specific code shape or practice that indicates this bug class}
+   **Detection heuristic:** {grep pattern, structural check, or question to ask about the code}
+   **Example:** {one concrete instance from a prior finding, anonymized to the pattern level}
+   ```
+
+   If the file does not exist, create it with this header:
+
+   ```markdown
+   # Holtz Pattern Brief
+
+   > Read this before starting any audit work. These patterns were discovered
+   > in prior audits of this project. Check for them in the code you're reviewing.
+   ```
+
+   **Deduplication:** Before appending, check if the new pattern is a refinement of an existing entry (same bug class, similar detection heuristic). If so, update the existing entry with improved heuristics or examples rather than adding a duplicate.
+
+   **Rolling policy:** The brief is capped at 20 active entries. When a new pattern would push the count past 20, move the 5 oldest entries (by discovery date) in a single batch to `docs/holtz/patterns-brief-archive.md`. The archive uses the same format but is not read by subagents by default. If the archive file does not exist, create it with the same header but titled `# Holtz Pattern Brief — Archive`.
 
 ### Phase 6: Convergence Loop
 
