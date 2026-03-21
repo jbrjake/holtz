@@ -85,7 +85,7 @@ Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is 
 **After each step:** update `docs/holtz/STATUS.md` with completed step.
 **After all steps:**
 
-**Recommendation Escalation** — Before writing the recon summary, read the Recommendations section of every `docs/holtz-prior-*/SUMMARY.md` file. Identify any recommendation that appears *in substance* (semantic match, not verbatim — e.g., "add mypy" and "configure a type checker" are the same recommendation) in 2 or more prior summaries. For each such recommendation, create a punchlist item in `docs/holtz/PUNCHLIST.md` using this format:
+**Recommendation Escalation** — Before writing the recon summary, read the Recommendations section of every `docs/holtz-prior-*/SUMMARY.md` file. Identify any recommendation that appears *in substance* (semantic match, not verbatim — e.g., "add mypy" and "configure a type checker" are the same recommendation) in 2 or more prior summaries. For each match, create a punchlist item in `docs/holtz/PUNCHLIST.md`. If the punchlist file does not exist yet, create it with proper file structure first (see [references/punchlist-format.md](references/punchlist-format.md) File Structure section). Use this format for each escalated item:
 
 ````markdown
 ### BH-{NNN}: {recommendation title}
