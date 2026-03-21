@@ -1095,3 +1095,29 @@ def test_load_history_file_not_found(tmp_path, monkeypatch):
     monkeypatch.setattr(cc, "HISTORY_FILE", str(nonexistent))
     result = cc.load_history()
     assert result == [], f"Missing history file should return empty list, got {result}"
+
+
+# --- BH-008 (run 4): partial item deletion bypasses convergence ---
+
+def test_partial_deletion_does_not_converge():
+    """Deleting some items while keeping others resolved should NOT converge."""
+    history = [
+        {
+            "timestamp": "2026-03-21T01:00:00",
+            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "unknown": 0, "total": 5},
+            "tests": {"passed": 50, "failed": 0, "skipped": 0},
+        },
+        {
+            "timestamp": "2026-03-21T02:00:00",
+            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 3, "DEFERRED": 0, "unknown": 0, "total": 3},
+            "tests": {"passed": 50, "failed": 0, "skipped": 0},
+        },
+        {
+            "timestamp": "2026-03-21T03:00:00",
+            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 3, "DEFERRED": 0, "unknown": 0, "total": 3},
+            "tests": {"passed": 50, "failed": 0, "skipped": 0},
+        },
+    ]
+    converged, message = cc.check_convergence(history)
+    assert converged is False, "Should not converge when items were deleted"
+    assert "DELETED" in message, f"Expected DELETED message, got: {message}"

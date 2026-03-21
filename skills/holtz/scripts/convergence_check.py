@@ -276,6 +276,17 @@ def check_convergence(history: list) -> tuple[bool, str]:
             "Resolve items, don't delete them."
         )
 
+    # Detect partial item deletion: if total items decreased at any point
+    # in the history, items were removed rather than resolved.
+    prev_max_total = max(_get_punchlist(h)["total"] for h in history[:-1])
+    if prev_max_total > 0 and curr_pl["total"] < prev_max_total:
+        deleted_count = prev_max_total - curr_pl["total"]
+        return False, (
+            f"ITEMS DELETED: {deleted_count} item(s) disappeared from punchlist "
+            f"(was {prev_max_total}, now {curr_pl['total']}). "
+            "Resolve items, don't delete them."
+        )
+
     # Convergence requires 2 consecutive clean iterations (3 data points)
     last_3 = history[-3:]
     last_3_pls = [_get_punchlist(h) for h in last_3]
