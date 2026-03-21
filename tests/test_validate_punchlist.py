@@ -1529,3 +1529,194 @@ echo test
     assert items[0].has_resolution, (
         "Resolution with exactly 6 chars should pass the >5 threshold"
     )
+
+
+# --- BH-009 (bug-hunter run 3): untested validator warning/error paths ---
+
+def test_invalid_status_produces_error():
+    """Invalid status value should produce a validation error."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** BORKED
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Discovery Chain:** observed X → leads to Y → causes Z
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items)
+    # BORKED is not a recognized status, so it won't be captured by the
+    # anchored regex — item.status will be empty, triggering "missing status"
+    status_errors = [e for e in result.errors if "status" in e.lower()]
+    assert len(status_errors) > 0, (
+        f"Expected status error, got errors: {result.errors}"
+    )
+
+
+def test_missing_location_produces_warning():
+    """Missing Location field should produce a warning."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Discovery Chain:** observed X → leads to Y → causes Z
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items)
+    loc_warnings = [w for w in result.warnings if "location" in w.lower()]
+    assert len(loc_warnings) > 0, (
+        f"Expected missing location warning, got warnings: {result.warnings}"
+    )
+
+
+def test_nonstandard_category_produces_warning():
+    """Non-standard category value should produce a warning."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/mystical
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Discovery Chain:** observed X → leads to Y → causes Z
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items)
+    cat_warnings = [w for w in result.warnings if "category" in w.lower()]
+    assert len(cat_warnings) > 0, (
+        f"Expected non-standard category warning, got warnings: {result.warnings}"
+    )
+
+
+def test_bug_item_missing_determinism_produces_warning():
+    """Bug/* item without Determinism field should produce a warning."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Discovery Chain:** observed X → leads to Y → causes Z
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items)
+    det_warnings = [w for w in result.warnings if "determinism" in w.lower()]
+    assert len(det_warnings) > 0, (
+        f"Expected missing determinism warning for bug/* item, got warnings: {result.warnings}"
+    )
+
+
+def test_nonstandard_determinism_produces_warning():
+    """Non-standard determinism value should produce a warning."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+**Determinism:** sometimes
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Discovery Chain:** observed X → leads to Y → causes Z
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items)
+    det_warnings = [w for w in result.warnings if "determinism" in w.lower()]
+    assert len(det_warnings) > 0, (
+        f"Expected non-standard determinism warning, got warnings: {result.warnings}"
+    )
+
+
+def test_invalid_root_cause_confidence_produces_warning():
+    """Invalid Root Cause Confidence value should produce a warning."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+**Root Cause Confidence:** MAYBE
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Discovery Chain:** observed X → leads to Y → causes Z
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items)
+    rcc_warnings = [w for w in result.warnings if "root cause confidence" in w.lower()]
+    assert len(rcc_warnings) > 0, (
+        f"Expected invalid Root Cause Confidence warning, got warnings: {result.warnings}"
+    )

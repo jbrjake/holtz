@@ -228,11 +228,12 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
             vc_region = original_block[orig_offset:]
             _vc_header = r'\*\*Validation Command:\*\*[ \t]*\n(?:\s*\n)*'
             # Try backtick fence (3+), then tilde fence (3+).
+            # Allow 0-3 spaces of indentation per CommonMark.
             val_cmd = re.search(
-                _vc_header + r'`{3,}\w*\n(.+?)\n`{3,}', vc_region, re.DOTALL)
+                _vc_header + r' {0,3}`{3,}\w*\n(.+?)\n {0,3}`{3,}', vc_region, re.DOTALL)
             if not val_cmd:
                 val_cmd = re.search(
-                    _vc_header + r'~{3,}\w*\n(.+?)\n~{3,}', vc_region, re.DOTALL)
+                    _vc_header + r' {0,3}~{3,}\w*\n(.+?)\n {0,3}~{3,}', vc_region, re.DOTALL)
             if val_cmd:
                 item.validation_command = val_cmd.group(1).strip()
         item.has_validation_command = bool(item.validation_command)
