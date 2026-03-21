@@ -87,7 +87,7 @@ Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is 
 
 **Recommendation Escalation** — Before writing the recon summary, read the Recommendations section of every `docs/holtz-prior-*/SUMMARY.md` file. Identify any recommendation that appears *in substance* (semantic match, not verbatim — e.g., "add mypy" and "configure a type checker" are the same recommendation) in 2 or more prior summaries. For each such recommendation, create a punchlist item in `docs/holtz/PUNCHLIST.md` using this format:
 
-```markdown
+````markdown
 ### BH-{NNN}: {recommendation title}
 **Severity:** MEDIUM
 **Category:** design/inconsistency
@@ -109,8 +109,8 @@ without being implemented: "{recommendation text}".
 **Validation Command:**
 ```bash
 {command that checks whether the recommendation was addressed}
-\```
 ```
+````
 
 Default severity is MEDIUM. Upgrade to HIGH if the recommendation addresses a HIGH or CRITICAL risk (e.g., "add input sanitization" recurring across security-focused audits). If no prior summaries exist, skip this step.
 
