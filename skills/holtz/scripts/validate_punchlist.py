@@ -3,7 +3,7 @@
 Holtz Punchlist Validator
 
 Parses PUNCHLIST.md files and validates:
-- All items have required fields (severity, category, status, problem, acceptance criteria, validation command)
+- All items have required fields (severity, category, status, problem, discovery chain, acceptance criteria, validation command)
 - Severity, status, and category values are from valid sets
 - Resolved items have a resolution documented
 - Deferred bug items have reproduction evidence or an investigation link
