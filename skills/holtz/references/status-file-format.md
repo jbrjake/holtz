@@ -40,6 +40,21 @@ This file is Holtz's program counter. Located at `docs/holtz/STATUS.md` in the t
 
 ## Notes
 {Anything important for resumption: blocked items, user decisions, scope constraints.}
+
+## Active Lens
+**Current:** {component | integration | security | error-propagation | data-flow | contract}
+**Lenses Completed This Run:** {comma-separated list}
+**Finding Rate (current lens):** {N findings in M minutes}
+
+## Pattern Library
+{Compact list of all patterns discovered so far, current run + prior runs}
+- **PAT-001:** {one-line description} ({N instances}, run {R})
+- **PAT-002:** ...
+
+## Strategy
+**High-Risk Areas:** {from recon, updated as audit progresses}
+**Last Insight:** {the most recent non-obvious observation — what the auditor learned that should inform the next step}
+**Approach:** {current tactical approach, e.g., "checking extraction paths after each masking fix"}
 ```
 
 ## Rules
@@ -48,3 +63,6 @@ This file is Holtz's program counter. Located at `docs/holtz/STATUS.md` in the t
 - The "Next Action" field must be specific enough that a fresh context can resume without reading anything else first.
 - Metrics update with each phase transition and each fix loop iteration.
 - If blocked, explain why and what would unblock it.
+- Active Lens updates whenever the auditor switches to a different lens. Record the completed lens in "Lenses Completed This Run" and reset finding rate tracking.
+- Pattern Library updates whenever a new PAT-NNN pattern is discovered. Carry forward patterns from prior runs.
+- Strategy updates after each fix or significant insight. The "Last Insight" field captures what the auditor learned that should inform the next step.

@@ -48,7 +48,7 @@ All Holtz runtime data goes in `docs/holtz/` in the target project, not the proj
 - **Subagents for heavy scanning.** Delegate grep/read-heavy work (test file audits, module scans) to Agent subagents. Their tool output stays in THEIR context, not yours. They return a short summary + write detailed findings to disk.
 - **Re-read before every phase.** At the start of each phase, read the output files you need. Never assume prior context survived.
 - **After compaction: STOP.** Re-read `docs/holtz/STATUS.md` and the latest phase output files before continuing.
-- **`docs/holtz/STATUS.md` is your program counter.** Update it after completing each step with: current phase, current step, what's done, what's next. This is the FIRST file you read after any compaction.
+- **`docs/holtz/STATUS.md` is your program counter.** Update it after completing each step with: current phase, current step, what's done, what's next. This is the FIRST file you read after any compaction. After compaction, re-read STATUS.md to recover position *and strategy* — which lens is active, what patterns have been found, and what tactical approach is being used.
 
 ## Lifecycle: Resuming Prior Runs
 
@@ -76,6 +76,8 @@ Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is 
 | 0d | Run linters/type checkers if configured | `docs/holtz/recon/0d-lint-results.md` |
 | 0e | Git churn analysis (top 20 most-changed files in last 50 commits) | `docs/holtz/recon/0e-churn.md` |
 | 0f | Find skipped/disabled tests | `docs/holtz/recon/0f-skipped-tests.md` |
+
+**When creating STATUS.md:** set the initial Active Lens to `component`. Initialize the Pattern Library and Strategy sections (High-Risk Areas from recon findings, Last Insight and Approach as "—" until first insight).
 
 **After each step:** update `docs/holtz/STATUS.md` with completed step.
 **After all steps:** write `docs/holtz/recon/0g-recon-summary.md` — a SHORT synthesis (this is what you'll re-read later, not the raw files).
@@ -183,7 +185,8 @@ This is per-fix robustness, not pattern analysis. Phase 5 looks across fixes for
 1. **Re-read `docs/holtz/PUNCHLIST.md`**
 2. Group resolved items by category. For groups of 2+: identify pattern, search for siblings, write new items to punchlist IMMEDIATELY
 3. Write pattern blocks to punchlist per format spec
-4. Update `docs/holtz/STATUS.md`
+4. **Update Pattern Library** in `docs/holtz/STATUS.md`: add a new PAT-NNN entry for each newly identified pattern with a one-line description, instance count, and run number
+5. Update `docs/holtz/STATUS.md`
 
 ### Phase 6: Convergence Loop
 
