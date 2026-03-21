@@ -58,7 +58,7 @@ Before starting ANY work, check for existing output files in `docs/holtz/`:
 1. **If `docs/holtz/STATUS.md` exists:** Read it. It tells you exactly where the last run stopped. Resume from that point — do not restart from Phase 0.
 2. **If `docs/holtz/recon/` dir exists but no STATUS file:** A prior run crashed in Phase 0. Check which `docs/holtz/recon/0*.md` files exist. Resume from the first missing step.
 3. **If `docs/holtz/PUNCHLIST.md` exists:** A prior run got past recon. Read it + STATUS to determine if you're in audit (Phases 1-3) or fix loop (Phases 4-6). Resume accordingly.
-4. **If the user says "start fresh" or "re-audit":** Move existing `docs/holtz/` to `docs/holtz-prior-{date}/` as a backup, then start from Phase 0. **Exception:** Do NOT move `docs/holtz/patterns-brief.md` or `docs/holtz/patterns-brief-archive.md` — these persist across runs. Copy them back into the fresh `docs/holtz/` after archiving.
+4. **If the user says "start fresh" or "re-audit":** Archive the run: move `docs/holtz/` to `docs/holtz-prior-{date}/` as a backup, then create a fresh `docs/holtz/`. **Exception:** `patterns-brief.md` and `patterns-brief-archive.md` persist across runs — after the move, copy them from `docs/holtz-prior-{date}/` back into the fresh `docs/holtz/`.
 5. **If `docs/holtz/SUMMARY.md` exists:** A prior run completed. Ask the user if they want a fresh audit or to review/extend the prior findings.
 
 **Default behavior is RESUME, not restart.** Never discard prior work without explicit user instruction.
