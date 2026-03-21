@@ -164,7 +164,7 @@ For straightforward items where the root cause is obvious from the finding:
 
 1. Write failing test. Verify it fails. Minimal fix. Full suite. Commit.
 2. **Update `docs/holtz/PUNCHLIST.md` with resolution IMMEDIATELY after each commit** (status, commit hash, validating test)
-3. Update `docs/holtz/STATUS.md` with last completed item ID
+3. Update `docs/holtz/STATUS.md` with last completed item ID. If this fix revealed a non-obvious insight, update the Strategy section's Last Insight field.
 
 #### Investigation Path
 
@@ -188,7 +188,7 @@ For `bug/*` items where the root cause is not obvious, the bug is intermittent o
 4. **Require HIGH confidence** before fixing. Write your root cause in the investigation file. If confidence is LOW or MEDIUM, design one more check to raise it. Do not write production code until confidence is HIGH.
 5. Once root cause is confirmed at HIGH confidence: write failing test, verify it fails, minimal fix, full suite, commit.
 6. **Update punchlist** with resolution, root cause confidence, and commit hash IMMEDIATELY.
-7. Update `docs/holtz/STATUS.md` with last completed item ID.
+7. Update `docs/holtz/STATUS.md` with last completed item ID. Update the Strategy section's Last Insight with the root cause finding and Approach if the investigation changed your tactical approach.
 
 #### Can't-Reproduce Path
 
