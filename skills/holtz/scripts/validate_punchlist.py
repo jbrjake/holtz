@@ -74,9 +74,9 @@ SECTION_RE = r'\*\*%s:\*\*[ \t]*((?:[^\n]*(?:\n(?!\*\*(?:' + _FIELD_ALT + r'):\*
 HEADER_RE = r'\*\*%s:\*\*'
 
 
-def parse_punchlist(content: str) -> list[PunchlistItem]:
+def parse_punchlist(content: str, *, _masked: tuple[str, str] | None = None) -> list[PunchlistItem]:
     """Parse markdown punchlist into structured items."""
-    normalized, masked = mask_code_fences(content)
+    normalized, masked = _masked if _masked else mask_code_fences(content)
     items = []
     # Split on item headers (### BH-NNN: title) in masked content
     # so headers inside code fences are not matched
@@ -155,7 +155,7 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         # This prevents code fence field headers from interfering with extraction
         # even when the same header appears in both a code fence and real content.
 
-        def _masked_pos_to_orig_offset(pos_in_masked, _mb=masked_block, _ob=original_block):
+        def _masked_pos_to_orig_offset(pos_in_masked: int, _mb: str = masked_block, _ob: str = original_block) -> int:
             """Map a character position in masked_block to the line start in original_block."""
             line_num = _mb[:pos_in_masked].count('\n')
             offset = 0
@@ -166,7 +166,7 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
                 offset = nl + 1
             return offset
 
-        def _section_from_original(field_name, _mb=masked_block, _ob=original_block):
+        def _section_from_original(field_name: str, _mb: str = masked_block, _ob: str = original_block) -> str | None:
             """Find section boundaries in masked, extract content from original.
 
             Uses masked_block for boundary detection (immune to code-fenced
@@ -229,15 +229,19 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
             orig_offset = _masked_pos_to_orig_offset(vc_match.start())
             vc_region = original_block[orig_offset:]
             _vc_header = r'\*\*Validation Command:\*\*[ \t]*\n(?:\s*\n)*'
-            # Try backtick fence (3+), then tilde fence (3+).
-            # Allow 0-3 spaces of indentation per CommonMark.
-            val_cmd = re.search(
-                _vc_header + r' {0,3}`{3,}\w*\n(.+?)\n {0,3}`{3,}', vc_region, re.DOTALL)
-            if not val_cmd:
-                val_cmd = re.search(
-                    _vc_header + r' {0,3}~{3,}\w*\n(.+?)\n {0,3}~{3,}', vc_region, re.DOTALL)
-            if val_cmd:
-                item.validation_command = val_cmd.group(1).strip()
+            # Find the opening fence (backtick or tilde, 3+ chars), then
+            # require the closing fence to have at least as many chars
+            # of the same type, per CommonMark spec.
+            opener = re.search(
+                _vc_header + r' {0,3}(`{3,}|~{3,})\w*\n', vc_region)
+            if opener:
+                fence_char = opener.group(1)[0]
+                fence_len = len(opener.group(1))
+                close_pat = r'\n {0,3}' + re.escape(fence_char) + '{' + str(fence_len) + r',}'
+                content_start = opener.end()
+                close_match = re.search(close_pat, vc_region[content_start:])
+                if close_match:
+                    item.validation_command = vc_region[content_start:content_start + close_match.start()].strip()
         item.has_validation_command = bool(item.validation_command)
 
         resolution_content = _section_from_original('Resolution')
@@ -377,7 +381,7 @@ def validate(items: list[PunchlistItem], content: str = "", masked_content: str 
     return result
 
 
-def main():
+def main() -> None:
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("docs/holtz/PUNCHLIST.md")
 
     if not path.exists():
@@ -385,7 +389,8 @@ def main():
         sys.exit(1)
 
     content = path.read_text()
-    items = parse_punchlist(content)
+    precomputed = mask_code_fences(content)
+    items = parse_punchlist(content, _masked=precomputed)
 
     if not items:
         print(f"ERROR: No punchlist items found in {path}")
@@ -393,7 +398,7 @@ def main():
             print("HINT: File contains an unclosed code fence — content after the fence is invisible to the parser")
         sys.exit(1)
 
-    result = validate(items, content)
+    result = validate(items, content, masked_content=precomputed[1])
 
     # Print report
     print(f"\n{'='*60}")

@@ -73,8 +73,8 @@ def test_unrecognized_status_counted(tmp_path):
 """)
     counts = cc.count_items(punchlist)
     # Total should account for all items, including ones with unrecognized statuses
-    assert counts["total"] >= 2, (
-        f"Expected total >= 2 (including unrecognized status), got {counts}"
+    assert counts["total"] == 2, (
+        f"Expected total == 2 (including unrecognized status), got {counts}"
     )
 
 
@@ -956,7 +956,7 @@ def test_stall_detection_triggers():
     assert "STALLED" in message, (
         f"Stall detection should mention STALLED. Got: {message}"
     )
-    assert "3" in message, (
+    assert "3 items remain open" in message, (
         f"Stall message should mention the number of stuck items. Got: {message}"
     )
 
@@ -1121,3 +1121,34 @@ def test_partial_deletion_does_not_converge():
     converged, message = cc.check_convergence(history)
     assert converged is False, "Should not converge when items were deleted"
     assert "DELETED" in message, f"Expected DELETED message, got: {message}"
+
+
+# --- BH-008 (run 5): IN PROGRESS message hides item regressions ---
+
+def test_reopened_items_reported_in_message():
+    """When resolved items are re-opened, message should say 're-opened', not '0 resolved'."""
+    history = [
+        {
+            "timestamp": "2026-03-21T01:00:00",
+            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "unknown": 0, "total": 5},
+            "tests": None,
+        },
+        {
+            "timestamp": "2026-03-21T02:00:00",
+            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "unknown": 0, "total": 5},
+            "tests": None,
+        },
+        {
+            "timestamp": "2026-03-21T03:00:00",
+            "punchlist": {"OPEN": 2, "IN PROGRESS": 0, "RESOLVED": 3, "DEFERRED": 0, "unknown": 0, "total": 5},
+            "tests": None,
+        },
+    ]
+    converged, message = cc.check_convergence(history)
+    assert converged is False
+    assert "re-opened" in message.lower(), (
+        f"When resolved count drops, message should mention 're-opened'. Got: {message}"
+    )
+    assert "2 re-opened" in message, (
+        f"Should report 2 items re-opened. Got: {message}"
+    )

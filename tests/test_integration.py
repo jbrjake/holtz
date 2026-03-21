@@ -1,8 +1,5 @@
 """Integration tests: validate_punchlist + convergence_check parse the same format."""
 
-import tempfile
-from pathlib import Path
-
 import convergence_check as cc
 import validate_punchlist as vp
 
@@ -112,17 +109,16 @@ grep -r "feature X" README.md
 """
 
 
-def test_item_count_agreement():
+def test_item_count_agreement(tmp_path):
     """Both parsers should find the same number of items."""
     vp_items = vp.parse_punchlist(SHARED_PUNCHLIST)
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
-        f.write(SHARED_PUNCHLIST)
-        f.flush()
-        cc_counts = cc.count_items(Path(f.name))
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text(SHARED_PUNCHLIST)
+    cc_counts = cc.count_items(punchlist)
     assert len(vp_items) == cc_counts["total"]
 
 
-def test_status_distribution_agreement():
+def test_status_distribution_agreement(tmp_path):
     """Both parsers should agree on status counts."""
     vp_items = vp.parse_punchlist(SHARED_PUNCHLIST)
     vp_counts = {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0}
@@ -132,10 +128,9 @@ def test_status_distribution_agreement():
         else:
             vp_counts["unknown"] += 1
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
-        f.write(SHARED_PUNCHLIST)
-        f.flush()
-        cc_counts = cc.count_items(Path(f.name))
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text(SHARED_PUNCHLIST)
+    cc_counts = cc.count_items(punchlist)
 
     for status in ("OPEN", "IN PROGRESS", "RESOLVED", "DEFERRED", "unknown"):
         assert vp_counts[status] == cc_counts[status], (
@@ -144,7 +139,7 @@ def test_status_distribution_agreement():
         )
 
 
-def test_code_fence_immunity_agreement():
+def test_code_fence_immunity_agreement(tmp_path):
     """Both parsers should ignore items inside code fences."""
     content = """\
 # Bug Hunter Punchlist
@@ -176,10 +171,9 @@ echo test
 ```
 """
     vp_items = vp.parse_punchlist(content)
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
-        f.write(content)
-        f.flush()
-        cc_counts = cc.count_items(Path(f.name))
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text(content)
+    cc_counts = cc.count_items(punchlist)
 
     assert len(vp_items) == 1, f"validate_punchlist found {len(vp_items)} items, expected 1"
     assert cc_counts["total"] == 1, f"convergence_check found {cc_counts['total']} items, expected 1"
@@ -187,7 +181,7 @@ echo test
     assert cc_counts["OPEN"] == 1
 
 
-def test_trailing_status_text_agreement():
+def test_trailing_status_text_agreement(tmp_path):
     """Both parsers should handle trailing text after status the same way."""
     content = """\
 ### BH-001: Test item
@@ -209,10 +203,9 @@ echo test
 ```
 """
     vp_items = vp.parse_punchlist(content)
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
-        f.write(content)
-        f.flush()
-        cc_counts = cc.count_items(Path(f.name))
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text(content)
+    cc_counts = cc.count_items(punchlist)
 
     assert vp_items[0].status == "OPEN"
     assert cc_counts["OPEN"] == 1

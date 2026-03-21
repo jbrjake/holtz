@@ -4,10 +4,10 @@ line-length = 120
 src = ["skills/holtz/scripts", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "ANN"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["E501", "E402"]
+"tests/*" = ["E501", "E402", "ANN"]
 "tests/runner_fixtures.py" = ["E101", "W191"]
 
 [tool.pytest.ini_options]

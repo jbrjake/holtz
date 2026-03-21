@@ -10,9 +10,11 @@ Usage: python convergence_check.py [punchlist_path]
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -237,10 +239,28 @@ def load_history() -> list:
     return []
 
 
-def save_history(history: list):
-    """Save convergence history to JSON file."""
-    Path(HISTORY_FILE).parent.mkdir(parents=True, exist_ok=True)
-    Path(HISTORY_FILE).write_text(json.dumps(history, indent=2))
+def save_history(history: list) -> None:
+    """Save convergence history to JSON file atomically.
+
+    Writes to a temp file in the same directory, then renames.
+    os.rename is atomic on POSIX for same-filesystem renames,
+    preventing corruption from interrupted writes.
+    """
+    target = Path(HISTORY_FILE)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=str(target.parent), suffix=".tmp")
+    closed = False
+    try:
+        os.write(fd, json.dumps(history, indent=2).encode())
+        os.close(fd)
+        closed = True
+        os.rename(tmp_path, str(target))
+    except BaseException:
+        if not closed:
+            os.close(fd)
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
 
 
 def _get_punchlist(entry: dict) -> dict:
@@ -336,13 +356,20 @@ def check_convergence(history: list) -> tuple[bool, str]:
     prev_pl = _get_punchlist(history[-2])
     new_items = curr_pl["total"] - prev_pl["total"]
     items_resolved = curr_pl["RESOLVED"] - prev_pl["RESOLVED"]
-    return False, (
-        f"IN PROGRESS: {open_items} items open, "
-        f"+{max(0, new_items)} new, {max(0, items_resolved)} resolved this iteration"
-    )
+
+    parts = [f"IN PROGRESS: {open_items} items open"]
+    if new_items > 0:
+        parts.append(f"+{new_items} new")
+    if items_resolved > 0:
+        parts.append(f"{items_resolved} resolved this iteration")
+    elif items_resolved < 0:
+        parts.append(f"{-items_resolved} re-opened this iteration")
+    else:
+        parts.append("0 resolved this iteration")
+    return False, ", ".join(parts)
 
 
-def main():
+def main() -> None:
     punchlist_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("docs/holtz/PUNCHLIST.md")
 
     # Gather current state

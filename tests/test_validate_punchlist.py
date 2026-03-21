@@ -1254,6 +1254,41 @@ echo quad_test
     )
 
 
+# --- BH-009 (run 5): VC fence length matching ---
+
+def test_validation_command_4backtick_not_closed_by_3backtick():
+    """4-backtick VC fence should NOT be closed by a 3-backtick line inside content."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+````bash
+echo line1
+```
+echo line2
+````
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].has_validation_command, (
+        "4-backtick VC fence should not be prematurely closed by 3-backtick line"
+    )
+    assert "line2" in items[0].validation_command, (
+        f"Content after inner 3-backtick line should be included, got: '{items[0].validation_command}'"
+    )
+
+
 # --- Discovery Chain tests ---
 
 def test_missing_discovery_chain_produces_error():
@@ -1611,8 +1646,8 @@ echo test
     items = vp.parse_punchlist(content)
     result = vp.validate(items, content)
     pat_warnings = [w for w in result.warnings if "PAT-001" in w]
-    assert len(pat_warnings) >= 2, (
-        f"Pattern block missing Systemic Fix and Detection Rule should produce warnings, got: {pat_warnings}"
+    assert len(pat_warnings) == 2, (
+        f"Pattern block missing Systemic Fix and Detection Rule should produce exactly 2 warnings, got: {pat_warnings}"
     )
 
 
