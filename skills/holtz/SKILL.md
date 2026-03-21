@@ -80,7 +80,38 @@ Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is 
 **When creating STATUS.md:** set the initial Active Lens to `component`. Initialize the Pattern Library and Strategy sections (High-Risk Areas from recon findings, Last Insight and Approach as "—" until first insight).
 
 **After each step:** update `docs/holtz/STATUS.md` with completed step.
-**After all steps:** write `docs/holtz/recon/0g-recon-summary.md` — a SHORT synthesis (this is what you'll re-read later, not the raw files).
+**After all steps:**
+
+**Recommendation Escalation** — Before writing the recon summary, read the Recommendations section of every `docs/holtz-prior-*/SUMMARY.md` file. Identify any recommendation that appears *in substance* (semantic match, not verbatim — e.g., "add mypy" and "configure a type checker" are the same recommendation) in 2 or more prior summaries. For each such recommendation, create a punchlist item in `docs/holtz/PUNCHLIST.md` using this format:
+
+```markdown
+### BH-{NNN}: {recommendation title}
+**Severity:** MEDIUM
+**Category:** design/inconsistency
+**Location:** docs/holtz-prior-*/SUMMARY.md
+**Status:** OPEN
+
+**Problem:** This recommendation has appeared in {N} consecutive audit summaries
+without being implemented: "{recommendation text}".
+
+**Evidence:** Found in: {list of summary files with dates}
+
+**Discovery Chain:** Prior summary scan → recommendation "{X}" found in {N} summaries
+→ 2+ appearances triggers escalation per recommendation escalation protocol
+
+**Acceptance Criteria:**
+- [ ] Recommendation is implemented OR explicitly rejected with rationale
+- [ ] Validation: the recommended tooling/change is in place
+
+**Validation Command:**
+```bash
+{command that checks whether the recommendation was addressed}
+\```
+```
+
+Default severity is MEDIUM. Upgrade to HIGH if the recommendation addresses a HIGH or CRITICAL risk (e.g., "add input sanitization" recurring across security-focused audits). If no prior summaries exist, skip this step.
+
+**Write recon summary:** write `docs/holtz/recon/0g-recon-summary.md` — a SHORT synthesis (this is what you'll re-read later, not the raw files).
 
 ### Phase 1: Doc-to-Implementation Audit
 
