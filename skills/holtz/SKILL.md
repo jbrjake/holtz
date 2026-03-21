@@ -185,8 +185,7 @@ This is per-fix robustness, not pattern analysis. Phase 5 looks across fixes for
 1. **Re-read `docs/holtz/PUNCHLIST.md`**
 2. Group resolved items by category. For groups of 2+: identify pattern, search for siblings, write new items to punchlist IMMEDIATELY
 3. Write pattern blocks to punchlist per format spec
-4. **Update Pattern Library** in `docs/holtz/STATUS.md`: add a new PAT-NNN entry for each newly identified pattern with a one-line description, instance count, and run number
-5. Update `docs/holtz/STATUS.md`
+4. **Update `docs/holtz/STATUS.md`:** add new PAT-NNN entries to Pattern Library for each newly identified pattern (one-line description, instance count, run number). Update position fields (Phase, Step, Next Action).
 
 ### Phase 6: Convergence Loop
 
