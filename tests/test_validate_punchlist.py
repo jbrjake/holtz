@@ -1949,3 +1949,195 @@ def test_sample_punchlist_parses_cleanly():
     assert len(result.errors) == 0, (
         f"Sample punchlist should have zero validation errors, got: {result.errors}"
     )
+
+
+# --- Lens field (Tier 2: Lens Registry) ---
+
+
+def test_lens_field_accepted():
+    """Item with **Lens:** integration → validator passes without error or warning about it."""
+    content = """\
+### BH-099: Seam mismatch between parser and serializer
+**Severity:** MEDIUM
+**Category:** bug/logic
+**Location:** `seam.py:42`
+**Status:** OPEN
+**Lens:** integration
+
+**Problem:** Parser and serializer disagree on delimiter escaping.
+
+**Evidence:** Parser uses `\\n`, serializer uses `\\r\\n`.
+
+**Discovery Chain:** read parser → read serializer → delimiter mismatch
+
+**Acceptance Criteria:**
+- [ ] Both use the same delimiter
+
+**Validation Command:**
+```bash
+pytest tests/test_seam.py -k delimiter
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    result = vp.validate(items, content)
+    assert len(result.errors) == 0
+    # Lens is an optional informational field — no error or warning about it
+    assert not any("Lens" in w for w in result.warnings)
+
+
+def test_lens_field_not_required():
+    """Item without Lens field → validator passes (Lens is optional)."""
+    content = """\
+### BH-100: Missing null check
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `core.py:10`
+**Status:** OPEN
+
+**Problem:** No null check on user input before dereferencing.
+
+**Evidence:** `core.py:10` dereferences `data["key"]` without checking.
+
+**Discovery Chain:** read core.py → found unguarded dereference → null crash
+
+**Acceptance Criteria:**
+- [ ] Null input returns error instead of crashing
+
+**Validation Command:**
+```bash
+pytest tests/test_core.py -k null
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    result = vp.validate(items, content)
+    assert len(result.errors) == 0
+
+
+def test_lens_field_in_code_fence():
+    """**Lens:** inside code fence → not treated as real field."""
+    content = """\
+### BH-101: Formatting example
+**Severity:** LOW
+**Category:** doc/drift
+**Location:** `docs/format.md:5`
+**Status:** OPEN
+
+**Problem:** Documentation shows old field format that includes bogus Lens reference.
+
+**Evidence:**
+```markdown
+**Lens:** this is inside a code fence and should be ignored
+```
+
+**Discovery Chain:** read docs → found outdated format example
+
+**Acceptance Criteria:**
+- [ ] Documentation updated
+
+**Validation Command:**
+```bash
+grep -c "Lens:" docs/format.md
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    result = vp.validate(items, content)
+    assert len(result.errors) == 0
+
+
+# --- Predicted field (Tier 2: Predictive Recon) ---
+
+
+def test_predicted_field_accepted():
+    """Item with **Predicted:** Prediction 3 (confidence: HIGH) → validator passes."""
+    content = """\
+### BH-102: Off-by-one in paginator
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `paginate.py:88`
+**Status:** OPEN
+**Predicted:** Prediction 3 (confidence: HIGH)
+
+**Problem:** Paginator skips the last page when total items is a multiple of page size.
+
+**Evidence:** `paginate.py:88` uses `<` instead of `<=` in boundary check.
+
+**Discovery Chain:** recon predicted off-by-one → confirmed in paginator → boundary check wrong
+
+**Acceptance Criteria:**
+- [ ] Last page included when items % page_size == 0
+
+**Validation Command:**
+```bash
+pytest tests/test_paginate.py -k boundary
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    result = vp.validate(items, content)
+    assert len(result.errors) == 0
+    assert not any("Predicted" in w for w in result.warnings)
+
+
+def test_predicted_field_not_required():
+    """Item without Predicted field → validator passes (Predicted is optional)."""
+    content = """\
+### BH-103: Stale cache TTL
+**Severity:** MEDIUM
+**Category:** bug/state
+**Location:** `cache.py:22`
+**Status:** OPEN
+**Determinism:** intermittent
+
+**Problem:** Cache TTL set to 24h but data changes hourly.
+
+**Evidence:** `cache.py:22` hardcodes `ttl=86400`.
+
+**Discovery Chain:** read cache config → TTL mismatch with data refresh rate
+
+**Acceptance Criteria:**
+- [ ] TTL matches data refresh interval
+
+**Validation Command:**
+```bash
+pytest tests/test_cache.py -k ttl
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    result = vp.validate(items, content)
+    assert len(result.errors) == 0
+
+
+def test_predicted_field_in_code_fence():
+    """**Predicted:** inside code fence → not treated as real field."""
+    content = """\
+### BH-104: Prediction format docs
+**Severity:** LOW
+**Category:** doc/drift
+**Location:** `docs/predictions.md:3`
+**Status:** OPEN
+
+**Problem:** Documentation shows outdated prediction format.
+
+**Evidence:**
+```markdown
+**Predicted:** Prediction 1 (confidence: LOW) — this is in a fence
+```
+
+**Discovery Chain:** read docs → found stale prediction format example
+
+**Acceptance Criteria:**
+- [ ] Documentation updated to current format
+
+**Validation Command:**
+```bash
+grep -c "Predicted:" docs/predictions.md
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    result = vp.validate(items, content)
+    assert len(result.errors) == 0

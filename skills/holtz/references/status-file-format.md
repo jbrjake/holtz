@@ -47,7 +47,13 @@ This file is Holtz's program counter. Located at `docs/holtz/STATUS.md` in the t
 
 ## Active Lens
 **Current:** {component | integration | security | error-propagation | data-flow | contract}
-**Lenses Completed This Run:** {comma-separated list}
+**Lenses Completed This Run:**
+- [ ] component
+- [ ] integration
+- [ ] security
+- [ ] error-propagation
+- [ ] data-flow
+- [ ] contract
 **Finding Rate (current lens):** {N findings in M minutes}
 
 ## Pattern Library

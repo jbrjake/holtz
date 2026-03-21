@@ -66,6 +66,7 @@ VALID_CATEGORIES = {
 FIELD_NAMES = (
     'Severity', 'Category', 'Location', 'Status', 'Pattern',
     'Determinism', 'Investigation', 'Root Cause Confidence',
+    'Lens', 'Predicted',
     'Problem', 'Evidence', 'Discovery Chain',
     'Acceptance Criteria', 'Validation Command', 'Resolution',
 )

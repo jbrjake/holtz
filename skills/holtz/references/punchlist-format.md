@@ -11,6 +11,8 @@
 **Pattern:** {PAT-NNN if applicable}
 **Determinism:** {deterministic | intermittent | theoretical} ← bug/* categories only, optional for others
 **Investigation:** {`docs/holtz/investigations/BH-{NNN}.md` if complex, omit if straightforward}
+**Lens:** {component | integration | security | error-propagation | data-flow | contract — which analytical lens discovered this finding, optional}
+**Predicted:** {Prediction N (confidence: HIGH|MEDIUM|LOW) — if this finding matched a prediction from 0h-predictions.md, optional}
 
 **Problem:** {What's wrong. Actual vs expected behavior. 1-3 sentences.}
 
