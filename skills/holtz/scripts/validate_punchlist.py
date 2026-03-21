@@ -314,8 +314,6 @@ def validate(items: list[PunchlistItem], content: str = "", masked_content: str 
 
         if not item.status:
             result.errors.append(f"{prefix}: missing status")
-        elif item.status not in VALID_STATUSES:
-            result.errors.append(f"{prefix}: invalid status '{item.status}'")
 
         if not item.has_problem:
             result.errors.append(f"{prefix}: missing or empty Problem section")

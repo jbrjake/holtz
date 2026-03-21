@@ -1618,8 +1618,12 @@ echo test
 
 # --- BH-009 (bug-hunter run 3): untested validator warning/error paths ---
 
-def test_invalid_status_produces_error():
-    """Invalid status value should produce a validation error."""
+def test_invalid_status_produces_missing_error():
+    """Unrecognized status value results in empty status, producing 'missing status' error.
+
+    The Status regex only captures valid values (OPEN|IN PROGRESS|RESOLVED|DEFERRED).
+    Input like 'BORKED' doesn't match, leaving item.status as empty string.
+    """
     content = """\
 ### BH-001: Test item
 **Severity:** HIGH
@@ -1642,12 +1646,12 @@ echo test
 ```
 """
     items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].status == "", "Unrecognized status should result in empty string"
     result = vp.validate(items)
-    # BORKED is not a recognized status, so it won't be captured by the
-    # anchored regex — item.status will be empty, triggering "missing status"
-    status_errors = [e for e in result.errors if "status" in e.lower()]
-    assert len(status_errors) > 0, (
-        f"Expected status error, got errors: {result.errors}"
+    status_errors = [e for e in result.errors if "missing status" in e.lower()]
+    assert len(status_errors) == 1, (
+        f"Expected exactly 1 'missing status' error, got errors: {result.errors}"
     )
 
 
