@@ -107,9 +107,9 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         if sev:
             item.severity = sev.group(1)
 
-        cat = re.search(r'\*\*Category:\*\*[ \t]*(.+)', masked_block)
+        cat = re.search(r'\*\*Category:\*\*[ \t]*(\S+)', masked_block)
         if cat:
-            item.category = cat.group(1).strip()
+            item.category = cat.group(1)
 
         loc = re.search(r'\*\*Location:\*\*[ \t]*(.+)', masked_block)
         if loc:
@@ -245,7 +245,7 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
     return items
 
 
-def validate(items: list[PunchlistItem], content: str = "") -> ValidationResult:
+def validate(items: list[PunchlistItem], content: str = "", masked_content: str = "") -> ValidationResult:
     """Validate parsed punchlist items."""
     result = ValidationResult()
     status_counts = Counter()
@@ -257,7 +257,8 @@ def validate(items: list[PunchlistItem], content: str = "") -> ValidationResult:
     # File structure validation — use masked content so headers inside
     # code fences don't suppress structural warnings.
     if content:
-        _, masked_content = mask_code_fences(content)
+        if not masked_content:
+            _, masked_content = mask_code_fences(content)
         if '# Holtz Punchlist' not in masked_content and '# Bug Hunter Punchlist' not in masked_content:
             result.warnings.append("Missing punchlist header section")
         if '## Summary' not in masked_content:

@@ -1411,3 +1411,121 @@ echo test
     assert len(result.errors) == 0, (
         f"Item with multi-step Discovery Chain should have zero errors, got: {result.errors}"
     )
+
+
+# --- BH-008 (bug-hunter run 3): boundary tests for content thresholds ---
+
+def test_problem_threshold_boundary_10_chars():
+    """Problem with exactly 10 characters should be detected as empty (threshold is >10)."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** 1234567890
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert not items[0].has_problem, (
+        "Problem with exactly 10 chars should NOT pass the >10 threshold"
+    )
+
+
+def test_problem_threshold_boundary_11_chars():
+    """Problem with exactly 11 characters should be detected as present (threshold is >10)."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** 12345678901
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].has_problem, (
+        "Problem with exactly 11 chars should pass the >10 threshold"
+    )
+
+
+def test_resolution_threshold_boundary_5_chars():
+    """Resolution with exactly 5 characters should be detected as empty (threshold is >5)."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** RESOLVED
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [x] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+
+**Resolution:** 12345
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert not items[0].has_resolution, (
+        "Resolution with exactly 5 chars should NOT pass the >5 threshold"
+    )
+
+
+def test_resolution_threshold_boundary_6_chars():
+    """Resolution with exactly 6 characters should be detected as present (threshold is >5)."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** RESOLVED
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [x] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+
+**Resolution:** 123456
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].has_resolution, (
+        "Resolution with exactly 6 chars should pass the >5 threshold"
+    )
