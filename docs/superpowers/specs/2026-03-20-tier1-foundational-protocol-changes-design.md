@@ -118,7 +118,7 @@ Recommendation escalation is a prose instruction in the Phase 0 "After all steps
 
 ### Escalated Item Format
 
-```markdown
+````markdown
 ### BH-{NNN}: {recommendation title}
 **Severity:** MEDIUM
 **Category:** design/inconsistency
@@ -141,7 +141,7 @@ without being implemented: "{recommendation text}".
 ```bash
 {command that checks whether the recommendation was addressed}
 ```
-```
+````
 
 ### Severity Logic
 

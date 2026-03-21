@@ -63,6 +63,6 @@ This file is Holtz's program counter. Located at `docs/holtz/STATUS.md` in the t
 - The "Next Action" field must be specific enough that a fresh context can resume without reading anything else first.
 - Metrics update with each phase transition and each fix loop iteration.
 - If blocked, explain why and what would unblock it.
-- Active Lens updates whenever the auditor switches to a different lens. Record the completed lens in "Lenses Completed This Run" and reset finding rate tracking.
+- Active Lens updates whenever the auditor switches to a different lens. Record the completed lens in "Lenses Completed This Run" and reset finding rate tracking. (Lens switching protocol is defined in Tier 2. Until then, the lens remains `component` for the full run.)
 - Pattern Library updates whenever a new PAT-NNN pattern is discovered. Carry forward patterns from prior runs.
 - Strategy updates after each fix or significant insight. The "Last Insight" field captures what the auditor learned that should inform the next step.

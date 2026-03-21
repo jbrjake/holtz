@@ -112,9 +112,9 @@ without being implemented: "{recommendation text}".
 ```
 ````
 
-Default severity is MEDIUM. Upgrade to HIGH if the recommendation addresses a HIGH or CRITICAL risk (e.g., "add input sanitization" recurring across security-focused audits). If no prior summaries exist, skip this step.
+Default severity is MEDIUM. Upgrade to HIGH if the recommendation addresses a HIGH or CRITICAL risk (e.g., "add input sanitization" recurring across security-focused audits). If no prior summaries exist, skip this step. Update `docs/holtz/STATUS.md` with recommendation escalation completion (how many items escalated, or "skipped — no prior summaries").
 
-**Write recon summary:** write `docs/holtz/recon/0g-recon-summary.md` — a SHORT synthesis (this is what you'll re-read later, not the raw files).
+**Write recon summary:** write `docs/holtz/recon/0g-recon-summary.md` — a SHORT synthesis (this is what you'll re-read later, not the raw files). Update `docs/holtz/STATUS.md` with 0g completion.
 
 ### Phase 1: Doc-to-Implementation Audit
 
@@ -219,8 +219,8 @@ This is per-fix robustness, not pattern analysis. Phase 5 looks across fixes for
 1. **Re-read `docs/holtz/PUNCHLIST.md`**
 2. Group resolved items by category. For groups of 2+: identify pattern, search for siblings, write new items to punchlist IMMEDIATELY
 3. Write pattern blocks to punchlist per format spec
-4. **Update `docs/holtz/STATUS.md`:** add new PAT-NNN entries to Pattern Library for each newly identified pattern (one-line description, instance count, run number). Update position fields (Phase, Step, Next Action).
-5. **Update `docs/holtz/patterns-brief.md`:** For each newly identified pattern, append an entry to the patterns brief. Use this format:
+4. **Update `docs/holtz/STATUS.md`:** add new PAT-NNN entries to Pattern Library for each newly identified pattern (one-line description, instance count, run number). Update position fields (Phase, Step, Next Action). If pattern analysis revealed a non-obvious insight about the codebase, update the Strategy section's Last Insight field.
+5. **Update `docs/holtz/patterns-brief.md`:** Read `docs/holtz/patterns-brief.md` first (if it exists) to check for existing entries. For each newly identified pattern, append an entry to the patterns brief. Use this format:
 
    ```markdown
    ## PAT-{NNN}: {name} (Run {R}, {date})
