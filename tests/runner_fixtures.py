@@ -99,6 +99,17 @@ Tests:       14 passed, 14 total
 Time:        1.5 s
 """
 
+# Jest with skipped tests
+JEST_WITH_SKIPPED = """\
+ PASS  src/jukebox/__tests__/playlist.test.ts
+ PASS  src/jukebox/__tests__/recommendations.test.ts
+
+Test Suites: 2 passed, 2 total
+Tests:       2 skipped, 12 passed, 14 total
+Snapshots:   0 total
+Time:        2.1 s
+"""
+
 JEST_CRASH = """\
 ● Validation Error:
 
@@ -133,6 +144,17 @@ VITEST_MIXED = """\
       Tests  2 failed | 11 passed (13)
    Start at  14:32:01
    Duration  312ms
+"""
+
+VITEST_WITH_SKIPPED = """\
+ ✓ src/quantum/__tests__/shell-integrity.test.ts (4 tests) 12ms
+ ✓ src/quantum/__tests__/filling-distribution.test.ts (5 tests) 8ms
+ ↓ src/quantum/__tests__/dark-matter-salsa.test.ts (2 tests) 0ms
+
+ Test Files  2 passed | 1 skipped (3)
+      Tests  2 skipped | 9 passed (11)
+   Start at  14:32:01
+   Duration  198ms
 """
 
 VITEST_CRASH = """\
@@ -277,6 +299,19 @@ MOCHA_MIXED = """\
        should not boo during soliloquy:
      AssertionError: audience booed 3 times, expected 0
       at Context.<anonymous> (test/audience.test.js:18:10)
+
+"""
+
+MOCHA_WITH_PENDING = """\
+
+  6 passing (278ms)
+  3 pending
+  1 failing
+
+  1) Puppet Theatre
+       should handle simultaneous curtain calls:
+     AssertionError: puppets collided during bow
+      at Context.<anonymous> (test/theatre.test.js:87:10)
 
 """
 

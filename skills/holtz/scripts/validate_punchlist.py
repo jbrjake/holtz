@@ -267,6 +267,24 @@ def validate(items: list[PunchlistItem], content: str = "", masked_content: str 
         if '## Items' not in masked_content:
             result.warnings.append("Missing Items section")
 
+    # Pattern block validation — check ## Pattern: blocks in masked content
+    if content:
+        if not masked_content:
+            _, masked_content = mask_code_fences(content)
+        pattern_headers = list(re.finditer(
+            r'^## Pattern: (PAT-\d+):\s+(.+)$', masked_content, re.MULTILINE
+        ))
+        _pat_fields = ('Instances', 'Root Cause', 'Systemic Fix', 'Detection Rule')
+        for ph in pattern_headers:
+            pat_id = ph.group(1)
+            pat_start = ph.end()
+            # Find next ## or end of content
+            next_section = re.search(r'^## ', masked_content[pat_start:], re.MULTILINE)
+            pat_block = masked_content[pat_start:pat_start + next_section.start()] if next_section else masked_content[pat_start:]
+            for field_name in _pat_fields:
+                if f'**{field_name}:**' not in pat_block:
+                    result.warnings.append(f"{pat_id}: missing {field_name} in pattern block")
+
     for item in items:
         prefix = f"{item.id}"
 

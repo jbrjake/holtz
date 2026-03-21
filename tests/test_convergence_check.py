@@ -998,3 +998,63 @@ def test_stall_detection_needs_4_entries():
     assert "STALLED" not in message, (
         f"Only 3 entries — stall detection should not trigger. Got: {message}"
     )
+
+
+# --- BH-004 (bug-hunter run 3): detect_test_runner with explicit project_root ---
+
+def test_detect_runner_with_project_root(tmp_path):
+    """detect_test_runner should find config files relative to project_root, not cwd."""
+    (tmp_path / "conftest.py").write_text("# pytest config")
+    # Do NOT chdir — test that project_root works from any cwd
+    result = cc.detect_test_runner(project_root=tmp_path)
+    assert result == "pytest", (
+        f"Should detect pytest via project_root param, got '{result}'"
+    )
+
+
+def test_detect_runner_project_root_no_match(tmp_path):
+    """detect_test_runner with project_root pointing to empty dir returns None."""
+    result = cc.detect_test_runner(project_root=tmp_path)
+    assert result is None, (
+        f"Empty project_root should return None, got '{result}'"
+    )
+
+
+def test_detect_runner_project_root_pyproject(tmp_path):
+    """detect_test_runner with project_root should correctly check pyproject.toml content."""
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.pytest.ini_options]\ntestpaths = ['tests']\n"
+    )
+    result = cc.detect_test_runner(project_root=tmp_path)
+    assert result == "pytest", (
+        f"Should detect pytest via pyproject.toml in project_root, got '{result}'"
+    )
+
+
+# --- BH-014 (bug-hunter run 3): skipped count parsing for jest/vitest/mocha ---
+
+def test_jest_with_skipped(monkeypatch):
+    """Jest output with skipped tests should capture the skipped count."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.JEST_WITH_SKIPPED))
+    result = cc.get_test_counts("jest")
+    assert result == {"passed": 12, "failed": 0, "skipped": 2}, (
+        f"Expected 2 skipped, got {result}"
+    )
+
+
+def test_vitest_with_skipped(monkeypatch):
+    """Vitest output with skipped tests should capture the skipped count."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.VITEST_WITH_SKIPPED))
+    result = cc.get_test_counts("vitest")
+    assert result == {"passed": 9, "failed": 0, "skipped": 2}, (
+        f"Expected 2 skipped, got {result}"
+    )
+
+
+def test_mocha_with_pending(monkeypatch):
+    """Mocha output with pending tests should capture them as skipped."""
+    monkeypatch.setattr(subprocess, "run", _fake_run(fx.MOCHA_WITH_PENDING))
+    result = cc.get_test_counts("mocha")
+    assert result == {"passed": 6, "failed": 1, "skipped": 3}, (
+        f"Expected 3 skipped (pending), got {result}"
+    )

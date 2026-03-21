@@ -1531,6 +1531,92 @@ echo test
     )
 
 
+# --- BH-013 (bug-hunter run 3): pattern block validation ---
+
+def test_valid_pattern_block_no_warning():
+    """Pattern block with all required fields should not produce warnings."""
+    content = """\
+# Holtz Punchlist
+## Summary
+## Patterns
+
+## Pattern: PAT-001: Unvalidated input
+**Instances:** BH-001, BH-003
+**Root Cause:** No validation layer
+**Systemic Fix:** Add validation middleware
+**Detection Rule:** grep -rn 'request.body' src/
+
+## Items
+
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Discovery Chain:** observed X → leads to Y → causes Z
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items, content)
+    pat_warnings = [w for w in result.warnings if "PAT-" in w]
+    assert len(pat_warnings) == 0, (
+        f"Valid pattern block should not produce warnings, got: {pat_warnings}"
+    )
+
+
+def test_pattern_block_missing_field_warns():
+    """Pattern block missing a required field should produce a warning."""
+    content = """\
+# Holtz Punchlist
+## Summary
+## Patterns
+
+## Pattern: PAT-001: Unvalidated input
+**Instances:** BH-001
+**Root Cause:** No validation layer
+
+## Items
+
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Discovery Chain:** observed X → leads to Y → causes Z
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items, content)
+    pat_warnings = [w for w in result.warnings if "PAT-001" in w]
+    assert len(pat_warnings) >= 2, (
+        f"Pattern block missing Systemic Fix and Detection Rule should produce warnings, got: {pat_warnings}"
+    )
+
+
 # --- BH-009 (bug-hunter run 3): untested validator warning/error paths ---
 
 def test_invalid_status_produces_error():

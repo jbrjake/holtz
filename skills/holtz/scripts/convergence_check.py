@@ -60,8 +60,13 @@ def count_items(punchlist_path: Path) -> dict:
     return counts
 
 
-def detect_test_runner() -> str | None:
-    """Auto-detect the project's test runner."""
+def detect_test_runner(project_root: Path | None = None) -> str | None:
+    """Auto-detect the project's test runner.
+
+    Args:
+        project_root: Directory to search for config files. Defaults to cwd.
+    """
+    root = project_root or Path(".")
     markers = {
         "pytest": ["pytest.ini", "pyproject.toml", "setup.cfg", "conftest.py"],
         "jest": ["jest.config.js", "jest.config.ts"],
@@ -73,12 +78,13 @@ def detect_test_runner() -> str | None:
     }
     for runner, files in markers.items():
         for f in files:
-            if Path(f).exists():
+            filepath = root / f
+            if filepath.exists():
                 # Extra check for pytest in config files that may not be pytest-related.
                 # Check for TOML section headers or INI sections, not bare substrings,
                 # to avoid false positives from comments or unrelated text.
                 if runner == "pytest" and f in ("pyproject.toml", "setup.cfg"):
-                    content = Path(f).read_text()
+                    content = filepath.read_text()
                     if f == "pyproject.toml":
                         if not re.search(r'^\[tool\.pytest[\].]', content, re.MULTILINE):
                             continue
@@ -125,14 +131,15 @@ def get_test_counts(runner: str | None) -> dict | None:
             }
 
         if runner == "jest":
-            # Jest output: Tests: N failed, N passed, N total
+            # Jest output: Tests: N failed, N skipped, N passed, N total
+            # Components are optional — "skipped" and "failed" may be absent.
             # Some versions omit "0 passed" when all tests fail.
-            m = re.search(r'Tests:\s+(?:(\d+) failed,\s+)?(\d+) passed', output)
+            m = re.search(r'Tests:\s+(?:(\d+) failed,\s+)?(?:(\d+) skipped,\s+)?(\d+) passed', output)
             if m:
                 return {
-                    "passed": int(m.group(2)),
+                    "passed": int(m.group(3)),
                     "failed": int(m.group(1)) if m.group(1) else 0,
-                    "skipped": 0,
+                    "skipped": int(m.group(2)) if m.group(2) else 0,
                 }
             # All-fail: "Tests: N failed, N total" with no "passed"
             m_fail = re.search(r'Tests:\s+(\d+) failed,\s+\d+ total', output)
@@ -145,16 +152,16 @@ def get_test_counts(runner: str | None) -> dict | None:
             return None
 
         if runner == "vitest":
-            # Vitest summary line: "Tests  N passed" or "Tests  N failed | N passed"
+            # Vitest summary line: "Tests  N passed" or "Tests  N failed | N skipped | N passed"
             # Must match the Tests summary line specifically to avoid counting
             # "Test Files  N passed" which is a different metric.
-            p = re.search(r'^\s*Tests\s+(?:(\d+) failed \| )?(\d+) passed', output, re.MULTILINE)
+            p = re.search(r'^\s*Tests\s+(?:(\d+) failed \| )?(?:(\d+) skipped \| )?(\d+) passed', output, re.MULTILINE)
             if not p:
                 return None
             return {
-                "passed": int(p.group(2)),
+                "passed": int(p.group(3)),
                 "failed": int(p.group(1)) if p.group(1) else 0,
-                "skipped": 0,
+                "skipped": int(p.group(2)) if p.group(2) else 0,
             }
 
         if runner == "cargo":
@@ -196,15 +203,16 @@ def get_test_counts(runner: str | None) -> dict | None:
             }
 
         if runner == "mocha":
-            # Mocha min reporter: N passing, N failing
+            # Mocha min reporter: N passing, N pending, N failing
             p = re.search(r'(\d+) passing', output)
             f = re.search(r'(\d+) failing', output)
-            if not p and not f:
+            s = re.search(r'(\d+) pending', output)
+            if not p and not f and not s:
                 return None
             return {
                 "passed": int(p.group(1)) if p else 0,
                 "failed": int(f.group(1)) if f else 0,
-                "skipped": 0,
+                "skipped": int(s.group(1)) if s else 0,
             }
 
         # Unknown runner (shouldn't reach here — checked at function entry)
