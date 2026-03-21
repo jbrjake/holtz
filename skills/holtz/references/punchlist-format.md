@@ -99,5 +99,5 @@ Discovery Chain is required for all items regardless of status (OPEN, RESOLVED, 
 - Resolved items stay (audit trail). Update status + fill Resolution field.
 - After status change: update summary table counts and pattern block if applicable.
 - Evidence is recommended but not enforced — the validator warns on missing Evidence but does not error. Include it whenever possible.
-- Determinism, Investigation, and Root Cause Confidence fields are optional. Only add them when relevant.
+- Determinism, Investigation, Root Cause Confidence, Lens, and Predicted fields are optional. Only add them when relevant.
 - Items deferred due to can't-reproduce must include evidence of reproduction attempts in the Evidence section or the linked investigation file.

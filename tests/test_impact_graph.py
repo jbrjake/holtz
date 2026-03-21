@@ -12,7 +12,10 @@
 """
 
 import json
+import subprocess
+import sys
 import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -127,6 +130,27 @@ def test_07_corrupt_json_file(tmp_path):
     g3 = ImpactGraph(path)
     g3.load()
     assert g3.stats()["nodes"] == 0
+
+
+def test_07b_null_json_values(tmp_path):
+    """JSON with null values for nodes/edges loads as empty graph (BH-001, BH-002)."""
+    path = tmp_path / "null.json"
+
+    # Both null
+    path.write_text('{"nodes": null, "edges": null}')
+    g = ImpactGraph(path)
+    g.load()
+    assert g.stats() == {"nodes": 0, "edges": 0, "edge_types": {}}
+    # Operations work on the empty graph
+    g.add_node("survivor.py", "module", "survivor.py")
+    assert g.stats()["nodes"] == 1
+
+    # nodes ok, edges null
+    path.write_text('{"nodes": {"x.py": {"id": "x.py", "type": "module", "file": "x.py", "line": null, "last_audited": "2026-01-01", "audit_count": 1, "risk_score": 0.0}}, "edges": null}')
+    g2 = ImpactGraph(path)
+    g2.load()
+    assert g2.stats()["nodes"] == 1
+    assert g2.stats()["edges"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -651,3 +675,117 @@ def test_drift_check_go_function(graph, project):
 
     result = graph.drift_check(project)
     assert result["drifted"] == []
+
+
+# ---------------------------------------------------------------------------
+# BH-003: CLI integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_cli_add_node_and_stats(tmp_path):
+    """CLI round-trip: add_node then stats shows the node (BH-003)."""
+    graph_path = tmp_path / "cli-graph.json"
+    script = str(Path(__file__).parent.parent / "skills" / "holtz" / "scripts" / "impact_graph.py")
+    base = [sys.executable, script, "--graph", str(graph_path)]
+
+    # Add a node
+    r1 = subprocess.run(base + ["add_node", "taco.py::fold", "function", "taco.py", "--line", "42"],
+                        capture_output=True, text=True)
+    assert r1.returncode == 0
+    node = json.loads(r1.stdout)
+    assert node["id"] == "taco.py::fold"
+    assert node["line"] == 42
+
+    # Stats should show 1 node
+    r2 = subprocess.run(base + ["stats"], capture_output=True, text=True)
+    assert r2.returncode == 0
+    stats = json.loads(r2.stdout)
+    assert stats["nodes"] == 1
+
+    # add_edge with nonexistent target → exit code 1
+    r3 = subprocess.run(base + ["add_edge", "taco.py::fold", "ghost.py::vanish", "calls"],
+                        capture_output=True, text=True)
+    assert r3.returncode == 1
+
+
+# ---------------------------------------------------------------------------
+# BH-005: Empty types filter edge case
+# ---------------------------------------------------------------------------
+
+
+def test_neighbors_empty_types_is_no_filter(graph):
+    """neighbors with types=[] is falsy → treated as no filter, returns all (BH-005)."""
+    graph.add_node("solo.py::A", "function", "solo.py", line=1)
+    graph.add_node("solo.py::B", "function", "solo.py", line=5)
+    graph.add_edge("solo.py::A", "solo.py::B", "calls")
+
+    # [] is falsy in Python → type_set = None → no filter → all neighbors returned
+    assert graph.neighbors("solo.py::A", types=[]) == ["solo.py::B"]
+
+
+def test_blast_radius_empty_types_is_no_filter(graph):
+    """blast_radius with types=[] is falsy → treated as no filter, returns all (BH-005)."""
+    graph.add_node("void.py::A", "function", "void.py", line=1)
+    graph.add_node("void.py::B", "function", "void.py", line=5)
+    graph.add_edge("void.py::A", "void.py::B", "calls")
+
+    # [] is falsy → type_set = None → no filter → all reachable
+    assert graph.blast_radius("void.py::A", depth=2, types=[]) == ["void.py::B"]
+
+
+# ---------------------------------------------------------------------------
+# BH-008: drift_check async function detection
+# ---------------------------------------------------------------------------
+
+
+def test_drift_check_async_python_function(graph, project):
+    """drift_check detects async def functions in Python (BH-008)."""
+    src = project / "async_handler.py"
+    src.write_text("async def handle_websocket(ws):\n    await ws.recv()\n")
+    graph.add_node("async_handler.py::handle_websocket", "function", "async_handler.py", line=1)
+
+    result = graph.drift_check(project)
+    assert result["drifted"] == []  # Found at line 1, no shift
+
+
+def test_drift_check_async_function_shifted(graph, project):
+    """drift_check flags async function that shifted >10 lines (BH-008)."""
+    src = project / "async_moved.py"
+    lines = ["# padding\n"] * 30
+    lines[29] = "async def process_queue(q):\n"
+    src.write_text("".join(lines))
+    graph.add_node("async_moved.py::process_queue", "function", "async_moved.py", line=5)
+
+    result = graph.drift_check(project)
+    assert len(result["drifted"]) == 1
+    assert result["drifted"][0]["reason"] == "line_shifted"
+    assert result["drifted"][0]["new_line"] == 30
+
+
+# ---------------------------------------------------------------------------
+# BH-009: load() with non-dict JSON types
+# ---------------------------------------------------------------------------
+
+
+def test_load_json_array(tmp_path):
+    """JSON array [1,2,3] is valid JSON but not a dict — loads as empty graph (BH-009)."""
+    path = tmp_path / "array.json"
+    path.write_text("[1, 2, 3]")
+    g = ImpactGraph(path)
+    g.load()
+    assert g.stats() == {"nodes": 0, "edges": 0, "edge_types": {}}
+
+
+def test_load_json_scalar(tmp_path):
+    """JSON scalar (number/string) is valid JSON but not a dict — loads as empty (BH-009)."""
+    path = tmp_path / "scalar.json"
+
+    path.write_text("42")
+    g = ImpactGraph(path)
+    g.load()
+    assert g.stats()["nodes"] == 0
+
+    path.write_text('"just a string"')
+    g2 = ImpactGraph(path)
+    g2.load()
+    assert g2.stats()["nodes"] == 0

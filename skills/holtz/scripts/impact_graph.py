@@ -53,8 +53,8 @@ class ImpactGraph:
             if not text:
                 return
             data = json.loads(text)
-            self.nodes = data.get("nodes", {})
-            self.edges = data.get("edges", [])
+            self.nodes = data.get("nodes") or {}
+            self.edges = data.get("edges") or []
         except (json.JSONDecodeError, AttributeError):
             self.nodes = {}
             self.edges = []
