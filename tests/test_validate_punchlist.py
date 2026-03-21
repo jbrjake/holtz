@@ -1809,3 +1809,105 @@ echo test
     assert len(rcc_warnings) > 0, (
         f"Expected invalid Root Cause Confidence warning, got warnings: {result.warnings}"
     )
+
+
+# --- BH-003 (run 4): validate() stats dict ---
+
+def test_validate_stats_dict():
+    """validate() should return correct stats for a multi-item punchlist."""
+    content = """\
+# Holtz Punchlist
+## Summary
+## Items
+
+### BH-001: First item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+**Pattern:** PAT-001
+**Determinism:** deterministic
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Discovery Chain:** observed X → leads to Y → causes Z
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+
+### BH-002: Second item
+**Severity:** MEDIUM
+**Category:** bug/logic
+**Location:** `file.py:2`
+**Status:** RESOLVED
+
+**Problem:** Another problem with enough detail to pass the threshold check.
+
+**Evidence:** Evidence for the second item showing the problem with references.
+
+**Discovery Chain:** found A → leads to B
+
+**Acceptance Criteria:**
+- [x] Fix it
+
+**Validation Command:**
+```bash
+echo test2
+```
+
+**Resolution:** Fixed in commit abc123. Full description of the fix.
+
+### BH-003: Third item
+**Severity:** LOW
+**Category:** doc/drift
+**Location:** `README.md:5`
+**Status:** OPEN
+
+**Problem:** Documentation claims feature X exists but it was removed.
+
+**Evidence:** grep for feature X in codebase returns no results.
+
+**Discovery Chain:** doc review → feature claim → grep confirms removal
+
+**Acceptance Criteria:**
+- [ ] README updated
+
+**Validation Command:**
+```bash
+grep feature README.md
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items, content)
+    stats = result.stats
+    assert stats["total_items"] == 3
+    assert stats["by_status"] == {"OPEN": 2, "RESOLVED": 1}
+    assert stats["by_severity"] == {"HIGH": 1, "MEDIUM": 1, "LOW": 1}
+    assert stats["patterns_referenced"] == ["PAT-001"]
+    # by_category is a list of (category, count) tuples from Counter.most_common()
+    cat_dict = dict(stats["by_category"])
+    assert cat_dict["bug/logic"] == 2
+    assert cat_dict["doc/drift"] == 1
+
+
+# --- BH-007 (run 4): sample punchlist through parser ---
+
+def test_sample_punchlist_parses_cleanly():
+    """The example punchlist should parse and validate without errors."""
+    from pathlib import Path
+    sample_path = Path(__file__).parent.parent / "skills" / "holtz" / "examples" / "sample-punchlist.md"
+    assert sample_path.exists(), f"Sample punchlist not found at {sample_path}"
+    content = sample_path.read_text()
+    items = vp.parse_punchlist(content)
+    assert len(items) == 6, f"Expected 6 items in sample punchlist, got {len(items)}"
+    result = vp.validate(items, content)
+    assert len(result.errors) == 0, (
+        f"Sample punchlist should have zero validation errors, got: {result.errors}"
+    )

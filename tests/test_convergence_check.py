@@ -1058,3 +1058,40 @@ def test_mocha_with_pending(monkeypatch):
     assert result == {"passed": 6, "failed": 1, "skipped": 3}, (
         f"Expected 3 skipped (pending), got {result}"
     )
+
+
+# --- BH-004 (run 4): BLOCKED branch in check_convergence ---
+
+def test_convergence_blocked_by_test_failures():
+    """Convergence should be BLOCKED when punchlist is clear but test failures increase."""
+    history = [
+        {
+            "timestamp": "2026-03-21T01:00:00",
+            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "unknown": 0, "total": 5},
+            "tests": {"passed": 50, "failed": 0, "skipped": 0},
+        },
+        {
+            "timestamp": "2026-03-21T02:00:00",
+            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "unknown": 0, "total": 5},
+            "tests": {"passed": 48, "failed": 2, "skipped": 0},
+        },
+        {
+            "timestamp": "2026-03-21T03:00:00",
+            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "unknown": 0, "total": 5},
+            "tests": {"passed": 45, "failed": 5, "skipped": 0},
+        },
+    ]
+    converged, message = cc.check_convergence(history)
+    assert converged is False, "Should not converge when test failures increase"
+    assert "BLOCKED" in message, f"Expected BLOCKED message, got: {message}"
+    assert "test failures" in message.lower(), f"Message should mention test failures, got: {message}"
+
+
+# --- BH-005 (run 4): load_history file-not-found branch ---
+
+def test_load_history_file_not_found(tmp_path, monkeypatch):
+    """load_history should return [] when history file doesn't exist."""
+    nonexistent = tmp_path / "does_not_exist" / "HISTORY.json"
+    monkeypatch.setattr(cc, "HISTORY_FILE", str(nonexistent))
+    result = cc.load_history()
+    assert result == [], f"Missing history file should return empty list, got {result}"
