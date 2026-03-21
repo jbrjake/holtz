@@ -115,9 +115,9 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         if loc:
             item.location = loc.group(1).strip()
 
-        stat = re.search(r'\*\*Status:\*\*[ \t]*(\w[\w ]*\w)', masked_block)
+        stat = re.search(r'\*\*Status:\*\*[ \t]*(OPEN|IN PROGRESS|RESOLVED|DEFERRED)', masked_block)
         if stat:
-            item.status = stat.group(1).strip()
+            item.status = stat.group(1)
 
         pat = re.search(r'\*\*Pattern:\*\*[ \t]*(PAT-\d+)', masked_block)
         if pat:

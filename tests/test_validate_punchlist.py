@@ -94,6 +94,38 @@ echo test
     assert item.has_validation_command
 
 
+# --- BH-002 (bug-hunter run 3): Status regex greedy trailing capture ---
+
+def test_status_trailing_text_ignored():
+    """Trailing text after status value should not be captured."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN but see notes below
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Discovery Chain:** found X → leads to Y → causes Z
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].status == "OPEN", (
+        f"Status should be 'OPEN', not include trailing text. Got '{items[0].status}'"
+    )
+
+
 # --- BH-003: Status regex cross-line leak ---
 
 def test_status_single_line_extraction():

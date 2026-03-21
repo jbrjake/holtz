@@ -42,9 +42,9 @@ def count_items(punchlist_path: Path) -> dict:
         end = item_starts[idx + 1] if idx + 1 < len(item_starts) else len(masked)
         block = masked[start:end]
         # Take only the FIRST Status field per item block.
-        status_match = re.search(r'\*\*Status:\*\*[ \t]*(\w[\w ]*\w)', block)
+        status_match = re.search(r'\*\*Status:\*\*[ \t]*(OPEN|IN PROGRESS|RESOLVED|DEFERRED)', block)
         if status_match:
-            status = status_match.group(1).strip()
+            status = status_match.group(1)
             if status in counts:
                 counts[status] += 1
             else:

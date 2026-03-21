@@ -899,6 +899,30 @@ def test_detect_pyproject_bracket_in_comment(tmp_path, monkeypatch):
     )
 
 
+# --- BH-002 (bug-hunter run 3): Status regex greedy trailing capture ---
+
+def test_status_trailing_text_ignored_count_items(tmp_path):
+    """Trailing text after status value should not corrupt count_items."""
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text("""\
+### BH-001: Item with annotation
+**Status:** OPEN but see notes
+
+### BH-002: Another item
+**Status:** RESOLVED successfully
+""")
+    counts = cc.count_items(punchlist)
+    assert counts["OPEN"] == 1, (
+        f"Expected 1 OPEN (trailing text ignored), got {counts}"
+    )
+    assert counts["RESOLVED"] == 1, (
+        f"Expected 1 RESOLVED (trailing text ignored), got {counts}"
+    )
+    assert counts["unknown"] == 0, (
+        f"Expected 0 unknown (trailing text should not cause misclassification), got {counts}"
+    )
+
+
 # --- BH-001 (bug-hunter run 3): stall detection untested ---
 
 def test_stall_detection_triggers():
