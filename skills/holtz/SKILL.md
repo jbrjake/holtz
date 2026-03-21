@@ -39,6 +39,7 @@ All Holtz runtime data goes in `docs/holtz/` in the target project, not the proj
 4. **Commit atomically.** One fix = one commit, punchlist item ID in body.
 5. **Patterns reveal systemic issues.** Every 3-5 fixes, ask what they have in common. Then go find the siblings.
 6. **Checkpoint constantly.** Write findings to disk as you discover them, not at the end of a phase. Your context window will compact. Files are your durable memory. After any compaction, re-read your output files to recover state before continuing.
+7. **Every finding needs a Discovery Chain.** Each punchlist item must include a `**Discovery Chain:**` showing the reasoning from observation to conclusion (1-4 steps connected by `→`). Required for all items regardless of status — it documents *how* the finding was discovered, which does not change after resolution.
 
 ## Context Survival Protocol
 
@@ -147,8 +148,6 @@ Same subagent strategy. Partition source modules into batches.
 Priority order: error paths, boundaries, state transitions, external integrations, security.
 
 ### Phase 4: Fix Loop (TDD)
-
-Each finding written to the punchlist must include a **Discovery Chain** showing the reasoning from observation to conclusion (1-4 steps connected by `→`). This is required for all items regardless of status — it documents *how* the finding was discovered, which does not change after resolution.
 
 1. **Re-read `docs/holtz/PUNCHLIST.md`** — this is your worklist
 2. **Triage each item** by category before starting work on it:
