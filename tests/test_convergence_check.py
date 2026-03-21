@@ -193,9 +193,16 @@ def test_convergence_missing_punchlist_key():
         {"timestamp": "2026-01-02", "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 1, "DEFERRED": 0, "total": 1}, "tests": None},
         {"timestamp": "2026-01-03", "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 1, "DEFERRED": 0, "total": 1}, "tests": None},
     ]
-    # Should not raise KeyError
+    # Should not raise KeyError. Entry 1 defaults to total=0, entry 2 has
+    # total=1 — items "appeared" between entries 1 and 2, so no_new_2_iters
+    # is False (total went from 0 to 1). Convergence should be False.
     converged, message = cc.check_convergence(history)
-    assert isinstance(converged, bool)
+    assert converged is False, (
+        f"Should not converge (items appeared between defaulted entry 1 and entry 2). Got: {message}"
+    )
+    assert "IN PROGRESS" in message, (
+        f"Should report in-progress state. Got: {message}"
+    )
 
 
 # --- FA-010: Deletion-based false convergence ---
@@ -889,4 +896,68 @@ def test_detect_pyproject_bracket_in_comment(tmp_path, monkeypatch):
     result = cc.detect_test_runner()
     assert result != "pytest", (
         f"pyproject.toml with [tool.pytest only in a comment should not detect pytest, got '{result}'"
+    )
+
+
+# --- BH-001 (bug-hunter run 3): stall detection untested ---
+
+def test_stall_detection_triggers():
+    """4+ iterations with no progress on open items should trigger stall detection."""
+    stalled = {
+        "punchlist": {"OPEN": 3, "IN PROGRESS": 0, "RESOLVED": 2, "DEFERRED": 0, "unknown": 0, "total": 5},
+        "tests": None,
+    }
+    # 4 identical snapshots — open items stuck at 3
+    history = [
+        {"timestamp": "2026-03-21T01:00:00", **stalled},
+        {"timestamp": "2026-03-21T02:00:00", **stalled},
+        {"timestamp": "2026-03-21T03:00:00", **stalled},
+        {"timestamp": "2026-03-21T04:00:00", **stalled},
+    ]
+    converged, message = cc.check_convergence(history)
+    assert not converged, f"Should not converge when stalled. Got: {message}"
+    assert "STALLED" in message, (
+        f"Stall detection should mention STALLED. Got: {message}"
+    )
+    assert "3" in message, (
+        f"Stall message should mention the number of stuck items. Got: {message}"
+    )
+
+
+def test_stall_detection_not_triggered_with_progress():
+    """4 iterations where open items decrease should NOT trigger stall."""
+    history = [
+        {"timestamp": "2026-03-21T01:00:00",
+         "punchlist": {"OPEN": 4, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0, "total": 4},
+         "tests": None},
+        {"timestamp": "2026-03-21T02:00:00",
+         "punchlist": {"OPEN": 3, "IN PROGRESS": 0, "RESOLVED": 1, "DEFERRED": 0, "unknown": 0, "total": 4},
+         "tests": None},
+        {"timestamp": "2026-03-21T03:00:00",
+         "punchlist": {"OPEN": 2, "IN PROGRESS": 0, "RESOLVED": 2, "DEFERRED": 0, "unknown": 0, "total": 4},
+         "tests": None},
+        {"timestamp": "2026-03-21T04:00:00",
+         "punchlist": {"OPEN": 1, "IN PROGRESS": 0, "RESOLVED": 3, "DEFERRED": 0, "unknown": 0, "total": 4},
+         "tests": None},
+    ]
+    converged, message = cc.check_convergence(history)
+    assert "STALLED" not in message, (
+        f"Progress being made — should NOT trigger stall. Got: {message}"
+    )
+
+
+def test_stall_detection_needs_4_entries():
+    """Stall detection requires 4+ history entries. 3 entries should not trigger it."""
+    stalled = {
+        "punchlist": {"OPEN": 3, "IN PROGRESS": 0, "RESOLVED": 2, "DEFERRED": 0, "unknown": 0, "total": 5},
+        "tests": None,
+    }
+    history = [
+        {"timestamp": "2026-03-21T01:00:00", **stalled},
+        {"timestamp": "2026-03-21T02:00:00", **stalled},
+        {"timestamp": "2026-03-21T03:00:00", **stalled},
+    ]
+    converged, message = cc.check_convergence(history)
+    assert "STALLED" not in message, (
+        f"Only 3 entries — stall detection should not trigger. Got: {message}"
     )
