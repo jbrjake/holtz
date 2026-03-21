@@ -217,7 +217,7 @@ This is per-fix robustness, not pattern analysis. Phase 5 looks across fixes for
 ### Phase 5: Pattern Analysis (every 3-5 fixes)
 
 1. **Re-read `docs/holtz/PUNCHLIST.md`**
-2. Group resolved items by category. For groups of 2+: identify pattern, search for siblings, write new items to punchlist IMMEDIATELY
+2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify pattern, search for siblings, write new items to punchlist IMMEDIATELY
 3. Write pattern blocks to punchlist per format spec
 4. **Update `docs/holtz/STATUS.md`:** add new PAT-NNN entries to Pattern Library for each newly identified pattern (one-line description, instance count, run number). Update position fields (Phase, Step, Next Action). If pattern analysis revealed a non-obvious insight about the codebase, update the Strategy section's Last Insight field.
 5. **Update `docs/holtz/patterns-brief.md`:** Read `docs/holtz/patterns-brief.md` first (if it exists) to check for existing entries. For each newly identified pattern, append an entry to the patterns brief. Use this format:

@@ -21,7 +21,11 @@ This file is Holtz's program counter. Located at `docs/holtz/STATUS.md` in the t
 - [x] Phase 0a: Project overview
 - [x] Phase 0b: Test infrastructure
 - [ ] Phase 0c: Test baseline
-- [ ] ...
+- [ ] Phase 0d: Lint results
+- [ ] Phase 0e: Churn analysis
+- [ ] Phase 0f: Skipped tests
+- [ ] Phase 0 recommendation escalation: {N items escalated | skipped}
+- [ ] Phase 0g: Recon summary
 
 ## Next Action
 {Exactly what to do next. One sentence. Specific enough to resume without context.}
