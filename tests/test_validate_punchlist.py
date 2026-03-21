@@ -2,7 +2,6 @@
 
 import validate_punchlist as vp
 
-
 # --- BH-001: Section regex eating adjacent sections on empty headers ---
 
 def test_empty_problem_adjacent_to_evidence():
@@ -30,8 +29,8 @@ echo test
     item = items[0]
     # Problem section is empty — should NOT have content from Evidence
     assert not item.has_problem, (
-        f"Empty Problem section should be detected as empty, "
-        f"not filled with Evidence content"
+        "Empty Problem section should be detected as empty, "
+        "not filled with Evidence content"
     )
     assert item.has_evidence
 

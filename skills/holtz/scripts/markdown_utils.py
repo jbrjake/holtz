@@ -2,7 +2,6 @@
 
 import re
 
-
 # CommonMark allows code fences to be indented 0-3 spaces.
 # 4+ spaces is an indented code block, not a fenced code block.
 _BACKTICK_OPEN = re.compile(r'^( {0,3})(`{3,})[^`]*$')

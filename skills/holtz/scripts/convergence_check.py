@@ -9,15 +9,14 @@ and test suite output to compute convergence metrics.
 Usage: python convergence_check.py [punchlist_path]
 """
 
-import re
-import sys
 import json
+import re
 import subprocess
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
 from markdown_utils import mask_code_fences
-
 
 HISTORY_FILE = "docs/holtz/HISTORY.json"
 
@@ -272,7 +271,10 @@ def check_convergence(history: list) -> tuple[bool, str]:
     # If items existed but current total is 0, they were deleted not resolved.
     curr_resolved_deferred = curr_pl["RESOLVED"] + curr_pl["DEFERRED"]
     if max_total > 0 and curr_resolved_deferred == 0 and open_items == 0:
-        return False, "ITEMS DELETED: Items existed previously but none are resolved or deferred. Resolve items, don't delete them."
+        return False, (
+            "ITEMS DELETED: Items existed previously but none are resolved or deferred. "
+            "Resolve items, don't delete them."
+        )
 
     # Convergence requires 2 consecutive clean iterations (3 data points)
     last_3 = history[-3:]

@@ -3,7 +3,8 @@
 Holtz Punchlist Validator
 
 Parses PUNCHLIST.md files and validates:
-- All items have required fields (severity, category, status, problem, discovery chain, acceptance criteria, validation command)
+- All items have required fields (severity, category, status, problem,
+  discovery chain, acceptance criteria, validation command)
 - Severity, status, and category values are from valid sets
 - Resolved items have a resolution documented
 - Deferred bug items have reproduction evidence or an investigation link
@@ -14,11 +15,11 @@ Usage: python validate_punchlist.py [path-to-punchlist.md]
 
 import re
 import sys
-from pathlib import Path
-from markdown_utils import mask_code_fences, has_unclosed_fence
-from dataclasses import dataclass, field
 from collections import Counter
+from dataclasses import dataclass, field
+from pathlib import Path
 
+from markdown_utils import has_unclosed_fence, mask_code_fences
 
 VALID_DETERMINISM = {"deterministic", "intermittent", "theoretical"}
 
@@ -59,6 +60,18 @@ VALID_CATEGORIES = {
     "test/integration-gap", "doc/drift", "doc/missing", "design/coupling",
     "design/duplication", "design/dead-code", "design/inconsistency",
 }
+
+# Known punchlist field names that terminate section capture.
+# Only these patterns stop the regex — not arbitrary **Bold Colon:** text.
+FIELD_NAMES = (
+    'Severity', 'Category', 'Location', 'Status', 'Pattern',
+    'Determinism', 'Investigation', 'Root Cause Confidence',
+    'Problem', 'Evidence', 'Discovery Chain',
+    'Acceptance Criteria', 'Validation Command', 'Resolution',
+)
+_FIELD_ALT = '|'.join(re.escape(f) for f in FIELD_NAMES)
+SECTION_RE = r'\*\*%s:\*\*[ \t]*((?:[^\n]*(?:\n(?!\*\*(?:' + _FIELD_ALT + r'):\*\*)[^\n]*)*))'
+HEADER_RE = r'\*\*%s:\*\*'
 
 
 def parse_punchlist(content: str) -> list[PunchlistItem]:
@@ -141,47 +154,36 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         # 3. Extract content from original_block starting at the mapped position
         # This prevents code fence field headers from interfering with extraction
         # even when the same header appears in both a code fence and real content.
-        # Known punchlist field names that terminate section capture.
-        # Only these patterns stop the regex — not arbitrary **Bold Colon:** text.
-        _field_names = (
-            'Severity', 'Category', 'Location', 'Status', 'Pattern',
-            'Determinism', 'Investigation', 'Root Cause Confidence',
-            'Problem', 'Evidence', 'Discovery Chain',
-            'Acceptance Criteria', 'Validation Command', 'Resolution',
-        )
-        _field_alt = '|'.join(re.escape(f) for f in _field_names)
-        section_re = r'\*\*%s:\*\*[ \t]*((?:[^\n]*(?:\n(?!\*\*(?:' + _field_alt + r'):\*\*)[^\n]*)*))'
-        header_re = r'\*\*%s:\*\*'
 
-        def _masked_pos_to_orig_offset(pos_in_masked):
+        def _masked_pos_to_orig_offset(pos_in_masked, _mb=masked_block, _ob=original_block):
             """Map a character position in masked_block to the line start in original_block."""
-            line_num = masked_block[:pos_in_masked].count('\n')
+            line_num = _mb[:pos_in_masked].count('\n')
             offset = 0
             for _ in range(line_num):
-                nl = original_block.find('\n', offset)
+                nl = _ob.find('\n', offset)
                 if nl == -1:
-                    return len(original_block)
+                    return len(_ob)
                 offset = nl + 1
             return offset
 
-        def _section_from_original(field_name):
+        def _section_from_original(field_name, _mb=masked_block, _ob=original_block):
             """Find section boundaries in masked, extract content from original.
 
             Uses masked_block for boundary detection (immune to code-fenced
             field headers) and original_block for content extraction.
             Returns the section content as a string, or None.
             """
-            masked_match = re.search(section_re % field_name, masked_block)
+            masked_match = re.search(SECTION_RE % field_name, _mb)
             if not masked_match:
                 return None
 
             cap_start = masked_match.start(1)
             cap_end = masked_match.end(1)
-            start_line = masked_block[:cap_start].count('\n')
-            end_line = masked_block[:cap_end].count('\n')
+            start_line = _mb[:cap_start].count('\n')
+            end_line = _mb[:cap_end].count('\n')
 
-            orig_lines = original_block.split('\n')
-            masked_lines_list = masked_block.split('\n')
+            orig_lines = _ob.split('\n')
+            masked_lines_list = _mb.split('\n')
 
             if start_line >= len(orig_lines):
                 return None
@@ -212,17 +214,17 @@ def parse_punchlist(content: str) -> list[PunchlistItem]:
         item.has_evidence = bool(evidence_content and len(evidence_content.strip()) > 10)
 
         # Discovery Chain: presence check only (header exists in masked content)
-        item.has_discovery_chain = bool(re.search(header_re % 'Discovery Chain', masked_block))
+        item.has_discovery_chain = bool(re.search(HEADER_RE % 'Discovery Chain', masked_block))
 
         # Checkbox detection: scoped to Acceptance Criteria section in masked block
-        ac_m = re.search(section_re % 'Acceptance Criteria', masked_block)
+        ac_m = re.search(SECTION_RE % 'Acceptance Criteria', masked_block)
         ac_content = ac_m.group(1) if ac_m else ""
         item.has_acceptance_criteria = '- [ ]' in ac_content or '- [x]' in ac_content or '- [X]' in ac_content
 
         # Validation command: header must exist in masked, content from original.
         # Supports backtick and tilde fences of any length (3+), with optional
         # blank lines between header and fence, per CommonMark spec.
-        vc_match = re.search(header_re % 'Validation Command', masked_block)
+        vc_match = re.search(HEADER_RE % 'Validation Command', masked_block)
         if vc_match:
             orig_offset = _masked_pos_to_orig_offset(vc_match.start())
             vc_region = original_block[orig_offset:]
@@ -280,7 +282,10 @@ def validate(items: list[PunchlistItem], content: str = "", masked_content: str 
             pat_start = ph.end()
             # Find next ## or end of content
             next_section = re.search(r'^## ', masked_content[pat_start:], re.MULTILINE)
-            pat_block = masked_content[pat_start:pat_start + next_section.start()] if next_section else masked_content[pat_start:]
+            if next_section:
+                pat_block = masked_content[pat_start:pat_start + next_section.start()]
+            else:
+                pat_block = masked_content[pat_start:]
             for field_name in _pat_fields:
                 if f'**{field_name}:**' not in pat_block:
                     result.warnings.append(f"{pat_id}: missing {field_name} in pattern block")
@@ -343,11 +348,10 @@ def validate(items: list[PunchlistItem], content: str = "", masked_content: str 
         if is_bug and not item.determinism:
             result.warnings.append(f"{prefix}: bug/* item missing Determinism field")
 
-        if item.root_cause_confidence:
-            if item.root_cause_confidence not in {"LOW", "MEDIUM", "HIGH"}:
-                result.warnings.append(
-                    f"{prefix}: invalid Root Cause Confidence '{item.root_cause_confidence}'"
-                )
+        if item.root_cause_confidence and item.root_cause_confidence not in {"LOW", "MEDIUM", "HIGH"}:
+            result.warnings.append(
+                f"{prefix}: invalid Root Cause Confidence '{item.root_cause_confidence}'"
+            )
 
         # Deferred bug items should have evidence of reproduction attempts
         # (in the Evidence section OR the linked investigation file).

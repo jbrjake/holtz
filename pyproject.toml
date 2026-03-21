@@ -1,0 +1,14 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["skills/holtz/scripts", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501", "E402"]
+"tests/runner_fixtures.py" = ["E101", "W191"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

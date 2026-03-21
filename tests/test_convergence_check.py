@@ -2,7 +2,6 @@
 
 import convergence_check as cc
 
-
 # --- BH-002: False convergence on empty punchlist ---
 
 def test_empty_punchlist_no_convergence():
@@ -382,6 +381,7 @@ def test_multi_item_punchlist_field_isolation(tmp_path):
 # =============================================================================
 
 import subprocess
+
 import runner_fixtures as fx
 
 
