@@ -53,3 +53,31 @@ def mask_code_fences(content: str) -> tuple[str, str]:
                 masked_lines[i] = ''
 
     return content, '\n'.join(masked_lines)
+
+
+def has_unclosed_fence(content: str) -> bool:
+    """Check if content has a code fence that is never closed."""
+    content = content.replace('\r\n', '\n')
+    lines = content.split('\n')
+    in_fence = False
+    fence_char_count = 0
+    fence_close_tmpl = ''
+
+    for line in lines:
+        if not in_fence:
+            m = _BACKTICK_OPEN.match(line)
+            if m:
+                fence_char_count = len(m.group(2))
+                fence_close_tmpl = _BACKTICK_CLOSE_TMPL
+                in_fence = True
+                continue
+            m = _TILDE_OPEN.match(line)
+            if m:
+                fence_char_count = len(m.group(2))
+                fence_close_tmpl = _TILDE_CLOSE_TMPL
+                in_fence = True
+        else:
+            if re.match(fence_close_tmpl % fence_char_count, line):
+                in_fence = False
+
+    return in_fence

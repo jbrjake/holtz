@@ -899,6 +899,19 @@ def test_detect_pyproject_bracket_in_comment(tmp_path, monkeypatch):
     )
 
 
+# --- BH-006 (bug-hunter run 3): count_items warns on nonexistent file ---
+
+def test_count_items_nonexistent_file_warns(tmp_path, capsys):
+    """count_items on nonexistent file should warn and return zero counts."""
+    nonexistent = tmp_path / "does_not_exist.md"
+    counts = cc.count_items(nonexistent)
+    assert counts["total"] == 0, f"Expected total 0 for nonexistent file, got {counts}"
+    captured = capsys.readouterr()
+    assert "WARNING" in captured.err, (
+        f"Expected warning on stderr for nonexistent file, got: {captured.err!r}"
+    )
+
+
 # --- BH-002 (bug-hunter run 3): Status regex greedy trailing capture ---
 
 def test_status_trailing_text_ignored_count_items(tmp_path):

@@ -30,7 +30,11 @@ def count_items(punchlist_path: Path) -> dict:
     preamble text, or item prose outside the first Status field per block
     are ignored.
     """
-    content = punchlist_path.read_text() if punchlist_path.exists() else ""
+    if not punchlist_path.exists():
+        print(f"WARNING: {punchlist_path} not found, treating as empty punchlist", file=sys.stderr)
+        content = ""
+    else:
+        content = punchlist_path.read_text()
     _, masked = mask_code_fences(content)
     counts = {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0}
 

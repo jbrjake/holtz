@@ -1,6 +1,7 @@
 """Tests for markdown_utils.py."""
 
 import markdown_utils as mu
+from markdown_utils import has_unclosed_fence
 
 
 def test_basic_fence_masking():
@@ -192,3 +193,24 @@ def test_tilde_fence_info_string_with_tilde():
     assert "after" in masked, (
         "Content after tilde fence should NOT be masked — cascading misparse detected"
     )
+
+
+# --- BH-005 (bug-hunter run 3): unclosed fence detection ---
+
+def test_has_unclosed_fence_true():
+    """Unclosed fence should be detected."""
+    content = "before\n```\nfenced content\nmore content"
+    assert has_unclosed_fence(content) is True
+
+def test_has_unclosed_fence_false():
+    """Properly closed fence should not be flagged."""
+    content = "before\n```\nfenced\n```\nafter\n"
+    assert has_unclosed_fence(content) is False
+
+def test_has_unclosed_fence_empty():
+    """Empty content has no unclosed fence."""
+    assert has_unclosed_fence("") is False
+
+def test_has_unclosed_fence_no_fences():
+    """Content with no fences has no unclosed fence."""
+    assert has_unclosed_fence("just some text\nno fences here\n") is False

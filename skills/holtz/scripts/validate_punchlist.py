@@ -15,7 +15,7 @@ Usage: python validate_punchlist.py [path-to-punchlist.md]
 import re
 import sys
 from pathlib import Path
-from markdown_utils import mask_code_fences
+from markdown_utils import mask_code_fences, has_unclosed_fence
 from dataclasses import dataclass, field
 from collections import Counter
 
@@ -368,6 +368,8 @@ def main():
 
     if not items:
         print(f"ERROR: No punchlist items found in {path}")
+        if has_unclosed_fence(content):
+            print("HINT: File contains an unclosed code fence — content after the fence is invisible to the parser")
         sys.exit(1)
 
     result = validate(items, content)
