@@ -78,7 +78,7 @@ Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is 
 | 0e | Git churn analysis (top 20 most-changed files in last 50 commits) | `docs/holtz/recon/0e-churn.md` |
 | 0f | Find skipped/disabled tests | `docs/holtz/recon/0f-skipped-tests.md` |
 
-**Pattern Brief:** If `docs/holtz/patterns-brief.md` exists, read it to load known patterns from prior runs. These patterns inform what to look for during audit phases. Optionally read `docs/holtz/patterns-brief-archive.md` for additional historical context if investigating a specific pattern class.
+**Before step 0a:** If `docs/holtz/patterns-brief.md` exists, read it to load known patterns from prior runs. These patterns inform what to look for during audit phases. Optionally read `docs/holtz/patterns-brief-archive.md` for additional historical context if investigating a specific pattern class.
 
 **When creating STATUS.md:** set the initial Active Lens to `component`. Initialize the Pattern Library and Strategy sections (High-Risk Areas from recon findings, Last Insight and Approach as "—" until first insight).
 
