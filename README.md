@@ -28,7 +28,7 @@ Once installed, the skill activates when you ask Claude to find bugs, audit test
 
 ## What's inside
 
-2 skills, 2 agents, 8 reference docs, 1 example, 4 Python scripts, 6 seed patterns, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+2 skills, 2 agents, 9 reference docs, 1 example, 4 Python scripts, 6 seed patterns, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Who Holtz is
 
@@ -60,7 +60,7 @@ Some people, after working with Holtz, start writing better tests on their own. 
 
 **Phase 0: Recon.** Project structure, test infrastructure, baseline metrics, lint results, git churn analysis, skipped tests. Each step writes its own file. Context compaction can't kill what's already on disk. If mutation testing tools are available, Holtz runs them. Functions where more than 40% of mutations survive become high-confidence predictions, because a test suite that can't detect injected bugs can't detect real ones either. If an architecture baseline exists from a prior run, Holtz diffs the current structure against it and flags drift: dependency reversals, boundary erosion, convention violations, layering breaches. If recommendations from prior runs went unaddressed, they stop being recommendations and become punchlist items. Then predictive recon: Holtz ranks every predicted bug location by converging signals (pattern history, graph risk scores, mutation survival, git churn) and writes the list to disk. By the time Phase 1 starts, he already has a map of where the trouble is.
 
-**Phase 1: Doc-to-Implementation Audit.** Every claim in your documentation gets checked against reality. If the README says it handles concurrent writes, there'd better be a test for concurrent writes. If there isn't, that's a punchlist item. Predicted locations get examined first. Every finding adds semantic edges to the impact graph (`assumes`, `diverges_from`, `shares_pattern`), so the map gets sharper with every bug found.
+**Phase 1: Doc-to-Implementation Audit.** Every claim in your documentation gets checked against reality. If the README says it handles concurrent writes, there'd better be a test for concurrent writes. If there isn't, that's a punchlist item. Predicted locations get examined first. Every finding adds semantic edges to the impact graph (`assumes`, `diverges_from`), so the map gets sharper with every bug found.
 
 **Phase 2: Test Quality Audit.** Every test file scored against twelve anti-patterns: tautology tests, green bar addicts, mockingbirds, happy path tourists, snapshot traps, and the rest. A test that can't fail isn't a test. Holtz will prove it. If mutation data is available, it provides concrete evidence: a test that passes while 60% of its target's mutations survive isn't testing anything. It's performing.
 

@@ -267,10 +267,45 @@ echo test
 """
     items = vp.parse_punchlist(content)
     result = vp.validate(items, content)
-    # Missing header, Summary, and Items sections — should produce 3 warnings
+    # Missing header, Summary, Patterns, and Items sections — should produce 4 warnings
     structure_warnings = [w for w in result.warnings if w.startswith("Missing")]
-    assert len(structure_warnings) == 3, (
-        f"Expected 3 structure warnings (header, Summary, Items), got: {result.warnings}"
+    assert len(structure_warnings) == 4, (
+        f"Expected 4 structure warnings (header, Summary, Patterns, Items), got: {result.warnings}"
+    )
+
+
+# --- BH-001 (run 6): Missing Patterns section warning ---
+
+def test_missing_patterns_section_produces_warning():
+    """Punchlist with Summary and Items but no Patterns section should warn."""
+    content = """\
+# Holtz Punchlist
+## Summary
+## Items
+
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    result = vp.validate(items, content)
+    patterns_warnings = [w for w in result.warnings if "Patterns" in w]
+    assert len(patterns_warnings) == 1, (
+        f"Expected 1 'Missing Patterns section' warning, got: {result.warnings}"
     )
 
 
@@ -1034,10 +1069,10 @@ echo test
     items = vp.parse_punchlist(content)
     result = vp.validate(items, content)
     # The file has NO real top-level structure — only inside a code fence.
-    # All 3 warnings should fire.
+    # All 4 warnings should fire.
     structure_warnings = [w for w in result.warnings if w.startswith("Missing")]
-    assert len(structure_warnings) == 3, (
-        f"Expected 3 structure warnings (header, Summary, Items), got: {result.warnings}"
+    assert len(structure_warnings) == 4, (
+        f"Expected 4 structure warnings (header, Summary, Patterns, Items), got: {result.warnings}"
     )
 
 

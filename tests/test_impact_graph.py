@@ -766,6 +766,23 @@ def test_drift_check_async_function_shifted(graph, project):
 
 
 # ---------------------------------------------------------------------------
+# BH-007 (run 6): drift_check with line=None node
+# ---------------------------------------------------------------------------
+
+
+def test_drift_check_line_none_no_crash(graph, project):
+    """drift_check on node with line=None should not crash or report drift (BH-007 run 6)."""
+    src = project / "found.py"
+    src.write_text("def exists_here():\n    pass\n")
+    graph.add_node("found.py::exists_here", "function", "found.py", line=None)
+
+    result = graph.drift_check(project)
+    assert result["drifted"] == [], (
+        "Node with line=None should not report drift when entity is found"
+    )
+
+
+# ---------------------------------------------------------------------------
 # BH-009: load() with non-dict JSON types
 # ---------------------------------------------------------------------------
 

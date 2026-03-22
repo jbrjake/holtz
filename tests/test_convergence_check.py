@@ -1051,6 +1051,26 @@ def test_vitest_with_skipped(monkeypatch):
     )
 
 
+def test_vitest_skipped_before_passed(monkeypatch):
+    """Vitest output with non-standard component order should parse correctly (BH-008 run 6)."""
+    # Vitest might reorder components. This test has skipped before passed.
+    output = """\
+ DEV  v3.0.0
+
+ ✓ tests/quantum_tacos.test.ts (11 tests)
+
+ Test Files  1 passed (1)
+      Tests  2 skipped | 9 passed (11)
+   Duration  834ms
+"""
+    monkeypatch.setattr(subprocess, "run", _fake_run(output))
+    result = cc.get_test_counts("vitest")
+    assert result is not None, "Vitest with skipped before passed should not return None"
+    assert result["passed"] == 9
+    assert result["failed"] == 0
+    assert result["skipped"] == 2
+
+
 def test_mocha_with_pending(monkeypatch):
     """Mocha output with pending tests should capture them as skipped."""
     monkeypatch.setattr(subprocess, "run", _fake_run(fx.MOCHA_WITH_PENDING))

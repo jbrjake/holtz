@@ -214,3 +214,20 @@ def test_has_unclosed_fence_empty():
 def test_has_unclosed_fence_no_fences():
     """Content with no fences has no unclosed fence."""
     assert has_unclosed_fence("just some text\nno fences here\n") is False
+
+
+# --- BH-006 (run 6): has_unclosed_fence missing tilde and CRLF tests ---
+
+def test_has_unclosed_tilde_fence():
+    """Unclosed tilde fence should be detected."""
+    assert has_unclosed_fence("before\n~~~\nfenced content\nmore") is True
+
+
+def test_has_closed_tilde_fence():
+    """Properly closed tilde fence should not be flagged."""
+    assert has_unclosed_fence("before\n~~~\nfenced\n~~~\nafter\n") is False
+
+
+def test_has_unclosed_fence_crlf():
+    """CRLF content with unclosed fence should be detected."""
+    assert has_unclosed_fence("before\r\n```\r\nfenced\r\n") is True

@@ -272,13 +272,13 @@ def validate(items: list[PunchlistItem], content: str = "", masked_content: str 
             result.warnings.append("Missing punchlist header section")
         if '## Summary' not in masked_content:
             result.warnings.append("Missing Summary section")
+        if '## Patterns' not in masked_content:
+            result.warnings.append("Missing Patterns section")
         if '## Items' not in masked_content:
             result.warnings.append("Missing Items section")
 
     # Pattern block validation — check ## Pattern: blocks in masked content
     if content:
-        if not masked_content:
-            _, masked_content = mask_code_fences(content)
         pattern_headers = list(re.finditer(
             r'^## Pattern: (PAT-\d+):[ \t]+(.+)$', masked_content, re.MULTILINE
         ))

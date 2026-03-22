@@ -154,13 +154,20 @@ def get_test_counts(runner: str | None) -> dict | None:
             # Vitest summary line: "Tests  N passed" or "Tests  N failed | N skipped | N passed"
             # Must match the Tests summary line specifically to avoid counting
             # "Test Files  N passed" which is a different metric.
-            p = re.search(r'^\s*Tests\s+(?:(\d+) failed \| )?(?:(\d+) skipped \| )?(\d+) passed', output, re.MULTILINE)
-            if not p:
+            # Components are extracted independently (like Jest) to handle any order.
+            vitest_line = re.search(r'^\s*Tests\s+(.+\d+ (?:passed|failed))', output, re.MULTILINE)
+            if not vitest_line:
+                return None
+            line = vitest_line.group(1)
+            p = re.search(r'(\d+) passed', line)
+            f = re.search(r'(\d+) failed', line)
+            s = re.search(r'(\d+) skipped', line)
+            if not p and not f and not s:
                 return None
             return {
-                "passed": int(p.group(3)),
-                "failed": int(p.group(1)) if p.group(1) else 0,
-                "skipped": int(p.group(2)) if p.group(2) else 0,
+                "passed": int(p.group(1)) if p else 0,
+                "failed": int(f.group(1)) if f else 0,
+                "skipped": int(s.group(1)) if s else 0,
             }
 
         if runner == "cargo":
