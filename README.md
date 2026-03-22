@@ -24,7 +24,7 @@ Once installed, the skill activates when you ask Claude to find bugs, audit test
 
 ## What's inside
 
-1 skill, 1 agent, 5 reference docs, 1 example, 3 Python scripts, 1 backstory you probably shouldn't read late at night, and a man who will find what's wrong with your code whether you want him to or not.
+1 skill, 1 agent, 6 reference docs, 1 example, 4 Python scripts, 1 backstory you probably shouldn't read late at night, and a man who will find what's wrong with your code whether you want him to or not.
 
 ## Who Holtz is
 
