@@ -1,5 +1,5 @@
 ---
-name: Missing Edge Case Handling
+name: missing-edge-case-handling
 version: 1
 discovered: 2026-03-19
 languages: [python, javascript, typescript, java, go, rust, ruby]

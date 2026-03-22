@@ -1,5 +1,5 @@
 ---
-name: Doc-Spec Drift
+name: doc-spec-drift
 version: 1
 discovered: 2026-03-19
 languages: []

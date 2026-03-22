@@ -1,5 +1,5 @@
 ---
-name: Incomplete Layer Isolation
+name: incomplete-layer-isolation
 version: 1
 discovered: 2026-03-19
 languages: [python, javascript, typescript, java, go, rust]

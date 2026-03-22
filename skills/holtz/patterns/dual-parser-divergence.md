@@ -1,5 +1,5 @@
 ---
-name: Dual Parser Divergence
+name: dual-parser-divergence
 version: 1
 discovered: 2026-03-19
 languages: [python, javascript, typescript, java, go, rust]
@@ -114,3 +114,5 @@ def extract_fields(text):
 
 - [incomplete-layer-isolation](incomplete-layer-isolation.md) — dual parsers are a special case of incomplete isolation, where the "layer" is the canonical parser
 - [code-fence-unaware-parsing](code-fence-unaware-parsing.md) — a common divergence point: one parser accounts for fenced blocks, the other does not
+- [missing-edge-case-handling](missing-edge-case-handling.md) — divergent parsers often differ precisely in which edge cases they handle
+- [doc-spec-drift](doc-spec-drift.md) — when specs diverge, implementations built against different spec versions will also diverge

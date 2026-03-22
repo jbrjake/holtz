@@ -1,5 +1,5 @@
 ---
-name: Regex Newline Leak
+name: regex-newline-leak
 version: 1
 discovered: 2026-03-19
 languages: [python, javascript, ruby, go]
@@ -83,3 +83,4 @@ result = parse_value(data, "item_count")
 
 - [code-fence-unaware-parsing](code-fence-unaware-parsing.md) — another class of regex applied to structured multi-line text without accounting for document structure
 - [missing-edge-case-handling](missing-edge-case-handling.md) — tests with only single-line input are a form of missing edge-case coverage
+- [dual-parser-divergence](dual-parser-divergence.md) — when one parser uses `\s` and another uses `[ \t]`, they produce divergent results on multi-line input

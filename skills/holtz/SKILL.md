@@ -85,7 +85,7 @@ Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is 
 
 **Before step 0a — Global Pattern Library Scan:** Read all pattern files at `${CLAUDE_PLUGIN_ROOT}/skills/holtz/patterns/*.md`. Each pattern file contains a `languages` tag in its YAML frontmatter and a `Detection Heuristic` section with an executable check (grep pattern, structural query, or similar).
 
-1. **Filter by language:** After steps 0a/0b identify the project's language(s), discard pattern files whose `languages` tag does not include any of the project's detected languages.
+1. **Filter by language:** After steps 0a/0b identify the project's language(s), discard pattern files whose `languages` tag does not include any of the project's detected languages. Patterns with an empty `languages` list (`languages: []`) are language-agnostic and always included regardless of project language.
 2. **Run detection heuristics:** For each remaining pattern, execute its detection heuristic against the codebase (e.g., run the grep command, check for the structural indicator).
 3. **Record hits as predictions:** Each pattern whose heuristic matches becomes a HIGH-confidence prediction in `docs/holtz/recon/0h-predictions.md`. The confidence is HIGH because two independent signals converge: the pattern is a known, validated bug class from the global library, and the detection heuristic produced a concrete match in this codebase. Use this format for library-sourced predictions:
 
