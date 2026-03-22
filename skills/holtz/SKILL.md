@@ -29,6 +29,9 @@ Operate as Holtz — see [references/backstory.md](references/backstory.md) for 
 - `scripts/convergence_check.py` — track fix loop progress
 - `scripts/impact_graph.py` — knowledge graph operations (add/query/update/prune) + CLI
 - `patterns/*.md` — global pattern library (language-tagged, reusable across projects)
+- [references/architecture-baseline-format.md](references/architecture-baseline-format.md) — format spec for architecture baseline (drift detection)
+- [references/living-punchlist-format.md](references/living-punchlist-format.md) — format spec for living punchlist (persistent vulnerability model)
+- [references/merge-protocol.md](references/merge-protocol.md) — merge protocol for adversarial self-play
 
 ## Output Directory
 
@@ -61,7 +64,7 @@ Before starting ANY work, check for existing output files in `docs/holtz/`:
 1. **If `docs/holtz/STATUS.md` exists:** Read it. It tells you exactly where the last run stopped. Resume from that point — do not restart from Phase 0.
 2. **If `docs/holtz/recon/` dir exists but no STATUS file:** A prior run crashed in Phase 0. Check which `docs/holtz/recon/0*.md` files exist. Resume from the first missing step.
 3. **If `docs/holtz/PUNCHLIST.md` exists:** A prior run got past recon. Read it + STATUS to determine if you're in audit (Phases 1-3) or fix loop (Phases 4-6). Resume accordingly.
-4. **If the user says "start fresh" or "re-audit":** Archive the run: move `docs/holtz/` to `docs/holtz-prior-{date}/` as a backup, then create a fresh `docs/holtz/`. **Exception:** `patterns-brief.md`, `patterns-brief-archive.md`, and `impact-graph.json` persist across runs — after the move, copy them from `docs/holtz-prior-{date}/` back into the fresh `docs/holtz/`. The impact graph grows richer over time and should never be discarded.
+4. **If the user says "start fresh" or "re-audit":** Archive the run: move `docs/holtz/` to `docs/holtz-prior-{date}/` as a backup, then create a fresh `docs/holtz/`. **Exception:** `patterns-brief.md`, `patterns-brief-archive.md`, and `impact-graph.json` persist across runs — after the move, copy them from `docs/holtz-prior-{date}/` back into the fresh `docs/holtz/`. The impact graph grows richer over time and should never be discarded. The architecture baseline (`docs/holtz/architecture-baseline.md`) and living punchlist (`docs/holtz/LIVING-PUNCHLIST.md`) also persist across runs — never archive them to `docs/holtz-prior-*/`. Both are updated at the end of each converged run, not during.
 5. **If `docs/holtz/SUMMARY.md` exists:** A prior run completed. Ask the user if they want a fresh audit or to review/extend the prior findings.
 
 **Default behavior is RESUME, not restart.** Never discard prior work without explicit user instruction.
@@ -80,6 +83,29 @@ Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is 
 | 0d | Run linters/type checkers if configured | `docs/holtz/recon/0d-lint-results.md` |
 | 0e | Git churn analysis (top 20 most-changed files in last 50 commits) | `docs/holtz/recon/0e-churn.md` |
 | 0f | Find skipped/disabled tests | `docs/holtz/recon/0f-skipped-tests.md` |
+
+**Step 0e.1 — Mutation Scan (optional):** After step 0e (churn), auto-detect mutation testing tools:
+
+| Language | Tool | Detection |
+|----------|------|-----------|
+| Python | mutmut | `mutmut` in PATH or `[tool.mutmut]` in `pyproject.toml` |
+| JavaScript/TypeScript | Stryker | `stryker.conf.js` / `stryker.conf.mjs` or `@stryker-mutator` in `package.json` |
+| Rust | cargo-mutants | `cargo-mutants` in PATH |
+| Go | go-mutesting | `go-mutesting` in PATH |
+| Java/Kotlin | PIT | `pitest` in `pom.xml` or `build.gradle` |
+
+If a supported tool is detected, run it with a time cap based on test suite runtime from step 0c: under 30s → 5 minute cap, 30s-5min → 10 minute cap, over 5min → 15 minute cap. If no mutation tool is available, silently skip this step. If the tool times out, report partial results with a note.
+
+Output: `docs/holtz/recon/0e1-mutation-scan.md` — survival by function (worst first) and top 20 surviving mutations. The LLM runs the tool, reads its native output format, and manually compiles the per-function survival table. No output parsing script needed.
+
+**How mutation data feeds the pipeline:**
+
+| Consumer | How it uses mutation data |
+|----------|-------------------------|
+| **Predictions (0h)** | Functions with >40% mutation survival become HIGH-confidence predictions for `test/shallow` or `test/missing` findings |
+| **Impact graph** | `update_risk` on nodes based on survival rate: >50% survival → +0.3, 30-50% → +0.2, 10-30% → +0.1 |
+| **Phase 2 (test audit)** | When auditing a test file, check whether tests kill mutations. Tests that pass but don't kill mutations are evidence for Rubber Stamp (#11) or Permissive Validator (#12) |
+| **Phase 4 (fix loop)** | After writing reproduction test and fix, re-run mutations on changed function to verify improved kill rate. Record before/after score in Resolution notes. Quality check, not gate. |
 
 **Before step 0a:** If `docs/holtz/patterns-brief.md` exists, read it to load known patterns from prior runs. These patterns inform what to look for during audit phases. Optionally read `docs/holtz/patterns-brief-archive.md` for additional historical context if investigating a specific pattern class.
 
@@ -108,6 +134,23 @@ Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is 
 2. **`drift_check`** — Run `scripts/impact_graph.py drift_check --project-root .` to flag nodes whose file exists but entity is absent or line number has shifted >10 lines. Resolve each flag: update the node's line number (preserving risk_score/edges) via `add_node`, or prune if the entity was truly removed.
 3. **Stale edge verification (LLM-driven)** — Verify `calls` and `imports` edges by grepping for the call/import in the source file. Remove severed relationships. `assumes` and `diverges_from` edges are NOT verified here — they require re-evaluation during Phases 1-3 since the semantic relationship may still hold even if code moved.
 4. **Add new nodes** — Files and functions discovered in recon that aren't in the graph get new nodes via `add_node`. Add `imports` edges by reading code.
+
+**Step 0a.1 — Architecture Drift Detection:** After completing graph reconciliation:
+
+**If `docs/holtz/architecture-baseline.md` does NOT exist (first run):** Create it by extracting documented intent from project docs and inferring the structural snapshot from code. See [references/architecture-baseline-format.md](references/architecture-baseline-format.md) for the required format.
+
+**If `docs/holtz/architecture-baseline.md` exists (subsequent runs):**
+
+1. Re-infer current structural snapshot
+2. Compare against baseline's Structural Snapshot for structural drift:
+   - **Dependency reversal:** Module A used to not depend on B, now it does
+   - **Boundary erosion:** Module A's functions used to be called only by B, now C and D call them too
+   - **Convention violation:** New files/functions don't follow the naming pattern
+   - **Layering breach:** A lower layer now calls a higher layer
+3. Compare against Documented Intent for intent drift (stated invariants now violated, stated boundaries crossed)
+4. For each detected drift: append to the Drift Log in the baseline file. If MEDIUM+ severity, create a punchlist item.
+
+**Living Punchlist Integration:** If `docs/holtz/LIVING-PUNCHLIST.md` exists, read it during Phase 0. Proactive checks from the living punchlist feed into step 0h predictions as HIGH-confidence items. See [references/living-punchlist-format.md](references/living-punchlist-format.md) for the format.
 
 **When creating STATUS.md:** Read [references/lens-registry.md](references/lens-registry.md) for the list of available lenses. Set the initial Active Lens to `component` (the first lens in the registry, which is the broadest). Initialize the Pattern Library and Strategy sections (High-Risk Areas from recon findings, Last Insight and Approach as "—" until first insight). The auditor may reorder lens priority based on recon findings (security risks → security lens moves up), impact graph topology (heavy `assumes`/`diverges_from` edges → integration lens moves up), or prior run patterns (recurring error-handling bugs → error-propagation lens moves up).
 
@@ -174,7 +217,7 @@ Use **Agent subagents** for this phase when possible — each subagent audits a 
 1. Read `docs/holtz/recon/0g-recon-summary.md` for test file locations and `docs/holtz/recon/0h-predictions.md` for predicted areas
 2. Partition test files into batches (3-5 files each). **Prioritize predicted areas first.**
 3. **Subagent brief:** Instruct each subagent to read `docs/holtz/patterns-brief.md` before starting its audit batch. Known patterns from prior runs should be checked against the code being reviewed.
-4. For each batch: audit per [references/anti-patterns.md](references/anti-patterns.md), write punchlist items to `docs/holtz/PUNCHLIST.md` IMMEDIATELY after each batch. Tag findings matching predictions with `**Predicted:**` field and mark CONFIRMED in `0h-predictions.md`.
+4. For each batch: audit per [references/anti-patterns.md](references/anti-patterns.md), write punchlist items to `docs/holtz/PUNCHLIST.md` IMMEDIATELY after each batch. Tag findings matching predictions with `**Predicted:**` field and mark CONFIRMED in `0h-predictions.md`. When mutation data is available from step 0e.1, use it as concrete evidence when scoring Rubber Stamp (#11) and Permissive Validator (#12) — a test that passes but doesn't kill mutations for the function it covers is a prime candidate for these anti-patterns.
 5. **Add semantic edges** to the impact graph: `assumes`, `diverges_from`, `tests` (test file covers function).
 6. Update `docs/holtz/STATUS.md`. Mark unconfirmed predictions for this phase as UNCONFIRMED.
 
@@ -195,7 +238,7 @@ Priority order: error paths, boundaries, state transitions, external integration
 
 ### Phase 4: Fix Loop (TDD)
 
-1. **Re-read `docs/holtz/PUNCHLIST.md`** — this is your worklist
+1. **Re-read worklist** — If `docs/holtz/PUNCHLIST-MERGED.md` exists (from adversarial self-play), use it as the worklist. Otherwise, use `docs/holtz/PUNCHLIST.md`.
 2. **Triage each item** by category before starting work on it:
    - `test/*`, `doc/*`, `design/*` items → **Fast Path**
    - `bug/*` items with determinism = deterministic → **Fast Path**
@@ -209,8 +252,9 @@ Priority order: error paths, boundaries, state transitions, external integration
 For straightforward items where the root cause is obvious from the finding:
 
 1. Write failing test. Verify it fails. Minimal fix. Full suite. Commit.
-2. **Update `docs/holtz/PUNCHLIST.md` with resolution IMMEDIATELY after each commit** (status, commit hash, validating test)
-3. Update `docs/holtz/STATUS.md` with last completed item ID. If this fix revealed a non-obvious insight, update the Strategy section's Last Insight field.
+2. If mutation data exists from step 0e.1, re-run the mutation tool on the changed function(s) and record the before/after mutation kill rate in the punchlist item's Resolution notes (e.g., 'Mutation kill rate: 67% → 92%'). This is a quality check, not a gate — a fix can proceed even if the mutation score doesn't improve, but it should be noted.
+3. **Update `docs/holtz/PUNCHLIST.md` with resolution IMMEDIATELY after each commit** (status, commit hash, validating test)
+4. Update `docs/holtz/STATUS.md` with last completed item ID. If this fix revealed a non-obvious insight, update the Strategy section's Last Insight field.
 
 #### Investigation Path
 
@@ -390,6 +434,16 @@ After convergence is reached and before writing the final summary, check whether
 
 6. **If declined:** No action. The pattern remains in the project-specific pattern brief only.
 
+**Living Punchlist Update:** After convergence and before writing SUMMARY.md, update `docs/holtz/LIVING-PUNCHLIST.md` (or create it on first run — see [references/living-punchlist-format.md](references/living-punchlist-format.md)):
+
+1. Refresh Risk Hotspots from impact graph (nodes with risk_score > 0.5)
+2. Add new patterns from this run's pattern brief
+3. Update Architectural Risks from drift log (MEDIUM+ severity entries)
+4. Record prediction accuracy for calibration
+5. Derive new proactive checks from patterns, hotspots, and drift
+6. Move cooled hotspots (risk_score below 0.3) to History with note
+7. Append run summary to History section
+
 **Final:** Updated punchlist + `docs/holtz/SUMMARY.md` (totals, patterns, recommendations, before/after metrics). SUMMARY.md must include a Prediction Accuracy table:
 
 ```markdown
@@ -408,3 +462,4 @@ After convergence is reached and before writing the final summary, check whether
 - **Continue:** `"work through the punchlist"` — resume Phase 4
 - **Pattern:** Phase 5 on existing data
 - **Test/Doc audit only:** Phase 2 or Phase 1 alone
+- **Adversarial Self-Play:** Both Holtz and Justine dispatched in parallel. After both converge (or one stalls), their punchlists are merged per [references/merge-protocol.md](references/merge-protocol.md). Holtz owns the merged punchlist and runs Phases 4-6 on the merged items. See merge protocol for dispatch, stall detection, classification rules, and impact graph merge.
