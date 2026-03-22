@@ -1,6 +1,6 @@
 """Tests for impact_graph.py — Holtz Knowledge Graph.
 
-54 test cases covering all 10 operations:
+56 test cases covering all 10 operations:
 - Basic operations (1-7b)
 - Blast radius (8-13)
 - Cycle handling (14-16)

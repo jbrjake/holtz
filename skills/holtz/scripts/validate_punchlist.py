@@ -280,7 +280,7 @@ def validate(items: list[PunchlistItem], content: str = "", masked_content: str 
         if not masked_content:
             _, masked_content = mask_code_fences(content)
         pattern_headers = list(re.finditer(
-            r'^## Pattern: (PAT-\d+):\s+(.+)$', masked_content, re.MULTILINE
+            r'^## Pattern: (PAT-\d+):[ \t]+(.+)$', masked_content, re.MULTILINE
         ))
         _pat_fields = ('Instances', 'Root Cause', 'Systemic Fix', 'Detection Rule')
         for ph in pattern_headers:
