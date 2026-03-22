@@ -10,8 +10,10 @@ Usage: python impact_graph.py <command> [args]
 
 import argparse
 import json
+import os
 import re
 import sys
+import tempfile
 from datetime import date
 from pathlib import Path
 
@@ -60,10 +62,22 @@ class ImpactGraph:
             self.edges = []
 
     def save(self) -> None:
-        """Write graph to JSON file."""
+        """Write graph to JSON file atomically via temp file + rename."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         data = {"nodes": self.nodes, "edges": self.edges}
-        self.path.write_text(json.dumps(data, indent=2) + "\n")
+        fd, tmp_path = tempfile.mkstemp(dir=str(self.path.parent), suffix=".tmp")
+        closed = False
+        try:
+            os.write(fd, (json.dumps(data, indent=2) + "\n").encode())
+            os.close(fd)
+            closed = True
+            os.rename(tmp_path, str(self.path))
+        except BaseException:
+            if not closed:
+                os.close(fd)
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            raise
 
     def add_node(self, node_id: str, node_type: str, file: str, line: int | None = None) -> dict:
         """Add or update a node. Preserves risk_score, increments audit_count on update."""
