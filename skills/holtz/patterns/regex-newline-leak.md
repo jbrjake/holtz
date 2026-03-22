@@ -1,7 +1,7 @@
 ---
 name: Regex Newline Leak
-version: "1.0"
-discovered: PAT-001, Bug Hunter run 1
+version: 1
+discovered: 2026-03-19
 languages: [python, javascript, ruby, go]
 categories: [bug/logic, bug/state]
 ---

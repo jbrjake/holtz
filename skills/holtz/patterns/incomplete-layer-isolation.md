@@ -1,7 +1,7 @@
 ---
 name: Incomplete Layer Isolation
-version: "1.0"
-discovered: PAT-002, Holtz self-audit run 2
+version: 1
+discovered: 2026-03-19
 languages: [python, javascript, typescript, java, go, rust]
 categories: [design/inconsistency, bug/logic]
 ---

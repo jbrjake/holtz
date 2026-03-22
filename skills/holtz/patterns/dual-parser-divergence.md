@@ -1,7 +1,7 @@
 ---
 name: Dual Parser Divergence
-version: "1.0"
-discovered: PAT-001, Holtz self-audit run 4
+version: 1
+discovered: 2026-03-19
 languages: [python, javascript, typescript, java, go, rust]
 categories: [bug/logic, design/inconsistency]
 ---

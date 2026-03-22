@@ -1,7 +1,7 @@
 ---
 name: Doc-Spec Drift
-version: "1.0"
-discovered: PAT-002, Bug Hunter run 1
+version: 1
+discovered: 2026-03-19
 languages: []
 categories: [doc/drift, design/inconsistency]
 ---

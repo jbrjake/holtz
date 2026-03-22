@@ -1,7 +1,7 @@
 ---
 name: Code Fence Unaware Parsing
-version: "1.0"
-discovered: PAT-001, Holtz self-audit run 1
+version: 1
+discovered: 2026-03-19
 languages: [python, javascript, ruby, go, rust]
 categories: [bug/logic]
 ---
