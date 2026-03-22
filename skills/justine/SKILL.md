@@ -274,8 +274,9 @@ Same protocol as Holtz — the fix process is disciplined regardless of how find
 For straightforward items where the root cause is obvious from the finding:
 
 1. Write failing test. Verify it fails. Minimal fix. Full suite. Commit.
-2. **Update `docs/justine/PUNCHLIST.md` with resolution IMMEDIATELY after each commit** (status, commit hash, validating test).
-3. Update `docs/justine/STATUS.md` with last completed item ID. If this fix revealed a non-obvious insight, update the Strategy section's Last Insight field.
+2. If mutation data exists from step 0e.1, re-run the mutation tool on the changed function(s) and record the before/after mutation kill rate in the punchlist item's Resolution notes (e.g., 'Mutation kill rate: 67% → 92%'). This is a quality check, not a gate — a fix can proceed even if the mutation score doesn't improve, but it should be noted.
+3. **Update `docs/justine/PUNCHLIST.md` with resolution IMMEDIATELY after each commit** (status, commit hash, validating test).
+4. Update `docs/justine/STATUS.md` with last completed item ID. If this fix revealed a non-obvious insight, update the Strategy section's Last Insight field.
 
 #### Investigation Path
 

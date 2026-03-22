@@ -37,7 +37,7 @@ For each item in either punchlist, classify it into exactly one of the five cate
 | **Severity disagreement** | Same bug found by both, different severity | Keep one copy. Tag `**Found by:** both auditors`. Flag: `**Severity disagreement:** Holtz={X}, Justine={Y}`. Use the higher severity. |
 | **Contradictory** | One auditor says X is a bug, the other explicitly verified X as correct | Flag for human review: `**Contradictory:** Holtz says {X}, Justine says {Y}`. Do not auto-resolve. |
 
-**Note:** Severity disagreement is a sub-case of Agreement. An item classified as "severity disagreement" is also counted as an agreement in the merge report statistics. The disagreement is noted as an annotation, not a separate bucket.
+**Note:** Severity disagreement is a sub-case of Agreement — both auditors found the same bug, they just disagree on severity. In the merge report, severity disagreements are counted in the Agreement section total (e.g., "5 items found by both auditors, including 2 with severity disagreements") and listed individually in the Severity Disagreements section for visibility. They are NOT double-counted in the merged total.
 
 ### "Same Bug" Matching Criteria
 
@@ -54,12 +54,13 @@ If conditions 1 and 2 match but condition 3 does not, the items are **not** the 
 
 ### Processing Order
 
-1. Sort both punchlists by file path, then by category, then by location.
-2. For each Holtz item, scan all Justine items for a match using the criteria above.
-3. Matched pairs are classified as Agreement (or Severity disagreement if severities differ).
-4. Unmatched Holtz items are classified as Holtz-only.
-5. Unmatched Justine items are classified as Justine-only.
-6. Check for contradictions: scan Justine's notes/evidence for explicit statements that a Holtz finding is "not a bug" or "correct behavior" (and vice versa). These override the Holtz-only/Justine-only classification.
+1. Sort both punchlists by file path, then by category, then by location (line numbers sort numerically; function names sort alphabetically; items with line numbers sort before items with only function names).
+2. **Matching is one-to-one.** For each Holtz item, scan all unmatched Justine items for a match using the criteria above. If multiple Justine items match, select the closest by line number (smallest absolute difference). If line distances are equal, select the Justine item with the lower item number. Once a Justine item is matched, it is removed from the candidate pool and cannot match another Holtz item.
+3. **Location-free fallback.** If neither finding in a candidate pair specifies a line number or function/class name, they match on file path + category alone (conditions 1 and 2 are sufficient).
+4. Matched pairs are classified as Agreement (or Severity disagreement if severities differ).
+5. Unmatched Holtz items are classified as Holtz-only.
+6. Unmatched Justine items are classified as Justine-only.
+7. Check for contradictions: scan Justine's notes/evidence for explicit statements that a Holtz finding is "not a bug" or "correct behavior" (and vice versa). These override the Holtz-only/Justine-only classification.
 
 ## Output Files
 
@@ -124,7 +125,7 @@ Post-merge sequence:
 
 1. Holtz reads `PUNCHLIST-MERGED.md` as his worklist.
 2. Holtz runs Phases 4-6 (fix loop, pattern analysis, convergence) on the merged items.
-3. Parent process archives `docs/justine/` to `docs/justine-prior-{ISO date}/` and deletes `docs/justine/impact-graph.json` (its data has been merged into the canonical graph).
+3. Parent process archives `docs/justine/` to `docs/justine-prior-{ISO date}/`, then deletes `docs/justine-prior-{ISO date}/impact-graph.json` from the archive (its data has already been merged into the canonical graph — the archive retains all other files for reference).
 4. Justine is not re-dispatched for the fix loop.
 5. If a full re-audit is needed after fixes, a new adversarial self-play round can be initiated.
 

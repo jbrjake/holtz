@@ -151,11 +151,11 @@ The baseline is not immutable. When drift is detected and determined to be inten
 **Evidence:** Commit a1b2c3d (2026-02-10) added `from cli import parse_args` to utils.py.
 Previously utils.py had zero imports from the CLI layer. git log --oneline utils.py
 shows this is the first CLI import in the file's 18-month history.
-**Severity:** MEDIUM
+**Severity:** HIGH
 **Punchlist item:** BH-042
 ```
 
-The established baseline showed `cli.py → utils.py` (CLI depends on utils). The new import reverses this direction. Escalated because utility modules should not depend on the CLI layer — this creates a circular dependency risk.
+The established baseline showed `cli.py → utils.py` (CLI depends on utils). The new import reverses this direction. Default severity for dependency-reversal is MEDIUM, escalated to HIGH because this creates a circular dependency where none existed (per the escalation rules above). Utility modules should not depend on the CLI layer.
 
 ### Example 2: Boundary Erosion (escalated)
 
@@ -215,7 +215,7 @@ This is a layering breach — the data access layer now depends on the business 
 - **Drift Log is append-only.** Never delete or edit drift entries. They are the historical record of architectural changes.
 - **Evidence must be specific.** Cite commit hashes, file names, line counts, and git history. "Something changed" is not evidence.
 - **Structural Snapshot reflects code, not docs.** If the code disagrees with the docs, the snapshot records what the code does. The disagreement itself may be a `doc/drift` punchlist item.
-- **Compare against the snapshot, not the docs.** Drift is measured as change from the prior structural snapshot, not deviation from documented intent. Deviation from documented intent is a Phase 1 (doc-to-implementation audit) concern, not an architecture baseline concern.
+- **Two kinds of drift.** Structural drift is measured as change from the prior Structural Snapshot (dependency graph, layering, boundaries). Intent drift is measured as deviation from the Documented Intent (stated invariants, boundaries, layering rules). Both are checked during step 0a.1. Structural drift detects changes the code has undergone; intent drift detects promises the code has broken. Phase 1 (doc-to-implementation audit) checks specific testable claims — step 0a.1 checks architectural-level claims that Phase 1's claim-by-claim approach may not catch.
 - **Baseline updates require justification.** When updating the baseline to accept drift, the drift log entry should explain why the change was accepted. Do not silently update the baseline.
 - **First-run behavior:** If no `docs/holtz/architecture-baseline.md` exists, create one during Phase 0 recon. Populate Documented Intent from project docs and Structural Snapshot from code analysis. The Drift Log starts empty.
 - **Subsequent-run behavior:** If the baseline exists, compare the current code structure against the Structural Snapshot. Any differences become Drift Log entries. Then proceed with the normal audit phases.

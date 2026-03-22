@@ -465,7 +465,7 @@ After convergence is reached and before writing the final summary, check whether
 3. Update Architectural Risks from drift log (MEDIUM+ severity entries)
 4. Record prediction accuracy for calibration
 5. Derive new proactive checks from patterns, hotspots, and drift
-6. Move cooled hotspots (risk_score below 0.3) to History with note
+6. Move cooled hotspots (risk_score below 0.3 for two consecutive converged runs) to History with note
 7. Append run summary to History section
 
 **Final:** Updated punchlist + `docs/holtz/SUMMARY.md` (totals, patterns, recommendations, before/after metrics). SUMMARY.md must include a Prediction Accuracy table:
@@ -481,7 +481,7 @@ After convergence is reached and before writing the final summary, check whether
 ```
 
 ## Invocation Modes
-- **Full:** all phases (Justine is dispatched automatically after Phase 0 — see Dispatch Justine section)
+- **Full (Adversarial Self-Play):** all phases — Justine is dispatched automatically after Phase 0 for parallel audit, findings merged before Phase 4 (see Dispatch Justine and Pre-Phase 4 sections)
 - **Targeted:** `"audit the auth module"` — scope to specific dirs (Justine is NOT dispatched for targeted audits)
 - **Continue:** `"work through the punchlist"` — resume Phase 4 (skip Justine dispatch — audit phases are done)
 - **Pattern:** Phase 5 on existing data

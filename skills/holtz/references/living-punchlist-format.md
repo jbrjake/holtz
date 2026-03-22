@@ -192,7 +192,8 @@ The living punchlist and the architecture baseline are the two documents that pe
 
 - **Living punchlist persists across runs.** It is never archived to `docs/holtz-prior-*/`.
 - **Architecture baseline persists across runs.** It is never archived.
-- **Both are updated at the end of each converged run, not during the run.** The auditor reads them during Phase 0 but does not modify them until the run has converged and findings are finalized.
+- **Living punchlist is updated at the end of each converged run, not during the run.** The auditor reads it during Phase 0 but does not modify it until the run has converged and findings are finalized.
+- **Architecture baseline drift log is appended during Phase 0** as drift is detected (step 0a.1). The baseline's Structural Snapshot and Documented Intent sections are updated only at convergence when drift is accepted. This distinction matters: drift log entries are raw observations (safe to write immediately), while snapshot/intent updates are acceptance decisions (deferred until findings are confirmed).
 - **History sections are append-only.** Entries are never deleted or edited. The history is the audit trail.
 - **Justine reads both documents during Phase 0 but does not update them.** Updates happen post-merge by Holtz. This prevents the living punchlist from being modified by in-flight work that might not converge.
 
