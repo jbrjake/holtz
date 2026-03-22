@@ -55,8 +55,10 @@ class ImpactGraph:
             if not text:
                 return
             data = json.loads(text)
-            self.nodes = data.get("nodes") or {}
-            self.edges = data.get("edges") or []
+            nodes = data.get("nodes")
+            edges = data.get("edges")
+            self.nodes = nodes if isinstance(nodes, dict) else {}
+            self.edges = edges if isinstance(edges, list) else []
         except (json.JSONDecodeError, AttributeError):
             self.nodes = {}
             self.edges = []
@@ -118,12 +120,16 @@ class ImpactGraph:
 
         for edge in self.edges:
             if edge["source"] == source and edge["target"] == target and edge["type"] == edge_type:
+                meta = edge.get("metadata")
+                if not isinstance(meta, dict):
+                    meta = {}
+                    edge["metadata"] = meta
                 if note is not None:
-                    edge["metadata"]["note"] = note
+                    meta["note"] = note
                 if confidence is not None:
-                    edge["metadata"]["confidence"] = confidence
+                    meta["confidence"] = confidence
                 if discovered is not None:
-                    edge["metadata"]["discovered"] = discovered
+                    meta["discovered"] = discovered
                 return edge
 
         metadata: dict = {

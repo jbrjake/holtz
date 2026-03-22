@@ -828,3 +828,33 @@ def test_drift_check_binary_file_does_not_block_others(graph, project):
     drifted_ids = [d["id"] for d in result["drifted"]]
     assert "aaa_binary.dat::corrupt" not in drifted_ids  # binary → skipped
     assert "zzz_normal.py::healthy" not in drifted_ids  # text → found at line 1
+
+
+# --- BH-006 (run 7): load() accepts wrong-typed nodes/edges from JSON ---
+
+
+def test_load_json_list_nodes(tmp_path):
+    """JSON with nodes as a list (not dict) should be treated as corrupt, not crash later."""
+    import json
+    graph_file = tmp_path / "graph.json"
+    graph_file.write_text(json.dumps({"nodes": [1, 2, 3], "edges": "not a list"}))
+    g = ImpactGraph(graph_file)
+    g.load()
+    # Should fall back to empty dict/list, not store wrong types
+    assert isinstance(g.nodes, dict), f"Expected dict, got {type(g.nodes).__name__}"
+    assert isinstance(g.edges, list), f"Expected list, got {type(g.edges).__name__}"
+
+
+# --- BH-007 (run 7): add_edge update crashes on edges missing metadata key ---
+
+
+def test_add_edge_update_missing_metadata(graph):
+    """Updating an edge that has no metadata key should not crash."""
+    graph.add_node("a.py::fn_a", "function", "a.py")
+    graph.add_node("b.py::fn_b", "function", "b.py")
+    # Manually insert an edge without metadata (simulating loaded JSON)
+    graph.edges.append({"source": "a.py::fn_a", "target": "b.py::fn_b", "type": "calls"})
+    # Updating should not raise KeyError
+    result = graph.add_edge("a.py::fn_a", "b.py::fn_b", "calls", note="updated")
+    assert "error" not in result
+    assert result.get("metadata", {}).get("note") == "updated"
