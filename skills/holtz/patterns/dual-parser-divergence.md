@@ -1,6 +1,6 @@
 ---
 name: dual-parser-divergence
-version: 1
+version: "1.0.0"
 discovered: 2026-03-19
 languages: [python, javascript, typescript, java, go, rust]
 categories: [bug/logic, design/inconsistency]
@@ -116,3 +116,4 @@ def extract_fields(text):
 - [code-fence-unaware-parsing](code-fence-unaware-parsing.md) — a common divergence point: one parser accounts for fenced blocks, the other does not
 - [missing-edge-case-handling](missing-edge-case-handling.md) — divergent parsers often differ precisely in which edge cases they handle
 - [doc-spec-drift](doc-spec-drift.md) — when specs diverge, implementations built against different spec versions will also diverge
+- [regex-newline-leak](regex-newline-leak.md) — when one parser uses `\s` and another uses `[ \t]`, they produce divergent results on multi-line input

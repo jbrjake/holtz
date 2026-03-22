@@ -1,6 +1,6 @@
 ---
 name: doc-spec-drift
-version: 1
+version: "1.0.0"
 discovered: 2026-03-19
 languages: []
 categories: [doc/drift, design/inconsistency]

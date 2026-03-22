@@ -1,6 +1,6 @@
 ---
 name: missing-edge-case-handling
-version: 1
+version: "1.0.0"
 discovered: 2026-03-19
 languages: [python, javascript, typescript, java, go, rust, ruby]
 categories: [bug/logic, bug/error-handling]

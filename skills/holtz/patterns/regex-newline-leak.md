@@ -1,6 +1,6 @@
 ---
 name: regex-newline-leak
-version: 1
+version: "1.0.0"
 discovered: 2026-03-19
 languages: [python, javascript, ruby, go]
 categories: [bug/logic, bug/state]

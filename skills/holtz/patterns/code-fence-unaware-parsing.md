@@ -1,6 +1,6 @@
 ---
 name: code-fence-unaware-parsing
-version: 1
+version: "1.0.0"
 discovered: 2026-03-19
 languages: [python, javascript, ruby, go, rust]
 categories: [bug/logic]

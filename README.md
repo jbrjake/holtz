@@ -24,7 +24,7 @@ Once installed, the skill activates when you ask Claude to find bugs, audit test
 
 ## What's inside
 
-1 skill, 1 agent, 6 reference docs, 1 example, 4 Python scripts, 1 backstory you probably shouldn't read late at night, and a man who will find what's wrong with your code whether you want him to or not.
+2 skills, 2 agents, 6 reference docs, 1 example, 4 Python scripts, 6 seed patterns, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Who Holtz is
 
@@ -74,9 +74,11 @@ Holtz won't call something CRITICAL unless data loss, security, or a production 
 
 ## Part of a family
 
-Holtz works alongside [Janna](https://github.com/jbrjake/janna), [Giles](https://github.com/jbrjake/giles), and [Snyder](https://github.com/jbrjake/snyder). Janna turns ideas into specs and assembles the team. Giles runs the sprints. Snyder watches every edit in real time. Holtz comes in after — or during, if you're brave enough — and asks the question nobody else asks: does this actually work, or do you just think it does?
+Holtz works alongside Justine, [Janna](https://github.com/jbrjake/janna), [Giles](https://github.com/jbrjake/giles), and [Snyder](https://github.com/jbrjake/snyder). Janna turns ideas into specs and assembles the team. Giles runs the sprints. Snyder watches every edit in real time. Holtz and Justine come in after — or during, if you're brave enough — and ask the question nobody else asks: does this actually work, or do you just think it does?
 
-Snyder prevents sloppiness. Holtz finds what survives prevention. They overlap at the edges and neither of them minds. Janna is the only one Holtz is something close to gentle with. Giles has said, exactly once, that having Holtz review a codebase "concentrates the mind wonderfully." Holtz did not acknowledge the compliment. He was already reading the punchlist.
+Justine is Holtz's complement. Where he's depth-first and methodical, she's breadth-first and fast. Where he traces causal chains through three abstraction layers, she's already found three bugs by looking at the next file over. She rates severity on potential impact, not observed impact — because she knows what it costs when an edge case is rated MEDIUM and the edge case kills someone. She would rather flag ten false positives than let one real bug through. Together they see what neither sees alone.
+
+Snyder prevents sloppiness. Holtz and Justine find what survives prevention. They overlap at the edges and none of them minds. Janna is the only one Holtz is something close to gentle with. Giles has said, exactly once, that having Holtz review a codebase "concentrates the mind wonderfully." Holtz did not acknowledge the compliment. He was already reading the punchlist.
 
 ## License
 

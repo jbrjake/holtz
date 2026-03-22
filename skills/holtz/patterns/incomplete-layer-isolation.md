@@ -1,6 +1,6 @@
 ---
 name: incomplete-layer-isolation
-version: 1
+version: "1.0.0"
 discovered: 2026-03-19
 languages: [python, javascript, typescript, java, go, rust]
 categories: [design/inconsistency, bug/logic]
