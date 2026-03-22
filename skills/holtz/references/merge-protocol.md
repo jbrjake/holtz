@@ -10,7 +10,7 @@ After both auditors reach convergence (or one stalls), the parent process merges
 
 **Inputs:**
 - `docs/holtz/PUNCHLIST.md` — Holtz's findings
-- `docs/justine/PUNCHLIST.md` — Justine's findings
+- `docs/holtz/justine/PUNCHLIST.md` — Justine's findings
 
 **Outputs:**
 - `docs/holtz/PUNCHLIST-MERGED.md` — unified punchlist (Holtz's worklist going forward)
@@ -125,13 +125,13 @@ Post-merge sequence:
 
 1. Holtz reads `PUNCHLIST-MERGED.md` as his worklist.
 2. Holtz runs Phases 4-6 (fix loop, pattern analysis, convergence) on the merged items.
-3. Parent process archives `docs/justine/` to `docs/justine-prior-{ISO date}/`, then deletes `docs/justine-prior-{ISO date}/impact-graph.json` from the archive (its data has already been merged into the canonical graph — the archive retains all other files for reference).
+3. Parent process archives `docs/holtz/justine/` to `docs/holtz/archive/justine-{ISO date}/`, then deletes the archived `impact-graph.json` (its data has already been merged into the canonical graph — the archive retains all other files for reference).
 4. Justine is not re-dispatched for the fix loop.
 5. If a full re-audit is needed after fixes, a new adversarial self-play round can be initiated.
 
 ## Impact Graph Merge
 
-After both auditors complete, merge Justine's impact graph (`docs/justine/impact-graph.json`) into the canonical graph (`docs/holtz/impact-graph.json`). Conflict resolution rules:
+After both auditors complete, merge Justine's impact graph (`docs/holtz/justine/impact-graph.json`) into the canonical graph (`docs/holtz/impact-graph.json`). Conflict resolution rules:
 
 | Conflict | Resolution |
 |----------|-----------|
@@ -141,7 +141,7 @@ After both auditors complete, merge Justine's impact graph (`docs/justine/impact
 | **Node exists in one graph only** | Add it to the canonical graph unchanged. |
 | **Edge exists in one graph only** | Add it to the canonical graph unchanged. |
 
-After the merge, delete `docs/justine/impact-graph.json` — the canonical graph is the single source of truth.
+After the merge, delete `docs/holtz/justine/impact-graph.json` — the canonical graph is the single source of truth.
 
 ## Worked Examples
 

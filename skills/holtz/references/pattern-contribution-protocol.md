@@ -4,7 +4,7 @@ Run this protocol after convergence is reached and before writing the final summ
 
 ## 1. Discover New Patterns
 
-Read `docs/holtz/patterns-brief.md` (or `docs/justine/patterns-brief.md` for Justine — though Justine shares the same brief) and compare each entry against the files in `${CLAUDE_PLUGIN_ROOT}/skills/holtz/patterns/*.md`. A pattern is "new" if no global library file covers the same bug class (semantic match, not name match — a project pattern called "Unguarded Parse" matches a library file covering "Unchecked Deserialization" if they describe the same class of issue).
+Read `docs/holtz/patterns-brief.md` (or `docs/holtz/justine/patterns-brief.md` for Justine — though Justine shares the same brief) and compare each entry against the files in `${CLAUDE_PLUGIN_ROOT}/skills/holtz/patterns/*.md`. A pattern is "new" if no global library file covers the same bug class (semantic match, not name match — a project pattern called "Unguarded Parse" matches a library file covering "Unchecked Deserialization" if they describe the same class of issue).
 
 ## 2. Generalize
 

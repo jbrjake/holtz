@@ -119,7 +119,7 @@ Before starting ANY work, check for existing output files in `docs/holtz/`:
 1. **If `docs/holtz/STATUS.md` exists:** Read it. It tells you exactly where the last run stopped. Resume from that point — do not restart from Phase 0.
 2. **If `docs/holtz/recon/` dir exists but no STATUS file:** A prior run crashed in Phase 0. Check which `docs/holtz/recon/0*.md` files exist. Resume from the first missing step.
 3. **If `docs/holtz/PUNCHLIST.md` exists:** A prior run got past recon. Read it + STATUS to determine if you're in audit (Phases 1-3) or fix loop (Phases 4-6). Resume accordingly.
-4. **If the user says "start fresh" or "re-audit":** Archive the run: move `docs/holtz/` to `docs/holtz-prior-{date}/` as a backup, then create a fresh `docs/holtz/`. **Exception:** `patterns-brief.md`, `patterns-brief-archive.md`, and `impact-graph.json` persist across runs — after the move, copy them from `docs/holtz-prior-{date}/` back into the fresh `docs/holtz/`. The impact graph grows richer over time and should never be discarded. The architecture baseline (`docs/holtz/architecture-baseline.md`) and living punchlist (`docs/holtz/LIVING-PUNCHLIST.md`) also persist across runs — never archive them to `docs/holtz-prior-*/`. The living punchlist is updated at the end of each converged run, not during. The architecture baseline's Drift Log is appended during Phase 0 (step 0a.1) as drift is detected; its Structural Snapshot and Documented Intent sections are updated only at convergence.
+4. **If the user says "start fresh" or "re-audit":** Archive the run: move the current run's files from `docs/holtz/` to `docs/holtz/archive/{date}-run{NN}/` as a backup, then create fresh output files in `docs/holtz/`. **Exception:** `patterns-brief.md`, `patterns-brief-archive.md`, and `impact-graph.json` persist across runs — copy them from the archive back into `docs/holtz/` if they were moved. The impact graph grows richer over time and should never be discarded. The architecture baseline (`docs/holtz/architecture-baseline.md`) and living punchlist (`docs/holtz/LIVING-PUNCHLIST.md`) also persist across runs — never archive them. The living punchlist is updated at the end of each converged run, not during. The architecture baseline's Drift Log is appended during Phase 0 (step 0a.1) as drift is detected; its Structural Snapshot and Documented Intent sections are updated only at convergence.
 5. **If `docs/holtz/SUMMARY.md` exists:** A prior run completed. Ask the user if they want a fresh audit or to review/extend the prior findings.
 
 **Default behavior is RESUME, not restart.** Preserve all prior work unless the user explicitly says otherwise.
@@ -213,7 +213,7 @@ Output: `docs/holtz/recon/0e1-mutation-scan.md` — survival by function (worst 
 **After each step:** update `docs/holtz/STATUS.md` with completed step.
 **After all steps:**
 
-**Recommendation Escalation** — Read [references/recommendation-escalation.md](references/recommendation-escalation.md) and follow the protocol: scan prior `docs/holtz-prior-*/SUMMARY.md` files for recurring recommendations (2+ appearances), escalate each to a punchlist item. If no prior summaries exist, skip this step.
+**Recommendation Escalation** — Read [references/recommendation-escalation.md](references/recommendation-escalation.md) and follow the protocol: scan prior `docs/holtz/archive/*/SUMMARY.md` files for recurring recommendations (2+ appearances), escalate each to a punchlist item. If no prior summaries exist, skip this step.
 
 **Write recon summary:** write `docs/holtz/recon/0g-recon-summary.md` — a SHORT synthesis (this is what you'll re-read later, not the raw files). Update `docs/holtz/STATUS.md` with 0g completion.
 
@@ -235,7 +235,7 @@ Each prediction includes: **Target** (file/function), **Predicted Issue**, **Con
 After Phase 0 completes, dispatch Justine as a background subagent to run her own parallel audit. Use the Agent tool with the `justine` agent:
 
 ```
-Agent(subagent_type="justine", run_in_background=true, prompt="Run a full audit on this codebase. You are being dispatched in parallel with Holtz — write to docs/justine/ and use docs/justine/impact-graph.json for your impact graph. Leave docs/holtz/architecture-baseline.md and docs/holtz/LIVING-PUNCHLIST.md untouched. Run through convergence, then stop. Report completion by writing docs/justine/SUMMARY.md. Holtz handles the merge and fix loop.")
+Agent(subagent_type="justine", run_in_background=true, prompt="Run a full audit on this codebase. You are being dispatched in parallel with Holtz — write to docs/holtz/justine/ and use docs/holtz/justine/impact-graph.json for your impact graph. Leave docs/holtz/architecture-baseline.md and docs/holtz/LIVING-PUNCHLIST.md untouched. Run through convergence, then stop. Report completion by writing docs/holtz/justine/SUMMARY.md. Holtz handles the merge and fix loop.")
 ```
 
 Continue immediately with Phase 1. Justine runs in parallel — that is the point. Check for her results before entering Phase 4.
@@ -285,13 +285,13 @@ Priority order: error paths, boundaries, state transitions, external integration
 
 Before starting any fix work, check whether Justine has produced results:
 
-1. **Check for Justine's output.** If `docs/justine/PUNCHLIST.md` exists, Justine has findings to merge.
-2. **If Justine is still running** (no `docs/justine/SUMMARY.md` and no `docs/justine/PUNCHLIST.md`), check her `docs/justine/STATUS.md` for stall indicators: STATUS.md not updated in >30 minutes, or 3 consecutive fix iterations with no progress. If stalled, proceed with whatever she has. If she's still actively working, wait — her breadth-first pass is fast.
+1. **Check for Justine's output.** If `docs/holtz/justine/PUNCHLIST.md` exists, Justine has findings to merge.
+2. **If Justine is still running** (no `docs/holtz/justine/SUMMARY.md` and no `docs/holtz/justine/PUNCHLIST.md`), check her `docs/holtz/justine/STATUS.md` for stall indicators: STATUS.md not updated in >30 minutes, or 3 consecutive fix iterations with no progress. If stalled, proceed with whatever she has. If she's still actively working, wait — her breadth-first pass is fast.
 3. **If Justine has results**, run the merge protocol per [references/merge-protocol.md](references/merge-protocol.md):
    - Classify findings: agreements, Holtz-only, Justine-only, severity disagreements, contradictions
    - Produce `docs/holtz/PUNCHLIST-MERGED.md` (unified worklist) and `docs/holtz/MERGE-REPORT.md` (statistics + blind spot analysis)
-   - Merge impact graphs: Justine's `docs/justine/impact-graph.json` into canonical `docs/holtz/impact-graph.json` (higher risk_score wins, audit_count summed, notes merged), then delete Justine's graph
-   - Archive Justine's audit: move `docs/justine/` to `docs/justine-prior-{ISO date}/`
+   - Merge impact graphs: Justine's `docs/holtz/justine/impact-graph.json` into canonical `docs/holtz/impact-graph.json` (higher risk_score wins, audit_count summed, notes merged), then delete Justine's graph
+   - Archive Justine's audit: move `docs/holtz/justine/` to `docs/holtz/archive/justine-{ISO date}/`
 4. **If no Justine output exists** (she wasn't dispatched or produced nothing), proceed with `docs/holtz/PUNCHLIST.md` as the worklist.
 
 ### Phase 4: Fix Loop (TDD)

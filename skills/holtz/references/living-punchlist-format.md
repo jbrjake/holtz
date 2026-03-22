@@ -1,6 +1,6 @@
 # Living Punchlist Format
 
-This file defines the format for `docs/holtz/LIVING-PUNCHLIST.md` — the document Holtz uses to maintain a persistent vulnerability model across all audit runs. Unlike per-run punchlists (which get archived to `docs/holtz-prior-*/` after each run), the living punchlist is cumulative and persists indefinitely.
+This file defines the format for `docs/holtz/LIVING-PUNCHLIST.md` — the document Holtz uses to maintain a persistent vulnerability model across all audit runs. Unlike per-run punchlists (which get archived to `docs/holtz/archive/` after each run), the living punchlist is cumulative and persists indefinitely.
 
 The living punchlist provides institutional memory. It records which bug classes the project is susceptible to, which code areas repeatedly produce bugs, what structural weaknesses exist, and what detection heuristics should be applied to every new change. Over time, it becomes a calibrated risk model: the prediction accuracy section tracks which signals are reliable for this specific project.
 
@@ -188,9 +188,9 @@ The living punchlist is updated at specific points in the Holtz workflow — nev
 
 ## Persistence Rules
 
-The living punchlist and the architecture baseline are the two documents that persist across runs. All other Holtz artifacts (per-run punchlist, STATUS.md, investigation files, 0h-predictions.md, etc.) get archived to `docs/holtz-prior-*/` at the start of each new run.
+The living punchlist and the architecture baseline are the two documents that persist across runs. All other Holtz artifacts (per-run punchlist, STATUS.md, investigation files, 0h-predictions.md, etc.) get archived to `docs/holtz/archive/` at the start of each new run.
 
-- **Living punchlist persists across runs.** It is never archived to `docs/holtz-prior-*/`.
+- **Living punchlist persists across runs.** It is never archived to `docs/holtz/archive/`.
 - **Architecture baseline persists across runs.** It is never archived.
 - **Living punchlist is updated at the end of each converged run, not during the run.** The auditor reads it during Phase 0 but does not modify it until the run has converged and findings are finalized.
 - **Architecture baseline drift log is appended during Phase 0** as drift is detected (step 0a.1). The baseline's Structural Snapshot and Documented Intent sections are updated only at convergence when drift is accepted. This distinction matters: drift log entries are raw observations (safe to write immediately), while snapshot/intent updates are acceptance decisions (deferred until findings are confirmed).

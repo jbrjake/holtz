@@ -1,6 +1,6 @@
 # Recommendation Escalation Protocol
 
-Before writing the recon summary, read the Recommendations section of every `docs/holtz-prior-*/SUMMARY.md` file (or `docs/justine-prior-*/SUMMARY.md` for Justine). Identify any recommendation that appears *in substance* (semantic match, not verbatim — e.g., "add mypy" and "configure a type checker" are the same recommendation) in 2 or more prior summaries. For each match, create a punchlist item. If the punchlist file does not exist yet, create it with proper file structure first (see punchlist-format.md File Structure section).
+Before writing the recon summary, read the Recommendations section of every `docs/holtz/archive/*/SUMMARY.md` file (or `docs/holtz/archive/justine-*/SUMMARY.md` for Justine). Identify any recommendation that appears *in substance* (semantic match, not verbatim — e.g., "add mypy" and "configure a type checker" are the same recommendation) in 2 or more prior summaries. For each match, create a punchlist item. If the punchlist file does not exist yet, create it with proper file structure first (see punchlist-format.md File Structure section).
 
 ## Escalated Item Template
 
@@ -8,7 +8,7 @@ Before writing the recon summary, read the Recommendations section of every `doc
 ### {ID}: {recommendation title}
 **Severity:** MEDIUM
 **Category:** design/inconsistency
-**Location:** docs/{auditor}-prior-*/SUMMARY.md
+**Location:** docs/holtz/archive/*/SUMMARY.md
 **Status:** OPEN
 
 **Problem:** This recommendation has appeared in {N} consecutive audit summaries

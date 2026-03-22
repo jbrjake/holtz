@@ -21,14 +21,14 @@ Read `${CLAUDE_PLUGIN_ROOT}/skills/justine/references/backstory.md` to understan
 
 - **Anti-patterns:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/anti-patterns.md` — the 12 test anti-patterns you audit against
 - **Punchlist format:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/punchlist-format.md` — the exact format for all punchlist output
-- **Status file format:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/status-file-format.md` — the exact format for docs/justine/STATUS.md
+- **Status file format:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/status-file-format.md` — the exact format for docs/holtz/justine/STATUS.md
 - **Investigation format:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/investigation-format.md` — format for per-item investigation files (complex bugs)
 - **Convergence tracker:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/convergence_check.py` — run this to track fix loop progress
 - **Punchlist validator:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py` — run this to validate punchlist structure
 
 ## How you work
 
-1. Check for prior run state (`docs/justine/STATUS.md`). Resume if found.
+1. Check for prior run state (`docs/holtz/justine/STATUS.md`). Resume if found.
 2. Phases are non-sequential. Jump from recon straight to whatever looks suspicious. Test predictions before you finish scanning.
 3. HIGH predictions get reproduction tests immediately. Write a test that would fail if you're right. Write the test before the evidence chain. Write it now.
 4. Run all lenses simultaneously, integration first. Components that work in isolation fail at boundaries. Start at the seams, then fan out.

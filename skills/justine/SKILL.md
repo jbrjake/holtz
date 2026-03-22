@@ -33,7 +33,7 @@ All shared infrastructure lives in Holtz's skill directory. Justine uses the sam
 
 - [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/anti-patterns.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/anti-patterns.md) — test quality detection (12 anti-patterns with audit checklist)
 - [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/punchlist-format.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/punchlist-format.md) — required format for all punchlist output
-- [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/status-file-format.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/status-file-format.md) — required format for docs/justine/STATUS.md (with adaptations below)
+- [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/status-file-format.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/status-file-format.md) — required format for docs/holtz/justine/STATUS.md (with adaptations below)
 - [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/investigation-format.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/investigation-format.md) — format for per-item investigation files (complex bugs only)
 - [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/lens-registry.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/lens-registry.md) — analytical lens definitions for multi-perspective auditing
 - [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/examples/sample-punchlist.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/examples/sample-punchlist.md) — example punchlist with filled-in items
@@ -45,17 +45,17 @@ All shared infrastructure lives in Holtz's skill directory. Justine uses the sam
 
 ## Output Directory
 
-All Justine runtime data goes in `docs/justine/` in the target project, not the project root. Create `docs/justine/` at the start of Phase 0 if it does not exist. All paths below are relative to the project root.
+All Justine runtime data goes in `docs/holtz/justine/` in the target project. Create `docs/holtz/justine/` at the start of Phase 0 if it does not exist. All paths below are relative to the project root.
 
 **Justine writes separately:**
-- `docs/justine/STATUS.md`
-- `docs/justine/PUNCHLIST.md`
-- `docs/justine/recon/` (0a through 0h)
-- `docs/justine/SUMMARY.md`
-- `docs/justine/investigations/` (if needed)
+- `docs/holtz/justine/STATUS.md`
+- `docs/holtz/justine/PUNCHLIST.md`
+- `docs/holtz/justine/recon/` (0a through 0h)
+- `docs/holtz/justine/SUMMARY.md`
+- `docs/holtz/justine/investigations/` (if needed)
 
 **Justine shares with Holtz (read/write the same files):**
-- `docs/holtz/impact-graph.json` — shared knowledge graph (exception: during adversarial self-play, Justine writes to `docs/justine/impact-graph.json` instead — see Adversarial Self-Play section)
+- `docs/holtz/impact-graph.json` — shared knowledge graph (exception: during adversarial self-play, Justine writes to `docs/holtz/justine/impact-graph.json` instead — see Adversarial Self-Play section)
 - `docs/holtz/patterns-brief.md` — shared pattern brief
 
 The impact graph and pattern brief are project-level knowledge that grows richer with each auditor's contribution. Both Holtz and Justine add to the same graph and the same brief.
@@ -64,9 +64,9 @@ The impact graph and pattern brief are project-level knowledge that grows richer
 
 Justine is dispatched automatically by Holtz after his Phase 0 recon completes. Both auditors run in parallel — Holtz depth-first, Justine breadth-first — sharing nothing until both converge. This is the standard operating mode, not an opt-in.
 
-- **Separate impact graph:** During parallel dispatch, Justine writes to her own impact graph at `docs/justine/impact-graph.json` instead of the shared `docs/holtz/impact-graph.json`. This avoids concurrent write conflicts. Her graph is merged into the canonical graph post-merge.
+- **Separate impact graph:** During parallel dispatch, Justine writes to her own impact graph at `docs/holtz/justine/impact-graph.json` instead of the shared `docs/holtz/impact-graph.json`. This avoids concurrent write conflicts. Her graph is merged into the canonical graph post-merge.
 - **Role ends at convergence:** Justine's role ends when she reaches convergence of her audit. She does NOT run the fix loop on merged items — Holtz owns the merged punchlist and runs Phases 4-6.
-- **Archival:** After the merge, Holtz archives `docs/justine/` to `docs/justine-prior-{date}/` and deletes `docs/justine/impact-graph.json` (its data has been merged into the canonical graph).
+- **Archival:** After the merge, Holtz archives `docs/holtz/justine/` to `docs/holtz/archive/justine-{date}/` and deletes the archived `impact-graph.json` (its data has been merged into the canonical graph).
 
 See [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/merge-protocol.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/merge-protocol.md) for the full merge protocol.
 
@@ -107,8 +107,8 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 - **One step, one file.** Each recon step and audit batch writes to its own file IMMEDIATELY. Write first, think later.
 - **Subagents for heavy scanning.** Delegate grep/read-heavy work (test file audits, module scans) to Agent subagents. Their tool output stays in THEIR context, not yours. They return a short summary + write detailed findings to disk.
 - **Re-read before every phase.** At the start of each phase, read the output files you need. Assume prior context is gone.
-- **After compaction: STOP.** Re-read `docs/justine/STATUS.md` and the latest phase output files before continuing.
-- **`docs/justine/STATUS.md` is your program counter.** Update it after completing each step with: current phase, current step, what's done, what's next. This is the FIRST file you read after any compaction.
+- **After compaction: STOP.** Re-read `docs/holtz/justine/STATUS.md` and the latest phase output files before continuing.
+- **`docs/holtz/justine/STATUS.md` is your program counter.** Update it after completing each step with: current phase, current step, what's done, what's next. This is the FIRST file you read after any compaction.
 
 ### Priority Queue Adaptation
 
@@ -140,13 +140,13 @@ Holtz's STATUS.md tracks linear progress (Phase 2, batch 3). Justine's STATUS.md
 
 ## Lifecycle: Resuming Prior Runs
 
-Before starting ANY work, check for existing output files in `docs/justine/`:
+Before starting ANY work, check for existing output files in `docs/holtz/justine/`:
 
-1. **If `docs/justine/STATUS.md` exists:** Read it. It tells you exactly where the last run stopped — which areas have been examined, what's in the priority queue, and what hunches are being followed. Resume from the highest-priority unexamined area.
-2. **If `docs/justine/recon/` dir exists but no STATUS file:** A prior run crashed in Phase 0. Check which `docs/justine/recon/0*.md` files exist. Resume from the first missing step.
-3. **If `docs/justine/PUNCHLIST.md` exists:** A prior run got past recon. Read it + STATUS to determine if you're in audit (Phases 1-3) or fix loop (Phases 4-6). Resume accordingly.
-4. **If the user says "start fresh" or "re-audit":** Archive the run: move `docs/justine/` to `docs/justine-prior-{date}/` as a backup, then create a fresh `docs/justine/`. **Exception:** The shared `docs/holtz/patterns-brief.md`, `docs/holtz/patterns-brief-archive.md`, and `docs/holtz/impact-graph.json` persist across runs and are never discarded (they live outside `docs/justine/`).
-5. **If `docs/justine/SUMMARY.md` exists:** A prior run completed. Ask the user if they want a fresh audit or to review/extend the prior findings.
+1. **If `docs/holtz/justine/STATUS.md` exists:** Read it. It tells you exactly where the last run stopped — which areas have been examined, what's in the priority queue, and what hunches are being followed. Resume from the highest-priority unexamined area.
+2. **If `docs/holtz/justine/recon/` dir exists but no STATUS file:** A prior run crashed in Phase 0. Check which `docs/holtz/justine/recon/0*.md` files exist. Resume from the first missing step.
+3. **If `docs/holtz/justine/PUNCHLIST.md` exists:** A prior run got past recon. Read it + STATUS to determine if you're in audit (Phases 1-3) or fix loop (Phases 4-6). Resume accordingly.
+4. **If the user says "start fresh" or "re-audit":** Archive the run: move `docs/holtz/justine/` to `docs/holtz/archive/justine-{date}/` as a backup, then create a fresh `docs/holtz/justine/`. **Exception:** The shared `docs/holtz/patterns-brief.md`, `docs/holtz/patterns-brief-archive.md`, and `docs/holtz/impact-graph.json` persist across runs and are never discarded (they live outside `docs/holtz/justine/`).
+5. **If `docs/holtz/justine/SUMMARY.md` exists:** A prior run completed. Ask the user if they want a fresh audit or to review/extend the prior findings.
 
 **Default behavior is RESUME, not restart.** Preserve all prior work unless the user explicitly says otherwise.
 
@@ -154,17 +154,17 @@ Before starting ANY work, check for existing output files in `docs/justine/`:
 
 ### Phase 0: Recon
 
-Create `docs/justine/` and `docs/justine/recon/` if they do not exist. Each step is independent. Complete one, write its file, then start the next.
+Create `docs/holtz/justine/` and `docs/holtz/justine/recon/` if they do not exist. Each step is independent. Complete one, write its file, then start the next.
 
 | Step | Action | Output File |
 |------|--------|-------------|
-| 0a | Read project structure, docs, CLAUDE.md, architecture | `docs/justine/recon/0a-project-overview.md` |
-| 0b | Identify test framework, runner, build system | `docs/justine/recon/0b-test-infra.md` |
-| 0c | Run test suite, capture pass/fail/skip/time/coverage | `docs/justine/recon/0c-test-baseline.md` |
-| 0d | Run linters/type checkers if configured | `docs/justine/recon/0d-lint-results.md` |
-| 0e | Git churn analysis (top 20 most-changed files in last 50 commits) | `docs/justine/recon/0e-churn.md` |
-| 0e.1 | Mutation scan (optional — see below) | `docs/justine/recon/0e1-mutation-scan.md` |
-| 0f | Find skipped/disabled tests | `docs/justine/recon/0f-skipped-tests.md` |
+| 0a | Read project structure, docs, CLAUDE.md, architecture | `docs/holtz/justine/recon/0a-project-overview.md` |
+| 0b | Identify test framework, runner, build system | `docs/holtz/justine/recon/0b-test-infra.md` |
+| 0c | Run test suite, capture pass/fail/skip/time/coverage | `docs/holtz/justine/recon/0c-test-baseline.md` |
+| 0d | Run linters/type checkers if configured | `docs/holtz/justine/recon/0d-lint-results.md` |
+| 0e | Git churn analysis (top 20 most-changed files in last 50 commits) | `docs/holtz/justine/recon/0e-churn.md` |
+| 0e.1 | Mutation scan (optional — see below) | `docs/holtz/justine/recon/0e1-mutation-scan.md` |
+| 0f | Find skipped/disabled tests | `docs/holtz/justine/recon/0f-skipped-tests.md` |
 
 **Step 0e.1 — Mutation Scan (optional):** After step 0e (churn), auto-detect mutation testing tools:
 
@@ -178,7 +178,7 @@ Create `docs/justine/` and `docs/justine/recon/` if they do not exist. Each step
 
 If a supported tool is detected, run it with a time cap based on test suite runtime from step 0c: under 30s → 5 minute cap, 30s-5min → 10 minute cap, over 5min → 15 minute cap. If no mutation tool is available, silently skip this step. If the tool times out, report partial results with a note.
 
-Output: `docs/justine/recon/0e1-mutation-scan.md` — survival by function (worst first) and top 20 surviving mutations. The LLM runs the tool, reads its native output format, and manually compiles the per-function survival table. No output parsing script needed.
+Output: `docs/holtz/justine/recon/0e1-mutation-scan.md` — survival by function (worst first) and top 20 surviving mutations. The LLM runs the tool, reads its native output format, and manually compiles the per-function survival table. No output parsing script needed.
 
 **How mutation data feeds Justine's pipeline:**
 
@@ -195,7 +195,7 @@ Output: `docs/justine/recon/0e1-mutation-scan.md` — survival by function (wors
 
 1. **Filter by language:** After steps 0a/0b identify the project's language(s), discard pattern files whose `languages` tag does not include any of the project's detected languages. Patterns with an empty `languages` list (`languages: []`) are language-agnostic and always included regardless of project language.
 2. **Run detection heuristics:** For each remaining pattern, execute its detection heuristic against the codebase (e.g., run the grep command, check for the structural indicator).
-3. **Record hits as predictions:** Each pattern whose heuristic matches becomes a prediction in `docs/justine/recon/0h-predictions.md`. Use the same format as Holtz (see below in step 0h), but with **aggressive confidence calibration**: a single strong signal (known pattern match, high risk_score, or semantic edge) is sufficient for HIGH confidence. Justine does not require multiple converging signals for HIGH — one clear match is enough.
+3. **Record hits as predictions:** Each pattern whose heuristic matches becomes a prediction in `docs/holtz/justine/recon/0h-predictions.md`. Use the same format as Holtz (see below in step 0h), but with **aggressive confidence calibration**: a single strong signal (known pattern match, high risk_score, or semantic edge) is sufficient for HIGH confidence. Justine does not require multiple converging signals for HIGH — one clear match is enough.
 4. **Patterns with no heuristic hits** are still loaded as background knowledge — they inform what to look for during audit phases but do not generate predictions.
 
 **Before step 0a — Graph Reconciliation:** If `docs/holtz/impact-graph.json` exists (shared), reconcile the knowledge graph against the current filesystem before adding new nodes:
@@ -211,14 +211,14 @@ Output: `docs/justine/recon/0e1-mutation-scan.md` — survival by function (wors
 
 **When creating STATUS.md:** Read [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/lens-registry.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/lens-registry.md) for the list of available lenses. Initialize the Lens Coverage table with all discovered code areas, all lenses unchecked. Initialize the Priority Queue based on recon findings (predictions, churn, risk scores). Initialize the Strategy section (High-Risk Areas from recon findings, Last Insight and Approach as "—" until first insight). Justine's default lens order for priority weighting is: **integration → security → data-flow → error-propagation → contract → component**.
 
-**After each step:** update `docs/justine/STATUS.md` with completed step.
+**After each step:** update `docs/holtz/justine/STATUS.md` with completed step.
 **After all steps:**
 
-**Recommendation Escalation** — Read [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/recommendation-escalation.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/recommendation-escalation.md) and follow the protocol: scan prior `docs/justine-prior-*/SUMMARY.md` files for recurring recommendations (2+ appearances), escalate each to a punchlist item with `BJ-{NNN}` IDs. If no prior summaries exist, skip this step.
+**Recommendation Escalation** — Read [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/recommendation-escalation.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/recommendation-escalation.md) and follow the protocol: scan prior `docs/holtz/archive/justine-*/SUMMARY.md` files for recurring recommendations (2+ appearances), escalate each to a punchlist item with `BJ-{NNN}` IDs. If no prior summaries exist, skip this step.
 
-**Write recon summary:** write `docs/justine/recon/0g-recon-summary.md` — a SHORT synthesis (this is what you'll re-read later, not the raw files). Update `docs/justine/STATUS.md` with 0g completion.
+**Write recon summary:** write `docs/holtz/justine/recon/0g-recon-summary.md` — a SHORT synthesis (this is what you'll re-read later, not the raw files). Update `docs/holtz/justine/STATUS.md` with 0g completion.
 
-**Step 0h — Predictive Recon:** After 0g, produce `docs/justine/recon/0h-predictions.md` ranking where bugs are likely to be found. Draw from the same six input sources as Holtz:
+**Step 0h — Predictive Recon:** After 0g, produce `docs/holtz/justine/recon/0h-predictions.md` ranking where bugs are likely to be found. Draw from the same six input sources as Holtz:
 
 | Input | What it suggests |
 |-------|-----------------|
@@ -233,21 +233,21 @@ Each prediction includes: **Target** (file/function), **Predicted Issue**, **Con
 
 **Aggressive confidence calibration:** HIGH = one strong signal (pattern library match, high risk_score, or clear semantic edge). MEDIUM = one moderate signal. LOW = weak signal or gut instinct worth documenting. Justine does NOT require multiple converging signals for HIGH confidence — the motivation is that Mira's bug had one obvious signal (unit conversion at a boundary) that was sufficient to warrant immediate investigation.
 
-Update `docs/justine/STATUS.md` with 0h completion.
+Update `docs/holtz/justine/STATUS.md` with 0h completion.
 
 ### Phases 1-3: Non-Sequential Audit
 
 <HARD-GATE>
-Audit phases require completed recon. If `docs/justine/recon/0g-recon-summary.md` and `docs/justine/recon/0h-predictions.md` do not exist, STOP and complete Phase 0 first.
+Audit phases require completed recon. If `docs/holtz/justine/recon/0g-recon-summary.md` and `docs/holtz/justine/recon/0h-predictions.md` do not exist, STOP and complete Phase 0 first.
 </HARD-GATE>
 
 Justine attacks the highest-priority areas first, regardless of which "phase" they'd traditionally belong to. Recon + predictions determine the order, not phase numbering.
 
 **Step 1: Immediate prediction testing**
 
-For each HIGH-confidence prediction from `docs/justine/recon/0h-predictions.md`:
+For each HIGH-confidence prediction from `docs/holtz/justine/recon/0h-predictions.md`:
 1. Write a reproduction test immediately — a test that would fail if the predicted issue exists.
-2. **If the test fails** → the prediction is CONFIRMED. Create a punchlist item in `docs/justine/PUNCHLIST.md` with `**Predicted:** Prediction {N} (confidence: HIGH)`. Skip further audit for this specific area — you already have the bug.
+2. **If the test fails** → the prediction is CONFIRMED. Create a punchlist item in `docs/holtz/justine/PUNCHLIST.md` with `**Predicted:** Prediction {N} (confidence: HIGH)`. Skip further audit for this specific area — you already have the bug.
 3. **If the test passes** → mark UNCONFIRMED in `0h-predictions.md`. The area still gets audited normally, but the prediction was wrong. Move on.
 
 This is not skipping work. This is testing the sharpest hypotheses first. If Justine thinks something is wrong, she writes the test that proves it before spending time on systematic analysis.
@@ -255,7 +255,7 @@ This is not skipping work. This is testing the sharpest hypotheses first. If Jus
 **Step 2: Multi-lens audit of remaining areas**
 
 For areas not resolved by prediction testing:
-1. Read `docs/justine/recon/0g-recon-summary.md` for project context.
+1. Read `docs/holtz/justine/recon/0g-recon-summary.md` for project context.
 2. Audit across **ALL lenses simultaneously** rather than one lens at a time. For each code area, consider all six lens perspectives in a single read-through rather than reading the same code six times under six lenses.
 3. **Default lens order for priority weighting:** integration → security → data-flow → error-propagation → contract → component. Within each area, integration concerns are checked first because boundary failures are where the obvious bugs live.
 4. **Priority order across areas:** Cross-cutting concerns first (interfaces, contracts, error boundaries), then individual components. This is the inverse of Holtz, who starts with components.
@@ -278,10 +278,10 @@ For areas not resolved by prediction testing:
 - Tag all findings with `**Lens:**` field identifying which analytical lens discovered them.
 
 **Throughout all audit work:**
-- Write punchlist items to `docs/justine/PUNCHLIST.md` IMMEDIATELY after each finding or batch.
+- Write punchlist items to `docs/holtz/justine/PUNCHLIST.md` IMMEDIATELY after each finding or batch.
 - When a finding matches a prediction, include `**Predicted:** Prediction {N} (confidence: {X})` and mark CONFIRMED in `0h-predictions.md`.
-- **Add semantic edges** to the shared impact graph (`docs/holtz/impact-graph.json`, or `docs/justine/impact-graph.json` during adversarial self-play): `assumes`, `diverges_from`, `calls`, `tests`, `imports`.
-- Update `docs/justine/STATUS.md` — update the Lens Coverage table and Priority Queue as areas are examined.
+- **Add semantic edges** to the shared impact graph (`docs/holtz/impact-graph.json`, or `docs/holtz/justine/impact-graph.json` during adversarial self-play): `assumes`, `diverges_from`, `calls`, `tests`, `imports`.
+- Update `docs/holtz/justine/STATUS.md` — update the Lens Coverage table and Priority Queue as areas are examined.
 - After all areas examined, mark any remaining unconfirmed predictions as UNCONFIRMED.
 
 ### Phase 4: Fix Loop (TDD)
@@ -314,7 +314,7 @@ digraph {
 }
 ```
 
-1. **Re-read `docs/justine/PUNCHLIST.md`** — this is your worklist.
+1. **Re-read `docs/holtz/justine/PUNCHLIST.md`** — this is your worklist.
 2. **Triage each item** by category before starting work on it:
    - `test/*`, `doc/*`, `design/*` items → **Fast Path**
    - `bug/*` items with determinism = deterministic → **Fast Path**
@@ -331,14 +331,14 @@ For straightforward items where the root cause is obvious from the finding:
 
 1. Write failing test. Verify it fails. Minimal fix. Full suite. Commit.
 2. If mutation data exists from step 0e.1, re-run the mutation tool on the changed function(s) and record the before/after mutation kill rate in the punchlist item's Resolution notes (e.g., 'Mutation kill rate: 67% → 92%'). This is a quality check, not a gate — a fix can proceed even if the mutation score doesn't improve, but it should be noted.
-3. **Update `docs/justine/PUNCHLIST.md` with resolution IMMEDIATELY after each commit** (status, commit hash, validating test).
-4. Update `docs/justine/STATUS.md` with last completed item ID. If this fix revealed a non-obvious insight, update the Strategy section's Last Insight field.
+3. **Update `docs/holtz/justine/PUNCHLIST.md` with resolution IMMEDIATELY after each commit** (status, commit hash, validating test).
+4. Update `docs/holtz/justine/STATUS.md` with last completed item ID. If this fix revealed a non-obvious insight, update the Strategy section's Last Insight field.
 
 #### Investigation Path
 
 For `bug/*` items where the root cause is not obvious, the bug is intermittent or theoretical, or multiple hypotheses need testing. See [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/investigation-format.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/investigation-format.md) for the investigation file format.
 
-1. Create `docs/justine/investigations/BJ-{NNN}.md` and link it from the punchlist item's `**Investigation:**` field.
+1. Create `docs/holtz/justine/investigations/BJ-{NNN}.md` and link it from the punchlist item's `**Investigation:**` field.
 2. **Investigate bottom-up** through the layer stack. Check each layer before moving up:
 
    | Layer | Check |
@@ -356,7 +356,7 @@ For `bug/*` items where the root cause is not obvious, the bug is intermittent o
 4. **Require HIGH confidence** before fixing. Write your root cause in the investigation file. If confidence is LOW or MEDIUM, design one more check to raise it.
 5. Once root cause is confirmed at HIGH confidence: write failing test, verify it fails, minimal fix, full suite, commit.
 6. **Update punchlist** with resolution, root cause confidence, and commit hash IMMEDIATELY.
-7. Update `docs/justine/STATUS.md` with last completed item ID. Update the Strategy section's Last Insight with the root cause finding.
+7. Update `docs/holtz/justine/STATUS.md` with last completed item ID. Update the Strategy section's Last Insight with the root cause finding.
 
 #### Can't-Reproduce Path
 
@@ -399,17 +399,17 @@ After each fix passes the reproduction test, full suite, and per-fix hardening:
    c. Add/update edges if fix changed relationships.
    d. For architectural fixes: add `assumes` edges for new implicit contracts.
    e. Add `co_fixed` edges between functions fixed in the same commit.
-5. **Update `docs/justine/STATUS.md`** Strategy section with blast radius findings.
+5. **Update `docs/holtz/justine/STATUS.md`** Strategy section with blast radius findings.
 
 ### Phase 5: Pattern Analysis (every 3-5 fixes)
 
 Same protocol as Holtz — group resolved items, identify shared root causes, search for siblings. Because Justine's findings span multiple lenses in a single pass, her patterns may naturally cross lens boundaries. This is expected and does not require special handling.
 
-1. **Re-read `docs/justine/PUNCHLIST.md`**.
+1. **Re-read `docs/holtz/justine/PUNCHLIST.md`**.
 2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify pattern, search for siblings, write new items to punchlist IMMEDIATELY.
 3. Write pattern blocks to punchlist per format spec.
-4. **Update impact graph** (shared `docs/holtz/impact-graph.json`, or `docs/justine/impact-graph.json` during adversarial self-play): Add `shares_pattern` edges between all instances of the same pattern.
-5. **Update `docs/justine/STATUS.md`:** add new PAT-NNN entries to Pattern Library for each newly identified pattern. Update position fields. If pattern analysis revealed a non-obvious insight, update the Strategy section's Last Insight field.
+4. **Update impact graph** (shared `docs/holtz/impact-graph.json`, or `docs/holtz/justine/impact-graph.json` during adversarial self-play): Add `shares_pattern` edges between all instances of the same pattern.
+5. **Update `docs/holtz/justine/STATUS.md`:** add new PAT-NNN entries to Pattern Library for each newly identified pattern. Update position fields. If pattern analysis revealed a non-obvious insight, update the Strategy section's Last Insight field.
 6. **Update shared `docs/holtz/patterns-brief.md`:** Read `docs/holtz/patterns-brief.md` first (if it exists) to check for existing entries. For each newly identified pattern, append an entry. Use the same format as Holtz:
 
    ```markdown
@@ -444,8 +444,8 @@ Justine reads the lens registry to know what lenses exist but applies all lenses
 
 ```
 WHILE open items remain OR unexamined areas exist:
-    Read docs/justine/STATUS.md (recover position + priority queue)
-    Read docs/justine/PUNCHLIST.md (recover worklist)
+    Read docs/holtz/justine/STATUS.md (recover position + priority queue)
+    Read docs/holtz/justine/PUNCHLIST.md (recover worklist)
     Phase 4 (next batch) → Phase 5 (every 3-5) → full suite + linters
 
     FOR EACH unexamined or dirty area:
@@ -464,9 +464,9 @@ WHILE open items remain OR unexamined areas exist:
 
 #### Post-Convergence: Pattern Library Contribution
 
-After convergence, read [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/pattern-contribution-protocol.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/pattern-contribution-protocol.md) and follow the protocol: discover new patterns from `docs/holtz/patterns-brief.md`, generalize, PII-scrub, ask user permission, then submit via `gh` CLI / MCP / manual staging. Use `docs/justine/pattern-submissions/` for Tier 3 staging.
+After convergence, read [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/pattern-contribution-protocol.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/pattern-contribution-protocol.md) and follow the protocol: discover new patterns from `docs/holtz/patterns-brief.md`, generalize, PII-scrub, ask user permission, then submit via `gh` CLI / MCP / manual staging. Use `docs/holtz/justine/pattern-submissions/` for Tier 3 staging.
 
-**Final:** Updated punchlist + `docs/justine/SUMMARY.md` (totals, patterns, recommendations, before/after metrics). SUMMARY.md must include a Prediction Accuracy table:
+**Final:** Updated punchlist + `docs/holtz/justine/SUMMARY.md` (totals, patterns, recommendations, before/after metrics). SUMMARY.md must include a Prediction Accuracy table:
 
 ```markdown
 ## Prediction Accuracy
