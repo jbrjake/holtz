@@ -45,10 +45,20 @@ All Justine runtime data goes in `docs/justine/` in the target project, not the 
 - `docs/justine/investigations/` (if needed)
 
 **Justine shares with Holtz (read/write the same files):**
-- `docs/holtz/impact-graph.json` — shared knowledge graph
+- `docs/holtz/impact-graph.json` — shared knowledge graph (exception: during adversarial self-play, Justine writes to `docs/justine/impact-graph.json` instead — see Adversarial Self-Play section)
 - `docs/holtz/patterns-brief.md` — shared pattern brief
 
 The impact graph and pattern brief are project-level knowledge that grows richer with each auditor's contribution. Both Holtz and Justine add to the same graph and the same brief.
+
+## Adversarial Self-Play
+
+Justine can be dispatched in parallel with Holtz for adversarial self-play. In this mode:
+
+- **Separate impact graph:** During parallel dispatch, Justine writes to her own impact graph at `docs/justine/impact-graph.json` instead of the shared `docs/holtz/impact-graph.json`. This avoids concurrent write conflicts. Her graph is merged into the canonical graph post-merge.
+- **Role ends at convergence:** Justine's role ends when she reaches convergence of her audit. She does NOT run the fix loop on merged items — Holtz owns the merged punchlist and runs Phases 4-6.
+- **Archival:** After the merge, the parent process archives `docs/justine/` to `docs/justine-prior-{date}/` and deletes `docs/justine/impact-graph.json` (its data has been merged into the canonical graph).
+
+See [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/merge-protocol.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/merge-protocol.md) for the full merge protocol.
 
 ## Core Rules
 
@@ -127,7 +137,31 @@ Create `docs/justine/` and `docs/justine/recon/` if they do not exist. Each step
 | 0c | Run test suite, capture pass/fail/skip/time/coverage | `docs/justine/recon/0c-test-baseline.md` |
 | 0d | Run linters/type checkers if configured | `docs/justine/recon/0d-lint-results.md` |
 | 0e | Git churn analysis (top 20 most-changed files in last 50 commits) | `docs/justine/recon/0e-churn.md` |
+| 0e.1 | Mutation scan (optional — see below) | `docs/justine/recon/0e1-mutation-scan.md` |
 | 0f | Find skipped/disabled tests | `docs/justine/recon/0f-skipped-tests.md` |
+
+**Step 0e.1 — Mutation Scan (optional):** After step 0e (churn), auto-detect mutation testing tools:
+
+| Language | Tool | Detection |
+|----------|------|-----------|
+| Python | mutmut | `mutmut` in PATH or `[tool.mutmut]` in `pyproject.toml` |
+| JavaScript/TypeScript | Stryker | `stryker.conf.js` / `stryker.conf.mjs` or `@stryker-mutator` in `package.json` |
+| Rust | cargo-mutants | `cargo-mutants` in PATH |
+| Go | go-mutesting | `go-mutesting` in PATH |
+| Java/Kotlin | PIT | `pitest` in `pom.xml` or `build.gradle` |
+
+If a supported tool is detected, run it with a time cap based on test suite runtime from step 0c: under 30s → 5 minute cap, 30s-5min → 10 minute cap, over 5min → 15 minute cap. If no mutation tool is available, silently skip this step. If the tool times out, report partial results with a note.
+
+Output: `docs/justine/recon/0e1-mutation-scan.md` — survival by function (worst first) and top 20 surviving mutations.
+
+**How mutation data feeds Justine's pipeline:**
+
+| Consumer | How it uses mutation data |
+|----------|-------------------------|
+| **Predictions (0h)** | Functions with >40% mutation survival become predictions. With Justine's aggressive calibration, a single strong mutation signal is sufficient for HIGH confidence. |
+| **Impact graph** | `update_risk` on nodes based on survival rate: >50% survival → +0.3, 30-50% → +0.2, 10-30% → +0.1 |
+| **Test quality checks** | Mutation data as evidence for Rubber Stamp (#11) and Permissive Validator (#12) — checked FIRST and at ONE SEVERITY LEVEL HIGHER per Justine's override |
+| **Phase 4 (fix loop)** | After writing reproduction test and fix, re-run mutations on changed function to verify improved kill rate. Record before/after score in Resolution notes. Quality check, not gate. |
 
 **Before step 0a:** If `docs/holtz/patterns-brief.md` exists (shared), read it to load known patterns from prior runs. These patterns inform what to look for during audit phases. Optionally read `docs/holtz/patterns-brief-archive.md` for additional historical context if investigating a specific pattern class.
 
@@ -144,6 +178,10 @@ Create `docs/justine/` and `docs/justine/recon/` if they do not exist. Each step
 2. **`drift_check`** — Run `${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py drift_check --project-root .` to flag nodes whose file exists but entity is absent or line number has shifted >10 lines. Resolve each flag: update the node's line number (preserving risk_score/edges) via `add_node`, or prune if the entity was truly removed.
 3. **Stale edge verification (LLM-driven)** — Verify `calls` and `imports` edges by grepping for the call/import in the source file. Remove severed relationships. `assumes` and `diverges_from` edges are NOT verified here — they require re-evaluation during Phases 1-3 since the semantic relationship may still hold even if code moved.
 4. **Add new nodes** — Files and functions discovered in recon that aren't in the graph get new nodes via `add_node`. Add `imports` edges by reading code.
+
+**Temporal Awareness (read-only):** If `docs/holtz/architecture-baseline.md` exists, read it to understand the project's architectural structure and any prior drift. If `docs/holtz/LIVING-PUNCHLIST.md` exists, read it and feed its proactive checks into step 0h predictions as HIGH-confidence items (with Justine's aggressive calibration, these are auto-promoted to HIGH).
+
+**Important:** Justine reads these documents but does NOT update them. Architecture baseline updates and living punchlist maintenance happen post-merge by Holtz. See [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/architecture-baseline-format.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/architecture-baseline-format.md) and [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/living-punchlist-format.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/living-punchlist-format.md) for format details.
 
 **When creating STATUS.md:** Read [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/lens-registry.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/lens-registry.md) for the list of available lenses. Initialize the Lens Coverage table with all discovered code areas, all lenses unchecked. Initialize the Priority Queue based on recon findings (predictions, churn, risk scores). Initialize the Strategy section (High-Risk Areas from recon findings, Last Insight and Approach as "—" until first insight). Justine's default lens order for priority weighting is: **integration → security → data-flow → error-propagation → contract → component**.
 
