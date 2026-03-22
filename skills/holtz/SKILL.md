@@ -82,6 +82,7 @@ Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is 
 | 0c | Run test suite, capture pass/fail/skip/time/coverage | `docs/holtz/recon/0c-test-baseline.md` |
 | 0d | Run linters/type checkers if configured | `docs/holtz/recon/0d-lint-results.md` |
 | 0e | Git churn analysis (top 20 most-changed files in last 50 commits) | `docs/holtz/recon/0e-churn.md` |
+| 0e.1 | Mutation scan (optional — see below) | `docs/holtz/recon/0e1-mutation-scan.md` |
 | 0f | Find skipped/disabled tests | `docs/holtz/recon/0f-skipped-tests.md` |
 
 **Step 0e.1 — Mutation Scan (optional):** After step 0e (churn), auto-detect mutation testing tools:
