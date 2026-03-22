@@ -81,7 +81,7 @@ def parse_punchlist(content: str, *, _masked: tuple[str, str] | None = None) -> 
     items = []
     # Split on item headers (### BH-NNN: title) in masked content
     # so headers inside code fences are not matched
-    item_pattern = re.compile(r'^### (BH-\d+):\s+(.+)$', re.MULTILINE)
+    item_pattern = re.compile(r'^### (BH-\d+):[ \t]*(.*)$', re.MULTILINE)
     masked_matches = list(item_pattern.finditer(masked))
 
     # Map character offsets between masked and normalized using line numbers.
@@ -214,8 +214,9 @@ def parse_punchlist(content: str, *, _masked: tuple[str, str] | None = None) -> 
         evidence_content = _section_from_original('Evidence')
         item.has_evidence = bool(evidence_content and len(evidence_content.strip()) > 10)
 
-        # Discovery Chain: presence check only (header exists in masked content)
-        item.has_discovery_chain = bool(re.search(HEADER_RE % 'Discovery Chain', masked_block))
+        # Discovery Chain: presence check — must be at start of line (field header position),
+        # not mid-line in prose (e.g., "missing a **Discovery Chain:** section").
+        item.has_discovery_chain = bool(re.search(r'^\*\*Discovery Chain:\*\*', masked_block, re.MULTILINE))
 
         # Checkbox detection: scoped to Acceptance Criteria section in masked block
         ac_m = re.search(SECTION_RE % 'Acceptance Criteria', masked_block)
@@ -234,7 +235,7 @@ def parse_punchlist(content: str, *, _masked: tuple[str, str] | None = None) -> 
             # require the closing fence to have at least as many chars
             # of the same type, per CommonMark spec.
             opener = re.search(
-                _vc_header + r' {0,3}(`{3,}|~{3,})\w*\n', vc_region)
+                _vc_header + r' {0,3}(`{3,}|~{3,})[^\n]*\n', vc_region)
             if opener:
                 fence_char = opener.group(1)[0]
                 fence_len = len(opener.group(1))

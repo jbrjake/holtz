@@ -2141,3 +2141,104 @@ grep -c "Predicted:" docs/predictions.md
     assert len(items) == 1
     result = vp.validate(items, content)
     assert len(result.errors) == 0
+
+
+# --- BH-002 (run 7): Item header regex \s+ crosses newlines on empty title ---
+
+
+def test_empty_title_does_not_swallow_severity():
+    """Item with empty title (nothing after colon) should not swallow the next line."""
+    content = """\
+### BH-001:
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** This is a real problem that describes what went wrong in enough detail.
+
+**Evidence:** Here is the evidence showing the problem with code references.
+
+**Discovery Chain:** found X → leads to Y
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    item = items[0]
+    assert item.severity == "HIGH", (
+        f"Severity should be 'HIGH', not swallowed into title. "
+        f"Title: {item.title!r}, Severity: {item.severity!r}"
+    )
+
+
+# --- BH-003 (run 7): VC opener regex rejects trailing whitespace ---
+
+
+def test_validation_command_trailing_space_after_lang():
+    """Trailing space after language tag in VC fence should still extract the command."""
+    # NOTE: The "```bash " line below has a deliberate trailing space after "bash"
+    content = (
+        "### BH-001: Test item\n"
+        "**Severity:** HIGH\n"
+        "**Category:** bug/logic\n"
+        "**Location:** `file.py:1`\n"
+        "**Status:** OPEN\n"
+        "\n"
+        "**Problem:** This is a real problem that describes what went wrong in enough detail.\n"
+        "\n"
+        "**Evidence:** Here is the evidence showing the problem with code references.\n"
+        "\n"
+        "**Acceptance Criteria:**\n"
+        "- [ ] Fix the bug\n"
+        "\n"
+        "**Validation Command:**\n"
+        "```bash \n"  # trailing space after "bash"
+        "echo trailing_space_test\n"
+        "```\n"
+    )
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].has_validation_command, (
+        "Trailing space after language tag should not prevent VC extraction"
+    )
+    assert "trailing_space_test" in items[0].validation_command, (
+        f"Should extract command, got: '{items[0].validation_command}'"
+    )
+
+
+# --- BH-004 (run 7): Discovery Chain substring match false positive ---
+
+
+def test_discovery_chain_in_prose_not_counted():
+    """**Discovery Chain:** appearing in Problem prose should not satisfy the requirement."""
+    content = """\
+### BH-001: Test item
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `file.py:1`
+**Status:** OPEN
+
+**Problem:** The item is missing a **Discovery Chain:** section which should be added.
+
+**Evidence:** Evidence text here with enough content to pass threshold.
+
+**Acceptance Criteria:**
+- [ ] Fix the bug
+
+**Validation Command:**
+```bash
+echo test
+```
+"""
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert not items[0].has_discovery_chain, (
+        "**Discovery Chain:** in Problem prose should not satisfy the requirement"
+    )
