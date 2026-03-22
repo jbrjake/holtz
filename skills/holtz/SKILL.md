@@ -28,6 +28,7 @@ Operate as Holtz — see [references/backstory.md](references/backstory.md) for 
 - `scripts/validate_punchlist.py` — validate punchlist structure
 - `scripts/convergence_check.py` — track fix loop progress
 - `scripts/impact_graph.py` — knowledge graph operations (add/query/update/prune) + CLI
+- `patterns/*.md` — global pattern library (language-tagged, reusable across projects)
 
 ## Output Directory
 
@@ -81,6 +82,25 @@ Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is 
 | 0f | Find skipped/disabled tests | `docs/holtz/recon/0f-skipped-tests.md` |
 
 **Before step 0a:** If `docs/holtz/patterns-brief.md` exists, read it to load known patterns from prior runs. These patterns inform what to look for during audit phases. Optionally read `docs/holtz/patterns-brief-archive.md` for additional historical context if investigating a specific pattern class.
+
+**Before step 0a — Global Pattern Library Scan:** Read all pattern files at `${CLAUDE_PLUGIN_ROOT}/skills/holtz/patterns/*.md`. Each pattern file contains a `languages` tag in its YAML frontmatter and a `Detection Heuristic` section with an executable check (grep pattern, structural query, or similar).
+
+1. **Filter by language:** After steps 0a/0b identify the project's language(s), discard pattern files whose `languages` tag does not include any of the project's detected languages.
+2. **Run detection heuristics:** For each remaining pattern, execute its detection heuristic against the codebase (e.g., run the grep command, check for the structural indicator).
+3. **Record hits as predictions:** Each pattern whose heuristic matches becomes a HIGH-confidence prediction in `docs/holtz/recon/0h-predictions.md`. The confidence is HIGH because two independent signals converge: the pattern is a known, validated bug class from the global library, and the detection heuristic produced a concrete match in this codebase. Use this format for library-sourced predictions:
+
+   ```markdown
+   ### Prediction {N}
+   **Target:** {file(s)/function(s) where heuristic matched}
+   **Predicted Issue:** {pattern name} — {pattern description from library}
+   **Confidence:** HIGH
+   **Basis:** Global pattern library match (`{pattern-file.md}`) + detection heuristic hit
+   **Lens:** {lens from pattern's categories}
+   **Graph Support:** —
+   **Outcome:** {CONFIRMED/UNCONFIRMED — filled in after relevant phase}
+   ```
+
+4. **Patterns with no heuristic hits** are still loaded as background knowledge — they inform what to look for during audit phases but do not generate predictions.
 
 **Before step 0a — Graph Reconciliation:** If `docs/holtz/impact-graph.json` exists, reconcile the knowledge graph against the current filesystem before adding new nodes:
 
@@ -320,6 +340,55 @@ WHILE open items remain OR unlensed perspectives exist:
         - IF clean → CONVERGED
         - IF findings → add to punchlist, reset affected lenses to incomplete
 ```
+
+#### Post-Convergence: Pattern Library Contribution
+
+After convergence is reached and before writing the final summary, check whether this run discovered patterns worth contributing to the global Holtz pattern library.
+
+1. **Discover new patterns:** Read `docs/holtz/patterns-brief.md` and compare each entry against the files in `${CLAUDE_PLUGIN_ROOT}/skills/holtz/patterns/*.md`. A pattern is "new" if no global library file covers the same bug class (semantic match, not name match — a project pattern called "Unguarded Parse" matches a library file covering "Unchecked Deserialization" if they describe the same class of issue).
+
+2. **Generalize:** For each new pattern, create a scrubbed pattern file with:
+   - **YAML frontmatter:** `name`, `version` (start at `1.0.0`), `discovered` (today's date), `languages` (from the project's detected languages), `categories` (relevant lens/category tags)
+   - **Required sections:** Description, Detection Heuristic (must be executable — a grep pattern, structural check, or command), Indicators, Example (generic, not project-specific), Related Patterns
+
+3. **PII scrubbing — mandatory before any external submission.** Remove ALL of the following:
+   - File paths specific to the project
+   - Function, class, or variable names specific to the project
+   - Business logic or domain terminology
+   - Any content that could identify the project, its authors, or its users
+   - Configuration values, API keys, URLs, environment details
+
+   The resulting pattern file must read as completely generic — someone reading it should not be able to determine which project it came from.
+
+4. **Ask permission** before any GitHub interaction:
+
+   > "This run discovered {N} patterns not in the upstream Holtz pattern library:
+   > - {pattern name 1}: {one-line description}
+   > - {pattern name 2}: {one-line description}
+   >
+   > Would you like me to submit a PR to github.com/jbrjake/holtz adding these
+   > to the global pattern library? All project-specific details will be scrubbed.
+   > You can review the PR before it's merged."
+
+5. **If approved, try tiers in order 1 → 2 → 3 with graceful fallback:**
+
+   **Tier 1 — `gh` CLI available:**
+   Verify `gh auth status` succeeds. Fork `github.com/jbrjake/holtz` (or use existing fork). Create branch `patterns/{pattern-name}`. Add scrubbed pattern file(s) to `skills/holtz/patterns/`. Open PR via `gh pr create` with title `feat(patterns): add {pattern name}` and body describing the pattern, detection heuristic, and discovery context (scrubbed).
+
+   **Tier 2 — GitHub MCP server available (no `gh` CLI):**
+   Check for GitHub-related MCP tools. Use MCP to fork, create branch, commit files, and open PR with the same title and body format as Tier 1.
+
+   **Tier 3 — No programmatic GitHub access:**
+   Write the scrubbed pattern file(s) to `docs/holtz/pattern-submissions/`. Generate `docs/holtz/pattern-submissions/PR-BODY.md` containing the PR title, full body text, and the pattern file content inline (so the user can copy-paste). Present:
+
+   > "I don't have programmatic access to GitHub. I've staged the pattern file(s)
+   > and a draft PR body at `docs/holtz/pattern-submissions/`. To submit:
+   >
+   > 1. Fork the repo: https://github.com/jbrjake/holtz/fork
+   > 2. Add the pattern file(s) to `skills/holtz/patterns/` in your fork
+   > 3. Open a PR using the body in `PR-BODY.md`"
+
+6. **If declined:** No action. The pattern remains in the project-specific pattern brief only.
 
 **Final:** Updated punchlist + `docs/holtz/SUMMARY.md` (totals, patterns, recommendations, before/after metrics). SUMMARY.md must include a Prediction Accuracy table:
 
