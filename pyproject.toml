@@ -17,3 +17,4 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--cov=skills/holtz/scripts --cov-report=term-missing --cov-fail-under=0"

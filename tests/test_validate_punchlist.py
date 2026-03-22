@@ -2277,3 +2277,33 @@ echo test
     assert not items[0].has_discovery_chain, (
         "**Discovery Chain:** in Problem prose should not satisfy the requirement"
     )
+
+
+# --- BH-002 (run 7): make_item builder fixture ---
+
+
+def test_make_item_defaults_produce_valid_item(make_item):
+    """make_item() with no overrides should produce a valid, parseable item."""
+    content = make_item(wrap=True)
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    result = vp.validate(items, content)
+    assert len(result.errors) == 0, (
+        f"make_item defaults should produce zero errors, got: {result.errors}"
+    )
+
+
+def test_make_item_severity_override(make_item):
+    """make_item(severity='CRITICAL') should override the default severity."""
+    content = make_item(severity="CRITICAL")
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert items[0].severity == "CRITICAL"
+
+
+def test_make_item_empty_problem(make_item):
+    """make_item(problem='') should produce an item with empty problem."""
+    content = make_item(problem="")
+    items = vp.parse_punchlist(content)
+    assert len(items) == 1
+    assert not items[0].has_problem
