@@ -105,6 +105,8 @@ Write `docs/holtz/recon/0g-recon-summary.md` — a SHORT synthesis (this is what
 
 ## Step 0h — Predictive Recon
 
+Use extended thinking (ultrathink) for this step — synthesizing six input sources into ranked predictions requires deep reasoning.
+
 After 0g, produce `docs/holtz/recon/0h-predictions.md` ranking where bugs are likely to be found. Draw from six input sources:
 
 | Input | What it suggests |

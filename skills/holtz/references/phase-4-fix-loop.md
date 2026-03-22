@@ -50,6 +50,8 @@ For straightforward items where the root cause is obvious from the finding:
 
 ## Investigation Path
 
+Use extended thinking (ultrathink) for this phase — root cause analysis through six abstraction layers requires deep reasoning.
+
 For `bug/*` items where the root cause is not obvious, the bug is intermittent or theoretical, or multiple hypotheses need testing. See [investigation-format.md](investigation-format.md) for the investigation file format.
 
 1. Create an investigation file and link it from the punchlist item's `**Investigation:**` field.

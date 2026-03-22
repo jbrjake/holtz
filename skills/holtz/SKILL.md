@@ -13,7 +13,7 @@ allowed-tools: Read, Edit, Write, Bash, Grep, Glob, Agent
 
 # Holtz: TDD-Driven Bug Identification & Resolution
 
-**Skill type: RIGID** — Follow exactly. Complete every phase in order. Do not adapt, skip, or reorder steps.
+**Skill type: RIGID** — Follow exactly. Complete every phase in sequential order.
 
 Announce: "Running Holtz [phase/action] on [target]."
 
@@ -143,7 +143,7 @@ Read [references/impact-graph-operations.md](references/impact-graph-operations.
 After Phase 0 completes, dispatch Justine as a background subagent to run her own parallel audit. Use the Agent tool with the `justine` agent:
 
 ```
-Agent(subagent_type="justine", run_in_background=true, prompt="Run a full audit on this codebase. You are being dispatched in parallel with Holtz — write to docs/holtz/justine/ and use docs/holtz/justine/impact-graph.json for your impact graph. Leave docs/holtz/architecture-baseline.md and docs/holtz/LIVING-PUNCHLIST.md untouched. Run through convergence, then stop. Report completion by writing docs/holtz/justine/SUMMARY.md. Holtz handles the merge and fix loop.")
+Agent(subagent_type="justine", run_in_background=true, prompt="Run a full audit on this codebase. You are being dispatched in parallel with Holtz — write to docs/holtz/justine/ and use docs/holtz/justine/impact-graph.json for your impact graph. Leave docs/holtz/architecture-baseline.md and docs/holtz/LIVING-PUNCHLIST.md untouched. Run through convergence, then stop. Report completion by writing docs/holtz/justine/SUMMARY.md. Holtz handles the merge and fix loop. This is an autonomous execution context — choose the most conservative default for ambiguities and proceed. Report NEEDS_CONTEXT only if the task is genuinely impossible without human input.")
 ```
 
 Continue immediately with Phase 1. Justine runs in parallel — that is the point. Check for her results before entering Phase 4.
@@ -173,7 +173,7 @@ Use **Agent subagents** for this phase when possible — each subagent audits a 
 
 1. Read `docs/holtz/recon/0g-recon-summary.md` for test file locations and `docs/holtz/recon/0h-predictions.md` for predicted areas
 2. Partition test files into batches (3-5 files each). **Prioritize predicted areas first.**
-3. **Subagent brief:** Instruct each subagent to: (a) read `docs/holtz/patterns-brief.md` before starting, (b) check known patterns against the code being reviewed, (c) write findings to disk before returning, (d) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT.
+3. **Subagent brief:** Instruct each subagent to: (a) read `docs/holtz/patterns-brief.md` before starting, (b) check known patterns against the code being reviewed, (c) write findings to disk before returning, (d) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT, (e) choose the most conservative default for ambiguities — report NEEDS_CONTEXT only if genuinely impossible without human input. **When reviewing subagent output:** verify findings by reading actual code. Subagents may have missed context or misidentified patterns. Confirm each finding before it enters the punchlist.
 4. For each batch: audit per [references/anti-patterns.md](references/anti-patterns.md), write punchlist items to `docs/holtz/PUNCHLIST.md` IMMEDIATELY after each batch. Tag findings matching predictions with `**Predicted:**` field and mark CONFIRMED in `0h-predictions.md`. When mutation data is available from step 0e.1, use it as concrete evidence when scoring Rubber Stamp (#11) and Permissive Validator (#12) — a test that passes but doesn't kill mutations for the function it covers is a prime candidate for these anti-patterns.
 5. **Add semantic edges** (`tests`, `assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). Run `stats` after the phase to verify edges were added.
 6. Update `docs/holtz/STATUS.md`. Mark unconfirmed predictions for this phase as UNCONFIRMED.
@@ -185,7 +185,7 @@ If not using subagents: audit one file at a time, write findings before opening 
 Same subagent strategy. Partition source modules into batches.
 
 1. Read `docs/holtz/recon/0g-recon-summary.md`, `docs/holtz/recon/0e-churn.md`, and `docs/holtz/recon/0h-predictions.md`. **Prioritize predicted areas first**, then high-churn files.
-2. **Subagent brief:** Instruct each subagent to read `docs/holtz/patterns-brief.md` before starting its audit batch. Known patterns from prior runs should be checked against the code being reviewed.
+2. **Subagent brief:** Instruct each subagent to: (a) read `docs/holtz/patterns-brief.md` before starting, (b) check known patterns against the code being reviewed, (c) write findings to disk before returning, (d) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT, (e) choose the most conservative default for ambiguities. **When reviewing subagent output:** verify findings by reading actual code. Confirm each finding before it enters the punchlist.
 3. For each module batch: review for bugs, write punchlist items IMMEDIATELY. Tag findings matching predictions with `**Predicted:**` field and mark CONFIRMED in `0h-predictions.md`. Tag findings with `**Lens:**` field identifying which analytical lens discovered them.
 4. **For `bug/*` items:** assess determinism and record in the punchlist item's `**Determinism:**` field. Is this bug deterministic (specific trigger), intermittent (timing/load/ordering dependent), or theoretical (identified from code analysis, not yet observed)? This determines the reproduction strategy in Phase 4.
 5. **Add semantic edges** (`calls`, `assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). Run `stats` after the phase to verify edges were added.
@@ -219,6 +219,8 @@ Read [references/impact-graph-operations.md](references/impact-graph-operations.
 5. **Update punchlist and STATUS.md IMMEDIATELY after each commit**
 
 ### Phase 5: Pattern Analysis (every 3-5 fixes)
+
+Use extended thinking (ultrathink) for this phase — cross-finding pattern discovery and sibling search require deep reasoning.
 
 1. **Re-read `docs/holtz/PUNCHLIST.md`**
 2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify pattern, search for siblings, write new items to punchlist IMMEDIATELY
@@ -257,31 +259,42 @@ Read [references/lens-registry.md](references/lens-registry.md) for the full set
 - **NO_PROGRESS:** 3 consecutive iterations with no items resolved. Stop and report.
 - **CONTEXT_BUDGET:** If context utilization exceeds 60%, compact proactively — re-read STATUS.md and worklist after compaction.
 
-```
-WHILE open items remain OR unlensed perspectives exist:
-    Read docs/holtz/STATUS.md (recover position + active lens)
-    Read docs/holtz/PUNCHLIST.md (recover worklist)
-    Phase 4 (next batch) → Phase 5 (every 3-5) → full suite + linters
+```dot
+digraph {
+  rankdir=TB
+  node [shape=box]
 
-    IF within current lens:
-        - zero OPEN/IN PROGRESS items AND
-        - no new items in 2 consecutive iterations AND
-        - test suite stable or improving
-    THEN mark current lens COMPLETE in STATUS.md
+  recover [label="Read STATUS.md\n+ PUNCHLIST.md\n(recover position + active lens)"]
+  fix_loop [label="Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"]
+  breaker [label="Circuit breaker\ntriggered?" shape=diamond]
+  stop [label="STOP\nReport to user"]
+  lens_clean [label="Current lens:\nzero OPEN items AND\nno new items (2 iters)\nAND suite stable?" shape=diamond]
+  mark [label="Mark current lens\nCOMPLETE in STATUS.md"]
+  switch [label="Switch lens?\n(COMPLETE OR\n3 consecutive LOW)" shape=diamond]
+  next_lens [label="Select next lens from registry\nUpdate Active Lens in STATUS.md\nRun Phases 1-3 scoped to\nnew lens focus + entry point"]
+  all_done [label="All lenses\nCOMPLETE?" shape=diamond]
+  final [label="Final sweep:\nALL lenses simultaneously"]
+  clean [label="Clean?" shape=diamond]
+  converged [label="CONVERGED"]
+  reset [label="Add findings to punchlist\nReset affected lenses\nto incomplete"]
 
-    IF current lens should switch (any of):
-        - current lens marked COMPLETE
-        - last 3 consecutive findings added under current lens are all LOW severity
-    THEN:
-        - select next lens from registry (skip completed lenses)
-        - update Active Lens in STATUS.md
-        - run Phases 1-3 scoped to new lens's focus and entry point
-        - continue Phase 4-5 loop
-
-    IF all lenses COMPLETE:
-        - run final sweep across ALL lenses simultaneously
-        - IF clean → CONVERGED
-        - IF findings → add to punchlist, reset affected lenses to incomplete
+  recover -> fix_loop
+  fix_loop -> breaker
+  breaker -> stop [label="yes"]
+  breaker -> lens_clean [label="no"]
+  lens_clean -> mark [label="yes"]
+  lens_clean -> recover [label="no\n(continue fixing)"]
+  mark -> switch
+  switch -> next_lens [label="yes"]
+  switch -> all_done [label="no"]
+  next_lens -> recover
+  all_done -> final [label="yes"]
+  all_done -> recover [label="no"]
+  final -> clean
+  clean -> converged [label="yes"]
+  clean -> reset [label="no"]
+  reset -> recover
+}
 ```
 
 #### Post-Convergence: Pattern Library Contribution

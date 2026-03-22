@@ -13,7 +13,7 @@ allowed-tools: Read, Edit, Write, Bash, Grep, Glob, Agent
 
 # Justine: Breadth-First Adversarial Bug Identification & Resolution
 
-**Skill type: RIGID** — Follow exactly. Complete every phase. Convergence is mandatory, not optional.
+**Skill type: RIGID** — Follow exactly. Complete every phase. Convergence is mandatory.
 
 Announce: "Running Justine [phase/action] on [target]."
 
@@ -197,7 +197,7 @@ For areas not resolved by prediction testing:
 3. **Default lens order for priority weighting:** integration → security → data-flow → error-propagation → contract → component. Within each area, integration concerns are checked first because boundary failures are where the obvious bugs live.
 4. **Priority order across areas:** Cross-cutting concerns first (interfaces, contracts, error boundaries), then individual components. This is the inverse of Holtz, who starts with components.
 5. Use **Agent subagents** for batch audits when possible. Each subagent audits a code area across all lenses and writes findings directly to a temp file. You merge them into the punchlist.
-6. **Subagent brief:** Instruct each subagent to: (a) read `docs/holtz/patterns-brief.md` (shared) before starting, (b) check known patterns against the code, (c) write findings to disk before returning, (d) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT.
+6. **Subagent brief:** Instruct each subagent to: (a) read `docs/holtz/patterns-brief.md` (shared) before starting, (b) check known patterns against the code, (c) write findings to disk before returning, (d) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT, (e) choose the most conservative default for ambiguities — report NEEDS_CONTEXT only if genuinely impossible without human input. **When reviewing subagent output:** verify findings by reading actual code. Subagents may have missed context or misidentified patterns. Confirm each finding before it enters the punchlist.
 
 **Doc-to-implementation checks (Phase 1 scope):**
 - Extract testable claims from project docs.
@@ -236,6 +236,8 @@ Read [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/impact-graph-operations.md`
 **Severity calibration override:** Justine rates on **potential impact**, not observed impact. A bug that "only" triggers on edge cases is rated by what happens when it triggers. Mira's bug only triggered on specific medications with microgram dosing. It was an edge case. It killed someone.
 
 ### Phase 5: Pattern Analysis (every 3-5 fixes)
+
+Use extended thinking (ultrathink) for this phase — cross-finding pattern discovery and sibling search require deep reasoning.
 
 Same protocol as Holtz — group resolved items, identify shared root causes, search for siblings. Because Justine's findings span multiple lenses in a single pass, her patterns may naturally cross lens boundaries. This is expected and does not require special handling.
 
@@ -276,22 +278,29 @@ Justine reads the lens registry to know what lenses exist but applies all lenses
 - **NO_PROGRESS:** 3 consecutive iterations with no items resolved. Stop and report.
 - **CONTEXT_BUDGET:** If context utilization exceeds 60%, compact proactively — re-read STATUS.md and priority queue after compaction.
 
-```
-WHILE open items remain OR unexamined areas exist:
-    Read docs/holtz/justine/STATUS.md (recover position + priority queue)
-    Read docs/holtz/justine/PUNCHLIST.md (recover worklist)
-    Phase 4 (next batch) → Phase 5 (every 3-5) → full suite + linters
+```dot
+digraph {
+  rankdir=TB
+  node [shape=box]
 
-    FOR EACH unexamined or dirty area:
-        - Single-pass audit across ALL lenses simultaneously
-        - For each code area, consider all 6 lens perspectives
-          in one read-through (single pass, all lenses at once)
-        - Default lens order within the pass:
-          integration → security → data-flow →
-          error-propagation → contract → component
+  recover [label="Read STATUS.md\n+ PUNCHLIST.md\n(recover position + priority queue)"]
+  fix_loop [label="Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"]
+  breaker [label="Circuit breaker\ntriggered?" shape=diamond]
+  stop [label="STOP\nReport to user"]
+  scan [label="Single-pass audit:\nALL lenses simultaneously\n(integration → security →\ndata-flow → error-propagation\n→ contract → component)"]
+  found [label="New findings\nacross any area?" shape=diamond]
+  converged [label="CONVERGED"]
+  add [label="Add findings to punchlist"]
 
-    IF zero findings across all lenses for all areas → CONVERGED
-    IF findings → add to punchlist → fix → single-pass again
+  recover -> fix_loop
+  fix_loop -> breaker
+  breaker -> stop [label="yes"]
+  breaker -> scan [label="no"]
+  scan -> found
+  found -> converged [label="zero findings\nacross all areas"]
+  found -> add [label="findings exist"]
+  add -> recover
+}
 ```
 
 **Trade-off acknowledged:** Justine's single-pass convergence is faster but provides a lower depth guarantee than Holtz's per-lens sequential convergence. This is intentional. Justine finds the bugs that are visible on a broad sweep. Holtz finds the bugs that require exhaustive depth. Together they cover the full spectrum.
