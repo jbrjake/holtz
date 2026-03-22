@@ -257,9 +257,9 @@ def parse_punchlist(content: str, *, _masked: tuple[str, str] | None = None) -> 
 def validate(items: list[PunchlistItem], content: str = "", masked_content: str = "") -> ValidationResult:
     """Validate parsed punchlist items."""
     result = ValidationResult()
-    status_counts = Counter()
-    severity_counts = Counter()
-    category_counts = Counter()
+    status_counts: Counter[str] = Counter()
+    severity_counts: Counter[str] = Counter()
+    category_counts: Counter[str] = Counter()
     pattern_refs = set()
     seen_ids: set[str] = set()
 

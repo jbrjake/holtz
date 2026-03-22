@@ -366,17 +366,17 @@ def main() -> None:
 
     elif args.command == "neighbors":
         types = args.types.split(",") if args.types else None
-        result = g.neighbors(args.id, types=types)
-        print(json.dumps(result, indent=2))
+        neighbors = g.neighbors(args.id, types=types)
+        print(json.dumps(neighbors, indent=2))
 
     elif args.command == "blast_radius":
         types = args.types.split(",") if args.types else None
-        result = g.blast_radius(args.id, depth=args.depth, types=types)
-        print(json.dumps(result, indent=2))
+        radius = g.blast_radius(args.id, depth=args.depth, types=types)
+        print(json.dumps(radius, indent=2))
 
     elif args.command == "risk_hotspots":
-        result = g.risk_hotspots(top=args.top)
-        print(json.dumps(result, indent=2))
+        hotspots = g.risk_hotspots(top=args.top)
+        print(json.dumps(hotspots, indent=2))
 
     elif args.command == "update_risk":
         result = g.update_risk(args.id, args.delta)

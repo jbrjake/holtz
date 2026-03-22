@@ -10,5 +10,10 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM", "ANN"]
 "tests/*" = ["E501", "E402", "ANN"]
 "tests/runner_fixtures.py" = ["E101", "W191"]
 
+[tool.mypy]
+python_version = "3.12"
+files = ["skills/holtz/scripts"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
