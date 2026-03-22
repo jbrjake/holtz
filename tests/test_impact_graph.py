@@ -789,3 +789,39 @@ def test_load_json_scalar(tmp_path):
     g2 = ImpactGraph(path)
     g2.load()
     assert g2.stats()["nodes"] == 0
+
+
+# ---------------------------------------------------------------------------
+# BH-001 (run 6): drift_check with binary/non-UTF-8 files
+# ---------------------------------------------------------------------------
+
+
+def test_drift_check_binary_file_skipped(graph, project):
+    """drift_check skips nodes whose files contain non-UTF-8 bytes without crashing (BH-001 run 6)."""
+    # Create a binary file that read_text() cannot decode
+    binary_file = project / "compiled.so"
+    binary_file.write_bytes(b"\x80\x81\x82\xff\xfe\x00\x01")
+    graph.add_node("compiled.so::init", "function", "compiled.so", line=1)
+
+    # Should not crash — binary file node is silently skipped (same as OSError)
+    result = graph.drift_check(project)
+    assert result["drifted"] == []
+
+
+def test_drift_check_binary_file_does_not_block_others(graph, project):
+    """drift_check continues checking other nodes after encountering a binary file (BH-001 run 6)."""
+    # Binary file node (alphabetically first due to "aaa" prefix)
+    binary_file = project / "aaa_binary.dat"
+    binary_file.write_bytes(b"\xff\xfe\x00\x01\x80\x81")
+    graph.add_node("aaa_binary.dat::corrupt", "function", "aaa_binary.dat", line=1)
+
+    # Normal text file node (alphabetically second)
+    text_file = project / "zzz_normal.py"
+    text_file.write_text("def healthy():\n    pass\n")
+    graph.add_node("zzz_normal.py::healthy", "function", "zzz_normal.py", line=1)
+
+    # Binary node silently skipped, text node found at correct line
+    result = graph.drift_check(project)
+    drifted_ids = [d["id"] for d in result["drifted"]]
+    assert "aaa_binary.dat::corrupt" not in drifted_ids  # binary → skipped
+    assert "zzz_normal.py::healthy" not in drifted_ids  # text → found at line 1

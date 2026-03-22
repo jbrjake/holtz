@@ -247,7 +247,7 @@ class ImpactGraph:
 
             try:
                 content = file_path.read_text()
-            except OSError:
+            except (OSError, UnicodeDecodeError):
                 continue
 
             patterns = ENTITY_PATTERNS.get(node_type, ENTITY_PATTERNS["function"])
