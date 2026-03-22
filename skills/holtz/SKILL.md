@@ -202,6 +202,16 @@ Default severity is MEDIUM. Upgrade to HIGH if the recommendation addresses a HI
 
 Each prediction includes: **Target** (file/function), **Predicted Issue**, **Confidence** (HIGH/MEDIUM/LOW), **Basis** (evidence from recon), **Lens** (which analytical lens), **Graph Support** (relevant edges/risk scores), **Outcome** (CONFIRMED/UNCONFIRMED — filled in after relevant phase). Confidence levels: HIGH = multiple converging signals, MEDIUM = two signals or one strong, LOW = single weak signal. Update `docs/holtz/STATUS.md` with 0h completion.
 
+### Dispatch Justine
+
+After Phase 0 completes, dispatch Justine as a background subagent to run her own parallel audit. Use the Agent tool with the `justine` agent:
+
+```
+Agent(subagent_type="justine", run_in_background=true, prompt="Run a full audit on this codebase. You are being dispatched in parallel with Holtz — write to docs/justine/ and use docs/justine/impact-graph.json for your impact graph. Do not update docs/holtz/architecture-baseline.md or docs/holtz/LIVING-PUNCHLIST.md. Run through convergence, then stop. Holtz will handle the merge and fix loop.")
+```
+
+Do NOT wait for Justine to finish. Continue immediately with Phase 1. She runs in parallel — that's the point. You will check for her results before entering Phase 4.
+
 ### Phase 1: Doc-to-Implementation Audit
 
 1. Read project docs, `docs/holtz/recon/0g-recon-summary.md`, and `docs/holtz/recon/0h-predictions.md`
@@ -237,9 +247,22 @@ Same subagent strategy. Partition source modules into batches.
 
 Priority order: error paths, boundaries, state transitions, external integrations, security.
 
+### Pre-Phase 4: Merge Justine's Findings
+
+Before starting any fix work, check whether Justine has produced results:
+
+1. **Check for Justine's output.** If `docs/justine/PUNCHLIST.md` exists, Justine has findings to merge.
+2. **If Justine is still running** (no `docs/justine/SUMMARY.md` and no `docs/justine/PUNCHLIST.md`), check her `docs/justine/STATUS.md` for stall indicators: STATUS.md not updated in >30 minutes, or 3 consecutive fix iterations with no progress. If stalled, proceed with whatever she has. If she's still actively working, wait — her breadth-first pass is fast.
+3. **If Justine has results**, run the merge protocol per [references/merge-protocol.md](references/merge-protocol.md):
+   - Classify findings: agreements, Holtz-only, Justine-only, severity disagreements, contradictions
+   - Produce `docs/holtz/PUNCHLIST-MERGED.md` (unified worklist) and `docs/holtz/MERGE-REPORT.md` (statistics + blind spot analysis)
+   - Merge impact graphs: Justine's `docs/justine/impact-graph.json` into canonical `docs/holtz/impact-graph.json` (higher risk_score wins, audit_count summed, notes merged), then delete Justine's graph
+   - Archive Justine's audit: move `docs/justine/` to `docs/justine-prior-{ISO date}/`
+4. **If no Justine output exists** (she wasn't dispatched or produced nothing), proceed with `docs/holtz/PUNCHLIST.md` as the worklist.
+
 ### Phase 4: Fix Loop (TDD)
 
-1. **Re-read worklist** — If `docs/holtz/PUNCHLIST-MERGED.md` exists (from adversarial self-play), use it as the worklist. Otherwise, use `docs/holtz/PUNCHLIST.md`.
+1. **Re-read worklist** — If `docs/holtz/PUNCHLIST-MERGED.md` exists, use it as the worklist. Otherwise, use `docs/holtz/PUNCHLIST.md`.
 2. **Triage each item** by category before starting work on it:
    - `test/*`, `doc/*`, `design/*` items → **Fast Path**
    - `bug/*` items with determinism = deterministic → **Fast Path**
@@ -458,9 +481,8 @@ After convergence is reached and before writing the final summary, check whether
 ```
 
 ## Invocation Modes
-- **Full:** all phases
-- **Targeted:** `"audit the auth module"` — scope to specific dirs
-- **Continue:** `"work through the punchlist"` — resume Phase 4
+- **Full:** all phases (Justine is dispatched automatically after Phase 0 — see Dispatch Justine section)
+- **Targeted:** `"audit the auth module"` — scope to specific dirs (Justine is NOT dispatched for targeted audits)
+- **Continue:** `"work through the punchlist"` — resume Phase 4 (skip Justine dispatch — audit phases are done)
 - **Pattern:** Phase 5 on existing data
-- **Test/Doc audit only:** Phase 2 or Phase 1 alone
-- **Adversarial Self-Play:** Both Holtz and Justine dispatched in parallel. After both converge (or one stalls), their punchlists are merged per [references/merge-protocol.md](references/merge-protocol.md). Holtz owns the merged punchlist and runs Phases 4-6 on the merged items. See merge protocol for dispatch, stall detection, classification rules, and impact graph merge.
+- **Test/Doc audit only:** Phase 2 or Phase 1 alone (Justine is NOT dispatched for single-phase runs)

@@ -50,13 +50,13 @@ All Justine runtime data goes in `docs/justine/` in the target project, not the 
 
 The impact graph and pattern brief are project-level knowledge that grows richer with each auditor's contribution. Both Holtz and Justine add to the same graph and the same brief.
 
-## Adversarial Self-Play
+## Parallel Dispatch (Default Mode)
 
-Justine can be dispatched in parallel with Holtz for adversarial self-play. In this mode:
+Justine is dispatched automatically by Holtz after his Phase 0 recon completes. Both auditors run in parallel — Holtz depth-first, Justine breadth-first — sharing nothing until both converge. This is the standard operating mode, not an opt-in.
 
 - **Separate impact graph:** During parallel dispatch, Justine writes to her own impact graph at `docs/justine/impact-graph.json` instead of the shared `docs/holtz/impact-graph.json`. This avoids concurrent write conflicts. Her graph is merged into the canonical graph post-merge.
 - **Role ends at convergence:** Justine's role ends when she reaches convergence of her audit. She does NOT run the fix loop on merged items — Holtz owns the merged punchlist and runs Phases 4-6.
-- **Archival:** After the merge, the parent process archives `docs/justine/` to `docs/justine-prior-{date}/` and deletes `docs/justine/impact-graph.json` (its data has been merged into the canonical graph).
+- **Archival:** After the merge, Holtz archives `docs/justine/` to `docs/justine-prior-{date}/` and deletes `docs/justine/impact-graph.json` (its data has been merged into the canonical graph).
 
 See [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/merge-protocol.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/merge-protocol.md) for the full merge protocol.
 
