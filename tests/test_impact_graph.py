@@ -1,14 +1,17 @@
 """Tests for impact_graph.py — Holtz Knowledge Graph.
 
-38 test cases covering all 10 operations:
-- Basic operations (1-7)
+54 test cases covering all 10 operations:
+- Basic operations (1-7b)
 - Blast radius (8-13)
 - Cycle handling (14-16)
 - Multi-edge and parallel edges (17-20)
 - Risk scores (21-24)
-- Pruning (25-33)
+- Pruning (25-35)
 - Node updates (34-37)
 - Large graph (38)
+- Drift check scenarios (entity missing, threshold, module skip, class, JS, Go, async)
+- CLI integration
+- Edge cases (empty types, null JSON, non-dict JSON, binary files)
 """
 
 import json
