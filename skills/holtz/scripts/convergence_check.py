@@ -133,24 +133,22 @@ def get_test_counts(runner: str | None) -> dict | None:
 
         if runner == "jest":
             # Jest output: Tests: N failed, N skipped, N passed, N total
-            # Components are optional — "skipped" and "failed" may be absent.
-            # Some versions omit "0 passed" when all tests fail.
-            m = re.search(r'Tests:\s+(?:(\d+) failed,\s+)?(?:(\d+) skipped,\s+)?(\d+) passed', output)
-            if m:
-                return {
-                    "passed": int(m.group(3)),
-                    "failed": int(m.group(1)) if m.group(1) else 0,
-                    "skipped": int(m.group(2)) if m.group(2) else 0,
-                }
-            # All-fail: "Tests: N failed, N total" with no "passed"
-            m_fail = re.search(r'Tests:\s+(\d+) failed,\s+\d+ total', output)
-            if m_fail:
-                return {
-                    "passed": 0,
-                    "failed": int(m_fail.group(1)),
-                    "skipped": 0,
-                }
-            return None
+            # Components are optional and Jest orders them by count descending,
+            # so the order is NOT fixed. Extract each component independently.
+            jest_line = re.search(r'Tests:\s+(.+\d+ total)', output)
+            if not jest_line:
+                return None
+            line = jest_line.group(1)
+            p = re.search(r'(\d+) passed', line)
+            f = re.search(r'(\d+) failed', line)
+            s = re.search(r'(\d+) skipped', line)
+            if not p and not f and not s:
+                return None
+            return {
+                "passed": int(p.group(1)) if p else 0,
+                "failed": int(f.group(1)) if f else 0,
+                "skipped": int(s.group(1)) if s else 0,
+            }
 
         if runner == "vitest":
             # Vitest summary line: "Tests  N passed" or "Tests  N failed | N skipped | N passed"

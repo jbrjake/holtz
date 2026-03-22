@@ -1152,3 +1152,44 @@ def test_reopened_items_reported_in_message():
     assert "2 re-opened" in message, (
         f"Should report 2 items re-opened. Got: {message}"
     )
+
+
+# --- BH-005 (run 7): Jest regex assumes fixed order of failed/skipped/passed ---
+
+
+def test_jest_skipped_before_failed(monkeypatch):
+    """Jest output with skipped count higher than failed should parse correctly."""
+    # Jest orders components by count descending. When skipped > failed,
+    # skipped appears before failed in the output.
+    output = """\
+ FAIL  src/jukebox/__tests__/recommendations.test.ts
+
+Test Suites: 1 failed, 1 total
+Tests:       2 skipped, 1 failed, 11 passed, 14 total
+Snapshots:   0 total
+Time:        2.103 s
+"""
+    monkeypatch.setattr(subprocess, "run", _fake_run(output))
+    result = cc.get_test_counts("jest")
+    assert result is not None, "Jest with skipped before failed should not return None"
+    assert result["passed"] == 11
+    assert result["failed"] == 1
+    assert result["skipped"] == 2
+
+
+def test_jest_all_fail_with_skipped(monkeypatch):
+    """Jest output with failed + skipped but no passed should parse correctly."""
+    output = """\
+ FAIL  src/jukebox/__tests__/playlist.test.ts
+
+Test Suites: 1 failed, 1 total
+Tests:       3 failed, 2 skipped, 5 total
+Snapshots:   0 total
+Time:        1.234 s
+"""
+    monkeypatch.setattr(subprocess, "run", _fake_run(output))
+    result = cc.get_test_counts("jest")
+    assert result is not None, "Jest with failed + skipped (no passed) should not return None"
+    assert result["passed"] == 0
+    assert result["failed"] == 3
+    assert result["skipped"] == 2
