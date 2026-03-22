@@ -152,7 +152,7 @@ Create `docs/justine/` and `docs/justine/recon/` if they do not exist. Each step
 
 If a supported tool is detected, run it with a time cap based on test suite runtime from step 0c: under 30s → 5 minute cap, 30s-5min → 10 minute cap, over 5min → 15 minute cap. If no mutation tool is available, silently skip this step. If the tool times out, report partial results with a note.
 
-Output: `docs/justine/recon/0e1-mutation-scan.md` — survival by function (worst first) and top 20 surviving mutations.
+Output: `docs/justine/recon/0e1-mutation-scan.md` — survival by function (worst first) and top 20 surviving mutations. The LLM runs the tool, reads its native output format, and manually compiles the per-function survival table. No output parsing script needed.
 
 **How mutation data feeds Justine's pipeline:**
 
