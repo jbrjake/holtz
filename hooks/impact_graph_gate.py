@@ -12,7 +12,7 @@ import sys
 
 # Allow importing _common from the same directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import read_event, exit_ok, exit_block
+from _common import exit_block, exit_ok, read_event
 
 
 def main() -> None:

@@ -13,7 +13,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import read_event, exit_ok, exit_block
+from _common import exit_block, exit_ok, read_event
 
 # Maximum age in seconds before STATUS.md is considered stale.
 # 300s (5 minutes) allows Investigation Path multi-minute analysis
@@ -35,16 +35,17 @@ def main() -> None:
     if "docs/holtz/" not in normalized:
         exit_ok()
 
-    # If the write IS to STATUS.md, allow it — this is the update itself
-    if normalized.endswith("STATUS.md"):
+    # If the write IS to a protocol STATUS.md, allow it — this is the update itself
+    if normalized.endswith("docs/holtz/STATUS.md") or normalized.endswith("docs/holtz/justine/STATUS.md"):
         exit_ok()
 
     # Determine which STATUS.md to check
     cwd = event.get("cwd", os.getcwd())
-    if "docs/holtz/justine/" in normalized:
-        status_rel = "docs/holtz/justine/STATUS.md"
-    else:
-        status_rel = "docs/holtz/STATUS.md"
+    status_rel = (
+        "docs/holtz/justine/STATUS.md"
+        if "docs/holtz/justine/" in normalized
+        else "docs/holtz/STATUS.md"
+    )
 
     status_path = os.path.join(cwd, status_rel)
 

@@ -12,7 +12,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import read_event, exit_ok, exit_block
+from _common import exit_block, exit_ok, read_event
 
 
 def main() -> None:
@@ -20,16 +20,18 @@ def main() -> None:
     tool_input = event.get("tool_input", {})
     command = tool_input.get("command", "")
 
-    # Only check commands that ran impact_graph.py
-    if "impact_graph.py" not in command:
+    # Only check commands that directly ran impact_graph.py as the script
+    # (not test files that happen to contain "impact_graph" in their name)
+    if not re.search(r'(?:^|[\s/])impact_graph\.py\b', command):
         exit_ok()
 
-    # Extract --graph path (handles quoted and unquoted paths)
+    # Extract --graph path (handles quoted and unquoted paths, and shell variables)
     match = re.search(r'--graph\s+["\']?([^"\'\s]+)["\']?', command)
-    if match:
-        graph_rel = match.group(1)
-    else:
-        graph_rel = "docs/holtz/impact-graph.json"
+    graph_rel = match.group(1) if match else "docs/holtz/impact-graph.json"
+
+    # Skip check if graph_rel looks like an unresolved shell variable
+    if graph_rel.startswith("$"):
+        exit_ok()
 
     # Resolve relative to cwd
     cwd = event.get("cwd", os.getcwd())
@@ -40,7 +42,6 @@ def main() -> None:
         tool_response = event.get("tool_response", {})
         extra = ""
         if isinstance(tool_response, dict):
-            stdout = tool_response.get("stdout", "")
             stderr = tool_response.get("stderr", "")
             if stderr:
                 extra = f" Script stderr: {stderr[:200]}"

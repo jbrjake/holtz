@@ -5,6 +5,11 @@ When a subagent completes, scans its last message for references
 to docs/holtz/ files and warns if any don't exist on disk.
 Uses exit 1 (warn) not exit 2 (block) — the subagent is already
 done, blocking can't undo its work.
+
+Note: Path extraction operates on raw message text without code-fence
+masking. Paths mentioned in code examples may trigger false-positive
+warnings. This is acceptable because the hook only warns (exit 1)
+and false positives are preferable to missed findings.
 """
 from __future__ import annotations
 
@@ -13,7 +18,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import read_event, exit_ok, exit_warn
+from _common import exit_ok, exit_warn, read_event
 
 
 def main() -> None:
