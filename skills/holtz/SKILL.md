@@ -74,6 +74,8 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 | "I'll update STATUS.md at the end of the phase" | STATUS.md is your program counter. Without an update, compaction loses your position. |
 | "Justine's findings are probably duplicates" | Justine's breadth-first scan catches what your depth-first methodology walks past. Merge everything. |
 | "Per-fix hardening is excessive for a simple fix" | Simple fixes in paths without coverage are where regressions hide. Harden every fix. |
+| "The impact graph is infrastructure, I'll do it later" | The graph was described in the skill for 10+ runs and never created once. "Later" means "never." Run the command NOW. |
+| "I don't need to verify artifact existence, I just created it" | You said that for 10 runs. `ls` the file. If it's not on disk, it doesn't exist. |
 
 ## Context Survival Protocol
 
@@ -128,107 +130,13 @@ Before starting ANY work, check for existing output files in `docs/holtz/`:
 
 ### Phase 0: Recon
 
-Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is independent. Complete one, write its file, then start the next.
+Read [references/phase-0-recon.md](references/phase-0-recon.md) for the complete Phase 0 procedure (recon steps 0a-0h, mutation scanning, pattern library, architecture drift, predictive recon).
 
-| Step | Action | Output File |
-|------|--------|-------------|
-| 0a | Read project structure, docs, CLAUDE.md, architecture | `docs/holtz/recon/0a-project-overview.md` |
-| 0b | Identify test framework, runner, build system | `docs/holtz/recon/0b-test-infra.md` |
-| 0c | Run test suite, capture pass/fail/skip/time/coverage | `docs/holtz/recon/0c-test-baseline.md` |
-| 0d | Run linters/type checkers if configured | `docs/holtz/recon/0d-lint-results.md` |
-| 0e | Git churn analysis (top 20 most-changed files in last 50 commits) | `docs/holtz/recon/0e-churn.md` |
-| 0e.1 | Mutation scan (optional — see below) | `docs/holtz/recon/0e1-mutation-scan.md` |
-| 0f | Find skipped/disabled tests | `docs/holtz/recon/0f-skipped-tests.md` |
+Read [references/impact-graph-operations.md](references/impact-graph-operations.md) for all graph CLI commands (initialization, reconciliation, edge operations, blast radius, risk scores).
 
-**Step 0e.1 — Mutation Scan (optional):** After step 0e (churn), auto-detect mutation testing tools:
-
-| Language | Tool | Detection |
-|----------|------|-----------|
-| Python | mutmut | `mutmut` in PATH or `[tool.mutmut]` in `pyproject.toml` |
-| JavaScript/TypeScript | Stryker | `stryker.conf.js` / `stryker.conf.mjs` or `@stryker-mutator` in `package.json` |
-| Rust | cargo-mutants | `cargo-mutants` in PATH |
-| Go | go-mutesting | `go-mutesting` in PATH |
-| Java/Kotlin | PIT | `pitest` in `pom.xml` or `build.gradle` |
-
-If a supported tool is detected, run it with a time cap based on test suite runtime from step 0c: under 30s → 5 minute cap, 30s-5min → 10 minute cap, over 5min → 15 minute cap. If no mutation tool is available, silently skip this step. If the tool times out, report partial results with a note.
-
-Output: `docs/holtz/recon/0e1-mutation-scan.md` — survival by function (worst first) and top 20 surviving mutations. The LLM runs the tool, reads its native output format, and manually compiles the per-function survival table. No output parsing script needed.
-
-**How mutation data feeds the pipeline:**
-
-| Consumer | How it uses mutation data |
-|----------|-------------------------|
-| **Predictions (0h)** | Functions with >40% mutation survival become HIGH-confidence predictions for `test/shallow` or `test/missing` findings |
-| **Impact graph** | `update_risk` on nodes based on survival rate: >50% survival → +0.3, 30-50% → +0.2, 10-30% → +0.1 |
-| **Phase 2 (test audit)** | When auditing a test file, check whether tests kill mutations. Tests that pass but don't kill mutations are evidence for Rubber Stamp (#11) or Permissive Validator (#12) |
-| **Phase 4 (fix loop)** | After writing reproduction test and fix, re-run mutations on changed function to verify improved kill rate. Record before/after score in Resolution notes. Quality check, not gate. |
-
-**Before step 0a:** If `docs/holtz/patterns-brief.md` exists, read it to load known patterns from prior runs. These patterns inform what to look for during audit phases. Optionally read `docs/holtz/patterns-brief-archive.md` for additional historical context if investigating a specific pattern class.
-
-**Before step 0a — Global Pattern Library Scan:** Read all pattern files at `${CLAUDE_PLUGIN_ROOT}/skills/holtz/patterns/*.md`. Each pattern file contains a `languages` tag in its YAML frontmatter and a `Detection Heuristic` section with an executable check (grep pattern, structural query, or similar).
-
-1. **Filter by language:** After steps 0a/0b identify the project's language(s), discard pattern files whose `languages` tag does not include any of the project's detected languages. Patterns with an empty `languages` list (`languages: []`) are language-agnostic and always included regardless of project language.
-2. **Run detection heuristics:** For each remaining pattern, execute its detection heuristic against the codebase (e.g., run the grep command, check for the structural indicator).
-3. **Record hits as predictions:** Each pattern whose heuristic matches becomes a HIGH-confidence prediction in `docs/holtz/recon/0h-predictions.md`. The confidence is HIGH because two independent signals converge: the pattern is a known, validated bug class from the global library, and the detection heuristic produced a concrete match in this codebase. Use this format for library-sourced predictions:
-
-   ```markdown
-   ### Prediction {N}
-   **Target:** {file(s)/function(s) where heuristic matched}
-   **Predicted Issue:** {pattern name} — {pattern description from library}
-   **Confidence:** HIGH
-   **Basis:** Global pattern library match (`{pattern-file.md}`) + detection heuristic hit
-   **Lens:** {lens from pattern's categories}
-   **Graph Support:** —
-   **Outcome:** {CONFIRMED/UNCONFIRMED — filled in after relevant phase}
-   ```
-
-4. **Patterns with no heuristic hits** are still loaded as background knowledge — they inform what to look for during audit phases but do not generate predictions.
-
-**Before step 0a — Graph Reconciliation:** If `docs/holtz/impact-graph.json` exists, reconcile the knowledge graph against the current filesystem before adding new nodes:
-
-1. **`prune_missing`** — Run `scripts/impact_graph.py prune_missing --project-root .` to remove nodes for deleted files. All edges connected to removed nodes are cascade-deleted.
-2. **`drift_check`** — Run `scripts/impact_graph.py drift_check --project-root .` to flag nodes whose file exists but entity is absent or line number has shifted >10 lines. Resolve each flag: update the node's line number (preserving risk_score/edges) via `add_node`, or prune if the entity was truly removed.
-3. **Stale edge verification (LLM-driven)** — Verify `calls` and `imports` edges by grepping for the call/import in the source file. Remove severed relationships. `assumes` and `diverges_from` edges are NOT verified here — they require re-evaluation during Phases 1-3 since the semantic relationship may still hold even if code moved.
-4. **Add new nodes** — Files and functions discovered in recon that aren't in the graph get new nodes via `add_node`. Add `imports` edges by reading code.
-
-**Step 0a.1 — Architecture Drift Detection:** After completing graph reconciliation:
-
-**If `docs/holtz/architecture-baseline.md` does NOT exist (first run):** Create it by extracting documented intent from project docs and inferring the structural snapshot from code. See [references/architecture-baseline-format.md](references/architecture-baseline-format.md) for the required format.
-
-**If `docs/holtz/architecture-baseline.md` exists (subsequent runs):**
-
-1. Re-infer current structural snapshot
-2. Compare against baseline's Structural Snapshot for structural drift:
-   - **Dependency reversal:** Module A used to not depend on B, now it does
-   - **Boundary erosion:** Module A's functions used to be called only by B, now C and D call them too
-   - **Convention violation:** New files/functions don't follow the naming pattern
-   - **Layering breach:** A lower layer now calls a higher layer
-3. Compare against Documented Intent for intent drift (stated invariants now violated, stated boundaries crossed)
-4. For each detected drift: append to the Drift Log in the baseline file. If MEDIUM+ severity, create a punchlist item.
-
-**Living Punchlist Integration:** If `docs/holtz/LIVING-PUNCHLIST.md` exists, read it during Phase 0. Proactive checks from the living punchlist feed into step 0h predictions as HIGH-confidence items. See [references/living-punchlist-format.md](references/living-punchlist-format.md) for the format.
-
-**When creating STATUS.md:** Read [references/lens-registry.md](references/lens-registry.md) for the list of available lenses. Set the initial Active Lens to `component` (the first lens in the registry, which is the broadest). Initialize the Pattern Library and Strategy sections (High-Risk Areas from recon findings, Last Insight and Approach as "—" until first insight). The auditor may reorder lens priority based on recon findings (security risks → security lens moves up), impact graph topology (heavy `assumes`/`diverges_from` edges → integration lens moves up), or prior run patterns (recurring error-handling bugs → error-propagation lens moves up).
+**Phase 0 summary:** Create `docs/holtz/` and `docs/holtz/recon/`. Run steps 0a-0f (project overview, test infra, test baseline, lint, churn, skipped tests). Initialize or reconcile the impact graph. Run architecture drift detection. Write recon summary (0g) and predictive recon (0h). Update STATUS.md after each step.
 
 **After each step:** update `docs/holtz/STATUS.md` with completed step.
-**After all steps:**
-
-**Recommendation Escalation** — Read [references/recommendation-escalation.md](references/recommendation-escalation.md) and follow the protocol: scan prior `docs/holtz/archive/*/SUMMARY.md` files for recurring recommendations (2+ appearances), escalate each to a punchlist item. If no prior summaries exist, skip this step.
-
-**Write recon summary:** write `docs/holtz/recon/0g-recon-summary.md` — a SHORT synthesis (this is what you'll re-read later, not the raw files). Update `docs/holtz/STATUS.md` with 0g completion.
-
-**Step 0h — Predictive Recon:** After 0g, produce `docs/holtz/recon/0h-predictions.md` ranking where bugs are likely to be found. Draw from these six input sources:
-
-| Input | What it suggests |
-|-------|-----------------|
-| Pattern Brief | Known patterns → predict same pattern in uninspected code with similar structure |
-| Impact Graph risk_score | High-risk nodes → predict bugs in areas that have produced bugs before |
-| Impact Graph `assumes`/`diverges_from` edges | Semantic tensions → predict integration bugs at those seams |
-| Git churn (0e) | High-churn files → predict bugs where code changes most |
-| Prior run findings | Categories that recurred → predict same categories in untested areas |
-| Recon observations | Architectural concerns noted during 0a-0g → predict specific failure modes |
-
-Each prediction includes: **Target** (file/function), **Predicted Issue**, **Confidence** (HIGH/MEDIUM/LOW), **Basis** (evidence from recon), **Lens** (which analytical lens), **Graph Support** (relevant edges/risk scores), **Outcome** (CONFIRMED/UNCONFIRMED — filled in after relevant phase). Confidence levels: HIGH = multiple converging signals, MEDIUM = two signals or one strong, LOW = single weak signal. Update `docs/holtz/STATUS.md` with 0h completion.
 
 ### Dispatch Justine
 
@@ -245,15 +153,19 @@ Continue immediately with Phase 1. Justine runs in parallel — that is the poin
 ### Phase 1: Doc-to-Implementation Audit
 
 <HARD-GATE>
-Phase 1 requires completed recon. If `docs/holtz/recon/0g-recon-summary.md` and `docs/holtz/recon/0h-predictions.md` do not exist, STOP and complete Phase 0 first.
+Phase 1 requires completed recon AND a live impact graph. Verify ALL THREE exist before proceeding:
+1. `docs/holtz/recon/0g-recon-summary.md`
+2. `docs/holtz/recon/0h-predictions.md`
+3. `docs/holtz/impact-graph.json`
+If any is missing, STOP and complete Phase 0 first. Run `ls docs/holtz/impact-graph.json` to verify — do not assume it exists.
 </HARD-GATE>
 
 1. Read project docs, `docs/holtz/recon/0g-recon-summary.md`, and `docs/holtz/recon/0h-predictions.md`
 2. Extract testable claims into a checklist file: `docs/holtz/audit/1-doc-claims.md`
 3. **Prioritize predicted areas first** — process claims matching HIGH-confidence predictions before others, then MEDIUM, then LOW, then unpredicted areas. No audit work is skipped; predictions change the order, not the scope.
 4. **For each claim** (or batch of 3-5 related claims): check if a real test exists, write punchlist items to `docs/holtz/PUNCHLIST.md` IMMEDIATELY, then move to next batch. When a finding matches a prediction, include `**Predicted:** Prediction {N} (confidence: {X})` in the punchlist item and mark the prediction CONFIRMED in `0h-predictions.md`.
-5. **Add semantic edges** to the impact graph as relationships are discovered: `assumes` (A makes an assumption about B's behavior), `diverges_from` (A and B parse/interpret the same data differently).
-6. Update `docs/holtz/STATUS.md`. After all claims processed, mark any unconfirmed predictions for this phase as UNCONFIRMED in `0h-predictions.md`.
+5. **Add semantic edges** (`assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). After the phase, run `stats` — if edge count did not increase and you processed 5+ claims, STOP and re-examine for missed relationships.
+6. Update `docs/holtz/STATUS.md`. Mark unconfirmed predictions as UNCONFIRMED in `0h-predictions.md`.
 
 ### Phase 2: Test Quality Audit
 
@@ -263,7 +175,7 @@ Use **Agent subagents** for this phase when possible — each subagent audits a 
 2. Partition test files into batches (3-5 files each). **Prioritize predicted areas first.**
 3. **Subagent brief:** Instruct each subagent to: (a) read `docs/holtz/patterns-brief.md` before starting, (b) check known patterns against the code being reviewed, (c) write findings to disk before returning, (d) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT.
 4. For each batch: audit per [references/anti-patterns.md](references/anti-patterns.md), write punchlist items to `docs/holtz/PUNCHLIST.md` IMMEDIATELY after each batch. Tag findings matching predictions with `**Predicted:**` field and mark CONFIRMED in `0h-predictions.md`. When mutation data is available from step 0e.1, use it as concrete evidence when scoring Rubber Stamp (#11) and Permissive Validator (#12) — a test that passes but doesn't kill mutations for the function it covers is a prime candidate for these anti-patterns.
-5. **Add semantic edges** to the impact graph: `assumes`, `diverges_from`, `tests` (test file covers function).
+5. **Add semantic edges** (`tests`, `assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). Run `stats` after the phase to verify edges were added.
 6. Update `docs/holtz/STATUS.md`. Mark unconfirmed predictions for this phase as UNCONFIRMED.
 
 If not using subagents: audit one file at a time, write findings before opening the next file.
@@ -276,8 +188,8 @@ Same subagent strategy. Partition source modules into batches.
 2. **Subagent brief:** Instruct each subagent to read `docs/holtz/patterns-brief.md` before starting its audit batch. Known patterns from prior runs should be checked against the code being reviewed.
 3. For each module batch: review for bugs, write punchlist items IMMEDIATELY. Tag findings matching predictions with `**Predicted:**` field and mark CONFIRMED in `0h-predictions.md`. Tag findings with `**Lens:**` field identifying which analytical lens discovered them.
 4. **For `bug/*` items:** assess determinism and record in the punchlist item's `**Determinism:**` field. Is this bug deterministic (specific trigger), intermittent (timing/load/ordering dependent), or theoretical (identified from code analysis, not yet observed)? This determines the reproduction strategy in Phase 4.
-5. **Add semantic edges** to the impact graph: `assumes`, `diverges_from`, `calls` (function call relationships discovered during review).
-6. Update `docs/holtz/STATUS.md`. Mark any remaining unconfirmed predictions as UNCONFIRMED in `0h-predictions.md`.
+5. **Add semantic edges** (`calls`, `assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). Run `stats` after the phase to verify edges were added.
+6. Update `docs/holtz/STATUS.md`. Mark remaining unconfirmed predictions as UNCONFIRMED in `0h-predictions.md`.
 
 Priority order: error paths, boundaries, state transitions, external integrations, security.
 
@@ -296,118 +208,15 @@ Before starting any fix work, check whether Justine has produced results:
 
 ### Phase 4: Fix Loop (TDD)
 
-```dot
-digraph {
-  rankdir=TB
-  node [shape=box]
-  read [label="Re-read worklist\n(MERGED if exists,\notherwise PUNCHLIST)"]
-  triage [label="Triage item\nby category"]
-  fast [label="Fast Path\n(test→fix→commit)"]
-  investigate [label="Investigation Path\n(layers→confidence→fix)"]
-  cantrepro [label="Can't-Reproduce Path\n(widen→bisect→defer)"]
-  harden [label="Per-Fix Hardening\n(edges+regression)"]
-  blast [label="Blast Radius Analysis\n(impact graph 2-hop)"]
-  next [label="Next item"]
+Read [references/phase-4-fix-loop.md](references/phase-4-fix-loop.md) for the complete fix loop procedure (triage flowchart, fast path, investigation path, can't-reproduce path, per-fix hardening, blast radius analysis).
 
-  read -> triage
-  triage -> fast [label="test/doc/design\nor deterministic bug"]
-  triage -> investigate [label="intermittent\nor theoretical bug"]
-  triage -> cantrepro [label="repro test\nunexpectedly passes"]
-  fast -> harden
-  investigate -> harden
-  cantrepro -> harden [label="if reproduced"]
-  cantrepro -> next [label="DEFERRED\nwith evidence"]
-  harden -> blast
-  blast -> next
-}
-```
+Read [references/impact-graph-operations.md](references/impact-graph-operations.md) for blast radius queries and risk score updates.
 
-1. **Re-read worklist** — If `docs/holtz/PUNCHLIST-MERGED.md` exists, use it as the worklist. Otherwise, use `docs/holtz/PUNCHLIST.md`.
-2. **Triage each item** by category before starting work on it:
-   - `test/*`, `doc/*`, `design/*` items → **Fast Path**
-   - `bug/*` items with determinism = deterministic → **Fast Path**
-   - `bug/*` items with determinism = intermittent or theoretical → **Investigation Path**
-   - Any item where the reproduction test unexpectedly passes → **Can't-Reproduce Path**
-3. After fixing each item (regardless of path), run **Per-Fix Hardening**
+1. **Re-read worklist** — If `docs/holtz/PUNCHLIST-MERGED.md` exists, use it. Otherwise, use `docs/holtz/PUNCHLIST.md`.
+2. **Triage** → Fast Path (test/doc/design/deterministic bug) | Investigation Path (intermittent/theoretical bug) | Can't-Reproduce Path (repro test passes)
+3. After each fix: **Per-Fix Hardening** (edge variants, regression tests) → **Blast Radius Analysis** (impact graph 2-hop query, risk score updates)
 4. Commit format: `fix(<scope>): <desc>` with punchlist ID in body
-
-#### Fast Path
-
-For straightforward items where the root cause is obvious from the finding:
-
-1. Write failing test. Verify it fails. Minimal fix. Full suite. Commit.
-2. If mutation data exists from step 0e.1, re-run the mutation tool on the changed function(s) and record the before/after mutation kill rate in the punchlist item's Resolution notes (e.g., 'Mutation kill rate: 67% → 92%'). This is a quality check, not a gate — a fix can proceed even if the mutation score doesn't improve, but it should be noted.
-3. **Update `docs/holtz/PUNCHLIST.md` with resolution IMMEDIATELY after each commit** (status, commit hash, validating test)
-4. Update `docs/holtz/STATUS.md` with last completed item ID. If this fix revealed a non-obvious insight, update the Strategy section's Last Insight field.
-
-#### Investigation Path
-
-For `bug/*` items where the root cause is not obvious, the bug is intermittent or theoretical, or multiple hypotheses need testing. See [references/investigation-format.md](references/investigation-format.md) for the investigation file format.
-
-1. Create `docs/holtz/investigations/BH-{NNN}.md` and link it from the punchlist item's `**Investigation:**` field
-2. **Investigate bottom-up** through the layer stack. Check each layer before moving up:
-
-   | Layer | Check |
-   |-------|-------|
-   | **Data** | Is the input what you think it is? Log actual values, types, shapes at entry point |
-   | **Dependencies** | Are called systems working? DB connected, API reachable, file exists, permissions correct? |
-   | **State** | Is state correct at each step? Add assertions/logging at intermediate points |
-   | **Logic** | Does the code do what it says? Trace actual execution path, not intended one |
-   | **Integration** | Do pieces work together? Boundary serialization, type mismatches, contract violations |
-   | **Timing** | Race condition, async ordering, cache staleness, concurrency issue? |
-
-   At each layer: form a specific, falsifiable hypothesis. Design the smallest check that confirms or refutes it. Run it. Record in the investigation file's Evidence section. Update Theories or Ruled Out.
-
-3. **For regressions** (behavior that previously worked): use `git bisect` to find the breaking commit before investigating layers. The bisect narrows the root cause to a specific change.
-4. **Require HIGH confidence** before fixing. Write your root cause in the investigation file. If confidence is LOW or MEDIUM, design one more check to raise it. Do not write production code until confidence is HIGH.
-5. Once root cause is confirmed at HIGH confidence: write failing test, verify it fails, minimal fix, full suite, commit.
-6. **Update punchlist** with resolution, root cause confidence, and commit hash IMMEDIATELY.
-7. Update `docs/holtz/STATUS.md` with last completed item ID. Update the Strategy section's Last Insight with the root cause finding and Approach if the investigation changed your tactical approach.
-
-#### Can't-Reproduce Path
-
-When the reproduction test passes (bug not triggered), do NOT skip the item. Escalate:
-
-1. **Widen conditions:** Try different inputs, orderings, timing, data sizes, concurrency levels
-2. **Check environment:** Different OS, runtime version, dependency versions, config differences between test and production
-3. **Statistical reproduction:** For intermittent bugs, run the test in a loop (100-1000x) and measure failure rate
-4. **Git bisect:** If the behavior "used to work," find the breaking commit
-5. **Add instrumentation:** If still not reproducible, add logging/tracing to capture state when the condition occurs in the wild
-
-Log every attempt in the investigation file. Failed reproduction attempts are evidence — they narrow the conditions.
-
-If not reproducible after structured attempts: mark the item DEFERRED with evidence of all reproduction attempts in the investigation file. Do not silently drop it.
-
-#### Per-Fix Hardening
-
-After each fix passes the reproduction test and full suite, ask:
-
-1. **Edge variants:** Does the fix handle null, empty, boundary, and concurrent cases for the same input path? If not, write tests for them.
-2. **Regression risk:** Could this specific fix regress? If the fix is in a path without existing test coverage, add a regression test beyond the reproduction test.
-3. Run full suite again after any hardening tests are added.
-
-This is per-fix robustness, not pattern analysis. Phase 5 looks across fixes for systemic issues. Hardening makes each individual fix durable. Particularly important for `bug/error-handling` and `bug/security` items where edge cases are the entire point.
-
-#### Blast Radius Analysis
-
-After each fix passes the reproduction test, full suite, and per-fix hardening:
-
-1. **Identify** the changed function(s)/module(s)
-2. **Query** the impact graph: `scripts/impact_graph.py blast_radius <changed_id> --depth 2` (use `--depth 3` for architectural fixes — adding new layers, changing interfaces, modifying data flow)
-3. **For each node in the blast radius:**
-   a. Read the code
-   b. Check: does it still hold correct assumptions about the changed code?
-   c. If an `assumes` or `diverges_from` edge exists, pay special attention
-   d. If assumption violated → new punchlist item (`bug/logic` or `design/inconsistency`). Tag with `**Lens:** integration` if found at module seams.
-   e. If assumption holds → update edge metadata with `"verified {date}"`
-   f. If finding matches a prediction → include `**Predicted:**` field
-4. **Update impact graph:**
-   a. `update_risk` on fixed node: `-0.1` (fix resolved, lower risk)
-   b. `update_risk` on clean blast radius nodes: `-0.05`
-   c. Add/update edges if fix changed relationships (new call, removed import, etc.)
-   d. For architectural fixes: add `assumes` edges for new implicit contracts
-   e. Add `co_fixed` edges between functions fixed in the same commit
-5. **Update `docs/holtz/STATUS.md`** Strategy section with blast radius findings. If blast radius keeps finding integration issues while current lens is `component`, this contributes to the lens-switch trigger.
+5. **Update punchlist and STATUS.md IMMEDIATELY after each commit**
 
 ### Phase 5: Pattern Analysis (every 3-5 fixes)
 
@@ -510,9 +319,10 @@ After convergence, read [references/pattern-contribution-protocol.md](references
 
 ---
 
-**These five rules override everything above when they conflict:**
+**These six rules override everything above when they conflict:**
 1. Write findings to disk IMMEDIATELY. Your context WILL compact.
 2. STATUS.md is your program counter. Update it after every completed step.
 3. Complete every phase in order. Convergence is reached when the process says so, not when you think so.
 4. Every finding needs evidence, acceptance criteria, and a validation command. No exceptions.
-5. Keep coming back until convergence. Not until anyone is tired. Until it converges.
+5. Verify artifacts exist with `ls` before claiming a phase is complete. If `impact-graph.json` does not exist on disk, the graph was not created — regardless of what you believe you did.
+6. Keep coming back until convergence. Not until anyone is tired. Until it converges.
