@@ -39,3 +39,9 @@ Users can add custom lenses by appending new sections following the same four-fi
 **Audit priorities:** Functions that promise behavior their implementation doesn't deliver, version drift in interfaces
 **Failure modes:** Contract violations that callers silently tolerate until they don't
 **Entry point:** Compare documented/typed interfaces against actual implementation behavior
+
+## semantic-fidelity
+**Focus:** Whether names (states, functions, variables, enums) accurately describe what they represent at runtime
+**Audit priorities:** State machine labels vs actual entry/exit timing, function names vs observed behavior, boolean semantics vs toggle points, enum values vs runtime meaning
+**Failure modes:** States labeled for current activity but applied on completion, functions named for actions they don't perform, naming that drifts from semantics across files (same state name means different things to caller vs callee)
+**Entry point:** For each state machine or status enum: trace when each value is set and cleared across ALL callers; compare the temporal window of each value against its documented description. Ask: "If I look at this value right now, does its name tell me the truth about what's happening?"
