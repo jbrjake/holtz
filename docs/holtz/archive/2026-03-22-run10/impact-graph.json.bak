@@ -6,7 +6,7 @@
       "file": "skills/holtz/scripts/validate_punchlist.py",
       "line": 1,
       "last_audited": "2026-03-22",
-      "audit_count": 2,
+      "audit_count": 1,
       "risk_score": 0.0
     },
     "convergence_check": {
@@ -15,7 +15,7 @@
       "file": "skills/holtz/scripts/convergence_check.py",
       "line": 1,
       "last_audited": "2026-03-22",
-      "audit_count": 2,
+      "audit_count": 1,
       "risk_score": 0.0
     },
     "impact_graph": {
@@ -24,7 +24,7 @@
       "file": "skills/holtz/scripts/impact_graph.py",
       "line": 1,
       "last_audited": "2026-03-22",
-      "audit_count": 2,
+      "audit_count": 1,
       "risk_score": 0.0
     },
     "markdown_utils": {
@@ -33,7 +33,7 @@
       "file": "skills/holtz/scripts/markdown_utils.py",
       "line": 1,
       "last_audited": "2026-03-22",
-      "audit_count": 2,
+      "audit_count": 1,
       "risk_score": 0.0
     },
     "hooks._common": {
@@ -42,7 +42,7 @@
       "file": "hooks/_common.py",
       "line": 1,
       "last_audited": "2026-03-22",
-      "audit_count": 2,
+      "audit_count": 1,
       "risk_score": 0.0
     },
     "hooks.artifact_verification": {
@@ -51,7 +51,7 @@
       "file": "hooks/artifact_verification.py",
       "line": 1,
       "last_audited": "2026-03-22",
-      "audit_count": 2,
+      "audit_count": 1,
       "risk_score": 0.0
     },
     "hooks.impact_graph_gate": {
@@ -60,7 +60,7 @@
       "file": "hooks/impact_graph_gate.py",
       "line": 1,
       "last_audited": "2026-03-22",
-      "audit_count": 2,
+      "audit_count": 1,
       "risk_score": 0.0
     },
     "hooks.status_staleness_gate": {
@@ -69,7 +69,7 @@
       "file": "hooks/status_staleness_gate.py",
       "line": 1,
       "last_audited": "2026-03-22",
-      "audit_count": 2,
+      "audit_count": 1,
       "risk_score": 0.0
     },
     "hooks.subagent_findings_check": {
@@ -78,7 +78,7 @@
       "file": "hooks/subagent_findings_check.py",
       "line": 1,
       "last_audited": "2026-03-22",
-      "audit_count": 2,
+      "audit_count": 1,
       "risk_score": 0.0
     },
     "validate_punchlist::parse_punchlist": {
@@ -167,15 +167,6 @@
       "type": "class",
       "file": "skills/holtz/scripts/impact_graph.py",
       "line": 41,
-      "last_audited": "2026-03-22",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "README.md": {
-      "id": "README.md",
-      "type": "module",
-      "file": "README.md",
-      "line": 1,
       "last_audited": "2026-03-22",
       "audit_count": 1,
       "risk_score": 0.0
@@ -272,46 +263,6 @@
         "discovered": "2026-03-22",
         "confidence": "medium",
         "note": "Hook assumes impact_graph.py creates file at --graph path"
-      }
-    },
-    {
-      "source": "README.md",
-      "target": "validate_punchlist",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium",
-        "note": "README component counts must match actual file counts"
-      }
-    },
-    {
-      "source": "impact_graph::ImpactGraph",
-      "target": "convergence_check::check_convergence",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium",
-        "note": "update_risk delta must be finite; risk_score must be valid float for sorting"
-      }
-    },
-    {
-      "source": "convergence_check",
-      "target": "validate_punchlist",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium",
-        "note": "Both parse ### B[HJ]-NNN: headers with compatible regex"
-      }
-    },
-    {
-      "source": "hooks.status_staleness_gate",
-      "target": "hooks.impact_graph_gate",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium",
-        "note": "Both share the same cwd resolution and path normalization pattern"
       }
     }
   ]

@@ -377,6 +377,30 @@ def test_24_empty_risk_hotspots(graph):
     assert graph.risk_hotspots() == []
 
 
+def test_update_risk_nan_rejected(graph):
+    """update_risk with NaN delta returns error instead of corrupting risk_score."""
+    graph.add_node("f.py::func", "function", "f.py", line=1)
+    result = graph.update_risk("f.py::func", float("nan"))
+    assert "error" in result
+    assert graph.nodes["f.py::func"]["risk_score"] == 0.0  # unchanged
+
+
+def test_update_risk_inf_rejected(graph):
+    """update_risk with inf delta returns error."""
+    graph.add_node("f.py::func", "function", "f.py", line=1)
+    result = graph.update_risk("f.py::func", float("inf"))
+    assert "error" in result
+    assert graph.nodes["f.py::func"]["risk_score"] == 0.0  # unchanged
+
+
+def test_risk_hotspots_negative_top(graph):
+    """risk_hotspots with negative top returns empty list, not reversed slice."""
+    graph.add_node("a.py::x", "function", "a.py", line=1)
+    graph.add_node("b.py::y", "function", "b.py", line=1)
+    assert graph.risk_hotspots(top=-1) == []
+    assert graph.risk_hotspots(top=0) == []
+
+
 # ---------------------------------------------------------------------------
 # Pruning (tests 25-33)
 # ---------------------------------------------------------------------------

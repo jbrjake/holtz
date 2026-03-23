@@ -26,13 +26,15 @@ def main() -> None:
     # Normalize path separators
     normalized = file_path.replace("\\", "/")
 
-    # Only gate writes to audit directories.
-    # Known limitation: PUNCHLIST.md and investigation files are not gated.
-    # The protocol writes audit claims (gated) before punchlist items,
-    # so the gate catches the first Phase 1+ write attempt.
-    if "docs/holtz/justine/audit/" in normalized:
+    # Only gate writes to audit directories and punchlist files.
+    # ORDER MATTERS: justine check must come before holtz check because
+    # "docs/holtz/audit/" is a substring of "docs/holtz/justine/audit/".
+    justine_paths = ("docs/holtz/justine/audit/", )
+    justine_files = ("docs/holtz/justine/PUNCHLIST.md", )
+    holtz_files = ("docs/holtz/PUNCHLIST.md", "docs/holtz/PUNCHLIST-MERGED.md")
+    if any(p in normalized for p in justine_paths) or normalized.endswith(justine_files):
         required = "docs/holtz/justine/impact-graph.json"
-    elif "docs/holtz/audit/" in normalized:
+    elif "docs/holtz/audit/" in normalized or normalized.endswith(holtz_files):
         required = "docs/holtz/impact-graph.json"
     else:
         exit_ok()

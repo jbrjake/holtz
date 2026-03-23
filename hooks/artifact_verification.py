@@ -26,7 +26,7 @@ def main() -> None:
         exit_ok()
 
     # Extract --graph path (handles quoted and unquoted paths, and shell variables)
-    match = re.search(r'--graph\s+["\']?([^"\'\s]+)["\']?', command)
+    match = re.search(r'--graph[ \t]+["\']?([^"\'\s]+)["\']?', command)
     graph_rel = match.group(1) if match else "docs/holtz/impact-graph.json"
 
     # Skip check if graph_rel looks like an unresolved shell variable

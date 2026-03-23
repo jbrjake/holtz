@@ -10,6 +10,7 @@ Usage: python impact_graph.py <command> [args]
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -23,17 +24,17 @@ DRIFT_LINE_THRESHOLD = 10
 # Patterns for finding entity definitions by language
 ENTITY_PATTERNS: dict[str, list[str]] = {
     "function": [
-        r"^\s*(?:async\s+)?def\s+{name}\s*\(",
-        r"^\s*(?:export\s+)?(?:async\s+)?function\s+{name}\s*[\(<]",
-        r"^\s*func\s+{name}\s*[\(<]",
+        r"^[ \t]*(?:async[ \t]+)?def[ \t]+{name}[ \t]*\(",
+        r"^[ \t]*(?:export[ \t]+)?(?:async[ \t]+)?function[ \t]+{name}[ \t]*[\(<]",
+        r"^[ \t]*func[ \t]+{name}[ \t]*[\(<]",
     ],
     "class": [
-        r"^\s*class\s+{name}\b",
+        r"^[ \t]*class[ \t]+{name}\b",
     ],
     "test": [
-        r"^\s*(?:async\s+)?def\s+{name}\s*\(",
-        r"^\s*(?:export\s+)?(?:async\s+)?function\s+{name}\s*[\(<]",
-        r"^\s*func\s+{name}\s*[\(<]",
+        r"^[ \t]*(?:async[ \t]+)?def[ \t]+{name}[ \t]*\(",
+        r"^[ \t]*(?:export[ \t]+)?(?:async[ \t]+)?function[ \t]+{name}[ \t]*[\(<]",
+        r"^[ \t]*func[ \t]+{name}[ \t]*[\(<]",
     ],
 }
 
@@ -201,10 +202,12 @@ class ImpactGraph:
         """Nodes sorted by risk_score descending, alphabetical ID tiebreaker."""
         nodes = list(self.nodes.values())
         nodes.sort(key=lambda n: (-n.get("risk_score", 0.0), n["id"]))
-        return nodes[:top]
+        return nodes[:max(0, top)]
 
     def update_risk(self, node_id: str, delta: float) -> dict:
         """Adjust risk_score, clamped to [0.0, 1.0]."""
+        if not math.isfinite(delta):
+            return {"error": f"delta must be finite, got {delta}"}
         if node_id not in self.nodes:
             return {"error": f"Node '{node_id}' does not exist"}
         node = self.nodes[node_id]

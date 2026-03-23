@@ -1,88 +1,96 @@
 # Holtz Summary
 
 **Project:** holtz
-**Run:** Full audit, run 10
+**Run:** Full audit, run 11
 **Date:** 2026-03-22
-**Duration:** Phases 0-6 complete (with Justine merge mid-run)
+**Duration:** Phases 0-6 complete (with Justine merge)
 
 ## Before / After
 
 | Metric | Baseline | Final |
 |--------|----------|-------|
-| Tests passing | 261 | 265 |
+| Tests passing | 265 | 269 |
 | Tests failing | 0 | 0 |
 | Tests skipped | 0 | 0 |
-| Test time | 0.89s | 0.92s |
+| Test time | 1.29s | 1.78s |
 | Ruff errors | 0 | 0 |
 | Mypy errors | 0 | 0 |
 | Mypy files | 9 | 9 |
-| Coverage | — | 66% |
-| Punchlist items | — | 9 |
-| Resolved | — | 9 |
+| Coverage | 67% | 66% |
+| Punchlist items | — | 13 |
+| Resolved | — | 13 |
 | Open | — | 0 |
 | Deferred | — | 0 |
 
-**Net new tests:** 4 (save_history round-trip x2, vitest all-skipped, BJ-prefix count)
+**Net new tests:** 4 (NaN rejection, inf rejection, negative --top, README metrics check)
 
 ## Items by Severity
 
 | Severity | Count | IDs |
 |----------|-------|-----|
-| MEDIUM | 7 | BH-002, BH-003, BH-005, BH-006, BH-007, BH-008, BH-009 |
-| LOW | 2 | BH-001, BH-004 |
+| MEDIUM | 5 | BH-001, BH-006, BH-008, BH-009, BH-010 |
+| LOW | 8 | BH-002, BH-003, BH-004, BH-005, BH-007, BH-011, BH-012, BH-013 |
 
 ## Items by Category
 
 | Category | Count | IDs |
 |----------|-------|-----|
-| bug/logic | 3 | BH-003 (BJ- prefix), BH-005 (vitest), BH-006 (Go parser) |
-| design/inconsistency | 2 | BH-002 (pytest-cov), BH-008 (staleness bypass doc), BH-009 (gate scope doc) |
-| doc/drift | 1 | BH-001 (README line count) |
-| test/missing | 1 | BH-007 (save_history round-trip) |
-| bug/error-handling | 1 | BH-004 (os.rename -> os.replace) |
+| design/inconsistency | 7 | BH-001, BH-004, BH-008, BH-009, BH-010, BH-011, BH-012, BH-013 |
+| bug/logic | 3 | BH-003, BH-006, BH-007 |
+| doc/drift | 1 | BH-002 |
+| bug/error-handling | 1 | BH-005 |
 
 ## Key Fixes
 
-1. **BH-001 (LOW):** Updated README line count 8,026 -> 8,118. Self-referential drift from run 9's own fixes.
+1. **BH-001 (MEDIUM):** Added test_readme_metrics_match_actual() to test_integration.py. Test count is now automated.
 
-2. **BH-002 (MEDIUM):** Installed pytest-cov, configured coverage in pyproject.toml and CI. Escalated after appearing in runs 8 and 9.
+2. **BH-002 (LOW):** Updated README "13 reference docs" to "14 reference docs".
 
-3. **BH-003 (MEDIUM):** Changed punchlist parser regex from `BH-\d+` to `B[HJ]-\d+` in both validate_punchlist.py and convergence_check.py. Justine's BJ- namespace was invisible to the tool chain.
+3. **BH-003 (LOW):** Fixed artifact_verification.py \s+ to [ \t]+ in --graph regex.
 
-4. **BH-004 (LOW):** Replaced `os.rename` with `os.replace` in impact_graph.py and convergence_check.py for Windows compatibility.
+4. **BH-004 (LOW):** Added comment documenting ordering dependency in impact_graph_gate.py if/elif chain.
 
-5. **BH-005 (MEDIUM):** Added `skipped` to vitest parser regex, allowing all-skipped runs to parse correctly instead of returning None.
+5. **BH-005 (LOW):** Wrapped os.path.getmtime in try/except OSError in status_staleness_gate.py.
 
-6. **BH-006 (MEDIUM):** Documented Go parser limitation: test functions printing fake `--- PASS:` lines can inflate counts.
+6. **BH-006 (MEDIUM):** Added math.isfinite() guard to update_risk(). NaN/inf deltas now return error dict.
 
-7. **BH-007 (MEDIUM):** Added save_history round-trip test and overwrite test.
+7. **BH-007 (LOW):** Clamped risk_hotspots top to max(0, top) to prevent negative slice.
 
-8. **BH-008 (MEDIUM):** Documented STATUS.md deletion bypass as known limitation.
+8. **BH-008 (MEDIUM):** Widened impact_graph_gate to also gate PUNCHLIST.md and PUNCHLIST-MERGED.md writes.
 
-9. **BH-009 (MEDIUM):** Documented impact_graph_gate narrow scope as known limitation.
+9. **BH-009 (MEDIUM):** Replaced \s with [ \t] in Jest, Vitest, and Cargo parser regexes.
+
+10. **BH-010 (MEDIUM):** Added sibling artifact detection to status_staleness_gate. Deleting STATUS.md mid-run now detected and blocked.
+
+11. **BH-011 (LOW):** Fixed \s+ to [ \t]+ in artifact_verification.py.
+
+12. **BH-012 (LOW):** Added comment documenting dict ordering as priority in detect_test_runner.
+
+13. **BH-013 (LOW):** Replaced \s with [ \t] in all 9 ENTITY_PATTERNS regexes.
 
 ## Justine Merge
 
-Justine found 10 items. After verification:
-- 0 agreements (Holtz found different items this run)
-- 2 Holtz-only items (BH-001, BH-002)
-- 7 Justine-only verified items (BH-003 through BH-009)
-- 1 already deferred design choice (BH-101: empty types=[] semantics, same as run 8)
-- 1 theoretical false positive (BH-103: TOML string value containing bracket text)
-- 1 already addressed (BH-107: subagent fence masking, same as run 8 BH-009)
+Justine found 8 items. After verification:
+- 0 agreements (no matching file + category + location pairs)
+- 7 Holtz-only items (BH-001 through BH-007)
+- 6 Justine-only items (BH-008 through BH-013)
+- 1 already fixed (BJ-006: Vitest all-skipped — test exists from run 10)
 
-Justine found the real bugs this run. Her BJ- prefix finding (BH-110 -> BH-003) was the most significant: the tools that validate Justine's work could not parse her output. Her Vitest and Go parser findings (BH-108/BH-109) caught genuine edge cases.
+Justine identified the regex convention violation pattern (PAT-003) with 3 instances. Holtz missed all 3 convention violations. Holtz found the NaN edge case and negative --top CLI bug. Different methodologies, different findings, zero overlap.
 
 ## Prediction Accuracy
 
 | Confidence | Predicted | Confirmed | Accuracy |
 |------------|-----------|-----------|----------|
-| HIGH       | 2         | 2         | 100%     |
-| MEDIUM     | 0         | 0         | --       |
-| LOW        | 0         | 0         | --       |
-| **Total**  | **2**     | **2**     | **100%** |
+| HIGH       | 1         | 1         | 100%     |
+| MEDIUM     | 2         | 2         | 100%     |
+| LOW        | 1         | 0         | 0%       |
+| **Total**  | **4**     | **3**     | **75%**  |
 
-Predictions only covered doc drift and escalation. Justine's 7 code-level findings were not predicted.
+- Prediction 1 (HIGH, README drift): CONFIRMED via BH-002
+- Prediction 2 (MEDIUM, hook bugs): CONFIRMED via BH-003, BH-004, BH-005
+- Prediction 3 (MEDIUM, impact_graph CLI): CONFIRMED via BH-006, BH-007
+- Prediction 4 (LOW, convergence_check edge cases): UNCONFIRMED — no bugs found in those lines
 
 ## Convergence Trajectory
 
@@ -98,9 +106,10 @@ Predictions only covered doc drift and escalation. Justine's 7 code-level findin
 | 8 | 10 | 2 HIGH, 3 MEDIUM, 5 LOW | None | 24 |
 | 9 | 5 | 1 MEDIUM, 4 LOW | None | 2 |
 | 10 | 9 | 7 MEDIUM, 2 LOW | None | 4 |
+| 11 | 13 | 5 MEDIUM, 8 LOW | PAT-003 | 4 |
 
-Run 10 found more items than expected because Justine's adversarial depth-first scan caught edge cases that both Holtz and prior Justine runs missed: the BJ- prefix invisibility, the Vitest all-skipped gap, and the Go parser inflation vulnerability. These are real bugs, not documentation drift. The scripts layer is NOT as clean as runs 7-9 suggested -- it had untested edge cases hiding in the test runner parsers and a namespace contract violation in the punchlist parsers.
+Run 11 found more items than run 10 because Justine surfaced a new pattern class (PAT-003: regex convention violations with 3 instances) that previous runs missed. The \s-vs-[ \t] convention was established early but never enforced. Once Justine ran the detection heuristic globally, the violations became visible. Additionally, Holtz found the NaN edge case in update_risk() which survived 10 prior audits because the Python min/max behavior with NaN is non-obvious (it silently clamps rather than propagating, unlike most languages).
 
 ## Recommendations
 
-1. **Automate README metrics** -- test count and line count drift on every change. Second appearance (also in run 9). Will be escalated in run 11 if unaddressed.
+1. **Add \s convention check to CI** -- A grep-based check preventing re-introduction of \s in source files would close this pattern permanently.

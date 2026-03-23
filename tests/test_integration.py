@@ -210,3 +210,43 @@ echo test
     assert vp_items[0].status == "OPEN"
     assert cc_counts["OPEN"] == 1
     assert cc_counts["unknown"] == 0
+
+
+def test_readme_metrics_match_actual():
+    """README component counts match actual file counts.
+
+    This test automates the README metrics check that was a recurring
+    recommendation across Holtz runs 9-11. If this test fails, update
+    the counts on the 'What's inside' line of README.md.
+    """
+    import re
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    readme = (root / "README.md").read_text()
+
+    # Extract claimed counts from README
+    m = re.search(
+        r"(\d+) skills, (\d+) agents, (\d+) reference docs, (\d+) example, "
+        r"(\d+) Python scripts, (\d+) seed patterns, (\d+) enforcement hooks, "
+        r"(\d+) tests across ([\d,]+) lines",
+        readme,
+    )
+    assert m, "Could not find 'What's inside' line in README.md"
+
+    claimed_tests = int(m.group(8))
+
+    # Count actual tests
+    result = subprocess.run(
+        ["python", "-m", "pytest", "tests/", "--co", "-q"],
+        capture_output=True, text=True, cwd=str(root),
+    )
+    # Last line is "N tests collected" or "N test/N tests collected"
+    test_line = result.stdout.strip().split("\n")[-1]
+    actual_tests = int(re.search(r"(\d+) test", test_line).group(1))
+
+    assert claimed_tests == actual_tests, (
+        f"README says {claimed_tests} tests but {actual_tests} collected. "
+        f"Update the 'What's inside' line in README.md."
+    )

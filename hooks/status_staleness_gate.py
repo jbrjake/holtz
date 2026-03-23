@@ -50,14 +50,26 @@ def main() -> None:
     status_path = os.path.join(cwd, status_rel)
 
     # If STATUS.md doesn't exist yet, allow — first write of the run.
-    # Known limitation: if STATUS.md is deleted mid-run, this also allows,
-    # bypassing staleness enforcement. Distinguishing "not created yet" from
-    # "deleted mid-run" would require checking for other docs/holtz/ artifacts.
+    # To distinguish "not created yet" from "deleted mid-run", check for
+    # sibling artifacts that would only exist if the run has already started.
     if not os.path.isfile(status_path):
+        holtz_dir = os.path.join(cwd, os.path.dirname(status_rel))
+        recon_dir = os.path.join(holtz_dir, "recon")
+        punchlist = os.path.join(holtz_dir, "PUNCHLIST.md")
+        if os.path.isdir(recon_dir) or os.path.isfile(punchlist):
+            exit_block(
+                f"BLOCKED: {status_rel} is missing but other run artifacts exist "
+                f"(recon/ or PUNCHLIST.md). STATUS.md may have been deleted mid-run. "
+                f"Re-create STATUS.md before continuing."
+            )
         exit_ok()
 
-    # Check modification time
-    mtime = os.path.getmtime(status_path)
+    # Check modification time. Wrap in try/except for TOCTOU race:
+    # STATUS.md could be deleted between isfile() above and getmtime() here.
+    try:
+        mtime = os.path.getmtime(status_path)
+    except OSError:
+        exit_ok()  # File vanished — treat as "doesn't exist yet"
     age = time.time() - mtime
 
     if age > STALENESS_WINDOW:

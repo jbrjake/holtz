@@ -70,9 +70,10 @@ def detect_test_runner(project_root: Path | None = None) -> str | None:
     """
     root = project_root or Path(".")
     # Priority order matters: first match wins. Ordered by specificity —
-    # pytest first (most common Python runner), then JS runners, then
-    # compiled-language runners. A project with both conftest.py and
-    # jest.config.js will detect pytest.
+    # Dict insertion order IS the detection priority (CPython 3.7+ guarantees
+    # dict ordering). pytest first (most common Python runner), then JS runners,
+    # then compiled-language runners. A project with both conftest.py and
+    # jest.config.js will detect pytest. Do NOT reorder without updating tests.
     markers = {
         "pytest": ["pytest.ini", "pyproject.toml", "setup.cfg", "conftest.py"],
         "jest": ["jest.config.js", "jest.config.ts"],
@@ -140,7 +141,7 @@ def get_test_counts(runner: str | None) -> dict | None:
             # Jest output: Tests: N failed, N skipped, N passed, N total
             # Components are optional and Jest orders them by count descending,
             # so the order is NOT fixed. Extract each component independently.
-            jest_line = re.search(r'Tests:\s+(.+\d+ total)', output)
+            jest_line = re.search(r'Tests:[ \t]+(.+\d+ total)', output)
             if not jest_line:
                 return None
             line = jest_line.group(1)
@@ -160,7 +161,7 @@ def get_test_counts(runner: str | None) -> dict | None:
             # Must match the Tests summary line specifically to avoid counting
             # "Test Files  N passed" which is a different metric.
             # Components are extracted independently (like Jest) to handle any order.
-            vitest_line = re.search(r'^\s*Tests\s+(.+\d+ (?:passed|failed|skipped))', output, re.MULTILINE)
+            vitest_line = re.search(r'^[ \t]*Tests[ \t]+(.+\d+ (?:passed|failed|skipped))', output, re.MULTILINE)
             if not vitest_line:
                 return None
             line = vitest_line.group(1)
@@ -177,7 +178,7 @@ def get_test_counts(runner: str | None) -> dict | None:
 
         if runner == "cargo":
             # Cargo: test result: ok. N passed; N failed; N ignored
-            m = re.search(r'(\d+) passed;\s*(\d+) failed;\s*(\d+) ignored', output)
+            m = re.search(r'(\d+) passed;[ \t]*(\d+) failed;[ \t]*(\d+) ignored', output)
             if not m:
                 return None
             return {
