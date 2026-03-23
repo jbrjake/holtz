@@ -141,7 +141,7 @@ Holtz has been auditing his own codebase since it was written. Eleven runs. Here
 
 **Run 11** is where Justine earned her keep. She found three regex convention violations that Holtz missed in prior runs — places where `\s` was used instead of `[ \t]`, letting patterns leak across line boundaries. Same pattern, three instances, invisible to depth-first analysis because each instance looked fine in isolation. Breadth-first caught them because she was scanning everything at once instead of drilling into one area.
 
-After 11 runs: 269 tests across 8,200 lines. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+After 11 runs: 286 tests across 8,200 lines. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
 
 ## The hooks
 
@@ -161,7 +161,7 @@ Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-2 skills, 2 agents, 14 reference docs, 1 example, 4 Python scripts, 6 seed patterns, 4 enforcement hooks, 269 tests across 8,200 lines, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+2 skills, 2 agents, 14 reference docs, 1 example, 4 Python scripts, 6 seed patterns, 4 enforcement hooks, 286 tests across 8,200 lines, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Who Holtz is
 

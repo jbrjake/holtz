@@ -27,17 +27,17 @@ def main() -> None:
     file_path = tool_input.get("file_path", "")
 
     if not file_path:
-        exit_ok()
+        exit_ok("PreToolUse")
 
     normalized = file_path.replace("\\", "/")
 
     # Only gate writes inside docs/holtz/
     if "docs/holtz/" not in normalized:
-        exit_ok()
+        exit_ok("PreToolUse")
 
     # If the write IS to a protocol STATUS.md, allow it — this is the update itself
     if normalized.endswith("docs/holtz/STATUS.md") or normalized.endswith("docs/holtz/justine/STATUS.md"):
-        exit_ok()
+        exit_ok("PreToolUse")
 
     # Determine which STATUS.md to check
     cwd = event.get("cwd", os.getcwd())
@@ -62,14 +62,14 @@ def main() -> None:
                 f"(recon/ or PUNCHLIST.md). STATUS.md may have been deleted mid-run. "
                 f"Re-create STATUS.md before continuing."
             )
-        exit_ok()
+        exit_ok("PreToolUse")
 
     # Check modification time. Wrap in try/except for TOCTOU race:
     # STATUS.md could be deleted between isfile() above and getmtime() here.
     try:
         mtime = os.path.getmtime(status_path)
     except OSError:
-        exit_ok()  # File vanished — treat as "doesn't exist yet"
+        exit_ok("PreToolUse")  # File vanished — treat as "doesn't exist yet"
     age = time.time() - mtime
 
     if age > STALENESS_WINDOW:
@@ -79,7 +79,7 @@ def main() -> None:
             f"STATUS.md is your program counter — update it before writing more findings."
         )
 
-    exit_ok()
+    exit_ok("PreToolUse")
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ def main() -> None:
     file_path = tool_input.get("file_path", "")
 
     if not file_path:
-        exit_ok()
+        exit_ok("PreToolUse")
 
     # Normalize path separators
     normalized = file_path.replace("\\", "/")
@@ -37,7 +37,7 @@ def main() -> None:
     elif "docs/holtz/audit/" in normalized or normalized.endswith(holtz_files):
         required = "docs/holtz/impact-graph.json"
     else:
-        exit_ok()
+        exit_ok("PreToolUse")
 
     # Resolve relative to cwd if path is relative
     cwd = event.get("cwd", os.getcwd())
@@ -50,7 +50,7 @@ def main() -> None:
             f"\"Later\" means \"never.\" Run the command NOW."
         )
 
-    exit_ok()
+    exit_ok("PreToolUse")
 
 
 if __name__ == "__main__":

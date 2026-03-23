@@ -12,7 +12,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import exit_block, exit_ok, read_event
+from _common import exit_ok, exit_warn, read_event
 
 
 def main() -> None:
@@ -46,7 +46,7 @@ def main() -> None:
             if stderr:
                 extra = f" Script stderr: {stderr[:200]}"
 
-        exit_block(
+        exit_warn(
             f"BLOCKED: impact_graph.py ran but {graph_rel} does not exist on disk. "
             f"The graph was not created.{extra}"
         )

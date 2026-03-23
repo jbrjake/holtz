@@ -1,7 +1,14 @@
 """Shared utilities for Holtz plugin hooks.
 
-All hooks read JSON from stdin, write reason to stderr, and exit 0/1/2.
-Exit 0 = allow, exit 1 = warn (non-blocking), exit 2 = block.
+All hooks read JSON from stdin and write modern-format JSON to stdout.
+Every hook exits 0. The JSON payload controls the decision:
+
+  - exit_ok:    {"continue": true,  "suppressOutput": true, ...}
+  - exit_warn:  {"continue": true,  "suppressOutput": false, "additionalContext": msg}
+  - exit_block: {"continue": false, "suppressOutput": false, "hookSpecificOutput": {...}}
+
+PreToolUse hooks include hookSpecificOutput with permissionDecision.
+See: https://github.com/anthropics/claude-code/issues/17088
 """
 from __future__ import annotations
 
@@ -25,18 +32,48 @@ def read_event() -> dict[str, Any]:
         return {}
 
 
-def exit_ok() -> None:
-    """Allow the tool call. Exit 0 with no output."""
+def exit_ok(event_name: str = "") -> None:
+    """Allow the tool call. Modern JSON on stdout, exit 0.
+
+    For PreToolUse hooks, pass event_name="PreToolUse" to include
+    hookSpecificOutput with permissionDecision (avoids phantom
+    "hook error" label in the Claude Code UI).
+    """
+    output: dict[str, Any] = {"continue": True, "suppressOutput": True}
+    if event_name == "PreToolUse":
+        output["hookSpecificOutput"] = {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "allow",
+            "permissionDecisionReason": "",
+        }
+    print(json.dumps(output))
     sys.exit(0)
 
 
 def exit_warn(msg: str) -> None:
-    """Warn but allow. Exit 1, message to stderr."""
-    print(msg, file=sys.stderr)
-    sys.exit(1)
+    """Warn but allow. Modern JSON on stdout, exit 0."""
+    print(json.dumps({
+        "continue": True,
+        "suppressOutput": False,
+        "additionalContext": msg,
+    }))
+    sys.exit(0)
 
 
 def exit_block(msg: str) -> None:
-    """Block the tool call. Exit 2, message to stderr."""
-    print(msg, file=sys.stderr)
-    sys.exit(2)
+    """Block the tool call. Modern JSON on stdout, exit 0.
+
+    For PreToolUse hooks only — uses hookSpecificOutput with
+    permissionDecision "block". PostToolUse hooks should use
+    exit_warn() instead since the tool has already executed.
+    """
+    print(json.dumps({
+        "continue": False,
+        "suppressOutput": False,
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "block",
+            "permissionDecisionReason": msg,
+        },
+    }))
+    sys.exit(0)
