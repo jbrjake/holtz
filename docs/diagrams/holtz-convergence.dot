@@ -1,35 +1,118 @@
 digraph {
   rankdir=TB
-  node [shape=box]
+  bgcolor="transparent"
+  pad=0.4
+  nodesep=0.6
+  ranksep=0.7
 
-  recover [label="Read STATUS.md\n+ PUNCHLIST.md\n(recover position + active lens)"]
-  fix_loop [label="Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"]
-  breaker [label="Circuit breaker\ntriggered?" shape=diamond]
-  stop [label="STOP\nReport to user"]
-  lens_clean [label="Current lens:\nzero OPEN items AND\nno new items (2 iters)\nAND suite stable?" shape=diamond]
-  mark [label="Mark current lens\nCOMPLETE in STATUS.md"]
-  switch [label="Switch lens?\n(COMPLETE OR\n3 consecutive LOW)" shape=diamond]
-  next_lens [label="Select next lens from registry\nUpdate Active Lens in STATUS.md\nRun Phases 1-3 scoped to\nnew lens focus + entry point"]
-  all_done [label="All lenses\nCOMPLETE?" shape=diamond]
-  final [label="Final sweep:\nALL lenses simultaneously"]
-  clean [label="Clean?" shape=diamond]
-  converged [label="CONVERGED"]
-  reset [label="Add findings to punchlist\nReset affected lenses\nto incomplete"]
+  node [
+    fontname="Helvetica"
+    fontsize=12
+    style="filled,rounded"
+    fillcolor="#f0f4f8"
+    color="#4a5568"
+    fontcolor="#1a202c"
+    penwidth=1.5
+    margin="0.15,0.1"
+  ]
+
+  edge [
+    fontname="Helvetica"
+    fontsize=10
+    fontcolor="#4a5568"
+    color="#718096"
+    penwidth=1.2
+    arrowsize=0.8
+  ]
+
+  recover [
+    label="Read STATUS.md\n+ PUNCHLIST.md\n(recover position + active lens)"
+    fillcolor="#bee3f8"
+    color="#3182ce"
+  ]
+  fix_loop [
+    label="Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"
+  ]
+  breaker [
+    label="Circuit breaker\ntriggered?"
+    shape=diamond
+    fillcolor="#fefcbf"
+    color="#d69e2e"
+    fontcolor="#744210"
+  ]
+  stop [
+    label="STOP\nReport to user"
+    fillcolor="#fed7d7"
+    color="#e53e3e"
+    fontcolor="#742a2a"
+  ]
+  lens_clean [
+    label="Current lens:\nzero OPEN items AND\nno new items (2 iters)\nAND suite stable?"
+    shape=diamond
+    fillcolor="#fefcbf"
+    color="#d69e2e"
+    fontcolor="#744210"
+  ]
+  mark [
+    label="Mark current lens\nCOMPLETE in STATUS.md"
+  ]
+  switch [
+    label="Switch lens?\n(COMPLETE OR\n3 consecutive LOW)"
+    shape=diamond
+    fillcolor="#fefcbf"
+    color="#d69e2e"
+    fontcolor="#744210"
+  ]
+  next_lens [
+    label="Select next lens from registry\nUpdate Active Lens in STATUS.md\nRun Phases 1-3 scoped to\nnew lens focus + entry point"
+  ]
+  all_done [
+    label="All lenses\nCOMPLETE?"
+    shape=diamond
+    fillcolor="#fefcbf"
+    color="#d69e2e"
+    fontcolor="#744210"
+  ]
+  final [
+    label="Final sweep:\nALL lenses simultaneously"
+    fillcolor="#e9d8fd"
+    color="#6b46c1"
+    fontcolor="#44337a"
+  ]
+  clean [
+    label="Clean?"
+    shape=diamond
+    fillcolor="#fefcbf"
+    color="#d69e2e"
+    fontcolor="#744210"
+  ]
+  converged [
+    label="CONVERGED"
+    fillcolor="#c6f6d5"
+    color="#38a169"
+    fontcolor="#22543d"
+  ]
+  reset [
+    label="Add findings to punchlist\nReset affected lenses\nto incomplete"
+    fillcolor="#fed7d7"
+    color="#e53e3e"
+    fontcolor="#742a2a"
+  ]
 
   recover -> fix_loop
   fix_loop -> breaker
   breaker -> stop [label="yes"]
   breaker -> lens_clean [label="no"]
   lens_clean -> mark [label="yes"]
-  lens_clean -> recover [label="no\n(continue fixing)"]
+  lens_clean -> recover [label="no\n(continue fixing)" style=dashed]
   mark -> switch
   switch -> next_lens [label="yes"]
   switch -> all_done [label="no"]
-  next_lens -> recover
+  next_lens -> recover [style=dashed]
   all_done -> final [label="yes"]
-  all_done -> recover [label="no"]
+  all_done -> recover [label="no" style=dashed]
   final -> clean
   clean -> converged [label="yes"]
   clean -> reset [label="no"]
-  reset -> recover
+  reset -> recover [style=dashed]
 }

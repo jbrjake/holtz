@@ -1,15 +1,73 @@
 digraph {
   rankdir=TB
-  node [shape=box]
+  bgcolor="transparent"
+  pad=0.4
+  nodesep=0.6
+  ranksep=0.7
 
-  recover [label="Read STATUS.md\n+ PUNCHLIST.md\n(recover position + priority queue)"]
-  fix_loop [label="Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"]
-  breaker [label="Circuit breaker\ntriggered?" shape=diamond]
-  stop [label="STOP\nReport to user"]
-  scan [label="Single-pass audit:\nALL lenses simultaneously\n(integration → security →\ndata-flow → error-propagation\n→ contract → component)"]
-  found [label="New findings\nacross any area?" shape=diamond]
-  converged [label="CONVERGED"]
-  add [label="Add findings to punchlist"]
+  node [
+    fontname="Helvetica"
+    fontsize=12
+    style="filled,rounded"
+    fillcolor="#f0f4f8"
+    color="#4a5568"
+    fontcolor="#1a202c"
+    penwidth=1.5
+    margin="0.15,0.1"
+  ]
+
+  edge [
+    fontname="Helvetica"
+    fontsize=10
+    fontcolor="#4a5568"
+    color="#718096"
+    penwidth=1.2
+    arrowsize=0.8
+  ]
+
+  recover [
+    label="Read STATUS.md\n+ PUNCHLIST.md\n(recover position + priority queue)"
+    fillcolor="#bee3f8"
+    color="#3182ce"
+  ]
+  fix_loop [
+    label="Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"
+  ]
+  breaker [
+    label="Circuit breaker\ntriggered?"
+    shape=diamond
+    fillcolor="#fefcbf"
+    color="#d69e2e"
+    fontcolor="#744210"
+  ]
+  stop [
+    label="STOP\nReport to user"
+    fillcolor="#fed7d7"
+    color="#e53e3e"
+    fontcolor="#742a2a"
+  ]
+  scan [
+    label="Single-pass audit:\nALL lenses simultaneously\n(integration → security →\ndata-flow → error-propagation\n→ contract → component)"
+    fillcolor="#e9d8fd"
+    color="#6b46c1"
+    fontcolor="#44337a"
+  ]
+  found [
+    label="New findings\nacross any area?"
+    shape=diamond
+    fillcolor="#fefcbf"
+    color="#d69e2e"
+    fontcolor="#744210"
+  ]
+  converged [
+    label="CONVERGED"
+    fillcolor="#c6f6d5"
+    color="#38a169"
+    fontcolor="#22543d"
+  ]
+  add [
+    label="Add findings to punchlist"
+  ]
 
   recover -> fix_loop
   fix_loop -> breaker
@@ -18,5 +76,5 @@ digraph {
   scan -> found
   found -> converged [label="zero findings\nacross all areas"]
   found -> add [label="findings exist"]
-  add -> recover
+  add -> recover [style=dashed]
 }

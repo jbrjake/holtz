@@ -1,16 +1,93 @@
 digraph {
   rankdir=TB
-  node [shape=box]
-  check [label="Check docs/holtz/"]
-  summary [label="SUMMARY.md exists?\n(prior run completed)"]
-  status [label="STATUS.md exists?\n(prior run in progress)"]
-  recon [label="recon/ dir exists?\n(crashed in Phase 0)"]
-  punchlist [label="PUNCHLIST.md exists?\n(past recon)"]
-  fresh [label="Start fresh\n(Phase 0)"]
-  resume_status [label="Resume from\nSTATUS.md position"]
-  resume_recon [label="Resume from first\nmissing recon step"]
-  resume_audit [label="Resume audit or\nfix loop per STATUS"]
-  ask [label="Ask user:\nfresh audit or\nreview prior?"]
+  bgcolor="transparent"
+  pad=0.4
+  nodesep=0.6
+  ranksep=0.7
+
+  node [
+    fontname="Helvetica"
+    fontsize=12
+    style="filled,rounded"
+    fillcolor="#f0f4f8"
+    color="#4a5568"
+    fontcolor="#1a202c"
+    penwidth=1.5
+    margin="0.15,0.1"
+  ]
+
+  edge [
+    fontname="Helvetica"
+    fontsize=10
+    fontcolor="#4a5568"
+    color="#718096"
+    penwidth=1.2
+    arrowsize=0.8
+  ]
+
+  check [
+    label="Check docs/holtz/"
+    fillcolor="#bee3f8"
+    color="#3182ce"
+  ]
+  summary [
+    label="SUMMARY.md exists?\n(prior run completed)"
+    shape=diamond
+    fillcolor="#fefcbf"
+    color="#d69e2e"
+    fontcolor="#744210"
+  ]
+  status [
+    label="STATUS.md exists?\n(prior run in progress)"
+    shape=diamond
+    fillcolor="#fefcbf"
+    color="#d69e2e"
+    fontcolor="#744210"
+  ]
+  recon [
+    label="recon/ dir exists?\n(crashed in Phase 0)"
+    shape=diamond
+    fillcolor="#fefcbf"
+    color="#d69e2e"
+    fontcolor="#744210"
+  ]
+  punchlist [
+    label="PUNCHLIST.md exists?\n(past recon)"
+    shape=diamond
+    fillcolor="#fefcbf"
+    color="#d69e2e"
+    fontcolor="#744210"
+  ]
+  fresh [
+    label="Start fresh\n(Phase 0)"
+    fillcolor="#c6f6d5"
+    color="#38a169"
+    fontcolor="#22543d"
+  ]
+  resume_status [
+    label="Resume from\nSTATUS.md position"
+    fillcolor="#c6f6d5"
+    color="#38a169"
+    fontcolor="#22543d"
+  ]
+  resume_recon [
+    label="Resume from first\nmissing recon step"
+    fillcolor="#c6f6d5"
+    color="#38a169"
+    fontcolor="#22543d"
+  ]
+  resume_audit [
+    label="Resume audit or\nfix loop per STATUS"
+    fillcolor="#c6f6d5"
+    color="#38a169"
+    fontcolor="#22543d"
+  ]
+  ask [
+    label="Ask user:\nfresh audit or\nreview prior?"
+    fillcolor="#e9d8fd"
+    color="#6b46c1"
+    fontcolor="#44337a"
+  ]
 
   check -> summary
   summary -> ask [label="yes"]

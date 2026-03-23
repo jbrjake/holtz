@@ -1,23 +1,72 @@
 digraph {
   rankdir=TB
-  node [shape=box]
-  read [label="Re-read worklist\n(MERGED if exists,\notherwise PUNCHLIST)"]
-  triage [label="Triage item\nby category"]
-  fast [label="Fast Path\n(test→fix→commit)"]
-  investigate [label="Investigation Path\n(layers→confidence→fix)"]
-  cantrepro [label="Can't-Reproduce Path\n(widen→bisect→defer)"]
-  harden [label="Per-Fix Hardening\n(edges+regression)"]
-  blast [label="Blast Radius Analysis\n(impact graph 2-hop)"]
-  next [label="Next item"]
+  bgcolor="transparent"
+  pad=0.4
+  nodesep=0.6
+  ranksep=0.7
+
+  node [
+    fontname="Helvetica"
+    fontsize=12
+    style="filled,rounded"
+    fillcolor="#f0f4f8"
+    color="#4a5568"
+    fontcolor="#1a202c"
+    penwidth=1.5
+    margin="0.15,0.1"
+  ]
+
+  edge [
+    fontname="Helvetica"
+    fontsize=10
+    fontcolor="#4a5568"
+    color="#718096"
+    penwidth=1.2
+    arrowsize=0.8
+  ]
+
+  read [
+    label="Re-read worklist\n(MERGED if exists,\notherwise PUNCHLIST)"
+    fillcolor="#bee3f8"
+    color="#3182ce"
+  ]
+  triage [
+    label="Triage item\nby category"
+    shape=diamond
+    fillcolor="#fefcbf"
+    color="#d69e2e"
+    fontcolor="#744210"
+  ]
+  fast [
+    label="Fast Path\n(test → fix → commit)"
+  ]
+  investigate [
+    label="Investigation Path\n(layers → confidence → fix)"
+  ]
+  cantrepro [
+    label="Can't-Reproduce Path\n(widen → bisect → defer)"
+  ]
+  harden [
+    label="Per-Fix Hardening\n(edges + regression)"
+  ]
+  blast [
+    label="Blast Radius Analysis\n(impact graph 2-hop)"
+  ]
+  next [
+    label="Next item"
+    fillcolor="#c6f6d5"
+    color="#38a169"
+    fontcolor="#22543d"
+  ]
 
   read -> triage
-  triage -> fast [label="test/doc/design\nor deterministic bug"]
-  triage -> investigate [label="intermittent\nor theoretical bug"]
-  triage -> cantrepro [label="repro test\nunexpectedly passes"]
+  triage -> fast [label="  test/doc/design\n  or deterministic bug"]
+  triage -> investigate [label="  intermittent\n  or theoretical bug"]
+  triage -> cantrepro [label="  repro test\n  unexpectedly passes"]
   fast -> harden
   investigate -> harden
   cantrepro -> harden [label="if reproduced"]
-  cantrepro -> next [label="DEFERRED\nwith evidence"]
+  cantrepro -> next [label="DEFERRED\nwith evidence" style=dashed]
   harden -> blast
   blast -> next
 }
