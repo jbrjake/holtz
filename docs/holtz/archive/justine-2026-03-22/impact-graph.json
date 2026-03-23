@@ -1,0 +1,273 @@
+{
+  "nodes": {
+    "validate_punchlist": {
+      "id": "validate_punchlist",
+      "type": "module",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.1
+    },
+    "convergence_check": {
+      "id": "convergence_check",
+      "type": "module",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.2
+    },
+    "impact_graph": {
+      "id": "impact_graph",
+      "type": "module",
+      "file": "skills/holtz/scripts/impact_graph.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.1
+    },
+    "markdown_utils": {
+      "id": "markdown_utils",
+      "type": "module",
+      "file": "skills/holtz/scripts/markdown_utils.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks._common": {
+      "id": "hooks._common",
+      "type": "module",
+      "file": "hooks/_common.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks.artifact_verification": {
+      "id": "hooks.artifact_verification",
+      "type": "module",
+      "file": "hooks/artifact_verification.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks.impact_graph_gate": {
+      "id": "hooks.impact_graph_gate",
+      "type": "module",
+      "file": "hooks/impact_graph_gate.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks.status_staleness_gate": {
+      "id": "hooks.status_staleness_gate",
+      "type": "module",
+      "file": "hooks/status_staleness_gate.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks.subagent_findings_check": {
+      "id": "hooks.subagent_findings_check",
+      "type": "module",
+      "file": "hooks/subagent_findings_check.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "README": {
+      "id": "README",
+      "type": "doc",
+      "file": "README.md",
+      "line": 36,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.4
+    },
+    "ci.yml": {
+      "id": "ci.yml",
+      "type": "config",
+      "file": ".github/workflows/ci.yml",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.2
+    },
+    "pyproject.toml": {
+      "id": "pyproject.toml",
+      "type": "config",
+      "file": "pyproject.toml",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.1
+    },
+    "convergence_check::check_convergence": {
+      "id": "convergence_check::check_convergence",
+      "type": "function",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": 280,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.2
+    },
+    "convergence_check::detect_test_runner": {
+      "id": "convergence_check::detect_test_runner",
+      "type": "function",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": 64,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.1
+    },
+    "convergence_check::save_history": {
+      "id": "convergence_check::save_history",
+      "type": "function",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": 247,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.1
+    },
+    "validate_punchlist::parse_punchlist": {
+      "id": "validate_punchlist::parse_punchlist",
+      "type": "function",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": 78,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.1
+    },
+    "validate_punchlist::validate": {
+      "id": "validate_punchlist::validate",
+      "type": "function",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": 257,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "markdown_utils::mask_code_fences": {
+      "id": "markdown_utils::mask_code_fences",
+      "type": "function",
+      "file": "skills/holtz/scripts/markdown_utils.py",
+      "line": 50,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "impact_graph::ImpactGraph": {
+      "id": "impact_graph::ImpactGraph",
+      "type": "class",
+      "file": "skills/holtz/scripts/impact_graph.py",
+      "line": 41,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.1
+    },
+    "architecture-baseline": {
+      "id": "architecture-baseline",
+      "type": "doc",
+      "file": "docs/holtz/architecture-baseline.md",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.1
+    },
+    "convergence_check::count_items": {
+      "id": "convergence_check::count_items",
+      "type": "function",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": 26,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    }
+  },
+  "edges": [
+    {
+      "source": "validate_punchlist",
+      "target": "markdown_utils",
+      "type": "imports",
+      "metadata": {"discovered": "2026-03-22", "confidence": "high"}
+    },
+    {
+      "source": "convergence_check",
+      "target": "markdown_utils",
+      "type": "imports",
+      "metadata": {"discovered": "2026-03-22", "confidence": "high"}
+    },
+    {
+      "source": "hooks.artifact_verification",
+      "target": "hooks._common",
+      "type": "imports",
+      "metadata": {"discovered": "2026-03-22", "confidence": "high"}
+    },
+    {
+      "source": "hooks.impact_graph_gate",
+      "target": "hooks._common",
+      "type": "imports",
+      "metadata": {"discovered": "2026-03-22", "confidence": "high"}
+    },
+    {
+      "source": "hooks.status_staleness_gate",
+      "target": "hooks._common",
+      "type": "imports",
+      "metadata": {"discovered": "2026-03-22", "confidence": "high"}
+    },
+    {
+      "source": "hooks.subagent_findings_check",
+      "target": "hooks._common",
+      "type": "imports",
+      "metadata": {"discovered": "2026-03-22", "confidence": "high"}
+    },
+    {
+      "source": "validate_punchlist::parse_punchlist",
+      "target": "markdown_utils::mask_code_fences",
+      "type": "calls",
+      "metadata": {"discovered": "2026-03-22", "confidence": "high"}
+    },
+    {
+      "source": "convergence_check::count_items",
+      "target": "markdown_utils::mask_code_fences",
+      "type": "calls",
+      "metadata": {"discovered": "2026-03-22", "confidence": "high"}
+    },
+    {
+      "source": "README",
+      "target": "pyproject.toml",
+      "type": "diverges_from",
+      "metadata": {"discovered": "2026-03-22", "confidence": "high", "note": "README claims 235 tests/4846 lines but actual is 259 tests/8026+ lines"}
+    },
+    {
+      "source": "ci.yml",
+      "target": "pyproject.toml",
+      "type": "diverges_from",
+      "metadata": {"discovered": "2026-03-22", "confidence": "high", "note": "CI runs ruff check . (all files) but pyproject.toml src only covers scripts/tests/hooks"}
+    },
+    {
+      "source": "architecture-baseline",
+      "target": "hooks._common",
+      "type": "diverges_from",
+      "metadata": {"discovered": "2026-03-22", "confidence": "high", "note": "Module Dependencies table omits hooks layer"}
+    },
+    {
+      "source": "validate_punchlist::parse_punchlist",
+      "target": "convergence_check::count_items",
+      "type": "assumes",
+      "metadata": {"discovered": "2026-03-22", "confidence": "high", "note": "Both split on ### BH-NNN: headers in masked content -- must stay aligned"}
+    },
+    {
+      "source": "hooks.artifact_verification",
+      "target": "impact_graph::ImpactGraph",
+      "type": "assumes",
+      "metadata": {"discovered": "2026-03-22", "confidence": "high", "note": "Hook assumes impact_graph.py creates file at --graph path"}
+    }
+  ]
+}

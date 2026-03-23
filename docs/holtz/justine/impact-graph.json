@@ -1,0 +1,171 @@
+{
+  "nodes": {
+    "validate_punchlist": {
+      "id": "validate_punchlist",
+      "type": "module",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "convergence_check": {
+      "id": "convergence_check",
+      "type": "module",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "impact_graph": {
+      "id": "impact_graph",
+      "type": "module",
+      "file": "skills/holtz/scripts/impact_graph.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "markdown_utils": {
+      "id": "markdown_utils",
+      "type": "module",
+      "file": "skills/holtz/scripts/markdown_utils.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks._common": {
+      "id": "hooks._common",
+      "type": "module",
+      "file": "hooks/_common.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks.impact_graph_gate": {
+      "id": "hooks.impact_graph_gate",
+      "type": "module",
+      "file": "hooks/impact_graph_gate.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks.status_staleness_gate": {
+      "id": "hooks.status_staleness_gate",
+      "type": "module",
+      "file": "hooks/status_staleness_gate.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks.artifact_verification": {
+      "id": "hooks.artifact_verification",
+      "type": "module",
+      "file": "hooks/artifact_verification.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks.subagent_findings_check": {
+      "id": "hooks.subagent_findings_check",
+      "type": "module",
+      "file": "hooks/subagent_findings_check.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    }
+  },
+  "edges": [
+    {
+      "source": "validate_punchlist",
+      "target": "markdown_utils",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check",
+      "target": "markdown_utils",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "hooks.impact_graph_gate",
+      "target": "hooks._common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "hooks.status_staleness_gate",
+      "target": "hooks._common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "hooks.artifact_verification",
+      "target": "hooks._common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "hooks.subagent_findings_check",
+      "target": "hooks._common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check",
+      "target": "validate_punchlist",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium",
+        "note": "Both use BH- prefix for item detection -- must stay aligned"
+      }
+    },
+    {
+      "source": "hooks.status_staleness_gate",
+      "target": "hooks._common",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium",
+        "note": "Hook assumes STATUS.md absence means first write, not deleted mid-run"
+      }
+    },
+    {
+      "source": "hooks.impact_graph_gate",
+      "target": "validate_punchlist",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium",
+        "note": "Gate assumes audit/ is only Phase 1+ output path, but PUNCHLIST.md is also Phase 1+"
+      }
+    }
+  ]
+}
