@@ -24,7 +24,7 @@
 <title>validate_punchlist&#45;&gt;markdown_utils</title>
 <path fill="none" stroke="#a0aec0" d="M433.18,-59.17C484.26,-67.98 561.15,-81.23 613.36,-90.23"/>
 <polygon fill="#a0aec0" stroke="#a0aec0" points="612.71,-92.6 620.02,-91.38 613.54,-87.77 612.71,-92.6"/>
-<text xml:space="preserve" text-anchor="middle" x="531.3" y="-80.88" font-family="Helvetica,sans-Serif" font-size="8.00">imports</text>
+<text xml:space="preserve" text-anchor="middle" x="531.3" y="-80.88" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#90cdf4">imports</text>
 </g>
 <!-- convergence_check -->
 <g id="node2" class="node">
@@ -37,16 +37,16 @@
 <title>convergence_check&#45;&gt;validate_punchlist</title>
 <path fill="none" stroke="#e53e3e" stroke-width="1.5" stroke-dasharray="5,2" d="M125.31,-91.52C145.91,-86.6 170.11,-81.15 192.16,-77 231.88,-69.53 276.72,-62.96 312.39,-58.17"/>
 <polygon fill="#e53e3e" stroke="#e53e3e" stroke-width="1.5" points="312.39,-60.64 319.01,-57.29 311.75,-55.79 312.39,-60.64"/>
-<text xml:space="preserve" text-anchor="middle" x="222.91" y="-96.4" font-family="Helvetica,sans-Serif" font-size="8.00">assumes</text>
-<text xml:space="preserve" text-anchor="middle" x="222.91" y="-87.4" font-family="Helvetica,sans-Serif" font-size="8.00">compatible</text>
-<text xml:space="preserve" text-anchor="middle" x="222.91" y="-78.4" font-family="Helvetica,sans-Serif" font-size="8.00">header regex</text>
+<text xml:space="preserve" text-anchor="middle" x="222.91" y="-96.4" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">assumes</text>
+<text xml:space="preserve" text-anchor="middle" x="222.91" y="-87.4" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">compatible</text>
+<text xml:space="preserve" text-anchor="middle" x="222.91" y="-78.4" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">header regex</text>
 </g>
 <!-- convergence_check&#45;&gt;markdown_utils -->
 <g id="edge2" class="edge">
 <title>convergence_check&#45;&gt;markdown_utils</title>
 <path fill="none" stroke="#a0aec0" d="M142.15,-106.01C158.5,-106.42 175.96,-106.79 192.16,-107 341,-108.91 515.92,-104.71 607.27,-102.02"/>
 <polygon fill="#a0aec0" stroke="#a0aec0" points="607.14,-104.47 614.06,-101.82 606.99,-99.58 607.14,-104.47"/>
-<text xml:space="preserve" text-anchor="middle" x="378.98" y="-108.83" font-family="Helvetica,sans-Serif" font-size="8.00">imports</text>
+<text xml:space="preserve" text-anchor="middle" x="378.98" y="-108.83" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#90cdf4">imports</text>
 </g>
 <!-- impact_graph_mod -->
 <g id="node3" class="node">
@@ -71,9 +71,9 @@
 <title>parse_punchlist&#45;&gt;count_items</title>
 <path fill="none" stroke="#e53e3e" stroke-width="1.5" stroke-dasharray="5,2" d="M132.81,-250.97C186.71,-254.72 267.01,-260.29 320.87,-264.03"/>
 <polygon fill="#e53e3e" stroke="#e53e3e" stroke-width="1.5" points="320.52,-266.47 327.68,-264.51 320.86,-261.58 320.52,-266.47"/>
-<text xml:space="preserve" text-anchor="middle" x="222.91" y="-278.16" font-family="Helvetica,sans-Serif" font-size="8.00">assumes</text>
-<text xml:space="preserve" text-anchor="middle" x="222.91" y="-269.16" font-family="Helvetica,sans-Serif" font-size="8.00">header format</text>
-<text xml:space="preserve" text-anchor="middle" x="222.91" y="-260.16" font-family="Helvetica,sans-Serif" font-size="8.00">must stay aligned</text>
+<text xml:space="preserve" text-anchor="middle" x="222.91" y="-278.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">assumes</text>
+<text xml:space="preserve" text-anchor="middle" x="222.91" y="-269.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">header format</text>
+<text xml:space="preserve" text-anchor="middle" x="222.91" y="-260.16" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">must stay aligned</text>
 </g>
 <!-- mask_code_fences -->
 <g id="node10" class="node">
@@ -86,7 +86,7 @@
 <title>parse_punchlist&#45;&gt;mask_code_fences</title>
 <path fill="none" stroke="#3182ce" d="M130.45,-240.65C175.13,-235.81 239.87,-229.56 296.66,-227 369.76,-223.7 388.15,-225.25 461.3,-227 505.32,-228.05 554.52,-230.36 594.09,-232.49"/>
 <polygon fill="#3182ce" stroke="#3182ce" points="593.75,-234.92 600.87,-232.86 594.02,-230.03 593.75,-234.92"/>
-<text xml:space="preserve" text-anchor="middle" x="378.98" y="-228.4" font-family="Helvetica,sans-Serif" font-size="8.00">calls</text>
+<text xml:space="preserve" text-anchor="middle" x="378.98" y="-228.4" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#63b3ed">calls</text>
 </g>
 <!-- validate_fn -->
 <g id="node6" class="node">
@@ -99,7 +99,7 @@
 <title>count_items&#45;&gt;mask_code_fences</title>
 <path fill="none" stroke="#3182ce" d="M427.23,-262.95C473.32,-258.02 544.08,-250.46 597.35,-244.77"/>
 <polygon fill="#3182ce" stroke="#3182ce" points="597.54,-247.21 604.24,-244.03 597.01,-242.34 597.54,-247.21"/>
-<text xml:space="preserve" text-anchor="middle" x="531.3" y="-255.76" font-family="Helvetica,sans-Serif" font-size="8.00">calls</text>
+<text xml:space="preserve" text-anchor="middle" x="531.3" y="-255.76" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#63b3ed">calls</text>
 </g>
 <!-- check_convergence -->
 <g id="node8" class="node">
@@ -124,9 +124,9 @@
 <title>ImpactGraph&#45;&gt;check_convergence</title>
 <path fill="none" stroke="#e53e3e" stroke-width="1.5" stroke-dasharray="5,2" d="M719.04,-544C760.55,-544 821.95,-544 871.15,-544"/>
 <polygon fill="#e53e3e" stroke="#e53e3e" stroke-width="1.5" points="870.91,-546.45 877.91,-544 870.91,-541.55 870.91,-546.45"/>
-<text xml:space="preserve" text-anchor="middle" x="810.78" y="-563.4" font-family="Helvetica,sans-Serif" font-size="8.00">assumes</text>
-<text xml:space="preserve" text-anchor="middle" x="810.78" y="-554.4" font-family="Helvetica,sans-Serif" font-size="8.00">delta is finite</text>
-<text xml:space="preserve" text-anchor="middle" x="810.78" y="-545.4" font-family="Helvetica,sans-Serif" font-size="8.00">risk_score valid</text>
+<text xml:space="preserve" text-anchor="middle" x="810.78" y="-563.4" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">assumes</text>
+<text xml:space="preserve" text-anchor="middle" x="810.78" y="-554.4" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">delta is finite</text>
+<text xml:space="preserve" text-anchor="middle" x="810.78" y="-545.4" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">risk_score valid</text>
 </g>
 <!-- artifact_verification -->
 <g id="node12" class="node">
@@ -139,9 +139,9 @@
 <title>artifact_verification&#45;&gt;ImpactGraph</title>
 <path fill="none" stroke="#e53e3e" stroke-width="1.5" stroke-dasharray="5,2" d="M443.63,-538.54C494.55,-539.76 565.25,-541.47 614.04,-542.65"/>
 <polygon fill="#e53e3e" stroke="#e53e3e" stroke-width="1.5" points="613.86,-545.09 620.92,-542.81 613.98,-540.2 613.86,-545.09"/>
-<text xml:space="preserve" text-anchor="middle" x="531.3" y="-560.53" font-family="Helvetica,sans-Serif" font-size="8.00">assumes</text>
-<text xml:space="preserve" text-anchor="middle" x="531.3" y="-551.53" font-family="Helvetica,sans-Serif" font-size="8.00">creates file</text>
-<text xml:space="preserve" text-anchor="middle" x="531.3" y="-542.53" font-family="Helvetica,sans-Serif" font-size="8.00">at &#45;&#45;graph path</text>
+<text xml:space="preserve" text-anchor="middle" x="531.3" y="-560.53" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">assumes</text>
+<text xml:space="preserve" text-anchor="middle" x="531.3" y="-551.53" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">creates file</text>
+<text xml:space="preserve" text-anchor="middle" x="531.3" y="-542.53" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">at &#45;&#45;graph path</text>
 </g>
 <!-- hooks_common -->
 <g id="node16" class="node">
@@ -154,7 +154,7 @@
 <title>artifact_verification&#45;&gt;hooks_common</title>
 <path fill="none" stroke="#a0aec0" d="M420.31,-522.68C476.25,-502.82 576.67,-467.16 631.59,-447.65"/>
 <polygon fill="#a0aec0" stroke="#a0aec0" points="632.15,-450.06 637.92,-445.4 630.51,-445.44 632.15,-450.06"/>
-<text xml:space="preserve" text-anchor="middle" x="531.3" y="-493.07" font-family="Helvetica,sans-Serif" font-size="8.00">imports</text>
+<text xml:space="preserve" text-anchor="middle" x="531.3" y="-493.07" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#90cdf4">imports</text>
 </g>
 <!-- impact_graph_gate -->
 <g id="node13" class="node">
@@ -167,7 +167,7 @@
 <title>impact_graph_gate&#45;&gt;hooks_common</title>
 <path fill="none" stroke="#a0aec0" d="M440.08,-458.58C494.83,-452.73 574.5,-444.21 624.25,-438.89"/>
 <polygon fill="#a0aec0" stroke="#a0aec0" points="624.36,-441.35 631.06,-438.17 623.84,-436.47 624.36,-441.35"/>
-<text xml:space="preserve" text-anchor="middle" x="531.3" y="-452.76" font-family="Helvetica,sans-Serif" font-size="8.00">imports</text>
+<text xml:space="preserve" text-anchor="middle" x="531.3" y="-452.76" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#90cdf4">imports</text>
 </g>
 <!-- status_staleness_gate -->
 <g id="node14" class="node">
@@ -180,16 +180,16 @@
 <title>status_staleness_gate&#45;&gt;impact_graph_gate</title>
 <path fill="none" stroke="#e53e3e" stroke-width="1.5" stroke-dasharray="5,2" d="M145.71,-445.03C194.4,-449.22 259,-454.77 307.71,-458.96"/>
 <polygon fill="#e53e3e" stroke="#e53e3e" stroke-width="1.5" points="307.47,-461.4 314.66,-459.56 307.89,-456.52 307.47,-461.4"/>
-<text xml:space="preserve" text-anchor="middle" x="222.91" y="-472.96" font-family="Helvetica,sans-Serif" font-size="8.00">assumes</text>
-<text xml:space="preserve" text-anchor="middle" x="222.91" y="-463.96" font-family="Helvetica,sans-Serif" font-size="8.00">same cwd</text>
-<text xml:space="preserve" text-anchor="middle" x="222.91" y="-454.96" font-family="Helvetica,sans-Serif" font-size="8.00">resolution</text>
+<text xml:space="preserve" text-anchor="middle" x="222.91" y="-472.96" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">assumes</text>
+<text xml:space="preserve" text-anchor="middle" x="222.91" y="-463.96" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">same cwd</text>
+<text xml:space="preserve" text-anchor="middle" x="222.91" y="-454.96" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">resolution</text>
 </g>
 <!-- status_staleness_gate&#45;&gt;hooks_common -->
 <g id="edge5" class="edge">
 <title>status_staleness_gate&#45;&gt;hooks_common</title>
 <path fill="none" stroke="#a0aec0" d="M145.71,-433.02C189.15,-429.62 246.1,-425.71 296.66,-424 369.79,-421.52 388.15,-422.25 461.3,-424 517.12,-425.34 581.27,-428.68 623.55,-431.13"/>
 <polygon fill="#a0aec0" stroke="#a0aec0" points="623.33,-433.58 630.46,-431.54 623.61,-428.68 623.33,-433.58"/>
-<text xml:space="preserve" text-anchor="middle" x="378.98" y="-425.4" font-family="Helvetica,sans-Serif" font-size="8.00">imports</text>
+<text xml:space="preserve" text-anchor="middle" x="378.98" y="-425.4" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#90cdf4">imports</text>
 </g>
 <!-- subagent_findings_check -->
 <g id="node15" class="node">
@@ -202,7 +202,7 @@
 <title>subagent_findings_check&#45;&gt;hooks_common</title>
 <path fill="none" stroke="#a0aec0" d="M442.06,-345.18C476.81,-352.86 520.59,-363.98 558.3,-378 586.32,-388.41 616.54,-403.84 638.48,-415.86"/>
 <polygon fill="#a0aec0" stroke="#a0aec0" points="637.24,-417.98 644.55,-419.23 639.62,-413.69 637.24,-417.98"/>
-<text xml:space="preserve" text-anchor="middle" x="531.3" y="-379.4" font-family="Helvetica,sans-Serif" font-size="8.00">imports</text>
+<text xml:space="preserve" text-anchor="middle" x="531.3" y="-379.4" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#90cdf4">imports</text>
 </g>
 <!-- readme -->
 <g id="node17" class="node">
@@ -215,9 +215,9 @@
 <title>readme&#45;&gt;validate_punchlist</title>
 <path fill="none" stroke="#e53e3e" stroke-width="1.5" stroke-dasharray="5,2" d="M123.8,-13.71C159.76,-11.42 209.99,-10.14 253.66,-16 278.91,-19.39 306.3,-26.49 328.93,-33.33"/>
 <polygon fill="#e53e3e" stroke="#e53e3e" stroke-width="1.5" points="328.09,-35.64 335.5,-35.37 329.53,-30.96 328.09,-35.64"/>
-<text xml:space="preserve" text-anchor="middle" x="222.91" y="-35.4" font-family="Helvetica,sans-Serif" font-size="8.00">assumes</text>
-<text xml:space="preserve" text-anchor="middle" x="222.91" y="-26.4" font-family="Helvetica,sans-Serif" font-size="8.00">counts match</text>
-<text xml:space="preserve" text-anchor="middle" x="222.91" y="-17.4" font-family="Helvetica,sans-Serif" font-size="8.00">actual files</text>
+<text xml:space="preserve" text-anchor="middle" x="222.91" y="-35.4" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">assumes</text>
+<text xml:space="preserve" text-anchor="middle" x="222.91" y="-26.4" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">counts match</text>
+<text xml:space="preserve" text-anchor="middle" x="222.91" y="-17.4" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#fc8181">actual files</text>
 </g>
 </g>
 </svg>

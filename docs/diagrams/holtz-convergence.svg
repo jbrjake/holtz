@@ -54,7 +54,7 @@
 <title>breaker&#45;&gt;stop</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M236.15,-987.93C212.03,-959.39 175.48,-916.11 150.27,-886.26"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="152.59,-884.67 145.29,-880.37 148.31,-888.29 152.59,-884.67"/>
-<text xml:space="preserve" text-anchor="middle" x="211.82" y="-943.95" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">yes</text>
+<text xml:space="preserve" text-anchor="middle" x="211.82" y="-943.95" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">yes</text>
 </g>
 <!-- lens_clean -->
 <g id="node5" class="node">
@@ -70,15 +70,15 @@
 <title>breaker&#45;&gt;lens_clean</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M282.63,-986.4C297.67,-964.89 318.15,-935.58 336.1,-909.89"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="338.25,-911.7 340.54,-903.54 333.66,-908.49 338.25,-911.7"/>
-<text xml:space="preserve" text-anchor="middle" x="316.86" y="-943.95" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">no</text>
+<text xml:space="preserve" text-anchor="middle" x="316.86" y="-943.95" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">no</text>
 </g>
 <!-- lens_clean&#45;&gt;recover -->
 <g id="edge6" class="edge">
 <title>lens_clean&#45;&gt;recover</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" stroke-dasharray="5,2" d="M382.93,-914.61C393.08,-1005.14 411.76,-1171.76 420.81,-1252.51"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="417.99,-1252.48 421.66,-1260.12 423.55,-1251.86 417.99,-1252.48"/>
-<text xml:space="preserve" text-anchor="middle" x="438.67" y="-1096.25" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">no</text>
-<text xml:space="preserve" text-anchor="middle" x="438.67" y="-1085" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">(continue fixing)</text>
+<text xml:space="preserve" text-anchor="middle" x="438.67" y="-1096.25" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">no</text>
+<text xml:space="preserve" text-anchor="middle" x="438.67" y="-1085" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">(continue fixing)</text>
 </g>
 <!-- mark -->
 <g id="node6" class="node">
@@ -92,7 +92,7 @@
 <title>lens_clean&#45;&gt;mark</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M376,-785.97C376,-768.62 376,-750.45 376,-735.15"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="378.8,-735.37 376,-727.37 373.2,-735.37 378.8,-735.37"/>
-<text xml:space="preserve" text-anchor="middle" x="383.88" y="-751.9" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">yes</text>
+<text xml:space="preserve" text-anchor="middle" x="383.88" y="-751.9" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">yes</text>
 </g>
 <!-- switch -->
 <g id="node7" class="node">
@@ -122,7 +122,7 @@
 <title>switch&#45;&gt;next_lens</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M398.46,-521.28C408.42,-502.31 420.24,-479.78 430.78,-459.69"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="433.13,-461.24 434.37,-452.86 428.17,-458.64 433.13,-461.24"/>
-<text xml:space="preserve" text-anchor="middle" x="427.86" y="-477.93" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">yes</text>
+<text xml:space="preserve" text-anchor="middle" x="427.86" y="-477.93" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">yes</text>
 </g>
 <!-- all_done -->
 <g id="node9" class="node">
@@ -136,7 +136,7 @@
 <title>switch&#45;&gt;all_done</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M332.39,-529.76C297.5,-502.31 248.98,-464.14 215.06,-437.45"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="217.08,-435.47 209.06,-432.73 213.61,-439.87 217.08,-435.47"/>
-<text xml:space="preserve" text-anchor="middle" x="280.75" y="-477.93" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">no</text>
+<text xml:space="preserve" text-anchor="middle" x="280.75" y="-477.93" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">no</text>
 </g>
 <!-- next_lens&#45;&gt;recover -->
 <g id="edge10" class="edge">
@@ -149,7 +149,7 @@
 <title>all_done&#45;&gt;recover</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" stroke-dasharray="5,2" d="M126.25,-425.19C74.47,-449.23 0,-495.69 0,-564.08 0,-1172.16 0,-1172.16 0,-1172.16 0,-1234.39 169.12,-1268.48 294.24,-1285.18"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="293.83,-1287.95 302.12,-1286.22 294.56,-1282.4 293.83,-1287.95"/>
-<text xml:space="preserve" text-anchor="middle" x="5.25" y="-847.93" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">no</text>
+<text xml:space="preserve" text-anchor="middle" x="5.25" y="-847.93" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">no</text>
 </g>
 <!-- final -->
 <g id="node10" class="node">
@@ -163,7 +163,7 @@
 <title>all_done&#45;&gt;final</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M204.75,-376.87C227.96,-355.76 260.33,-326.32 285.17,-303.72"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="286.92,-305.92 290.95,-298.46 283.15,-301.77 286.92,-305.92"/>
-<text xml:space="preserve" text-anchor="middle" x="269.54" y="-324.19" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">yes</text>
+<text xml:space="preserve" text-anchor="middle" x="269.54" y="-324.19" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">yes</text>
 </g>
 <!-- clean -->
 <g id="node11" class="node">
@@ -188,7 +188,7 @@
 <title>clean&#45;&gt;converged</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M410,-135.03C410,-114.86 410,-87.28 410,-66.72"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="412.8,-66.78 410,-58.78 407.2,-66.78 412.8,-66.78"/>
-<text xml:space="preserve" text-anchor="middle" x="417.88" y="-101.21" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">yes</text>
+<text xml:space="preserve" text-anchor="middle" x="417.88" y="-101.21" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">yes</text>
 </g>
 <!-- reset -->
 <g id="node13" class="node">
@@ -203,7 +203,7 @@
 <title>clean&#45;&gt;reset</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M437.65,-147.43C472.25,-129.39 532.68,-97.87 579.74,-73.31"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="580.96,-75.84 586.76,-69.65 578.37,-70.87 580.96,-75.84"/>
-<text xml:space="preserve" text-anchor="middle" x="533.75" y="-101.21" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">no</text>
+<text xml:space="preserve" text-anchor="middle" x="533.75" y="-101.21" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">no</text>
 </g>
 <!-- reset&#45;&gt;recover -->
 <g id="edge16" class="edge">

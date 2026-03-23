@@ -54,7 +54,7 @@
 <title>breaker&#45;&gt;stop</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M270.22,-437.21C227.52,-408.77 157.43,-362.09 112.08,-331.88"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="113.63,-329.56 105.42,-327.45 110.53,-334.22 113.63,-329.56"/>
-<text xml:space="preserve" text-anchor="middle" x="217.09" y="-388.51" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">yes</text>
+<text xml:space="preserve" text-anchor="middle" x="217.09" y="-388.51" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">yes</text>
 </g>
 <!-- scan -->
 <g id="node5" class="node">
@@ -71,7 +71,7 @@
 <title>breaker&#45;&gt;scan</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M307.31,-422.56C307.31,-407.26 307.31,-389.26 307.31,-371.93"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="310.11,-372.21 307.31,-364.21 304.51,-372.21 310.11,-372.21"/>
-<text xml:space="preserve" text-anchor="middle" x="312.56" y="-388.51" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">no</text>
+<text xml:space="preserve" text-anchor="middle" x="312.56" y="-388.51" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">no</text>
 </g>
 <!-- found -->
 <g id="node6" class="node">
@@ -97,8 +97,8 @@
 <title>found&#45;&gt;converged</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M292.4,-115.52C288.86,-106.08 285.48,-95.73 283.31,-85.9 280.65,-73.89 279.34,-60.38 278.72,-48.75"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="281.53,-48.79 278.41,-40.91 275.93,-49.02 281.53,-48.79"/>
-<text xml:space="preserve" text-anchor="middle" x="317.81" y="-76.4" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">zero findings</text>
-<text xml:space="preserve" text-anchor="middle" x="317.81" y="-65.15" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">across all areas</text>
+<text xml:space="preserve" text-anchor="middle" x="317.81" y="-76.4" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">zero findings</text>
+<text xml:space="preserve" text-anchor="middle" x="317.81" y="-65.15" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">across all areas</text>
 </g>
 <!-- add -->
 <g id="node8" class="node">
@@ -111,7 +111,7 @@
 <title>found&#45;&gt;add</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M337.37,-121.19C357.18,-103.25 384.23,-80.37 410.56,-63.4 422.96,-55.4 437.06,-47.94 450.35,-41.54"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="451.26,-44.21 457.3,-38.27 448.87,-39.14 451.26,-44.21"/>
-<text xml:space="preserve" text-anchor="middle" x="439.43" y="-70.77" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">findings exist</text>
+<text xml:space="preserve" text-anchor="middle" x="439.43" y="-70.77" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">findings exist</text>
 </g>
 <!-- add&#45;&gt;recover -->
 <g id="edge8" class="edge">

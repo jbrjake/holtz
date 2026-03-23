@@ -99,40 +99,46 @@ digraph {
   ]
 
   // Import edges — solid gray
-  validate_punchlist -> markdown_utils [color="#a0aec0" label="imports"]
-  convergence_check -> markdown_utils [color="#a0aec0" label="imports"]
-  artifact_verification -> hooks_common [color="#a0aec0" label="imports"]
-  impact_graph_gate -> hooks_common [color="#a0aec0" label="imports"]
-  status_staleness_gate -> hooks_common [color="#a0aec0" label="imports"]
-  subagent_findings_check -> hooks_common [color="#a0aec0" label="imports"]
+  validate_punchlist -> markdown_utils [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
+  convergence_check -> markdown_utils [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
+  artifact_verification -> hooks_common [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
+  impact_graph_gate -> hooks_common [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
+  status_staleness_gate -> hooks_common [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
+  subagent_findings_check -> hooks_common [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
 
   // Call edges — solid blue
-  parse_punchlist -> mask_code_fences [color="#3182ce" label="calls"]
-  count_items -> mask_code_fences [color="#3182ce" label="calls"]
+  parse_punchlist -> mask_code_fences [color="#3182ce" fontcolor="#63b3ed" label="calls"]
+  count_items -> mask_code_fences [color="#3182ce" fontcolor="#63b3ed" label="calls"]
 
   // Assumes edges — dashed red, the interesting ones
   parse_punchlist -> count_items [
     color="#e53e3e" style=dashed penwidth=1.5
+    fontcolor="#fc8181"
     label="assumes\nheader format\nmust stay aligned"
   ]
   artifact_verification -> ImpactGraph [
     color="#e53e3e" style=dashed penwidth=1.5
+    fontcolor="#fc8181"
     label="assumes\ncreates file\nat --graph path"
   ]
   readme -> validate_punchlist [
     color="#e53e3e" style=dashed penwidth=1.5
+    fontcolor="#fc8181"
     label="assumes\ncounts match\nactual files"
   ]
   ImpactGraph -> check_convergence [
     color="#e53e3e" style=dashed penwidth=1.5
+    fontcolor="#fc8181"
     label="assumes\ndelta is finite\nrisk_score valid"
   ]
   convergence_check -> validate_punchlist [
     color="#e53e3e" style=dashed penwidth=1.5
+    fontcolor="#fc8181"
     label="assumes\ncompatible\nheader regex"
   ]
   status_staleness_gate -> impact_graph_gate [
     color="#e53e3e" style=dashed penwidth=1.5
+    fontcolor="#fc8181"
     label="assumes\nsame cwd\nresolution"
   ]
 }

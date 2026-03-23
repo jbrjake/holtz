@@ -40,8 +40,8 @@
 <title>triage&#45;&gt;fast</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M313.35,-486.02C269.93,-462.33 198.96,-423.61 149.73,-396.76"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="151.37,-394.46 143,-393.09 148.69,-399.38 151.37,-394.46"/>
-<text xml:space="preserve" text-anchor="middle" x="276.78" y="-433.61" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568"> &#160;test/doc/design</text>
-<text xml:space="preserve" text-anchor="middle" x="276.78" y="-422.36" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568"> &#160;or deterministic bug</text>
+<text xml:space="preserve" text-anchor="middle" x="276.78" y="-433.61" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4"> &#160;test/doc/design</text>
+<text xml:space="preserve" text-anchor="middle" x="276.78" y="-422.36" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4"> &#160;or deterministic bug</text>
 </g>
 <!-- investigate -->
 <g id="node4" class="node">
@@ -55,8 +55,8 @@
 <title>triage&#45;&gt;investigate</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M351.82,-467.58C351.82,-448.27 351.82,-425.09 351.82,-405.83"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="354.62,-405.98 351.82,-397.98 349.02,-405.98 354.62,-405.98"/>
-<text xml:space="preserve" text-anchor="middle" x="392.32" y="-433.61" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568"> &#160;intermittent</text>
-<text xml:space="preserve" text-anchor="middle" x="392.32" y="-422.36" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568"> &#160;or theoretical bug</text>
+<text xml:space="preserve" text-anchor="middle" x="392.32" y="-433.61" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4"> &#160;intermittent</text>
+<text xml:space="preserve" text-anchor="middle" x="392.32" y="-422.36" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4"> &#160;or theoretical bug</text>
 </g>
 <!-- cantrepro -->
 <g id="node5" class="node">
@@ -70,8 +70,8 @@
 <title>triage&#45;&gt;cantrepro</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M391.67,-486.47C437.23,-462.98 512.29,-424.3 564.68,-397.29"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="565.77,-399.88 571.6,-393.72 563.21,-394.9 565.77,-399.88"/>
-<text xml:space="preserve" text-anchor="middle" x="561.31" y="-433.61" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568"> &#160;repro test</text>
-<text xml:space="preserve" text-anchor="middle" x="561.31" y="-422.36" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568"> &#160;unexpectedly passes</text>
+<text xml:space="preserve" text-anchor="middle" x="561.31" y="-433.61" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4"> &#160;repro test</text>
+<text xml:space="preserve" text-anchor="middle" x="561.31" y="-422.36" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4"> &#160;unexpectedly passes</text>
 </g>
 <!-- harden -->
 <g id="node6" class="node">
@@ -97,7 +97,7 @@
 <title>cantrepro&#45;&gt;harden</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" d="M575.53,-338.34C542.01,-319.97 497.34,-295.5 462.83,-276.59"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="464.25,-274.17 455.89,-272.78 461.56,-279.08 464.25,-274.17"/>
-<text xml:space="preserve" text-anchor="middle" x="551.36" y="-301.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">if reproduced</text>
+<text xml:space="preserve" text-anchor="middle" x="551.36" y="-301.5" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">if reproduced</text>
 </g>
 <!-- next -->
 <g id="node8" class="node">
@@ -110,8 +110,8 @@
 <title>cantrepro&#45;&gt;next</title>
 <path fill="none" stroke="#718096" stroke-width="1.2" stroke-dasharray="5,2" d="M620.28,-335.31C613.67,-284.31 597.54,-176.7 569.82,-89.4 565.27,-75.06 558.61,-59.73 552.62,-47.16"/>
 <polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="555.24,-46.14 549.22,-40.18 550.21,-48.59 555.24,-46.14"/>
-<text xml:space="preserve" text-anchor="middle" x="626.35" y="-183.82" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">DEFERRED</text>
-<text xml:space="preserve" text-anchor="middle" x="626.35" y="-172.57" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#4a5568">with evidence</text>
+<text xml:space="preserve" text-anchor="middle" x="626.35" y="-183.82" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">DEFERRED</text>
+<text xml:space="preserve" text-anchor="middle" x="626.35" y="-172.57" font-family="Helvetica,sans-Serif" font-size="10.00" fill="#90cdf4">with evidence</text>
 </g>
 <!-- blast -->
 <g id="node7" class="node">

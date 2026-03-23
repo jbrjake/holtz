@@ -19,7 +19,7 @@ digraph {
   edge [
     fontname="Helvetica"
     fontsize=10
-    fontcolor="#4a5568"
+    fontcolor="#90cdf4"
     color="#718096"
     penwidth=1.2
     arrowsize=0.8
