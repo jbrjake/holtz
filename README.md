@@ -16,6 +16,21 @@ He runs a seven-phase audit and then starts over. Finds what the fixes uncovered
 
 The moment you stop looking is the moment something gets through.
 
+## Installation
+
+```
+/plugin marketplace add jbrjake/claude-plugin-marketplace
+/plugin install holtz@jbrjake
+```
+
+Or from a local clone:
+
+```bash
+claude --plugin-dir /path/to/holtz
+```
+
+The skill activates when you ask Claude to find bugs, audit tests, create a punchlist, review code quality, or polish a codebase. Or just tell Holtz to audit and get out of the way.
+
 ## What Holtz audits
 
 Not just your code.
@@ -42,7 +57,7 @@ Here is the actual impact graph from Holtz's own codebase. Blue nodes are module
 
 That edge between `parse_punchlist` and `count_items` says: "Both split on `### BH-NNN:` headers in masked content — must stay aligned." Change how one of them splits headers, and the other breaks. No import. No call. Just a shared assumption about a markdown format that two functions parse independently. The graph knows about it. When Holtz fixes one, blast radius analysis queries two hops out and checks whether the assumption still holds.
 
-The edge between `ImpactGraph` and `check_convergence` says: "update_risk delta must be finite; risk_score must be valid float for sorting." That edge is how Holtz found the NaN bug. `update_risk()` accepts `float('nan')`, Python's `min(1.0, nan)` returns `1.0` because NaN comparisons are always False, and every node's risk score silently pins to maximum. The assumption was documented in the graph. The violation was found by checking it.
+The edge between `ImpactGraph` and `check_convergence` says: "update_risk delta must be finite; risk_score must be valid float for sorting." That assumption turned out to be violated — `update_risk()` accepts `float('nan')`, and Python's `min(1.0, nan)` returns `1.0` because NaN comparisons are always False. Every node's risk score silently pins to maximum. The graph recorded the assumption. Checking the assumption found the bug.
 
 The graph also detects drift. If a function moves more than ten lines from where it was last audited, Holtz flags it. If it disappears, he prunes it. The graph stays honest about what's in the codebase, not what used to be.
 
@@ -76,6 +91,18 @@ The living punchlist is the institutional memory. It records which bug classes y
 
 Six seed patterns ship with the plugin: regex newline leaks, code-fence-unaware parsing, incomplete layer isolation, dual-parser divergence, missing edge case handling, doc-spec drift. Each one has an executable detection heuristic that fires during recon. New patterns discovered during audits get generalized, scrubbed of project-specific details, and contributed back to the library. The pattern library grows with every codebase that gets audited.
 
+## Extending Holtz
+
+Holtz is built to be added to.
+
+**Lenses.** The six analytical lenses that ship are defaults. Add any lens to the registry file and it joins the convergence rotation. If you've found a way of looking at code that catches things the existing lenses miss, that's the kind of contribution that makes the registry better for everyone.
+
+**Patterns.** Each seed pattern is a markdown file with a YAML header, a description, an executable detection heuristic, and an example. Write one for a bug class you keep seeing. If the heuristic fires during recon, Holtz starts the audit already knowing what to look for.
+
+**Edge types.** The seven edge types in the impact graph cover most relationships, but if your domain has a relationship type that `assumes` and `diverges_from` don't capture — temporal ordering, permission scoping, schema versioning — the graph model supports extension.
+
+PRs with new lenses, patterns, or edge types are welcome. The whole point of the pattern library is that it gets better as more codebases get audited.
+
 ## The seven phases
 
 **Phase 0: Recon.** Project structure, test infrastructure, baseline metrics, lint, git churn, skipped tests, mutation scanning, architecture drift, predictive recon. Eight steps, each written to disk immediately. By the time Phase 1 starts, Holtz has a map.
@@ -98,6 +125,10 @@ Justine's convergence is different — all lenses at once, single-pass, faster b
 
 <p align="center"><img src="docs/diagrams/justine-convergence.svg" alt="Justine convergence loop"></p>
 
+Default behavior between runs is resume, not restart:
+
+<p align="center"><img src="docs/diagrams/resume-lifecycle.svg" alt="Resume lifecycle flowchart"></p>
+
 ## What this looks like in practice
 
 Holtz has been auditing his own codebase since it was written. Eleven runs. Here's what happened.
@@ -111,27 +142,6 @@ Holtz has been auditing his own codebase since it was written. Eleven runs. Here
 **Run 11** is where Justine earned her keep. She found three regex convention violations that Holtz missed in prior runs — places where `\s` was used instead of `[ \t]`, letting patterns leak across line boundaries. Same pattern, three instances, invisible to depth-first analysis because each instance looked fine in isolation. Breadth-first caught them because she was scanning everything at once instead of drilling into one area.
 
 After 11 runs: 269 tests across 8,200 lines. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
-
-## Installation
-
-```
-/plugin marketplace add jbrjake/claude-plugin-marketplace
-/plugin install holtz@jbrjake
-```
-
-Or from a local clone:
-
-```bash
-claude --plugin-dir /path/to/holtz
-```
-
-The skill activates when you ask Claude to find bugs, audit tests, create a punchlist, review code quality, or polish a codebase. Or just tell Holtz to audit and get out of the way.
-
-## Resuming prior runs
-
-Default behavior is resume, not restart.
-
-<p align="center"><img src="docs/diagrams/resume-lifecycle.svg" alt="Resume lifecycle flowchart"></p>
 
 ## The hooks
 
@@ -179,23 +189,9 @@ She is not a replacement for Holtz. She is the thing Holtz is not — fast where
 
 The thing that makes people uncomfortable isn't the bugs he finds. It's that he keeps coming back.
 
-He fixes everything on the punchlist. Green suite. Clean commit history. And then he runs another pass. Finds more. Things that were hiding behind the bugs he already fixed. Things that were always there.
-
-He remembers. Across runs, across sessions, across whatever you thought was a clean break from the last audit. The living punchlist accumulates a vulnerability model of your codebase. Each pattern gets a detection rule that fires during recon. Each hotspot gets a risk score from the impact graph. Recommendations that go unaddressed in two or more runs stop being optional. They become punchlist items.
+He fixes everything on the punchlist. Green suite. Clean commit history. And then he runs another pass. Finds more. Things that were hiding behind the bugs he already fixed. Things that were always there. And you realize "done" was something you told yourself because you wanted to stop looking.
 
 Some people, after working with Holtz, start writing better tests on their own. Not because he taught them. Because they want him to stop coming back. It never works. But the tests are better.
-
-## Extending Holtz
-
-Holtz is built to be added to.
-
-**Lenses.** The six analytical lenses that ship are defaults. Add any lens to the registry file and it joins the convergence rotation. If you've found a way of looking at code that catches things the existing lenses miss, that's the kind of contribution that makes the registry better for everyone.
-
-**Patterns.** Each seed pattern is a markdown file with a YAML header, a description, an executable detection heuristic, and an example. Write one for a bug class you keep seeing. If the heuristic fires during recon, Holtz starts the audit already knowing what to look for.
-
-**Edge types.** The seven edge types in the impact graph cover most relationships, but if your domain has a relationship type that `assumes` and `diverges_from` don't capture — temporal ordering, permission scoping, schema versioning — the graph model supports extension.
-
-PRs with new lenses, patterns, or edge types are welcome. The whole point of the pattern library is that it gets better as more codebases get audited.
 
 ## Part of a family
 
