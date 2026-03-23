@@ -1,0 +1,305 @@
+{
+  "nodes": {
+    "markdown_utils": {
+      "id": "markdown_utils",
+      "type": "module",
+      "file": "skills/holtz/scripts/markdown_utils.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "validate_punchlist": {
+      "id": "validate_punchlist",
+      "type": "module",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "convergence_check": {
+      "id": "convergence_check",
+      "type": "module",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "impact_graph": {
+      "id": "impact_graph",
+      "type": "module",
+      "file": "skills/holtz/scripts/impact_graph.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks/_common": {
+      "id": "hooks/_common",
+      "type": "module",
+      "file": "hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks/impact_graph_gate": {
+      "id": "hooks/impact_graph_gate",
+      "type": "module",
+      "file": "hooks/impact_graph_gate.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks/status_staleness_gate": {
+      "id": "hooks/status_staleness_gate",
+      "type": "module",
+      "file": "hooks/status_staleness_gate.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks/artifact_verification": {
+      "id": "hooks/artifact_verification",
+      "type": "module",
+      "file": "hooks/artifact_verification.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks/subagent_findings_check": {
+      "id": "hooks/subagent_findings_check",
+      "type": "module",
+      "file": "hooks/subagent_findings_check.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_hooks": {
+      "id": "test_hooks",
+      "type": "module",
+      "file": "tests/test_hooks.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_validate_punchlist": {
+      "id": "test_validate_punchlist",
+      "type": "module",
+      "file": "tests/test_validate_punchlist.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_convergence_check": {
+      "id": "test_convergence_check",
+      "type": "module",
+      "file": "tests/test_convergence_check.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_impact_graph": {
+      "id": "test_impact_graph",
+      "type": "module",
+      "file": "tests/test_impact_graph.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_integration": {
+      "id": "test_integration",
+      "type": "module",
+      "file": "tests/test_integration.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_markdown_utils": {
+      "id": "test_markdown_utils",
+      "type": "module",
+      "file": "tests/test_markdown_utils.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    }
+  },
+  "edges": [
+    {
+      "source": "validate_punchlist",
+      "target": "markdown_utils",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check",
+      "target": "markdown_utils",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "hooks/impact_graph_gate",
+      "target": "hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "hooks/status_staleness_gate",
+      "target": "hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "hooks/artifact_verification",
+      "target": "hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "hooks/subagent_findings_check",
+      "target": "hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_hooks",
+      "target": "hooks/impact_graph_gate",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_hooks",
+      "target": "hooks/status_staleness_gate",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_hooks",
+      "target": "hooks/artifact_verification",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_hooks",
+      "target": "hooks/subagent_findings_check",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_validate_punchlist",
+      "target": "validate_punchlist",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_convergence_check",
+      "target": "convergence_check",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_impact_graph",
+      "target": "impact_graph",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_markdown_utils",
+      "target": "markdown_utils",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_integration",
+      "target": "validate_punchlist",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_integration",
+      "target": "convergence_check",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check",
+      "target": "validate_punchlist",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium",
+        "note": "Both split on ### B[HJ]-NNN: headers in masked content -- must stay aligned"
+      }
+    },
+    {
+      "source": "hooks/impact_graph_gate",
+      "target": "impact_graph",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium",
+        "note": "Gate checks for impact-graph.json existence -- assumes impact_graph.py creates it at that path"
+      }
+    }
+  ]
+}

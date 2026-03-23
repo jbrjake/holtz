@@ -47,8 +47,17 @@ class ImpactGraph:
         self.nodes: dict[str, dict] = {}
         self.edges: list[dict] = []
 
+    # Minimum keys required for edges and nodes to be usable by graph methods.
+    _REQUIRED_EDGE_KEYS = {"source", "target", "type"}
+    _REQUIRED_NODE_KEYS = {"type", "file"}
+
     def load(self) -> None:
-        """Load graph from JSON file. Handles missing, empty, or corrupt files."""
+        """Load graph from JSON file. Handles missing, empty, or corrupt files.
+
+        Individual node/edge entries that are not dicts or are missing required
+        keys are silently dropped to prevent KeyError crashes in downstream
+        methods (neighbors, blast_radius, stats, risk_hotspots, etc.).
+        """
         if not self.path.exists():
             return
         try:
@@ -58,8 +67,20 @@ class ImpactGraph:
             data = json.loads(text)
             nodes = data.get("nodes")
             edges = data.get("edges")
-            self.nodes = nodes if isinstance(nodes, dict) else {}
-            self.edges = edges if isinstance(edges, list) else []
+            if isinstance(nodes, dict):
+                self.nodes = {
+                    k: v for k, v in nodes.items()
+                    if isinstance(v, dict) and self._REQUIRED_NODE_KEYS.issubset(v)
+                }
+            else:
+                self.nodes = {}
+            if isinstance(edges, list):
+                self.edges = [
+                    e for e in edges
+                    if isinstance(e, dict) and self._REQUIRED_EDGE_KEYS.issubset(e)
+                ]
+            else:
+                self.edges = []
         except (json.JSONDecodeError, AttributeError):
             self.nodes = {}
             self.edges = []

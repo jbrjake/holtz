@@ -259,6 +259,48 @@ class TestImpactGraphGate:
         assert hook_output.get("permissionDecision") == "block"
         assert hook_output.get("hookEventName") == "PreToolUse"
 
+    def test_blocks_punchlist_merged_when_graph_missing(self, tmp_path):
+        """Writes to PUNCHLIST-MERGED.md should be blocked when graph is missing (BH-004)."""
+        event = {
+            "tool_input": {"file_path": str(tmp_path / "docs" / "holtz" / "PUNCHLIST-MERGED.md")},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_hook("impact_graph_gate.py", event)
+        assert_blocked(code, output, "BLOCKED")
+
+    def test_allows_punchlist_merged_when_graph_exists(self, tmp_path):
+        """Writes to PUNCHLIST-MERGED.md should be allowed when graph exists (BH-004)."""
+        docs = tmp_path / "docs" / "holtz"
+        docs.mkdir(parents=True)
+        (docs / "impact-graph.json").write_text("{}")
+        event = {
+            "tool_input": {"file_path": str(docs / "PUNCHLIST-MERGED.md")},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_hook("impact_graph_gate.py", event)
+        assert_allowed(code, output)
+
+    def test_blocks_justine_punchlist_when_graph_missing(self, tmp_path):
+        """Writes to Justine's PUNCHLIST.md should check Justine's graph (BH-006)."""
+        event = {
+            "tool_input": {"file_path": str(tmp_path / "docs" / "holtz" / "justine" / "PUNCHLIST.md")},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_hook("impact_graph_gate.py", event)
+        assert_blocked(code, output, "justine")
+
+    def test_allows_justine_punchlist_when_graph_exists(self, tmp_path):
+        """Writes to Justine's PUNCHLIST.md should be allowed when Justine's graph exists (BH-006)."""
+        justine_dir = tmp_path / "docs" / "holtz" / "justine"
+        justine_dir.mkdir(parents=True)
+        (justine_dir / "impact-graph.json").write_text("{}")
+        event = {
+            "tool_input": {"file_path": str(justine_dir / "PUNCHLIST.md")},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_hook("impact_graph_gate.py", event)
+        assert_allowed(code, output)
+
 
 # --- status_staleness_gate.py (PreToolUse) ---
 
@@ -319,6 +361,31 @@ class TestStatusStalenessGate:
         }
         code, output, _ = run_hook("status_staleness_gate.py", event)
         assert_allowed(code, output)
+
+    def test_blocks_when_status_missing_but_recon_exists(self, tmp_path):
+        """STATUS.md missing but recon/ exists = deleted mid-run, should block (BH-005)."""
+        holtz = tmp_path / "docs" / "holtz"
+        recon = holtz / "recon"
+        recon.mkdir(parents=True)
+        (recon / "0a.md").write_text("recon data")
+        event = {
+            "tool_input": {"file_path": str(holtz / "PUNCHLIST.md")},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_hook("status_staleness_gate.py", event)
+        assert_blocked(code, output, "missing")
+
+    def test_blocks_when_status_missing_but_punchlist_exists(self, tmp_path):
+        """STATUS.md missing but PUNCHLIST.md exists = deleted mid-run, should block (BH-005)."""
+        holtz = tmp_path / "docs" / "holtz"
+        holtz.mkdir(parents=True)
+        (holtz / "PUNCHLIST.md").write_text("items")
+        event = {
+            "tool_input": {"file_path": str(holtz / "recon" / "0b.md")},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_hook("status_staleness_gate.py", event)
+        assert_blocked(code, output, "missing")
 
     def test_status_exemption_scoped_to_protocol_paths(self, tmp_path):
         """Only the protocol STATUS.md paths should be exempt, not arbitrary files."""

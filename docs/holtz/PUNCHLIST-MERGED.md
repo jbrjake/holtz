@@ -1,323 +1,162 @@
-# Holtz Punchlist
-> Generated: 2026-03-22 | Project: holtz | Baseline: 265 pass, 0 fail, 0 skip
+# Holtz Punchlist (Merged)
+> Generated: 2026-03-23 | Project: holtz | Baseline: 286 pass, 0 fail, 0 skip
 
 ## Summary
 | Severity | Open | Resolved | Deferred |
 |----------|------|----------|----------|
-| HIGH     | 0    | 0        | 0        |
-| MEDIUM   | 0    | 5        | 0        |
-| LOW      | 0    | 8        | 0        |
+| MEDIUM | 0 | 4 | 0 |
+| LOW | 0 | 2 | 0 |
 
 ## Patterns
 
-## Pattern: PAT-003: regex-convention-violation
-**Instances:** BH-009, BH-011, BH-013
-**Root Cause:** \s used in regex where [ \t] is project convention. Established after initial dev; not all sites updated.
-**Systemic Fix:** Replace \s with [ \t] in all non-line-start positions. Add grep check to CI.
-**Detection Rule:** `grep -rnP '\\s[*+?]' --include='*.py' skills/ hooks/ | grep -v '^\s*#'`
-
 ## Items
 
-### BH-001: Automate README metrics — recurring recommendation unaddressed
-**Severity:** MEDIUM
-**Category:** design/inconsistency
-**Location:** README.md:36
-**Status:** RESOLVED
-**Found by:** Holtz only
-<!-- Was: Holtz BH-001 -->
-
-**Problem:** The recommendation "Automate README metrics" has appeared in 2 consecutive audit summaries (runs 9 and 10) without being implemented.
-
-**Evidence:** Run 9 and 10 SUMMARY.md both contain this recommendation. Run 10 explicitly states "Will be escalated in run 11 if unaddressed."
-
-**Discovery Chain:** Prior summary scan → "Automate README metrics" found in runs 9 and 10 → 2+ appearances triggers escalation
-
-**Acceptance Criteria:**
-- [ ] README metrics validated automatically (CI step, pre-commit hook, or test)
-- [ ] Validation: metric check runs on CI
-
-**Validation Command:**
-```bash
-grep "265 tests" README.md && python -m pytest tests/ --co -q 2>/dev/null | tail -1
-```
-
-### BH-002: README says 13 reference docs, actual is 14
+### BH-001: README "What's inside" counts stale after Justine refactor
 **Severity:** LOW
 **Category:** doc/drift
-**Location:** README.md:36
+**Location:** `README.md:164`
 **Status:** RESOLVED
-**Found by:** Holtz only
 **Predicted:** Prediction 1 (confidence: HIGH)
-<!-- Was: Holtz BH-002 -->
 
-**Problem:** README says "13 reference docs" but there are 14. recommendation-escalation.md was not counted.
+**Problem:** README line 164 claims "2 skills, 2 agents, 14 reference docs, ... 286 tests across 8,200 lines" but after the Justine internal-only refactor: skills is now 1 (skills/justine/ removed), test count changed, line count changed.
 
-**Evidence:** `ls skills/holtz/references/*.md | wc -l` returns 14.
+**Evidence:**
+- `ls skills/*/SKILL.md` → only `skills/holtz/SKILL.md` (1 skill, not 2)
+- Test count changed from 286 to 295
+- Line count changed from 8,200 to ~7,800
 
-**Discovery Chain:** Phase 1 count verification → ls returns 14 → README says 13
+**Discovery Chain:** Justine refactor (bc165b2) moved files from skills/justine/ to skills/holtz/references/ → skills count decreased → README line 164 not updated
 
 **Acceptance Criteria:**
-- [ ] README reference doc count matches actual
+- [x] README "What's inside" line reflects actual counts
+- [x] test_readme_metrics_match_actual regex handles singular/plural
 
 **Validation Command:**
 ```bash
-grep "14 reference docs" README.md
+grep "skill.*, .* agents, .* reference docs" README.md
 ```
 
-### BH-003: artifact_verification.py regex fails on quoted paths with spaces
+**Resolution:** Updated README line 164 to "1 skill, 2 agents, 14 reference docs, ... 295 tests across 7,800 lines". Updated test regex to accept singular forms.
+
+### BH-002: subagent_findings_check.py docstring references legacy exit codes
 **Severity:** LOW
-**Category:** bug/logic
-**Location:** `hooks/artifact_verification.py:29`
+**Category:** doc/drift
+**Location:** `hooks/subagent_findings_check.py:12`
 **Status:** RESOLVED
-**Determinism:** theoretical
-**Found by:** Holtz only
-**Predicted:** Prediction 2 (confidence: MEDIUM)
-<!-- Was: Holtz BH-003 -->
 
-**Problem:** The regex `([^"\'\s]+)` stops at spaces, so `--graph "path with spaces/file.json"` captures only `path`.
+**Problem:** Docstring says "Uses exit 1 (warn) not exit 2 (block)" but the hook was modernized to use JSON output format. All hooks now exit 0.
 
-**Evidence:** The capture group excludes whitespace. Practically safe since Holtz paths don't contain spaces.
+**Evidence:** Lines 6, 11: references to "exit 1" and "exit 2" in docstring.
 
-**Discovery Chain:** Adversarial hook audit → regex review → capture excludes spaces → quoted-path truncation
+**Discovery Chain:** read subagent_findings_check.py during Phase 2 → docstring mentions exit codes → code uses JSON functions that exit 0 → docstring stale
 
 **Acceptance Criteria:**
-- [ ] Regex correctly handles quoted paths with spaces
-- [ ] Test covers the case
+- [x] Docstring accurately describes the modern output format
+- [x] No references to legacy exit code semantics
 
 **Validation Command:**
 ```bash
-python -c "import re; m = re.search(r'--graph\s+[\"\\x27]([^\"\\x27]+)[\"\\x27]|--graph\s+(\S+)', '--graph \"docs/my project/graph.json\"'); print(m.group(1) or m.group(2))"
+grep -n "exit 1\|exit 2\|exit code" hooks/subagent_findings_check.py
 ```
 
-### BH-004: impact_graph_gate substring match order-dependent
-**Severity:** LOW
-**Category:** design/inconsistency
-**Location:** `hooks/impact_graph_gate.py:33-36`
-**Status:** RESOLVED
-**Found by:** Holtz only
-<!-- Was: Holtz BH-004 -->
+**Resolution:** Updated docstring to say "Warns but does not block" and "exit_warn" instead of legacy exit code references.
 
-**Problem:** `"docs/holtz/audit/"` is substring of `"docs/holtz/justine/audit/"`. Justine check must come first. Undocumented ordering dependency.
-
-**Evidence:** Reordering the if/elif breaks justine gating.
-
-**Discovery Chain:** Adversarial hook audit → substring analysis → order-dependent correctness → no comment
-
-**Acceptance Criteria:**
-- [ ] Comment explaining ordering dependency, or refactored to non-overlapping checks
-
-**Validation Command:**
-```bash
-grep -A1 "justine/audit" hooks/impact_graph_gate.py | head -4
-```
-
-### BH-005: status_staleness_gate TOCTOU race on STATUS.md deletion
-**Severity:** LOW
+### BH-003: impact_graph.py load() does not validate individual edge/node entries
+**Severity:** MEDIUM
 **Category:** bug/error-handling
-**Location:** `hooks/status_staleness_gate.py:56-60`
-**Status:** RESOLVED
-**Determinism:** intermittent
-**Found by:** Holtz only
-**Predicted:** Prediction 2 (confidence: MEDIUM)
-<!-- Was: Holtz BH-005 -->
-
-**Problem:** If STATUS.md deleted between isfile (line 56) and getmtime (line 60), unhandled FileNotFoundError crashes the hook.
-
-**Evidence:** No try/except around getmtime.
-
-**Discovery Chain:** TOCTOU pattern → isfile/getmtime gap → FileNotFoundError unhandled
-
-**Acceptance Criteria:**
-- [ ] getmtime wrapped in try/except OSError, calls exit_ok on FileNotFoundError
-
-**Validation Command:**
-```bash
-grep -A5 "os.path.getmtime" hooks/status_staleness_gate.py
-```
-
-### BH-006: update_risk accepts NaN delta, silently sets risk_score to 1.0
-**Severity:** MEDIUM
-**Category:** bug/logic
-**Location:** `skills/holtz/scripts/impact_graph.py:211-212`
+**Location:** `skills/holtz/scripts/impact_graph.py:50-65`
 **Status:** RESOLVED
 **Determinism:** deterministic
-**Found by:** Holtz only
-**Predicted:** Prediction 3 (confidence: MEDIUM)
-<!-- Was: Holtz BH-006 -->
+**Predicted:** Prediction 4 (confidence: MEDIUM)
+**Lens:** error-propagation
 
-**Problem:** NaN delta doesn't propagate (Python min/max behavior) but silently sets risk_score to 1.0 regardless of current value. CLI accepts `nan` via argparse float().
+**Problem:** `load()` validates top-level structure but not individual entries. Malformed edge/node entries missing required keys crash downstream methods with `KeyError`.
 
-**Evidence:** `max(0.0, min(1.0, float('nan'))) == 1.0`. The clamping prevents data corruption but produces wrong results silently.
+**Evidence:** `load()` lines 59-62 check `isinstance(nodes, dict)` and `isinstance(edges, list)` but do not validate entry contents.
 
-**Discovery Chain:** Float edge case analysis → NaN through min/max → silent reset to 1.0
+**Discovery Chain:** global pattern heuristic (missing-edge-case-handling) flagged impact_graph.py → read load() → found top-level validation but no per-entry validation → confirmed KeyError on malformed entries
 
 **Acceptance Criteria:**
-- [ ] update_risk rejects NaN/inf delta with error
-- [ ] Test verifies rejection
+- [x] `load()` filters out malformed edge entries (missing source/target/type keys)
+- [x] `load()` filters out malformed node entries (missing required keys)
+- [x] Tests verify that loading a graph with malformed entries doesn't crash
+- [x] Tests verify that valid entries survive filtering alongside malformed ones
 
 **Validation Command:**
 ```bash
-source .venv/bin/activate && python -c "import math; from impact_graph import ImpactGraph; g = ImpactGraph('/tmp/t.json'); g.add_node('x','function','f.py'); r = g.update_risk('x', float('nan')); print('error' in r)"
+python -m pytest tests/test_impact_graph.py -v --tb=short -k "malformed"
 ```
 
-### BH-007: CLI --top accepts negative integers with counterintuitive results
-**Severity:** LOW
-**Category:** bug/logic
-**Location:** `skills/holtz/scripts/impact_graph.py:323`
-**Status:** RESOLVED
-**Determinism:** deterministic
-**Found by:** Holtz only
-**Predicted:** Prediction 3 (confidence: MEDIUM)
-<!-- Was: Holtz BH-007 -->
+**Resolution:** Added `_REQUIRED_EDGE_KEYS` and `_REQUIRED_NODE_KEYS` class constants. `load()` now filters entries with dict comprehensions that check `isinstance(v, dict)` and required key presence. 3 tests added: malformed edges, malformed nodes, mixed valid/invalid.
 
-**Problem:** `--top -1` on 10 nodes returns 9 nodes via Python negative slice semantics.
-
-**Evidence:** `list(range(10))[:-1]` returns 9 items.
-
-**Discovery Chain:** CLI argument audit → no lower bound → negative slice semantics
-
-**Acceptance Criteria:**
-- [ ] --top clamped to max(0, value) or validated
-
-**Validation Command:**
-```bash
-source .venv/bin/activate && python -c "from impact_graph import ImpactGraph; g = ImpactGraph('/tmp/t.json'); print(len(g.risk_hotspots(top=-1)))"
-```
-
-### BH-008: impact_graph_gate enforcement scope narrower than documented requirement
+### BH-004: Missing test for PUNCHLIST-MERGED.md gate path in impact_graph_gate
 **Severity:** MEDIUM
-**Category:** design/inconsistency
-**Location:** `hooks/impact_graph_gate.py:33`
+**Category:** test/missing
+**Location:** `hooks/impact_graph_gate.py:34`
 **Status:** RESOLVED
-**Found by:** Justine only
-<!-- Was: Justine BJ-001 -->
-**Severity disagreement:** Holtz=MEDIUM, Justine=HIGH
+**Lens:** contract
 
-**Problem:** The hook only gates writes to `docs/holtz/audit/` but the HARD-GATE requires gating ALL Phase 1+ output including PUNCHLIST.md. Commented as "Known limitation" at line 30-32. Already documented in run 10 as BH-009.
+**Problem:** The `holtz_files` tuple includes `"docs/holtz/PUNCHLIST-MERGED.md"` as a gated path but no test exercises it.
 
-**Evidence:** `else: exit_ok()` allows PUNCHLIST.md writes ungated.
+**Evidence:** `grep -r "PUNCHLIST-MERGED" tests/` returned zero results.
 
-**Discovery Chain:** SKILL.md HARD-GATE → hook only gates audit/ → PUNCHLIST.md bypasses
+**Discovery Chain:** Justine read impact_graph_gate.py line 34 → identified PUNCHLIST-MERGED.md in holtz_files → grepped tests → zero matches → untested path confirmed
 
 **Acceptance Criteria:**
-- [ ] Hook also gates PUNCHLIST.md, PUNCHLIST-MERGED.md, and investigations/ writes
-- [ ] Test verifies PUNCHLIST.md gating
+- [x] Test sends file_path ending in `docs/holtz/PUNCHLIST-MERGED.md` and verifies block when graph missing
+- [x] Test verifies allow when graph exists
 
 **Validation Command:**
 ```bash
-python -m pytest tests/test_hooks.py::TestImpactGraphGate -v
+python -m pytest tests/test_hooks.py -k "punchlist_merged" -v
 ```
 
-### BH-009: \s+ in Jest/Vitest/Cargo parser regexes violates [ \t] convention
+**Resolution:** Added `test_blocks_punchlist_merged_when_graph_missing` and `test_allows_punchlist_merged_when_graph_exists` to TestImpactGraphGate.
+
+### BH-005: Missing test for STATUS.md-deleted-mid-run block in status_staleness_gate
 **Severity:** MEDIUM
-**Category:** design/inconsistency
-**Location:** `skills/holtz/scripts/convergence_check.py:143,163,180`
+**Category:** test/missing
+**Location:** `hooks/status_staleness_gate.py:55-64`
 **Status:** RESOLVED
-**Pattern:** PAT-003
-**Found by:** Justine only
-<!-- Was: Justine BJ-003 -->
+**Lens:** contract
 
-**Problem:** Three test runner parsers use `\s` where project convention specifies `[ \t]`. Semantically wrong for horizontal whitespace, practically safe.
+**Problem:** The hook blocks writes when STATUS.md is missing but sibling artifacts exist, but no test exercises this path.
 
-**Evidence:** Lines 143 (Jest), 163 (Vitest), 180 (Cargo) use `\s+` or `\s*`. Architecture baseline: "All regex in source uses `[ \t]` not `\s`."
+**Evidence:** Only the allow case (no artifacts) was tested.
 
-**Discovery Chain:** Pattern library match (regex-newline-leak) → grep hit → baseline convention → violation confirmed
+**Discovery Chain:** Justine read status_staleness_gate.py lines 55-64 → identified conditional block on artifact existence → grepped tests → zero matches → untested block path confirmed
 
 **Acceptance Criteria:**
-- [ ] All three parsers use `[ \t]` instead of `\s`
+- [x] Test where STATUS.md is absent but `docs/holtz/recon/` exists → hook blocks
+- [x] Test where STATUS.md is absent but `docs/holtz/PUNCHLIST.md` exists → hook blocks
 
 **Validation Command:**
 ```bash
-grep -n '\\s' skills/holtz/scripts/convergence_check.py | grep -v '^\s*#'
+python -m pytest tests/test_hooks.py -k "status_missing" -v
 ```
 
-### BH-010: status_staleness_gate bypass on STATUS.md deletion
+**Resolution:** Added `test_blocks_when_status_missing_but_recon_exists` and `test_blocks_when_status_missing_but_punchlist_exists` to TestStatusStalenessGate.
+
+### BH-006: Missing test for Justine PUNCHLIST.md gate path in impact_graph_gate
 **Severity:** MEDIUM
-**Category:** design/inconsistency
-**Location:** `hooks/status_staleness_gate.py:56`
+**Category:** test/missing
+**Location:** `hooks/impact_graph_gate.py:35`
 **Status:** RESOLVED
-**Found by:** Justine only
-<!-- Was: Justine BJ-002 -->
-**Severity disagreement:** Holtz=MEDIUM, Justine=HIGH
+**Lens:** contract
 
-**Problem:** Deleting STATUS.md mid-run disables all staleness enforcement. Documented as "Known limitation" at lines 53-55. Already documented in run 10 as BH-008.
+**Problem:** The Justine PUNCHLIST.md endswith check is not tested. Only the audit/ directory path is tested.
 
-**Evidence:** `if not os.path.isfile(status_path): exit_ok()` can't distinguish first-write from deletion.
+**Evidence:** No test sends `docs/holtz/justine/PUNCHLIST.md` as file_path.
 
-**Discovery Chain:** Prior run 10 finding → code still has same bypass → deletion disables enforcement
+**Discovery Chain:** Justine read impact_graph_gate.py line 35 → two-condition OR for justine paths → test only covers audit/ path → endswith(justine_files) untested
 
 **Acceptance Criteria:**
-- [ ] Hook checks for sibling artifacts (recon/, PUNCHLIST.md) to distinguish first-write from deletion
+- [x] Test sends file_path `docs/holtz/justine/PUNCHLIST.md` and verifies it checks Justine's graph
+- [x] Test verifies both block (graph missing) and allow (graph present)
 
 **Validation Command:**
 ```bash
-python -m pytest tests/test_hooks.py::TestStatusStalenessGate -v
+python -m pytest tests/test_hooks.py -k "justine_punchlist" -v
 ```
 
-### BH-011: \s+ in artifact_verification.py violates [ \t] convention
-**Severity:** LOW
-**Category:** design/inconsistency
-**Location:** `hooks/artifact_verification.py:29`
-**Status:** RESOLVED
-**Pattern:** PAT-003
-**Found by:** Justine only
-<!-- Was: Justine BJ-004 -->
-
-**Problem:** `\s+` in `--graph\s+` regex violates project [ \t] convention. Harmless since shell commands are single-line.
-
-**Evidence:** `hooks/artifact_verification.py:29`: `--graph\s+`.
-
-**Discovery Chain:** Pattern library match → grep hit → convention violation
-
-**Acceptance Criteria:**
-- [ ] Regex uses `[ \t]+` instead of `\s+`
-
-**Validation Command:**
-```bash
-grep -n '\\s' hooks/artifact_verification.py
-```
-
-### BH-012: detect_test_runner dict ordering as implicit priority
-**Severity:** LOW
-**Category:** design/inconsistency
-**Location:** `skills/holtz/scripts/convergence_check.py:76`
-**Status:** RESOLVED
-**Found by:** Justine only
-<!-- Was: Justine BJ-005 -->
-
-**Problem:** Runner detection priority depends on dict insertion order (CPython 3.7+ guaranteed). Tests exist for pytest>jest and jest>vitest, but ordering dependency is undocumented and fragile.
-
-**Evidence:** Reordering dict entries silently changes priority. Two tests verify ordering but don't prevent regression.
-
-**Discovery Chain:** Prior run 9 finding → code unchanged → dict ordering is implicit priority
-
-**Acceptance Criteria:**
-- [ ] Comment explicitly documents that dict ordering IS the priority
-
-**Validation Command:**
-```bash
-python -m pytest tests/test_convergence_check.py -k "priority" -v
-```
-
-### BH-013: \s in ENTITY_PATTERNS violates [ \t] convention (safe)
-**Severity:** LOW
-**Category:** design/inconsistency
-**Location:** `skills/holtz/scripts/impact_graph.py:26-36`
-**Status:** RESOLVED
-**Pattern:** PAT-003
-**Found by:** Justine only
-<!-- Was: Justine BJ-008 -->
-
-**Problem:** 9 regex patterns use `\s`. Applied per-line via splitlines(), so newlines can't match. Convention violation only.
-
-**Evidence:** Lines 26-36 contain `\s`. Patterns applied at line 277 via `content.splitlines()`.
-
-**Discovery Chain:** Grep found \s → checked usage → per-line via splitlines → safe but convention violation
-
-**Acceptance Criteria:**
-- [ ] Replace \s with [ \t] in ENTITY_PATTERNS
-
-**Validation Command:**
-```bash
-grep -c '\\\\s' skills/holtz/scripts/impact_graph.py
-```
+**Resolution:** Added `test_blocks_justine_punchlist_when_graph_missing` and `test_allows_justine_punchlist_when_graph_exists` to TestImpactGraphGate.

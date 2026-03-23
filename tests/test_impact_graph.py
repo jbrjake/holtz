@@ -899,3 +899,85 @@ def test_add_edge_update_missing_metadata(graph):
     result = graph.add_edge("a.py::fn_a", "b.py::fn_b", "calls", note="updated")
     assert "error" not in result
     assert result.get("metadata", {}).get("note") == "updated"
+
+
+# --- BH-003 (run 12): load() does not validate individual edge/node entries ---
+
+
+def test_load_malformed_edges_filtered(tmp_path):
+    """Edges missing required keys (source/target/type) should be filtered during load."""
+    graph_file = tmp_path / "graph.json"
+    graph_file.write_text(json.dumps({
+        "nodes": {
+            "a": {"id": "a", "type": "module", "file": "a.py", "line": 1,
+                   "last_audited": "2026-01-01", "audit_count": 1, "risk_score": 0.0},
+            "b": {"id": "b", "type": "module", "file": "b.py", "line": 1,
+                   "last_audited": "2026-01-01", "audit_count": 1, "risk_score": 0.0},
+        },
+        "edges": [
+            {"source": "a", "target": "b", "type": "calls"},  # valid
+            {"target": "b", "type": "calls"},  # missing source
+            {"source": "a", "type": "calls"},  # missing target
+            {"source": "a", "target": "b"},  # missing type
+            "not a dict",  # completely wrong type
+            42,  # not a dict either
+        ],
+    }))
+    g = ImpactGraph(graph_file)
+    g.load()
+    # Only the valid edge should survive
+    assert len(g.edges) == 1
+    assert g.edges[0]["source"] == "a"
+    # Operations should work without crashing
+    assert g.neighbors("a") == ["b"]
+    stats = g.stats()
+    assert stats["edges"] == 1
+
+
+def test_load_malformed_nodes_filtered(tmp_path):
+    """Node values missing required keys should be filtered during load."""
+    graph_file = tmp_path / "graph.json"
+    graph_file.write_text(json.dumps({
+        "nodes": {
+            "good": {"id": "good", "type": "module", "file": "good.py", "line": 1,
+                      "last_audited": "2026-01-01", "audit_count": 1, "risk_score": 0.0},
+            "no_file": {"id": "no_file", "type": "module"},  # missing file
+            "no_type": {"id": "no_type", "file": "x.py"},  # missing type
+            "not_a_dict": "string value",  # wrong type entirely
+        },
+        "edges": [],
+    }))
+    g = ImpactGraph(graph_file)
+    g.load()
+    # Only the well-formed node should survive
+    assert "good" in g.nodes
+    assert "no_file" not in g.nodes
+    assert "no_type" not in g.nodes
+    assert "not_a_dict" not in g.nodes
+    # Operations should work
+    hotspots = g.risk_hotspots(top=10)
+    assert len(hotspots) == 1
+
+
+def test_load_malformed_mixed_valid_and_invalid(tmp_path):
+    """Valid entries should survive alongside malformed ones."""
+    graph_file = tmp_path / "graph.json"
+    graph_file.write_text(json.dumps({
+        "nodes": {
+            "a": {"id": "a", "type": "function", "file": "a.py", "line": 10,
+                   "last_audited": "2026-01-01", "audit_count": 1, "risk_score": 0.5},
+            "b": {"id": "b", "type": "function", "file": "b.py", "line": 20,
+                   "last_audited": "2026-01-01", "audit_count": 1, "risk_score": 0.1},
+            "bad": {},  # empty dict
+        },
+        "edges": [
+            {"source": "a", "target": "b", "type": "calls", "metadata": {"note": "ok"}},
+            {},  # empty dict
+        ],
+    }))
+    g = ImpactGraph(graph_file)
+    g.load()
+    assert len(g.nodes) == 2
+    assert len(g.edges) == 1
+    # Risk scores preserved
+    assert g.nodes["a"]["risk_score"] == 0.5

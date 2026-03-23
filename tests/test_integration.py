@@ -228,8 +228,8 @@ def test_readme_metrics_match_actual():
 
     # Extract claimed counts from README
     m = re.search(
-        r"(\d+) skills, (\d+) agents, (\d+) reference docs, (\d+) example, "
-        r"(\d+) Python scripts, (\d+) seed patterns, (\d+) enforcement hooks, "
+        r"(\d+) skills?, (\d+) agents?, (\d+) reference docs?, (\d+) examples?, "
+        r"(\d+) Python scripts?, (\d+) seed patterns?, (\d+) enforcement hooks?, "
         r"(\d+) tests across ([\d,]+) lines",
         readme,
     )

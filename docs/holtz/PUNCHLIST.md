@@ -1,176 +1,84 @@
 # Holtz Punchlist
-> Generated: 2026-03-22 | Project: holtz | Baseline: 265 pass, 0 fail, 0 skip
+> Generated: 2026-03-23 | Project: holtz | Baseline: 286 pass, 0 fail, 0 skip
 
 ## Summary
 | Severity | Open | Resolved | Deferred |
 |----------|------|----------|----------|
-| HIGH     | 0    | 0        | 0        |
-| MEDIUM   | 2    | 0        | 0        |
-| LOW      | 5    | 0        | 0        |
+| MEDIUM | 1 | 0 | 0 |
+| LOW | 2 | 0 | 0 |
 
 ## Patterns
 
 ## Items
 
-### BH-001: Automate README metrics — recurring recommendation unaddressed
-**Severity:** MEDIUM
-**Category:** design/inconsistency
-**Location:** README.md:36
-**Status:** OPEN
-
-**Problem:** The recommendation "Automate README metrics" has appeared in 2 consecutive audit summaries (runs 9 and 10) without being implemented. Run 10's summary explicitly states "Will be escalated in run 11 if unaddressed." The README test count (265) and line count (8,118) have required manual updates in runs 9 and 10 after code changes caused drift.
-
-**Evidence:** Run 9 SUMMARY.md: "Automate README metrics — Consider a CI step or pre-commit hook that validates test count and line count against README.md. First appearance." Run 10 SUMMARY.md: "Automate README metrics — test count and line count drift on every change. Second appearance (also in run 9). Will be escalated in run 11 if unaddressed."
-
-**Discovery Chain:** Prior summary scan → "Automate README metrics" found in runs 9 and 10 → 2+ appearances triggers escalation per recommendation escalation protocol
-
-**Acceptance Criteria:**
-- [ ] README metrics are validated automatically (CI step, pre-commit hook, or test)
-- [ ] Validation: `grep -c "265 tests across 8,118 lines" README.md` matches and is checked automatically
-
-**Validation Command:**
-```bash
-grep "265 tests" README.md && python -m pytest tests/ --co -q 2>/dev/null | tail -1
-```
-
-### BH-002: README says 13 reference docs, actual is 14
+### BH-001: README "What's inside" counts stale after Justine refactor
 **Severity:** LOW
 **Category:** doc/drift
-**Location:** README.md:36
+**Location:** `README.md:164`
 **Status:** OPEN
 **Predicted:** Prediction 1 (confidence: HIGH)
 
-**Problem:** README line 36 states "13 reference docs" but there are 14 .md files in `skills/holtz/references/`. The `recommendation-escalation.md` file was added but the README count was not updated.
+**Problem:** README line 164 claims "2 skills, 2 agents, 14 reference docs, ... 286 tests across 8,200 lines" but after the Justine internal-only refactor: skills is now 1 (skills/justine/ removed), reference docs is 16 (justine-skill.md and justine-backstory.md moved into references/), and line count is ~8,308.
 
-**Evidence:** `ls skills/holtz/references/*.md | wc -l` returns 14. README says "13 reference docs". The 14th file is `recommendation-escalation.md`, added to support the recommendation escalation protocol.
+**Evidence:**
+- `ls skills/*/SKILL.md` → only `skills/holtz/SKILL.md` (1 skill, not 2)
+- `ls skills/holtz/references/*.md | wc -l` → 16 (not 14)
+- `wc -l` total across scripts+hooks+tests+docs → 8,308 (not 8,200)
 
-**Discovery Chain:** Phase 1 component count verification → `ls` returns 14 reference docs → README says 13 → `recommendation-escalation.md` not counted in last README update
+**Discovery Chain:** Justine refactor (bc165b2) moved files from skills/justine/ to skills/holtz/references/ → skills count decreased, reference doc count increased → README line 164 not updated
 
 **Acceptance Criteria:**
-- [ ] README reference doc count matches actual
-- [ ] Validation: count matches
+- [ ] README "What's inside" line reflects actual counts
+- [ ] test_readme_metrics_match_actual covers skills and reference doc counts (not just test count)
 
 **Validation Command:**
 ```bash
-grep "14 reference docs" README.md
+grep "skills, .* agents, .* reference docs" README.md
 ```
 
-### BH-003: artifact_verification.py regex fails on quoted paths with spaces
+### BH-002: subagent_findings_check.py docstring references legacy exit codes
 **Severity:** LOW
-**Category:** bug/logic
-**Location:** `hooks/artifact_verification.py:29`
+**Category:** doc/drift
+**Location:** `hooks/subagent_findings_check.py:12`
 **Status:** OPEN
-**Determinism:** theoretical
-**Predicted:** Prediction 2 (confidence: MEDIUM)
-**Lens:** component
 
-**Problem:** The `--graph` path extraction regex `r'--graph\s+["\']?([^"\'\s]+)["\']?'` claims to handle quoted paths (the `["\']?` groups exist for this purpose) but the capture group `([^"\'\s]+)` stops at whitespace, so `--graph "docs/my project/impact-graph.json"` captures only `docs/my`.
+**Problem:** Docstring says "Uses exit 1 (warn) not exit 2 (block)" but the hook was modernized in commit 4049532 to use JSON output format. All hooks now exit 0. The docstring was not updated during the modernization.
 
-**Evidence:** The regex character class `[^"\'\s]+` excludes spaces. For input `--graph "path with spaces/graph.json"`, the capture stops at the first space after `path`. The comment on line 28 says "handles quoted and unquoted paths" but the regex only handles quoted paths without spaces.
+**Evidence:** Line 12: `"Uses exit 1 (warn) not exit 2 (block) — the subagent is already done, blocking can't undo its work."` — but actual code calls `exit_ok()` and `exit_warn()` which both `sys.exit(0)`.
 
-**Discovery Chain:** Adversarial hook audit → regex review → capture group excludes `\s` → quoted paths with spaces truncated → comment claim inaccurate
+**Discovery Chain:** read subagent_findings_check.py during Phase 2 → docstring mentions exit codes → code uses JSON functions that exit 0 → docstring stale after modernization
 
 **Acceptance Criteria:**
-- [ ] Regex correctly extracts paths from `--graph "path with spaces/file.json"`
-- [ ] Existing unquoted path extraction still works
-- [ ] Test covers the quoted-path-with-spaces case
+- [ ] Docstring accurately describes the modern output format
+- [ ] No references to legacy exit code semantics
 
 **Validation Command:**
 ```bash
-python -c "import re; m = re.search(r'--graph\s+[\"\\x27]([^\"\\x27]+)[\"\\x27]|--graph\s+(\S+)', '--graph \"docs/my project/graph.json\"'); print(m.group(1) or m.group(2))"
+grep -n "exit 1\|exit 2\|exit code" hooks/subagent_findings_check.py
 ```
 
-### BH-004: impact_graph_gate.py substring path match is order-dependent
-**Severity:** LOW
-**Category:** design/inconsistency
-**Location:** `hooks/impact_graph_gate.py:33-36`
-**Status:** OPEN
-**Determinism:** theoretical
-**Lens:** component
-
-**Problem:** The gate uses substring matching where `"docs/holtz/audit/"` is a substring of `"docs/holtz/justine/audit/"`. The justine check (line 33) must come before the holtz check (line 35) — if reordered, justine audit writes would check the wrong graph file. This ordering dependency is undocumented and fragile.
-
-**Evidence:** `"docs/holtz/audit/" in "docs/holtz/justine/audit/notes.md"` evaluates to `True`. The code works correctly because the justine check comes first in the if/elif chain, but there is no comment explaining why the order matters.
-
-**Discovery Chain:** Adversarial hook audit → substring analysis → `"docs/holtz/audit/"` matches justine paths too → order-dependent correctness → no comment documenting this
-
-**Acceptance Criteria:**
-- [ ] Comment added explaining the ordering dependency
-- [ ] OR refactored to use non-overlapping checks
-
-**Validation Command:**
-```bash
-grep -A1 "justine/audit" hooks/impact_graph_gate.py | head -4
-```
-
-### BH-005: status_staleness_gate.py TOCTOU race on STATUS.md deletion
-**Severity:** LOW
+### BH-003: impact_graph.py load() does not validate individual edge/node entries
+**Severity:** MEDIUM
 **Category:** bug/error-handling
-**Location:** `hooks/status_staleness_gate.py:56-60`
+**Location:** `skills/holtz/scripts/impact_graph.py:50-65`
 **Status:** OPEN
-**Determinism:** intermittent
-**Predicted:** Prediction 2 (confidence: MEDIUM)
+**Determinism:** deterministic
+**Predicted:** Prediction 4 (confidence: MEDIUM)
 **Lens:** error-propagation
 
-**Problem:** If STATUS.md is deleted between the `os.path.isfile()` check (line 56) and `os.path.getmtime()` call (line 60), an unhandled `FileNotFoundError` crashes the hook. The crash produces exit code 1 (warn), which is acceptable but accidental — not an intentional degradation path.
+**Problem:** `load()` validates top-level structure (`nodes` is dict, `edges` is list) but does not validate individual entries. Malformed edge entries missing `source`, `target`, or `type` keys crash every method that iterates edges (`neighbors`, `blast_radius`, `add_edge`, `stats`, `prune_node`) with `KeyError`. Malformed node entries missing `id`, `file`, `type`, or `risk_score` crash `risk_hotspots`, `prune_missing`, and `drift_check`.
 
-**Evidence:** Lines 56-60: `if not os.path.isfile(status_path): exit_ok()` followed by `mtime = os.path.getmtime(status_path)`. No try/except around `getmtime`. The known limitation comment (lines 52-55) documents the deletion *bypass* but not the crash on race.
+**Evidence:** `load()` lines 59-62 check `isinstance(nodes, dict)` and `isinstance(edges, list)` but do not validate entry contents. `neighbors()` line 153 accesses `edge["source"]` and `edge["type"]` without guards. `add_edge()` line 123 does the same for dedup.
 
-**Discovery Chain:** Adversarial hook audit → TOCTOU pattern between isfile and getmtime → FileNotFoundError unhandled → crash exit code 1 = accidental warn
+**Discovery Chain:** global pattern heuristic (missing-edge-case-handling) flagged impact_graph.py → read load() → found top-level validation but no per-entry validation → confirmed KeyError on malformed entries
 
 **Acceptance Criteria:**
-- [ ] `getmtime` wrapped in try/except for `OSError`
-- [ ] On `FileNotFoundError`, hook calls `exit_ok()` (consistent with "file doesn't exist" logic)
+- [ ] `load()` filters out malformed edge entries (missing source/target/type keys)
+- [ ] `load()` filters out malformed node entries (missing required keys)
+- [ ] Tests verify that loading a graph with malformed entries doesn't crash
+- [ ] Tests verify that valid entries survive filtering alongside malformed ones
 
 **Validation Command:**
 ```bash
-grep -A5 "os.path.getmtime" hooks/status_staleness_gate.py
-```
-
-### BH-006: update_risk accepts NaN delta, silently sets risk_score to 1.0
-**Severity:** MEDIUM
-**Category:** bug/logic
-**Location:** `skills/holtz/scripts/impact_graph.py:211-212`
-**Status:** OPEN
-**Determinism:** deterministic
-**Predicted:** Prediction 3 (confidence: MEDIUM)
-**Lens:** component
-
-**Problem:** When `update_risk()` receives `float('nan')` as delta, the arithmetic produces NaN but Python's `min(1.0, nan)` returns `1.0` (NaN comparisons always return False, so `min` returns its first arg). The result is `max(0.0, 1.0) = 1.0`. The node's risk_score is silently set to 1.0 regardless of its current value. The CLI exposes this directly: `python impact_graph.py update_risk node nan` is accepted by argparse.
-
-**Evidence:** `python -c "print(max(0.0, min(1.0, float('nan'))))"` returns `1.0`. Any call to `update_risk(node_id, float('nan'))` silently sets risk_score to 1.0 instead of returning an error.
-
-**Discovery Chain:** Adversarial code audit → float edge case analysis → NaN propagation through min/max → silent risk_score reset to 1.0
-
-**Acceptance Criteria:**
-- [ ] `update_risk` rejects NaN and inf delta values with an error
-- [ ] Test verifies NaN rejection
-
-**Validation Command:**
-```bash
-source .venv/bin/activate && python -c "import math; from impact_graph import ImpactGraph; g = ImpactGraph('/tmp/test.json'); g.add_node('x', 'function', 'f.py'); r = g.update_risk('x', float('nan')); print('error' in r)"
-```
-
-### BH-007: CLI --top accepts negative integers with counterintuitive results
-**Severity:** LOW
-**Category:** bug/logic
-**Location:** `skills/holtz/scripts/impact_graph.py:323`
-**Status:** OPEN
-**Determinism:** deterministic
-**Predicted:** Prediction 3 (confidence: MEDIUM)
-**Lens:** component
-
-**Problem:** The `risk_hotspots` CLI subcommand accepts negative `--top` values without validation. Due to Python's negative slice semantics, `--top -1` on a 10-node graph returns 9 nodes (via `nodes[:-1]`), and `--top -10` returns 0 nodes. The user asked for a negative count and silently gets a different positive count.
-
-**Evidence:** `python -c "print(list(range(10))[:-1])"` returns `[0, 1, 2, 3, 4, 5, 6, 7, 8]` — 9 items for --top -1.
-
-**Discovery Chain:** CLI argument audit → --top has no lower bound → negative int accepted → Python slice semantics produce counterintuitive count
-
-**Acceptance Criteria:**
-- [ ] `--top` validated to be non-negative, or clamped to 0
-- [ ] Test verifies negative --top handling
-
-**Validation Command:**
-```bash
-source .venv/bin/activate && python -c "from impact_graph import ImpactGraph; g = ImpactGraph('/tmp/test.json'); print(len(g.risk_hotspots(top=-1)))"
+python -m pytest tests/test_impact_graph.py -v --tb=short -k "malformed"
 ```
