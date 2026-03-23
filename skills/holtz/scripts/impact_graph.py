@@ -73,7 +73,7 @@ class ImpactGraph:
             os.write(fd, (json.dumps(data, indent=2) + "\n").encode())
             os.close(fd)
             closed = True
-            os.rename(tmp_path, str(self.path))
+            os.replace(tmp_path, str(self.path))
         except BaseException:
             if not closed:
                 os.close(fd)

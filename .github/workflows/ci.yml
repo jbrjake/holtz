@@ -18,7 +18,7 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install pytest ruff mypy
+          pip install pytest pytest-cov ruff mypy
       - name: Lint
         run: |
           source .venv/bin/activate

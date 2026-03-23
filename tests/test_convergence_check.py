@@ -1031,6 +1031,80 @@ def test_detect_runner_project_root_pyproject(tmp_path):
     )
 
 
+# --- BH-004 (run 9): detect_test_runner priority order ---
+
+def test_detect_runner_priority_pytest_over_jest(tmp_path):
+    """When both pytest and jest markers exist, pytest wins (higher priority)."""
+    (tmp_path / "conftest.py").write_text("")
+    (tmp_path / "jest.config.js").write_text("")
+    result = cc.detect_test_runner(project_root=tmp_path)
+    assert result == "pytest", (
+        f"pytest should win over jest when both markers exist, got '{result}'"
+    )
+
+
+def test_detect_runner_priority_jest_over_vitest(tmp_path):
+    """When both jest and vitest markers exist, jest wins (higher priority)."""
+    (tmp_path / "jest.config.js").write_text("")
+    (tmp_path / "vitest.config.ts").write_text("")
+    result = cc.detect_test_runner(project_root=tmp_path)
+    assert result == "jest", (
+        f"jest should win over vitest when both markers exist, got '{result}'"
+    )
+
+
+# --- BH-007 (run 10): save_history round-trip ---
+
+def test_save_history_round_trip(tmp_path, monkeypatch):
+    """save_history then load_history should produce identical data."""
+    monkeypatch.setattr(cc, "HISTORY_FILE", str(tmp_path / "HISTORY.json"))
+    history = [
+        {"timestamp": "2026-01-01T00:00:00", "punchlist": {"OPEN": 3, "RESOLVED": 1, "total": 4}},
+        {"timestamp": "2026-01-02T00:00:00", "punchlist": {"OPEN": 0, "RESOLVED": 4, "total": 4}},
+    ]
+    cc.save_history(history)
+    loaded = cc.load_history()
+    assert loaded == history, f"Round-trip failed: {loaded} != {history}"
+
+
+def test_save_history_overwrites_existing(tmp_path, monkeypatch):
+    """save_history should overwrite existing file, not append."""
+    monkeypatch.setattr(cc, "HISTORY_FILE", str(tmp_path / "HISTORY.json"))
+    cc.save_history([{"first": True}])
+    cc.save_history([{"second": True}])
+    loaded = cc.load_history()
+    assert len(loaded) == 1
+    assert loaded[0]["second"] is True
+
+
+# --- BH-005 (run 10): Vitest all-skipped ---
+
+def test_vitest_all_skipped(monkeypatch):
+    """Vitest output with only skipped tests (no passed/failed) should parse correctly."""
+    output = " Test Files  1 skipped (1)\n      Tests  3 skipped (3)\n   Duration  100ms\n"
+    monkeypatch.setattr(subprocess, "run", _fake_run(output))
+    result = cc.get_test_counts("vitest")
+    assert result is not None, "Vitest all-skipped should not return None"
+    assert result == {"passed": 0, "failed": 0, "skipped": 3}
+
+
+# --- BH-003 (run 10): BJ- prefix support ---
+
+def test_count_items_bj_prefix(tmp_path):
+    """count_items should count BJ- prefixed items (Justine namespace)."""
+    content = (
+        "# Holtz Punchlist\n## Summary\n## Items\n\n"
+        "### BJ-001: Test item\n**Status:** OPEN\n\n"
+        "### BJ-002: Another item\n**Status:** RESOLVED\n"
+    )
+    p = tmp_path / "PUNCHLIST.md"
+    p.write_text(content)
+    counts = cc.count_items(p)
+    assert counts["total"] == 2, f"Expected 2 BJ- items, got {counts['total']}"
+    assert counts["OPEN"] == 1
+    assert counts["RESOLVED"] == 1
+
+
 # --- BH-014 (bug-hunter run 3): skipped count parsing for jest/vitest/mocha ---
 
 def test_jest_with_skipped(monkeypatch):

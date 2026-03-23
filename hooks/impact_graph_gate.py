@@ -26,7 +26,10 @@ def main() -> None:
     # Normalize path separators
     normalized = file_path.replace("\\", "/")
 
-    # Only gate writes to audit directories
+    # Only gate writes to audit directories.
+    # Known limitation: PUNCHLIST.md and investigation files are not gated.
+    # The protocol writes audit claims (gated) before punchlist items,
+    # so the gate catches the first Phase 1+ write attempt.
     if "docs/holtz/justine/audit/" in normalized:
         required = "docs/holtz/justine/impact-graph.json"
     elif "docs/holtz/audit/" in normalized:

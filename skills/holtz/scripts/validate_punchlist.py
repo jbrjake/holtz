@@ -79,9 +79,10 @@ def parse_punchlist(content: str, *, _masked: tuple[str, str] | None = None) -> 
     """Parse markdown punchlist into structured items."""
     normalized, masked = _masked if _masked else mask_code_fences(content)
     items = []
-    # Split on item headers (### BH-NNN: title) in masked content
-    # so headers inside code fences are not matched
-    item_pattern = re.compile(r'^### (BH-\d+):[ \t]*(.*)$', re.MULTILINE)
+    # Split on item headers (### BH-NNN: or ### BJ-NNN: title) in masked content
+    # so headers inside code fences are not matched.
+    # Supports both BH- (Holtz) and BJ- (Justine) namespaces per architecture baseline.
+    item_pattern = re.compile(r'^### (B[HJ]-\d+):[ \t]*(.*)$', re.MULTILINE)
     masked_matches = list(item_pattern.finditer(masked))
 
     # Map character offsets between masked and normalized using line numbers.
@@ -230,7 +231,7 @@ def parse_punchlist(content: str, *, _masked: tuple[str, str] | None = None) -> 
         if vc_match:
             orig_offset = _masked_pos_to_orig_offset(vc_match.start())
             vc_region = original_block[orig_offset:]
-            _vc_header = r'\*\*Validation Command:\*\*[ \t]*\n(?:\s*\n)*'
+            _vc_header = r'\*\*Validation Command:\*\*[ \t]*\n(?:[ \t]*\n)*'
             # Find the opening fence (backtick or tilde, 3+ chars), then
             # require the closing fence to have at least as many chars
             # of the same type, per CommonMark spec.

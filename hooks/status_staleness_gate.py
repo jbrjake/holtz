@@ -49,7 +49,10 @@ def main() -> None:
 
     status_path = os.path.join(cwd, status_rel)
 
-    # If STATUS.md doesn't exist yet, allow — first write of the run
+    # If STATUS.md doesn't exist yet, allow — first write of the run.
+    # Known limitation: if STATUS.md is deleted mid-run, this also allows,
+    # bypassing staleness enforcement. Distinguishing "not created yet" from
+    # "deleted mid-run" would require checking for other docs/holtz/ artifacts.
     if not os.path.isfile(status_path):
         exit_ok()
 

@@ -33,7 +33,7 @@ Once installed, the skill activates when you ask Claude to find bugs, audit test
 
 ## What's inside
 
-2 skills, 2 agents, 13 reference docs, 1 example, 4 Python scripts, 6 seed patterns, 4 enforcement hooks, 235 tests across 4,846 lines, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+2 skills, 2 agents, 13 reference docs, 1 example, 4 Python scripts, 6 seed patterns, 4 enforcement hooks, 265 tests across 8,118 lines, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Who Holtz is
 

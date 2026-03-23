@@ -40,7 +40,8 @@ def count_items(punchlist_path: Path) -> dict:
     counts = {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0}
 
     # Split on item headers so we only look inside item blocks.
-    item_pattern = re.compile(r'^### BH-\d+:', re.MULTILINE)
+    # Supports both BH- (Holtz) and BJ- (Justine) namespaces.
+    item_pattern = re.compile(r'^### B[HJ]-\d+:', re.MULTILINE)
     item_starts = [m.start() for m in item_pattern.finditer(masked)]
 
     for idx, start in enumerate(item_starts):
@@ -68,6 +69,10 @@ def detect_test_runner(project_root: Path | None = None) -> str | None:
         project_root: Directory to search for config files. Defaults to cwd.
     """
     root = project_root or Path(".")
+    # Priority order matters: first match wins. Ordered by specificity —
+    # pytest first (most common Python runner), then JS runners, then
+    # compiled-language runners. A project with both conftest.py and
+    # jest.config.js will detect pytest.
     markers = {
         "pytest": ["pytest.ini", "pyproject.toml", "setup.cfg", "conftest.py"],
         "jest": ["jest.config.js", "jest.config.ts"],
@@ -155,7 +160,7 @@ def get_test_counts(runner: str | None) -> dict | None:
             # Must match the Tests summary line specifically to avoid counting
             # "Test Files  N passed" which is a different metric.
             # Components are extracted independently (like Jest) to handle any order.
-            vitest_line = re.search(r'^\s*Tests\s+(.+\d+ (?:passed|failed))', output, re.MULTILINE)
+            vitest_line = re.search(r'^\s*Tests\s+(.+\d+ (?:passed|failed|skipped))', output, re.MULTILINE)
             if not vitest_line:
                 return None
             line = vitest_line.group(1)
@@ -184,6 +189,9 @@ def get_test_counts(runner: str | None) -> dict | None:
         if runner == "go":
             # Go verbose output: individual test results as --- PASS/FAIL/SKIP lines.
             # Only count top-level tests (no slash in name) to avoid double-counting subtests.
+            # Known limitation: test functions that print "--- PASS: FakeName (" to stdout
+            # at line start will inflate the count. No reliable way to distinguish runner
+            # output from test output since they share stdout.
             passed = len(re.findall(r'^--- PASS: \w+[ (]', output, re.MULTILINE))
             failed = len(re.findall(r'^--- FAIL: \w+[ (]', output, re.MULTILINE))
             skipped = len(re.findall(r'^--- SKIP: \w+[ (]', output, re.MULTILINE))
@@ -259,7 +267,7 @@ def save_history(history: list) -> None:
         os.write(fd, json.dumps(history, indent=2).encode())
         os.close(fd)
         closed = True
-        os.rename(tmp_path, str(target))
+        os.replace(tmp_path, str(target))
     except BaseException:
         if not closed:
             os.close(fd)
@@ -303,6 +311,9 @@ def check_convergence(history: list) -> tuple[bool, str]:
 
     # Detect partial item deletion: if total items decreased at any point
     # in the history, items were removed rather than resolved.
+    # Known limitation: equal-count replacement (delete N, add N) is invisible
+    # to this count-based check. Convergence still requires zero open items,
+    # so false convergence cannot occur — only the deletion warning is bypassed.
     prev_max_total = max(_get_punchlist(h)["total"] for h in history[:-1])
     if prev_max_total > 0 and curr_pl["total"] < prev_max_total:
         deleted_count = prev_max_total - curr_pl["total"]
