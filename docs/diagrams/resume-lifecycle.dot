@@ -1,0 +1,24 @@
+digraph {
+  rankdir=TB
+  node [shape=box]
+  check [label="Check docs/holtz/"]
+  summary [label="SUMMARY.md exists?\n(prior run completed)"]
+  status [label="STATUS.md exists?\n(prior run in progress)"]
+  recon [label="recon/ dir exists?\n(crashed in Phase 0)"]
+  punchlist [label="PUNCHLIST.md exists?\n(past recon)"]
+  fresh [label="Start fresh\n(Phase 0)"]
+  resume_status [label="Resume from\nSTATUS.md position"]
+  resume_recon [label="Resume from first\nmissing recon step"]
+  resume_audit [label="Resume audit or\nfix loop per STATUS"]
+  ask [label="Ask user:\nfresh audit or\nreview prior?"]
+
+  check -> summary
+  summary -> ask [label="yes"]
+  summary -> status [label="no"]
+  status -> resume_status [label="yes"]
+  status -> recon [label="no"]
+  recon -> resume_recon [label="yes"]
+  recon -> punchlist [label="no"]
+  punchlist -> resume_audit [label="yes"]
+  punchlist -> fresh [label="no"]
+}

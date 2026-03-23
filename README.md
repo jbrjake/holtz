@@ -91,6 +91,12 @@ The graph also detects drift. If a function moves more than ten lines from where
 
 Justine builds her own graph during her parallel audit. After both auditors converge, the graphs are merged — higher risk scores win, audit counts are summed, and Justine's graph is deleted. One source of truth.
 
+## Resuming prior runs
+
+Default behavior is resume, not restart. Before starting any work, Holtz checks for existing output:
+
+<p align="center"><img src="docs/diagrams/resume-lifecycle.svg" alt="Resume lifecycle flowchart"></p>
+
 ## The seven phases
 
 **Phase 0: Recon.** Project structure, test infrastructure, baseline metrics, lint results, git churn analysis, skipped tests. Each step writes its own file. Context compaction can't kill what's already on disk. If mutation testing tools are available, Holtz runs them. Functions where more than 40% of mutations survive become high-confidence predictions, because a test suite that can't detect injected bugs can't detect real ones either. If an architecture baseline exists from a prior run, Holtz diffs the current structure against it and flags drift: dependency reversals, boundary erosion, convention violations, layering breaches. If recommendations from prior runs went unaddressed, they stop being recommendations and become punchlist items. Then predictive recon: Holtz ranks every predicted bug location by converging signals (pattern history, graph risk scores, mutation survival, git churn) and writes the list to disk. By the time Phase 1 starts, he already has a map of where the trouble is.
@@ -103,28 +109,7 @@ Justine builds her own graph during her parallel audit. After both auditors conv
 
 **Phase 4: Fix Loop (TDD).** Triaged by complexity. Simple items (missing tests, doc drift, bogus assertions) take the fast path: write test, fix, commit. Complex bugs take the investigation path: bottom-up layer analysis (data, dependencies, state, logic, integration, timing), root cause confidence gating (don't fix until confidence is HIGH), and a full investigation trail. Bugs that can't be reproduced get their own protocol — widen conditions, check environment differences, statistical reproduction, git bisect, instrumentation — before being deferred with evidence. Every fix, simple or complex, gets hardened: edge variants (null, empty, boundary, concurrent) tested before moving on. Then comes the part most auditors skip. Blast radius analysis. After every fix passes its reproduction test, Holtz queries the impact graph for every function, test, and module within two hops of the change. Did the fix break an assumption somewhere else? Did it shift a boundary a downstream consumer depends on? If so, new punchlist items. Fixes that create bugs are worse than the bugs they fixed. Holtz checks.
 
-```mermaid
-flowchart TB
-    read["Re-read worklist\n(MERGED if exists,\notherwise PUNCHLIST)"]
-    triage["Triage item\nby category"]
-    fast["Fast Path\n(test → fix → commit)"]
-    investigate["Investigation Path\n(layers → confidence → fix)"]
-    cantrepro["Can't-Reproduce Path\n(widen → bisect → defer)"]
-    harden["Per-Fix Hardening\n(edges + regression)"]
-    blast["Blast Radius Analysis\n(impact graph 2-hop)"]
-    next["Next item"]
-
-    read --> triage
-    triage -->|"test/doc/design\nor deterministic bug"| fast
-    triage -->|"intermittent\nor theoretical bug"| investigate
-    triage -->|"repro test\nunexpectedly passes"| cantrepro
-    fast --> harden
-    investigate --> harden
-    cantrepro -->|"if reproduced"| harden
-    cantrepro -->|"DEFERRED\nwith evidence"| next
-    harden --> blast
-    blast --> next
-```
+<p align="center"><img src="docs/diagrams/phase4-triage.svg" alt="Phase 4 triage flowchart"></p>
 
 **Phase 5: Pattern Analysis.** After every 3-5 fixes, group resolved items by category. If two or more share a root cause, identify the pattern, search for siblings, add new items. The bugs you found are a sample. The pattern tells you the population. Discovery chains — the reasoning trail each finding carries from observation to conclusion — get cross-compared here, because bugs that look different on the surface sometimes share the same causal shape underneath.
 
@@ -134,62 +119,11 @@ The convergence checker has specific protections against false convergence. You 
 
 Holtz's convergence loop:
 
-```mermaid
-flowchart TB
-    recover["Read STATUS.md + PUNCHLIST.md\n(recover position + active lens)"]
-    fix_loop["Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"]
-    breaker{"Circuit breaker\ntriggered?"}
-    stop["STOP\nReport to user"]
-    lens_clean{"Current lens:\nzero OPEN items AND\nno new items (2 iters)\nAND suite stable?"}
-    mark["Mark current lens\nCOMPLETE in STATUS.md"]
-    switch{"Switch lens?\n(COMPLETE OR\n3 consecutive LOW)"}
-    next_lens["Select next lens from registry\nUpdate Active Lens in STATUS.md\nRun Phases 1-3 scoped to\nnew lens focus + entry point"]
-    all_done{"All lenses\nCOMPLETE?"}
-    final["Final sweep:\nALL lenses simultaneously"]
-    clean{"Clean?"}
-    converged["CONVERGED"]
-    reset["Add findings to punchlist\nReset affected lenses\nto incomplete"]
-
-    recover --> fix_loop
-    fix_loop --> breaker
-    breaker -->|yes| stop
-    breaker -->|no| lens_clean
-    lens_clean -->|yes| mark
-    lens_clean -->|"no\n(continue fixing)"| recover
-    mark --> switch
-    switch -->|yes| next_lens
-    switch -->|no| all_done
-    next_lens --> recover
-    all_done -->|yes| final
-    all_done -->|no| recover
-    final --> clean
-    clean -->|yes| converged
-    clean -->|no| reset
-    reset --> recover
-```
+<p align="center"><img src="docs/diagrams/holtz-convergence.svg" alt="Holtz convergence loop"></p>
 
 Justine's convergence is different — single-pass, all lenses at once:
 
-```mermaid
-flowchart TB
-    recover["Read STATUS.md + PUNCHLIST.md\n(recover position + priority queue)"]
-    fix_loop["Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"]
-    breaker{"Circuit breaker\ntriggered?"}
-    stop["STOP\nReport to user"]
-    scan["Single-pass audit:\nALL lenses simultaneously\n(integration → security →\ndata-flow → error-propagation\n→ contract → component)"]
-    found{"New findings\nacross any area?"}
-    converged["CONVERGED"]
-    add["Add findings to punchlist"]
-
-    recover --> fix_loop
-    fix_loop --> breaker
-    breaker -->|yes| stop
-    breaker -->|no| scan
-    scan --> found
-    found -->|"zero findings\nacross all areas"| converged
-    found -->|"findings exist"| add
-    add --> recover
-```
+<p align="center"><img src="docs/diagrams/justine-convergence.svg" alt="Justine convergence loop"></p>
 
 ## The lenses
 

@@ -1,0 +1,23 @@
+digraph {
+  rankdir=TB
+  node [shape=box]
+  read [label="Re-read worklist\n(MERGED if exists,\notherwise PUNCHLIST)"]
+  triage [label="Triage item\nby category"]
+  fast [label="Fast Path\n(test→fix→commit)"]
+  investigate [label="Investigation Path\n(layers→confidence→fix)"]
+  cantrepro [label="Can't-Reproduce Path\n(widen→bisect→defer)"]
+  harden [label="Per-Fix Hardening\n(edges+regression)"]
+  blast [label="Blast Radius Analysis\n(impact graph 2-hop)"]
+  next [label="Next item"]
+
+  read -> triage
+  triage -> fast [label="test/doc/design\nor deterministic bug"]
+  triage -> investigate [label="intermittent\nor theoretical bug"]
+  triage -> cantrepro [label="repro test\nunexpectedly passes"]
+  fast -> harden
+  investigate -> harden
+  cantrepro -> harden [label="if reproduced"]
+  cantrepro -> next [label="DEFERRED\nwith evidence"]
+  harden -> blast
+  blast -> next
+}

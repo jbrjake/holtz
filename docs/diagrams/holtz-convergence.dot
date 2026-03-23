@@ -1,0 +1,35 @@
+digraph {
+  rankdir=TB
+  node [shape=box]
+
+  recover [label="Read STATUS.md\n+ PUNCHLIST.md\n(recover position + active lens)"]
+  fix_loop [label="Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"]
+  breaker [label="Circuit breaker\ntriggered?" shape=diamond]
+  stop [label="STOP\nReport to user"]
+  lens_clean [label="Current lens:\nzero OPEN items AND\nno new items (2 iters)\nAND suite stable?" shape=diamond]
+  mark [label="Mark current lens\nCOMPLETE in STATUS.md"]
+  switch [label="Switch lens?\n(COMPLETE OR\n3 consecutive LOW)" shape=diamond]
+  next_lens [label="Select next lens from registry\nUpdate Active Lens in STATUS.md\nRun Phases 1-3 scoped to\nnew lens focus + entry point"]
+  all_done [label="All lenses\nCOMPLETE?" shape=diamond]
+  final [label="Final sweep:\nALL lenses simultaneously"]
+  clean [label="Clean?" shape=diamond]
+  converged [label="CONVERGED"]
+  reset [label="Add findings to punchlist\nReset affected lenses\nto incomplete"]
+
+  recover -> fix_loop
+  fix_loop -> breaker
+  breaker -> stop [label="yes"]
+  breaker -> lens_clean [label="no"]
+  lens_clean -> mark [label="yes"]
+  lens_clean -> recover [label="no\n(continue fixing)"]
+  mark -> switch
+  switch -> next_lens [label="yes"]
+  switch -> all_done [label="no"]
+  next_lens -> recover
+  all_done -> final [label="yes"]
+  all_done -> recover [label="no"]
+  final -> clean
+  clean -> converged [label="yes"]
+  clean -> reset [label="no"]
+  reset -> recover
+}

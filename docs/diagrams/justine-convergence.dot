@@ -1,0 +1,22 @@
+digraph {
+  rankdir=TB
+  node [shape=box]
+
+  recover [label="Read STATUS.md\n+ PUNCHLIST.md\n(recover position + priority queue)"]
+  fix_loop [label="Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"]
+  breaker [label="Circuit breaker\ntriggered?" shape=diamond]
+  stop [label="STOP\nReport to user"]
+  scan [label="Single-pass audit:\nALL lenses simultaneously\n(integration → security →\ndata-flow → error-propagation\n→ contract → component)"]
+  found [label="New findings\nacross any area?" shape=diamond]
+  converged [label="CONVERGED"]
+  add [label="Add findings to punchlist"]
+
+  recover -> fix_loop
+  fix_loop -> breaker
+  breaker -> stop [label="yes"]
+  breaker -> scan [label="no"]
+  scan -> found
+  found -> converged [label="zero findings\nacross all areas"]
+  found -> add [label="findings exist"]
+  add -> recover
+}
