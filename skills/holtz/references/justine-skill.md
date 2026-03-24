@@ -227,7 +227,11 @@ Read [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/phase-4-fix-loop.md`](${CLA
 
 Read [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/impact-graph-operations.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/impact-graph-operations.md) for blast radius queries and risk score updates.
 
-1. **Re-read `docs/holtz/justine/PUNCHLIST.md`** — this is your worklist.
+1. **Re-read `docs/holtz/justine/PUNCHLIST.md`** — this is your worklist. **If the punchlist has more than 6 items**, use filtered reads to reduce context load:
+   ```bash
+   python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py docs/holtz/justine/PUNCHLIST.md --filter-status OPEN "IN PROGRESS" --resolved-before 3 --render
+   ```
+   This shows all OPEN/IN PROGRESS items plus the 3 most recently resolved items (for cross-item pattern recognition). Items resolved earlier are on disk and available in Phase 5.
 2. **Triage** → Fast Path (test/doc/design/deterministic bug) | Investigation Path (intermittent/theoretical bug) | Can't-Reproduce Path (repro test passes)
 3. After each fix: **Per-Fix Hardening** → **Blast Radius Analysis**
 4. Commit format: `fix(<scope>): <desc>` with punchlist ID in body
@@ -241,7 +245,7 @@ Use extended thinking (ultrathink) for this phase — cross-finding pattern disc
 
 Same protocol as Holtz — group resolved items, identify shared root causes, search for siblings. Because Justine's findings span multiple lenses in a single pass, her patterns may naturally cross lens boundaries. This is expected and does not require special handling.
 
-1. **Re-read `docs/holtz/justine/PUNCHLIST.md`**.
+1. **Re-read `docs/holtz/justine/PUNCHLIST.md`** — For pattern analysis, read the full punchlist (no filter). Pattern grouping requires seeing all resolved items to identify shared root causes across the complete history.
 2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify pattern, search for siblings, write new items to punchlist IMMEDIATELY.
 3. Write pattern blocks to punchlist per format spec.
 4. **Update impact graph** (shared `docs/holtz/impact-graph.json`, or `docs/holtz/justine/impact-graph.json` during adversarial self-play): Add `shares_pattern` edges between all instances of the same pattern.
@@ -283,7 +287,7 @@ digraph {
   rankdir=TB
   node [shape=box]
 
-  recover [label="Read STATUS.md\n+ PUNCHLIST.md\n(recover position + priority queue)"]
+  recover [label="Read STATUS.md\n+ PUNCHLIST.md\n(filtered: OPEN + last 3 resolved)"]
   fix_loop [label="Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"]
   breaker [label="Circuit breaker\ntriggered?" shape=diamond]
   stop [label="STOP\nReport to user"]
@@ -302,6 +306,12 @@ digraph {
   add -> recover
 }
 ```
+
+**Filtered reads in convergence loop:** Each iteration re-reads the punchlist. If the punchlist has more than 6 items, use:
+```bash
+python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py docs/holtz/justine/PUNCHLIST.md --filter-status OPEN "IN PROGRESS" --resolved-before 3 --render
+```
+This keeps recently-resolved items visible for pattern recognition while filtering out stable old resolutions. Phase 5 (pattern analysis, every 3-5 fixes) reads the full punchlist.
 
 **Trade-off acknowledged:** Justine's single-pass convergence is faster but provides a lower depth guarantee than Holtz's per-lens sequential convergence. This is intentional. Justine finds the bugs that are visible on a broad sweep. Holtz finds the bugs that require exhaustive depth. Together they cover the full spectrum.
 
