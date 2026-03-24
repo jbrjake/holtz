@@ -31,7 +31,8 @@ def main() -> None:
 
     normalized = file_path.replace("\\", "/")
 
-    # Only gate writes inside docs/holtz/
+    # Only gate writes inside docs/holtz/. Uses `in` for substring matching
+    # because Claude Code provides absolute or cwd-relative paths. BH-007 run 14.
     if "docs/holtz/" not in normalized:
         exit_ok("PreToolUse")
 

@@ -365,8 +365,12 @@ def check_convergence(history: list) -> tuple[bool, str]:
             for i in range(3)
         )
         if no_open_progress and open_items > 0:
+            # Distinguish flat (stalled) from growing (regressing). BH-008 run 14.
+            first_open = (last_4_pls[0]["OPEN"] + last_4_pls[0]["IN PROGRESS"]
+                          + last_4_pls[0].get("unknown", 0))
+            label = "REGRESSING" if open_items > first_open else "STALLED"
             return False, (
-                f"STALLED: {open_items} items remain open but no progress "
+                f"{label}: {open_items} items remain open but no progress "
                 f"in last 3 iterations. Consider deferring remaining items."
             )
 

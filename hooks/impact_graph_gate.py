@@ -29,6 +29,9 @@ def main() -> None:
     # Only gate writes to audit directories and punchlist files.
     # ORDER MATTERS: justine check must come before holtz check because
     # "docs/holtz/audit/" is a substring of "docs/holtz/justine/audit/".
+    # NOTE: Uses `in` for substring matching. Claude Code provides absolute
+    # or cwd-relative paths, so these specific path components are safe from
+    # false positives on embedded paths. BH-007 run 14: verified by design.
     justine_paths = ("docs/holtz/justine/audit/", )
     justine_files = ("docs/holtz/justine/PUNCHLIST.md", )
     holtz_files = ("docs/holtz/PUNCHLIST.md", "docs/holtz/PUNCHLIST-MERGED.md")
