@@ -138,3 +138,31 @@ def format_compact(entries: list[PatternEntry], *, fmt: str = DEFAULT_FORMAT) ->
 
     separator = "\n" if fmt == "oneliner" else "\n\n"
     return header + separator.join(blocks) + "\n"
+
+
+def main() -> None:
+    import argparse
+    parser = argparse.ArgumentParser(description="Compact pattern brief for subagents")
+    parser.add_argument("path", nargs="?", default="docs/holtz/patterns-brief.md",
+                        help="Path to patterns-brief.md")
+    parser.add_argument("--format", choices=["oneliner", "twoliner", "structured"],
+                        default=DEFAULT_FORMAT,
+                        help="Compact format to use")
+    args = parser.parse_args()
+
+    path = Path(args.path)
+    if not path.exists():
+        print(f"No pattern brief found at {path}", file=sys.stderr)
+        sys.exit(0)  # Not an error — brief may not exist on early runs
+
+    content = path.read_text()
+    entries = parse_brief(content)
+    if not entries:
+        print("No patterns in brief", file=sys.stderr)
+        sys.exit(0)
+
+    print(format_compact(entries, fmt=args.format))
+
+
+if __name__ == "__main__":
+    main()
