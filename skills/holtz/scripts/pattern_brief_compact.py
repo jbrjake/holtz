@@ -34,23 +34,34 @@ class PatternEntry:
 
 
 def parse_brief(content: str) -> list[PatternEntry]:
-    """Parse patterns-brief.md into structured entries."""
+    """Parse patterns-brief.md into structured entries.
+
+    Masks code fences before header matching to prevent false matches
+    on pattern headers inside code examples (PAT-001 / BH-005 run 14).
+    Uses [ \\t]* instead of \\s* for field extraction to prevent newline
+    leaks on empty field values (BH-004 run 14).
+    """
+    from markdown_utils import mask_code_fences
+
     entries = []
-    # Match ## PAT-NNN: name (Run N, YYYY-MM-DD)
+    # Mask code fences so headers inside examples are not matched (BH-005).
+    _, masked = mask_code_fences(content)
+
+    # Match ## PAT-NNN: name (Run N, YYYY-MM-DD) in masked content
     header_re = re.compile(
-        r'^## (PAT-\d+): (.+?) \((Run \d+), (\d{4}-\d{2}-\d{2})\)\s*$',
+        r'^## (PAT-\d+): (.+?) \((Run \d+), (\d{4}-\d{2}-\d{2})\)[ \t]*$',
         re.MULTILINE,
     )
-    matches = list(header_re.finditer(content))
+    matches = list(header_re.finditer(masked))
 
     for i, match in enumerate(matches):
         start = match.end()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(masked)
         block = content[start:end]
 
         def _extract(field: str, _block: str = block) -> str:
             m = re.search(
-                rf'\*\*{field}:\*\*\s*(.*?)(?=\n\*\*|\n##|\Z)',
+                rf'\*\*{field}:\*\*[ \t]*(.*?)(?=\n\*\*|\n##|\Z)',
                 _block,
                 re.DOTALL,
             )
