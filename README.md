@@ -12,7 +12,7 @@ Code review happens once. The comments get addressed, the reviewer approves, eve
 
 Holtz goes back to check.
 
-He runs a seven-phase audit and then starts over. Finds what the fixes uncovered. Fixes those too. Runs again. This continues until two consecutive passes produce zero new findings across six analytical lenses. That's convergence. Everything before that is just progress.
+He runs a seven-phase audit and then starts over. Finds what the fixes uncovered. Fixes those too. Runs again. This continues until two consecutive passes produce zero new findings across nine analytical lenses. That's convergence. Everything before that is just progress.
 
 The moment you stop looking is the moment something gets through.
 
@@ -95,7 +95,7 @@ Six seed patterns ship with the plugin: regex newline leaks, code-fence-unaware 
 
 Holtz is built to be added to.
 
-**Lenses.** The six analytical lenses that ship are defaults. Add any lens to the registry file and it joins the convergence rotation. If you've found a way of looking at code that catches things the existing lenses miss, that's the kind of contribution that makes the registry better for everyone.
+**Lenses.** The nine analytical lenses that ship are defaults. Add any lens to the registry file and it joins the convergence rotation. If you've found a way of looking at code that catches things the existing lenses miss, that's the kind of contribution that makes the registry better for everyone.
 
 **Patterns.** Each seed pattern is a markdown file with a YAML header, a description, an executable detection heuristic, and an example. Write one for a bug class you keep seeing. If the heuristic fires during recon, Holtz starts the audit already knowing what to look for.
 
@@ -117,7 +117,7 @@ PRs with new lenses, patterns, or edge types are welcome. The whole point of the
 
 **Phase 5: Pattern analysis.** Group resolved items, find shared root causes, search for siblings.
 
-**Phase 6: Convergence.** Repeat Phases 4-5 until clean, then run a final sweep across all six lenses — component, integration, security, error propagation, data flow, contract. If any lens finds something, the loop continues. Circuit breakers prevent runaway: max 15 iterations, max 3 attempts per item, stall detection after 3 iterations with no progress. Without these, Holtz would audit forever. He would not consider this a problem.
+**Phase 6: Convergence.** Repeat Phases 4-5 until clean, then run a final sweep across all nine lenses — component, integration, security, error propagation, data flow, contract, semantic fidelity, temporal protocol, public contract. If any lens finds something, the loop continues. Circuit breakers prevent runaway: max 15 iterations, max 3 attempts per item, stall detection after 3 iterations with no progress. Without these, Holtz would audit forever. He would not consider this a problem.
 
 <p align="center"><img src="docs/diagrams/holtz-convergence.svg" alt="Holtz convergence loop"></p>
 
