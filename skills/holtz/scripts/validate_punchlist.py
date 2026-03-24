@@ -344,11 +344,25 @@ def render_items(
     item_pattern = re.compile(r'^### (B[HJ]-\d+):[ \t]*(.*)$', re.MULTILINE)
     matches = list(item_pattern.finditer(masked))
 
+    # Build line-number-to-offset map for original_content so we can
+    # convert masked line numbers to original character offsets.
+    # mask_code_fences preserves line count, so line N in masked = line N
+    # in original. Character offsets diverge because fenced lines shrink.
+    orig_line_offsets = [0]
+    for ci, ch in enumerate(original_content):
+        if ch == '\n':
+            orig_line_offsets.append(ci + 1)
+
     blocks = []
     for i, match in enumerate(matches):
         if match.group(1) in item_ids:
-            start = match.start()
-            end = matches[i + 1].start() if i + 1 < len(matches) else len(original_content)
+            start_line = masked[:match.start()].count('\n')
+            start = orig_line_offsets[start_line] if start_line < len(orig_line_offsets) else len(original_content)
+            if i + 1 < len(matches):
+                end_line = masked[:matches[i + 1].start()].count('\n')
+                end = orig_line_offsets[end_line] if end_line < len(orig_line_offsets) else len(original_content)
+            else:
+                end = len(original_content)
             blocks.append(original_content[start:end].rstrip())
 
     showing = f"{len(items)} of {total_count}" if total_count else str(len(items))

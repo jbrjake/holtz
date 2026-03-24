@@ -1,6 +1,6 @@
 """Tests for pattern_brief_compact.py."""
 
-import pattern_brief_compact as pbc
+import pattern_brief_compact as pbc  # noqa: I001
 
 
 SAMPLE_BRIEF = """\
@@ -49,11 +49,11 @@ def test_format_oneliner():
     """Oneliner format: one pipe-delimited line per pattern."""
     entries = pbc.parse_brief(SAMPLE_BRIEF)
     output = pbc.format_compact(entries, fmt="oneliner")
-    lines = [l for l in output.strip().split('\n') if l.strip() and not l.startswith('#')]
+    lines = [line for line in output.strip().split('\n') if line.strip() and not line.startswith('#')]
     assert len(lines) == 3
     assert "PAT-001" in lines[0]
     assert "|" in lines[0]
-    assert all(len(l) < 200 for l in lines)
+    assert all(len(line) < 200 for line in lines)
 
 
 def test_format_twoliner():
@@ -62,7 +62,7 @@ def test_format_twoliner():
     output = pbc.format_compact(entries, fmt="twoliner")
     assert "PAT-001" in output
     assert "Detect:" in output
-    content_lines = [l for l in output.strip().split('\n') if l.strip()]
+    content_lines = [line for line in output.strip().split('\n') if line.strip()]
     assert len(content_lines) >= 6  # 3 entries x 2 lines
 
 
