@@ -10,7 +10,15 @@ Parses PUNCHLIST.md files and validates:
 - Deferred bug items have reproduction evidence or an investigation link
 - Validation commands are present
 
-Usage: python validate_punchlist.py [path-to-punchlist.md]
+Usage:
+  Validate:  python validate_punchlist.py [path-to-punchlist.md]
+  Filter:    python validate_punchlist.py [path] --filter-status OPEN --render
+  Recency:   python validate_punchlist.py [path] --resolved-before 3 --render
+
+Filter flags:
+  --filter-status STATUS [STATUS ...]   Only include items with these statuses
+  --resolved-before N                   Keep only the N most recently resolved items
+  --render                              Output filtered markdown instead of validation report
 """
 
 import re
