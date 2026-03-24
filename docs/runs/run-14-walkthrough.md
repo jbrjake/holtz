@@ -2,7 +2,7 @@
 
 > **What you're reading:** The complete trace of Holtz's 14th audit of his own codebase, including reasoning, commands, findings, and fixes. This was a full adversarial self-play audit — Holtz and Justine auditing in parallel, merging findings, then Holtz running the TDD fix loop.
 >
-> **Token usage:** ~210K tokens in the main context + ~142K tokens in Justine's parallel subagent = ~352K total across 2 execution contexts.
+> **Token usage:** 207,110 tokens in the main context + 141,876 tokens in Justine's parallel subagent = 348,986 total across 2 execution contexts. All token counts are real, extracted from `~/.claude/` session logs.
 >
 > **Result:** 8 findings (6 MEDIUM, 2 LOW), all resolved. 2 real code bugs found and fixed. 3 tests added. Pattern library predicted both bugs before any code was read.
 
@@ -388,21 +388,32 @@ Documented that hook `in` path matching is a design decision (Claude Code provid
 - Prediction 4 (HIGH, README counts stale): UNCONFIRMED — counts were correct
 - Prediction 5 (LOW, hook coverage): UNCONFIRMED — subprocess testing is adequate
 
-### Token usage breakdown (estimated)
+### Token usage (real, from session history)
 
-| Phase | Cumulative Tokens | What happened |
-|-------|-------------------|---------------|
-| Session start | ~2,500 | Skill loaded, prior run checked |
-| Phase 0 complete | ~45,000 | 8 recon steps, 11 files written to disk |
-| Justine dispatched | ~52,000 | Background subagent launched |
-| Phase 1 complete | ~78,000 | All doc claims verified, 0 findings |
-| Phase 2 complete | ~110,000 | Test audit + subagent, 1 finding |
-| Phase 3 complete | ~140,000 | 2 bugs confirmed by reproduction |
-| Merge complete | ~160,000 | Justine's 142K-token audit merged |
-| Fix loop complete | ~195,000 | 3 commits, 8 items resolved |
-| Convergence | ~210,000 | SUMMARY.md written, run complete |
-| **Justine (parallel)** | **~142,000** | Independent 109-tool-call audit |
-| **Total across all contexts** | **~352,000** | Main + Justine subagent |
+Context window size at each milestone, extracted from `~/.claude/` session logs:
+
+| Phase | Context Window | Output Tokens | Wall Clock (UTC) |
+|-------|---------------|---------------|-----------------|
+| Session start | 31,707 | 25 | 05:20:47 |
+| Phase 0 complete | 103,136 | — | 05:41:22 |
+| Justine dispatched | 104,084 | 4 | 05:41:39 |
+| Phase 1 complete | 131,282 | — | 05:46:05 |
+| Phase 2 complete (BH-003) | 142,164 | — | 05:49:51 |
+| Both bugs confirmed | 144,218 | — | 05:50:27 |
+| Phase 3 complete | 155,261 | 2 | 05:56:57 |
+| Merge complete | 174,760 | 2 | 06:00:30 |
+| Fix loop: first commit | 190,661 | — | 06:04:24 |
+| All 8 items fixed | 191,404 | — | 06:04:41 |
+| **Run 14 converged** | **207,110** | **478** | **06:09:16** |
+
+| Execution Context | Context Window | Output Tokens | Tool Calls | Duration |
+|-------------------|---------------|---------------|------------|----------|
+| **Holtz (main)** | **207,110** | ~73K total | 381 turns | ~49 min |
+| **Justine (parallel subagent)** | **141,876** | — | 109 calls | ~15 min |
+| **Total** | **348,986** | — | **490 turns** | — |
+
+*Context window = input_tokens + cache_creation_input_tokens + cache_read_input_tokens per API call.
+This is the number displayed in the Claude Code status bar.*
 
 ---
 
