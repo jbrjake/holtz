@@ -3,8 +3,10 @@
 
 Shows what the user sees in Claude Code with tool calls collapsed:
 assistant text output, tool call indicators (name + description),
-user prompts, and injected token/cost metadata. Tool results are
-omitted (they're behind expandable sections in the real UI).
+user prompts, and injected token metadata. Tool results are omitted
+(they're behind expandable sections in the real UI).
+
+After the audit portion ends, appends the full SUMMARY.md content.
 """
 import json
 import sys
@@ -21,18 +23,12 @@ BLUE = "\x1b[34m"
 MAGENTA = "\x1b[35m"
 CYAN = "\x1b[36m"
 
-# Opus pricing
-CACHE_READ_RATE = 1.50 / 1_000_000
-CACHE_WRITE_RATE = 18.75 / 1_000_000
-INPUT_RATE = 15.0 / 1_000_000
-OUTPUT_RATE = 75.0 / 1_000_000
-
-# Playback pacing: fixed delay between events (not real-time).
-# Text gets a bit more time so it's readable. Tool calls are fast.
-TEXT_DELAY = 1.5       # seconds per text block
-TOOL_DELAY = 0.15      # seconds per tool call indicator
-USER_DELAY = 2.0       # pause on user messages
-TOKEN_DELAY = 0.8      # pause on token markers
+# Playback pacing
+TEXT_DELAY = 1.5
+TOOL_DELAY = 0.15
+USER_DELAY = 2.0
+TOKEN_DELAY = 0.8
+SUMMARY_LINE_DELAY = 0.06
 
 # Cut the recording at this user message
 CUT_MARKER = "take this last holtz run"
@@ -54,15 +50,7 @@ def ev(t, text):
     return json.dumps([round(t, 3), "o", text])
 
 
-def cost_so_far(cum):
-    """Calculate running cost from cumulative token counts."""
-    return (cum["input"] * INPUT_RATE +
-            cum["cache_write"] * CACHE_WRITE_RATE +
-            cum["cache_read"] * CACHE_READ_RATE +
-            cum["output"] * OUTPUT_RATE)
-
-
-def extract(session_path, output_path):
+def extract(session_path, output_path, summary_path=None):
     messages = []
     with open(session_path) as f:
         for line in f:
@@ -70,11 +58,9 @@ def extract(session_path, output_path):
 
     events = [cast_header()]
     t = 0.0
-    cum = {"input": 0, "cache_write": 0, "cache_read": 0, "output": 0}
-    tool_batch = []  # accumulate consecutive tool calls, show as compact group
+    tool_batch = []
 
     def flush_tools():
-        """Write accumulated tool calls as a compact block."""
         nonlocal t
         if not tool_batch:
             return
@@ -83,7 +69,6 @@ def extract(session_path, output_path):
                 events.append(ev(t, f"  {CYAN}\u23bf {name}{RESET} {DIM}{desc}{RESET}\n"))
                 t += TOOL_DELAY
         else:
-            # Show first 2, count, last 1
             for name, desc in tool_batch[:2]:
                 events.append(ev(t, f"  {CYAN}\u23bf {name}{RESET} {DIM}{desc}{RESET}\n"))
                 t += TOOL_DELAY
@@ -103,7 +88,6 @@ def extract(session_path, output_path):
 
             if isinstance(content, str) and CUT_MARKER in content.lower():
                 flush_tools()
-                events.append(ev(t, f"\n{DIM}\u2500\u2500\u2500 audit complete \u2500\u2500\u2500{RESET}\n"))
                 break
 
             if isinstance(content, str) and content.strip() and not content.startswith("<") and not msg.get("isMeta"):
@@ -137,7 +121,6 @@ def extract(session_path, output_path):
                     name = block.get("name", "?")
                     inp = block.get("input", {})
 
-                    # Compact description
                     if name == "Bash":
                         desc = inp.get("description", inp.get("command", "")[:80])
                     elif name == "Read":
@@ -172,7 +155,7 @@ def extract(session_path, output_path):
 
                     tool_batch.append((name, desc))
 
-            # Token + cost marker after text output
+            # Token marker after text output (tokens only, no cost)
             if usage and has_text:
                 flush_tools()
                 u_in = usage.get("input_tokens", 0)
@@ -181,25 +164,37 @@ def extract(session_path, output_path):
                 u_out = usage.get("output_tokens", 0)
                 ctx = u_in + u_cw + u_cr
 
-                cum["input"] += u_in
-                cum["cache_write"] += u_cw
-                cum["cache_read"] += u_cr
-                cum["output"] += u_out
-
-                running_cost = cost_so_far(cum)
-                events.append(ev(t, f"{DIM}  [{ctx:,} ctx tokens | ${running_cost:.2f} running cost]{RESET}\n"))
+                events.append(ev(t, f"{DIM}  [{ctx:,} ctx | {u_out:,} out]{RESET}\n"))
                 t += TOKEN_DELAY
 
     flush_tools()
 
-    # Final tally
-    total_cost = cost_so_far(cum)
-    events.append(ev(t + 0.5, f"\n{BOLD}\u2550{'=' * 78}{RESET}\n"))
-    events.append(ev(t + 0.6, f"  Main context: {cum['cache_read'] + cum['cache_write'] + cum['input']:,} billed input tokens\n"))
-    events.append(ev(t + 0.7, f"  Output: {cum['output']:,} tokens | API cost (main only): ${total_cost:.2f}\n"))
-    events.append(ev(t + 0.8, f"  + Justine subagent: $33.20 | + other subagents: $20.18\n"))
-    events.append(ev(t + 0.9, f"  {BOLD}Total API cost: $164.38{RESET}  (Opus pricing, prompt caching)\n"))
-    events.append(ev(t + 1.0, f"{BOLD}\u2550{'=' * 78}{RESET}\n"))
+    # ─── Append SUMMARY.md ──────────────────────────────────
+    if summary_path is None:
+        # Try to find it relative to the session
+        candidates = [
+            Path("docs/holtz/SUMMARY.md"),
+            Path(session_path).parent.parent / "docs" / "holtz" / "SUMMARY.md",
+        ]
+        for c in candidates:
+            if c.exists():
+                summary_path = str(c)
+                break
+
+    if summary_path and Path(summary_path).exists():
+        summary_text = Path(summary_path).read_text()
+        t += 1.0
+        events.append(ev(t, f"\n{BOLD}{'━' * 80}{RESET}\n"))
+        t += 0.3
+        events.append(ev(t, f"{BOLD}  SUMMARY.md{RESET}\n"))
+        events.append(ev(t + 0.1, f"{BOLD}{'━' * 80}{RESET}\n\n"))
+        t += 0.5
+
+        for line in summary_text.split("\n"):
+            events.append(ev(t, f"{line}\n"))
+            t += SUMMARY_LINE_DELAY
+
+        t += 1.0
 
     with open(output_path, "w") as f:
         for e in events:
