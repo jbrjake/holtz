@@ -137,7 +137,19 @@ Default behavior between runs is resume, not restart:
 
 ## What this looks like in practice
 
-Holtz has been auditing his own codebase since it was written. Thirteen runs. Here's what happened.
+Holtz has been auditing his own codebase since it was written. Fourteen runs. Here's what happened.
+
+Here is run 14 — a full adversarial self-play audit. Holtz and Justine auditing in parallel, merging findings, then Holtz running the TDD fix loop through convergence. Every tool call, every finding, every fix. Token counts after each step.
+
+<p align="center">
+
+[![Run 14: Full Audit with Adversarial Self-Play](https://asciinema.org/a/mFXtFyzeKqZnNgIy.svg)](https://asciinema.org/a/mFXtFyzeKqZnNgIy)
+
+</p>
+
+<p align="center"><em>~3 min at 1x. Use the player controls to pause, scrub, or adjust speed.</em></p>
+
+For the complete trace with reasoning chains, code diffs, and prediction accuracy analysis, see the [full run 14 walkthrough](docs/runs/run-14-walkthrough.md).
 
 **Run 1** found 12 issues. Two HIGH. The punchlist parser didn't account for code fences — a `**Status:**` header inside a code example would truncate the real Status field, eating audit findings. The test runner parsers returned `{passed: 0, failed: 0}` instead of `None` on unparseable output, so crashes looked like clean runs. The convergence checker would see zero failures and declare everything fine while the tests never actually ran. Holtz wrote failing tests for each, fixed them, and committed. 48 new tests from a single run.
 
@@ -149,7 +161,9 @@ Holtz has been auditing his own codebase since it was written. Thirteen runs. He
 
 **Run 13** found a bug in the new punchlist filtering code — `render_items` used character offsets from masked content to index into the original, but `mask_code_fences` replaces fenced lines with empty strings, so offsets diverge after the first fence. Every item after a code fence extracted content from the wrong position. The kind of bug that only appears when two utilities that each work correctly in isolation get composed. The temporal-protocol lens would have caught it. It didn't exist yet during the run that introduced the code.
 
-After 13 runs: 324 tests across 8,600 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+**Run 14** was the first full adversarial self-play since run 12. The pattern library predicted both bugs before any code was read: `parse_brief()` used `\s*` instead of `[ \t]*` in its field extraction regex, causing empty fields to silently consume the next field's content. And `parse_brief()` applied its header regex without masking code fences, so a `## PAT-NNN:` header inside a code example matched as a real entry. PAT-001 again — the same root cause family, fifth manifestation across fourteen runs. Justine found the convention violation and called it "functionally harmless." She tested CRLF handling and cross-entry bleeding. The wrong edge cases. Holtz tested empty fields and code fences. Found the actual bugs. That's what adversarial self-play is for.
+
+After 14 runs: 324 tests across 8,600 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
 
 ## The hooks
 
