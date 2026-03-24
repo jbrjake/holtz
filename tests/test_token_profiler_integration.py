@@ -6,18 +6,10 @@ Requires actual session JSONL at ~/.claude/projects/. Skip if not available.
 import importlib.util
 import json
 import os
-import sys
 import tempfile
 from pathlib import Path
 
 import pytest
-
-# ---------------------------------------------------------------------------
-# Path setup
-# ---------------------------------------------------------------------------
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
 from token_profiler.analyze import build_run_profile, build_session_profile
 from token_profiler.extract import discover_subagents, extract_session
 from token_profiler.report import generate_markdown

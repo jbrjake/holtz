@@ -1,10 +1,5 @@
 """Tests for token_profiler analysis pipeline (stages 2-5)."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
 from token_profiler.analyze import (
     apply_phase_labels,
     build_run_profile,

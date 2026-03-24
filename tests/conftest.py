@@ -7,6 +7,8 @@ import pytest
 
 # Add scripts directory to path so we can import the modules
 sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "holtz" / "scripts"))
+# Add token_profiler package parent so `import token_profiler` works everywhere
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 # Add tests directory itself so test helper modules (runner_fixtures) can be imported
 sys.path.insert(0, str(Path(__file__).parent))
 

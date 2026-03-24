@@ -1,10 +1,5 @@
 """Tests for token_profiler markdown report generation."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
 from token_profiler.models import (
     BucketBreakdown,
     CompactionEvent,

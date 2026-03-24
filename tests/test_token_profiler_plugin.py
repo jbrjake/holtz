@@ -5,13 +5,6 @@ file without importing from token_profiler.  We test it here by importing it
 directly and feeding it RawTurn instances from the token_profiler models.
 """
 
-import sys
-from pathlib import Path
-
-# Add scripts dir for token_profiler imports, and skills dir for the plugin
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "holtz" / "scripts"))
-
 from token_profiler.models import ContentBlock, RawTurn, Usage
 
 from profiler_plugin import HoltzProfilerPlugin

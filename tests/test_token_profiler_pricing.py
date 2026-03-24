@@ -1,11 +1,5 @@
 """Tests for token_profiler pricing module."""
 
-import sys
-from pathlib import Path
-
-# Add scripts/token_profiler to path so we can import the package
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
 from token_profiler.models import DollarCost, Usage
 from token_profiler.pricing import PRICING, apply_pricing_to_usage, get_pricing
 
