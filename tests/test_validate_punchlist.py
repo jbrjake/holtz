@@ -2420,3 +2420,58 @@ def test_filter_items_resolved_before_with_no_resolved(make_item):
     items = vp.parse_punchlist(content)
     filtered = vp.filter_items(items, resolved_before=3)
     assert len(filtered) == 2
+
+
+def test_render_items_includes_header_and_stats(make_item):
+    """Rendered output includes a filter header and item count."""
+    content = make_item(item_id="BH-001", status="OPEN", wrap=True)
+    items = vp.parse_punchlist(content)
+    output = vp.render_items(content, items)
+    assert "# Holtz Punchlist" in output
+    assert "BH-001" in output
+
+
+def test_render_items_only_filtered_items(make_item):
+    """Only items in the filtered list appear in output."""
+    content = (
+        "# Holtz Punchlist\n> Generated: 2026-03-22\n\n"
+        "## Summary\n\n## Patterns\n\n## Items\n\n"
+        + make_item(item_id="BH-001", status="OPEN")
+        + make_item(item_id="BH-002", status="RESOLVED",
+                  resolution="Fixed in a1b2c3d")
+    )
+    all_items = vp.parse_punchlist(content)
+    filtered = [i for i in all_items if i.status == "OPEN"]
+    output = vp.render_items(content, filtered)
+    assert "BH-001" in output
+    assert "BH-002" not in output
+
+
+def test_render_items_shows_filter_metadata(make_item):
+    """Output includes metadata about what was filtered."""
+    content = (
+        "# Holtz Punchlist\n> Generated: 2026-03-22\n\n"
+        "## Summary\n\n## Patterns\n\n## Items\n\n"
+        + make_item(item_id="BH-001", status="OPEN")
+        + make_item(item_id="BH-002", status="RESOLVED",
+                  resolution="Fixed in a1b2c3d")
+        + make_item(item_id="BH-003", status="RESOLVED",
+                  resolution="Fixed in b2c3d4e")
+    )
+    all_items = vp.parse_punchlist(content)
+    filtered = vp.filter_items(all_items, resolved_before=1)
+    output = vp.render_items(content, filtered, total_count=len(all_items))
+    assert "2 of 3" in output.lower() or "2/3" in output
+
+
+def test_render_items_preserves_original_markdown(make_item):
+    """Item markdown is extracted verbatim from source, not reconstructed."""
+    content = (
+        "# Holtz Punchlist\n> Generated: 2026-03-22\n\n"
+        "## Summary\n\n## Patterns\n\n## Items\n\n"
+        + make_item(item_id="BH-001", status="OPEN",
+                  problem="A very specific problem description here.")
+    )
+    items = vp.parse_punchlist(content)
+    output = vp.render_items(content, items)
+    assert "A very specific problem description here." in output
