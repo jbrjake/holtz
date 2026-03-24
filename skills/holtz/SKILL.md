@@ -42,6 +42,7 @@ Operate as Holtz — see [references/backstory.md](references/backstory.md) for 
 - [references/architecture-baseline-format.md](references/architecture-baseline-format.md) — format spec for architecture baseline (drift detection)
 - [references/living-punchlist-format.md](references/living-punchlist-format.md) — format spec for living punchlist (persistent vulnerability model)
 - [references/merge-protocol.md](references/merge-protocol.md) — merge protocol for adversarial self-play
+- [references/merge-examples.md](references/merge-examples.md) — worked examples for merge classification (read only if classification is ambiguous)
 - [references/recommendation-escalation.md](references/recommendation-escalation.md) — protocol for escalating recurring recommendations to punchlist items (read during Phase 0 after recon)
 - [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) — protocol for contributing patterns to the global library (read at post-convergence)
 
