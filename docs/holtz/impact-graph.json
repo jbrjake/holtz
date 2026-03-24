@@ -94,9 +94,9 @@
       "id": "validate_punchlist::validate",
       "type": "function",
       "file": "skills/holtz/scripts/validate_punchlist.py",
-      "line": 360,
-      "last_audited": "2026-03-23",
-      "audit_count": 2,
+      "line": 374,
+      "last_audited": "2026-03-24",
+      "audit_count": 3,
       "risk_score": 0.0
     },
     "convergence_check::count_items": {
@@ -177,7 +177,7 @@
       "file": "README.md",
       "line": 1,
       "last_audited": "2026-03-22",
-      "audit_count": 1,
+      "audit_count": 2,
       "risk_score": 0.0
     },
     "skills/holtz/references": {
@@ -311,8 +311,8 @@
       "type": "function",
       "file": "skills/holtz/scripts/pattern_brief_compact.py",
       "line": 36,
-      "last_audited": "2026-03-23",
-      "audit_count": 1,
+      "last_audited": "2026-03-24",
+      "audit_count": 2,
       "risk_score": 0.0
     },
     "pattern_brief_compact::format_compact": {
@@ -330,6 +330,123 @@
       "file": "agents/merge-agent.md",
       "line": 1,
       "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_pattern_brief_compact": {
+      "id": "test_pattern_brief_compact",
+      "type": "test",
+      "file": "tests/test_pattern_brief_compact.py",
+      "line": 1,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "pattern_brief_compact::_extract": {
+      "id": "pattern_brief_compact::_extract",
+      "type": "function",
+      "file": "skills/holtz/scripts/pattern_brief_compact.py",
+      "line": 51,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "markdown_utils.py": {
+      "id": "markdown_utils.py",
+      "type": "module",
+      "file": "skills/holtz/scripts/markdown_utils.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "validate_punchlist.py": {
+      "id": "validate_punchlist.py",
+      "type": "module",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "convergence_check.py": {
+      "id": "convergence_check.py",
+      "type": "module",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "impact_graph.py": {
+      "id": "impact_graph.py",
+      "type": "module",
+      "file": "skills/holtz/scripts/impact_graph.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "pattern_brief_compact.py": {
+      "id": "pattern_brief_compact.py",
+      "type": "module",
+      "file": "skills/holtz/scripts/pattern_brief_compact.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "_common.py": {
+      "id": "_common.py",
+      "type": "module",
+      "file": "hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "impact_graph_gate.py": {
+      "id": "impact_graph_gate.py",
+      "type": "module",
+      "file": "hooks/impact_graph_gate.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "status_staleness_gate.py": {
+      "id": "status_staleness_gate.py",
+      "type": "module",
+      "file": "hooks/status_staleness_gate.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "artifact_verification.py": {
+      "id": "artifact_verification.py",
+      "type": "module",
+      "file": "hooks/artifact_verification.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "subagent_findings_check.py": {
+      "id": "subagent_findings_check.py",
+      "type": "module",
+      "file": "hooks/subagent_findings_check.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_integration.py": {
+      "id": "test_integration.py",
+      "type": "test",
+      "file": "tests/test_integration.py",
+      "line": null,
+      "last_audited": "2026-03-24",
       "audit_count": 1,
       "risk_score": 0.0
     }
@@ -414,7 +531,7 @@
       "metadata": {
         "discovered": "2026-03-22",
         "confidence": "medium",
-        "note": "Both split on ### BH-NNN: headers in masked content \u2014 must stay aligned"
+        "note": "Both split on B[HJ]-NNN headers in masked content \u2014 must stay aligned"
       }
     },
     {
@@ -657,6 +774,148 @@
       "type": "calls",
       "metadata": {
         "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_pattern_brief_compact",
+      "target": "pattern_brief_compact::parse_brief",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "5 tests, all happy-path"
+      }
+    },
+    {
+      "source": "pattern_brief_compact::parse_brief",
+      "target": "pattern_brief_compact::_extract",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Called for each field in each entry"
+      }
+    },
+    {
+      "source": "pattern_brief_compact::_extract",
+      "target": "markdown_utils::mask_code_fences",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Assumes input has no code fences \u2014 does not call mask_code_fences before regex"
+      }
+    },
+    {
+      "source": "validate_punchlist.py",
+      "target": "markdown_utils.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check.py",
+      "target": "markdown_utils.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "impact_graph_gate.py",
+      "target": "_common.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "status_staleness_gate.py",
+      "target": "_common.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "artifact_verification.py",
+      "target": "_common.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "subagent_findings_check.py",
+      "target": "_common.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check.py",
+      "target": "validate_punchlist.py",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Both split on ### BH-NNN: headers in masked content \u2014 must stay aligned"
+      }
+    },
+    {
+      "source": "validate_punchlist.py",
+      "target": "convergence_check.py",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Both use mask_code_fences to split on ### BH/BJ-NNN headers \u2014 must agree on item boundaries"
+      }
+    },
+    {
+      "source": "impact_graph_gate.py",
+      "target": "status_staleness_gate.py",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Both use substring containment for path matching \u2014 same pattern, same limitations"
+      }
+    },
+    {
+      "source": "test_integration.py",
+      "target": "README.md",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "test_readme_metrics_match_actual validates test count but not line count or other metrics"
+      }
+    },
+    {
+      "source": "test_integration.py",
+      "target": "validate_punchlist.py",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_integration.py",
+      "target": "convergence_check.py",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
         "confidence": "medium"
       }
     }

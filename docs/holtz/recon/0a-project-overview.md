@@ -1,27 +1,56 @@
-# Phase 0a: Project Overview (Run 13 — targeted delta)
+# Step 0a: Project Overview
 
-**Scope:** 24 commits since run 12 fix (74d8bd2..HEAD), touching 16 files
+**Project:** holtz — Claude Code plugin for TDD-driven codebase auditing
+**Language:** Python 3.12
+**Run:** 14 (full audit)
+**Date:** 2026-03-24
 
-## New Files
-- `agents/merge-agent.md` — deterministic merge subagent (model: sonnet)
-- `skills/holtz/references/merge-examples.md` — extracted worked examples from merge protocol
-- `skills/holtz/scripts/pattern_brief_compact.py` — compact pattern brief for subagent consumption
-- `tests/test_pattern_brief_compact.py` — functional tests for compact script
-- `tests/test_pattern_brief_compact_structure.py` — structural/CI-safe tests
-- `tests/test_validate_punchlist.py` — new tests for filter_items, render_items, CLI
+## Structure
 
-## Modified Files
-- `README.md` — updated for 9-lens registry
-- `agents/justine.md` — updated for inherited recon mode
-- `skills/holtz/SKILL.md` — filtered reads, merge subagent dispatch, post-convergence baseline update, README audit step
-- `skills/holtz/references/justine-skill.md` — inherited recon mode (two modes: inherited vs solo)
-- `skills/holtz/references/lens-registry.md` — 3 new lenses (semantic-fidelity, temporal-protocol, public-contract)
-- `skills/holtz/references/merge-protocol.md` — trimmed to rules-only, cross-refs merge-examples.md
-- `skills/holtz/references/phase-0-recon.md` — CI pipeline status step (0c.1)
-- `skills/holtz/scripts/validate_punchlist.py` — filter_items, render_items, resolution_order, CLI flags
+- `skills/holtz/scripts/` — 5 Python CLI scripts (1,697 lines)
+  - `validate_punchlist.py` (584) — punchlist parsing, validation, filtering, rendering
+  - `convergence_check.py` (429) — convergence tracking, test runner detection, history
+  - `impact_graph.py` (435) — knowledge graph: nodes, edges, risk scores, blast radius
+  - `markdown_utils.py` (81) — CommonMark fence state machine
+  - `pattern_brief_compact.py` (168) — pattern brief parser and compact output
+- `hooks/` — 4 enforcement hooks + shared utilities (339 lines)
+  - `_common.py` (79) — shared hook helpers (read_event, exit_ok/warn/block)
+  - `impact_graph_gate.py` (57) — blocks audit writes without graph
+  - `status_staleness_gate.py` (86) — blocks writes if STATUS.md is stale
+  - `artifact_verification.py` (58) — verifies graph file exists after commands
+  - `subagent_findings_check.py` (59) — verifies subagent output files exist
+- `tests/` — 8 test files + fixtures (6,509 lines)
+  - `test_validate_punchlist.py` (2,578) — largest test file
+  - `test_convergence_check.py` (1,289)
+  - `test_impact_graph.py` (983)
+  - `test_hooks.py` (531)
+  - `test_integration.py` (252)
+  - `test_markdown_utils.py` (233)
+  - `test_pattern_brief_compact.py` (76)
+  - `test_pattern_brief_compact_structure.py` (83)
+- Total: 21 Python files, 8,545 lines
 
-## Architecture Notes
-- Merge is now delegated to a dedicated sonnet-model subagent rather than done inline by Holtz
-- Justine's Phase 0 has two modes: inherited (reads Holtz's 0a-0f) and solo (runs full recon)
-- Punchlist reads in Phases 4-6 now use filtered views to reduce context load
-- Post-convergence architecture baseline update dispatched as background subagent
+## Recent Activity (since run 13)
+
+5 commits since run 13 (all docs/config):
+- 828f7e1: docs: remove 9 orphan nodes from impact graph
+- ed3416b: docs: update impact graph for current codebase state
+- 30f4dfc: docs(readme): update for v0.4.0 — new lens descriptions, inherited recon, run 13
+- 7c63c65: chore: remove .claude/ from git tracking
+- a3e35e9: docs: add implementation plans for token context optimizations
+
+No source code changes since run 13. All 5 commits are docs/config only.
+
+## Architecture
+
+Two-layer design:
+1. Markdown protocol layer (SKILL.md, references, patterns) — consumed by LLM
+2. Python tool layer (CLI scripts) — called by LLM for operations
+
+Dependencies: `markdown_utils.py` is leaf, imported by `validate_punchlist.py` and `convergence_check.py`. `impact_graph.py` standalone. Hooks import `_common.py` only.
+
+## Configuration
+
+- `pyproject.toml`: ruff + mypy configured for scripts and hooks
+- pytest: `--cov` for scripts + hooks, no coverage threshold enforced
+- Python 3.12 target (running 3.10.9)

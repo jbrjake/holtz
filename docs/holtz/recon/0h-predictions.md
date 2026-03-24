@@ -1,46 +1,61 @@
-# Phase 0h: Predictive Recon (Run 13)
+# Step 0h: Predictive Recon
+
+**Run 14 — 2026-03-24**
+
+## Input Sources
+
+| Source | Signal |
+|--------|--------|
+| Pattern Brief | PAT-001 (code-fence-unaware), PAT-002 (incomplete isolation), PAT-003 (regex convention violation) — 3 known patterns |
+| Impact Graph | 37 nodes, 9 `assumes` edges, 1 `diverges_from` edge, risk_score ceiling at 0.0 (post-convergence) |
+| Git Churn | No source changes since run 13 |
+| Prior Run 13 | 4 findings (2 MEDIUM, 2 LOW), all resolved. BH-001 was PAT-003 adjacent |
+| Recon | `pattern_brief_compact.py` has 2 `\s` regex hits, only module violating convention |
+| Global Patterns | regex-newline-leak heuristic hit on pattern_brief_compact.py lines 41, 53 |
+
+## Predictions
 
 ### Prediction 1
-**Target:** `validate_punchlist.py::render_items` (line 317-357)
-**Predicted Issue:** Character offset mismatch between masked and original content — items after code fences extracted from wrong positions
+**Target:** `skills/holtz/scripts/pattern_brief_compact.py:53` — `\s*` in field extraction regex
+**Predicted Issue:** regex-newline-leak — `\s*` after `**Field:**` could match `\n`, causing `(.*?)` to capture from the next line when a field has an empty value
 **Confidence:** HIGH
-**Basis:** Code review shows `match.start()` from `masked` regex used to index `original_content`. `mask_code_fences` replaces fenced lines with empty strings, shifting character offsets. PAT-003 (code-fence-unaware parsing) pattern match. Impact graph `assumes` edge confirms the assumption.
-**Lens:** data-flow
-**Graph Support:** `assumes` edge: render_items → parse_punchlist (offset assumption)
-**Outcome:** CONFIRMED — BH-001
+**Basis:** Global pattern library match (`regex-newline-leak.md`) + detection heuristic hit + PAT-003 adjacency (same convention violation class) + this is the only module still using `\s`
+**Lens:** component
+**Graph Support:** `pattern_brief_compact` node has no `assumes` edges — isolated module, low blast radius
+**Outcome:** CONFIRMED — empty field causes content bleed from next field (BH-004)
 
 ### Prediction 2
-**Target:** `README.md:164` ("What's inside" counts)
-**Predicted Issue:** Reference doc count (15) and line count (7,800) are stale after today's additions
-**Confidence:** HIGH
-**Basis:** Counted 17 reference docs (merge-examples.md added today). Total lines 8,494. README highest churn file (rank 5, 9 touches). Prior run 12 also found README drift (BH-001).
-**Lens:** public-contract
-**Graph Support:** —
-**Outcome:** CONFIRMED — BH-002
-
-### Prediction 3
-**Target:** `tests/test_pattern_brief_compact.py`
-**Predicted Issue:** Ruff lint failures (4 errors) indicate the file was committed without lint checking
-**Confidence:** HIGH
-**Basis:** Ruff output shows 4 errors. Other test files are clean. This file is new today.
-**Lens:** contract
-**Graph Support:** —
-**Outcome:** CONFIRMED — BH-003
-
-### Prediction 4
-**Target:** `validate_punchlist.py::render_items` test coverage
-**Predicted Issue:** Existing render_items tests don't exercise items after code fences — the offset bug is untested
+**Target:** `skills/holtz/scripts/pattern_brief_compact.py:41` — `\s*$` in header regex
+**Predicted Issue:** regex-newline-leak — `\s*` before `$` in header pattern. In MULTILINE mode, `$` matches end of line, but `\s*` preceding it could match trailing whitespace including `\r` in CRLF files
 **Confidence:** MEDIUM
-**Basis:** Reviewed 5 render_items tests — all either render the first item only or check metadata not content. No test has multiple items where a later item is filtered and rendered while earlier items contain code fences.
+**Basis:** Detection heuristic hit, but the `^...$` anchors + MULTILINE constrain the match to a single line. Impact limited to CRLF edge case.
 **Lens:** component
 **Graph Support:** —
-**Outcome:** CONFIRMED — render_items tests only exercise first-item rendering; no test renders an item after a code-fence-containing item
+**Outcome:** UNCONFIRMED — `\s*$` in header regex correctly handles CRLF. Convention violation exists but is actually correct behavior for cross-platform compatibility.
+
+### Prediction 3
+**Target:** `pattern_brief_compact.py` — `parse_brief()` applies regex directly to content without masking
+**Predicted Issue:** code-fence-unaware-parsing — if a pattern brief contains a code example with a `## PAT-NNN:` header inside a code fence, `parse_brief` would match it as a real entry
+**Confidence:** MEDIUM
+**Basis:** parse_brief uses `header_re.finditer(content)` without masking. Pattern brief format includes `**Example:**` sections that could contain fenced code with pattern headers.
+**Lens:** component
+**Graph Support:** No `assumes` edges, no callers in graph
+**Outcome:** CONFIRMED — fake PAT-999 header inside code fence matched as real entry (BH-005)
+
+### Prediction 4
+**Target:** `README.md` "What's inside" line
+**Predicted Issue:** doc-spec-drift — README counts may be stale for ref docs (claimed 17) and line count (claimed 8,500). Test only validates test count.
+**Confidence:** HIGH
+**Basis:** Recurring recommendation (4 appearances). `test_readme_metrics_match_actual` only checks test count. Ref doc count and line count are unchecked. README was updated in commit 30f4dfc.
+**Lens:** public-contract
+**Graph Support:** `README.md` diverges_from `validate_punchlist.py` edge exists
+**Outcome:** UNCONFIRMED — README counts are currently correct (all 9 match). However, BH-001 (test only checks 1 of 9 fields) remains valid as a design/inconsistency finding.
 
 ### Prediction 5
-**Target:** SKILL.md Phase 1 and justine-skill.md Phases 1-3
-**Predicted Issue:** Subagent compact brief instruction references `pattern_brief_compact.py` but file may not exist on early runs — missing guard
+**Target:** `hooks/` coverage
+**Predicted Issue:** test/shallow — hooks show 0% coverage because test_hooks.py tests via subprocess. This means coverage-guided audit work will systematically overlook hook code.
 **Confidence:** LOW
-**Basis:** The subagent brief says "read the compact pattern brief by running python ... pattern_brief_compact.py docs/holtz/patterns-brief.md". The script exits 0 when the brief doesn't exist (line 156), but the instruction says "if a finding matches a pattern ID, reference it" — subagent may be confused by the error message on stderr.
-**Lens:** error-propagation
-**Graph Support:** —
-**Outcome:** UNCONFIRMED — script exits cleanly with exit 0 and empty stdout; subagent handles gracefully
+**Basis:** Single signal (coverage report). Hooks are tested functionally (531 lines in test_hooks.py). The 0% is a reporting artifact, not a real coverage gap. However, any NEW hook paths added without tests would be invisible to coverage.
+**Lens:** integration
+**Graph Support:** Hook nodes have `tests` edges in graph
+**Outcome:**
