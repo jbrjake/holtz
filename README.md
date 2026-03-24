@@ -45,6 +45,12 @@ Not just your code.
 
 **Your architecture.** On the first run, Holtz establishes a baseline: module dependencies, layering direction, naming conventions, boundary clarity. On every subsequent run, he diffs the current structure against it. Dependency reversals. Boundary erosion. A lower layer reaching up into a higher one. The kind of structural decay that makes bugs more likely even when no individual line of code is wrong.
 
+**Your naming.** Whether the names in your code describe what actually happens at runtime. A state machine label called `PROCESSING` that gets applied after processing is finished. A function called `validate` that only checks one of three fields. An enum whose values drifted from their original meanings across six months of patches. The semantic-fidelity lens traces when each state is set and cleared across all callers and compares the temporal window against the name. If the name lies, that's a bug. A subtle one, but the kind that makes the next developer write the wrong code with full confidence.
+
+**Your orchestration.** Whether multi-file workflows actually execute in the order they claim to. Phantom states entered and exited in the same code block. Exit-labeled transitions that fire after the work instead of before it. Protocol steps documented in one file but executed differently in another. The temporal-protocol lens picks a workflow spanning two or more files and traces the actual execution sequence step by step, asking at each state change what work happened since the last change and what remains before the next.
+
+**Your README.** Whether user-facing documentation accurately describes runtime behavior. Install instructions that skip a required step. Feature claims about capabilities the code doesn't have. Capabilities the code does have that the README doesn't mention. The public-contract lens reads the README end to end and classifies every concrete claim as verified, overstated, fabricated, or understated. Aspirational documentation that describes what you intended instead of what you shipped is the most common finding. It's also the one people argue about the most.
+
 ## The graph
 
 The graph is how Holtz thinks. Every function, class, module, and test in your codebase becomes a node. Every relationship becomes an edge. Seven edge types: `imports`, `calls`, `tests`, `assumes`, `diverges_from`, `shares_pattern`, `co_fixed`. Each node carries a risk score (0.0 to 1.0) that increases with every bug found nearby and decreases as clean audits accumulate. The graph persists across runs.
@@ -131,7 +137,7 @@ Default behavior between runs is resume, not restart:
 
 ## What this looks like in practice
 
-Holtz has been auditing his own codebase since it was written. Eleven runs. Here's what happened.
+Holtz has been auditing his own codebase since it was written. Thirteen runs. Here's what happened.
 
 **Run 1** found 12 issues. Two HIGH. The punchlist parser didn't account for code fences — a `**Status:**` header inside a code example would truncate the real Status field, eating audit findings. The test runner parsers returned `{passed: 0, failed: 0}` instead of `None` on unparseable output, so crashes looked like clean runs. The convergence checker would see zero failures and declare everything fine while the tests never actually ran. Holtz wrote failing tests for each, fixed them, and committed. 48 new tests from a single run.
 
@@ -141,7 +147,9 @@ Holtz has been auditing his own codebase since it was written. Eleven runs. Here
 
 **Run 11** is where Justine earned her keep. She found three regex convention violations that Holtz missed in prior runs — places where `\s` was used instead of `[ \t]`, letting patterns leak across line boundaries. Same pattern, three instances, invisible to depth-first analysis because each instance looked fine in isolation. Breadth-first caught them because she was scanning everything at once instead of drilling into one area.
 
-After 11 runs: 286 tests across 8,200 lines. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+**Run 13** found a bug in the new punchlist filtering code — `render_items` used character offsets from masked content to index into the original, but `mask_code_fences` replaces fenced lines with empty strings, so offsets diverge after the first fence. Every item after a code fence extracted content from the wrong position. The kind of bug that only appears when two utilities that each work correctly in isolation get composed. The temporal-protocol lens would have caught it. It didn't exist yet during the run that introduced the code.
+
+After 13 runs: 321 tests across 8,500 lines. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
 
 ## The hooks
 
@@ -197,7 +205,7 @@ Some people, after working with Holtz, start writing better tests on their own. 
 
 Holtz works alongside Justine, [Janna](https://github.com/jbrjake/janna), [Giles](https://github.com/jbrjake/giles), and [Snyder](https://github.com/jbrjake/snyder). Janna turns ideas into specs. Giles runs the sprints. Snyder watches every edit in real time. Holtz and Justine come in after and ask the question nobody else asks: does this actually work, or do you just think it does?
 
-They always run together. After recon, Holtz dispatches Justine automatically. She runs in parallel, writing to her own directory, sharing nothing until both converge. Then the merge — agreements, Holtz-only, Justine-only, severity disagreements, contradictions. What each auditor missed becomes a blind spot analysis. Holtz takes the merged punchlist. Justine's role ends at convergence. But what she found doesn't end. It's in the punchlist now, and it's not coming out.
+They always run together. After recon, Holtz dispatches Justine automatically. She inherits his raw recon data — project structure, git churn, test infrastructure, baseline metrics — but runs her own synthesis and predictions independently. Same inputs, different lens ordering, different conclusions. That's what makes the merge useful: agreements confirm, disagreements reveal blind spots, and contradictions get deferred to a human instead of silently resolved. The merge itself is deterministic — a subagent follows classification rules mechanically so the main context stays focused on fixing things, not bookkeeping. Holtz takes the merged punchlist. Justine's role ends at convergence. But what she found doesn't end. It's in the punchlist now, and it's not coming out.
 
 ## License
 
