@@ -16,6 +16,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+# Default format: "structured" selected as the safe default (richest context).
+# Empirical subagent evaluation deferred — run Task 4 from the implementation
+# plan to validate format selection with actual subagent dispatches.
+DEFAULT_FORMAT = "structured"
+
 
 @dataclass
 class PatternEntry:
@@ -90,7 +95,7 @@ def _compress_example(example: str) -> str:
     return _truncate(first_sentence, 100)
 
 
-def format_compact(entries: list[PatternEntry], *, fmt: str = "structured") -> str:
+def format_compact(entries: list[PatternEntry], *, fmt: str = DEFAULT_FORMAT) -> str:
     """Format parsed entries into a compact representation.
 
     Args:
