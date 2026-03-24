@@ -57,7 +57,7 @@ The graph is how Holtz thinks. Every function, class, module, and test in your c
 
 The interesting edges are the semantic ones: `assumes` and `diverges_from`. These encode things that don't appear in any import statement or call stack. The implicit contracts between modules that nobody writes down and everybody violates.
 
-Here is the actual impact graph from Holtz's own codebase. Blue nodes are modules. Gray are functions. Yellow are enforcement hooks. Purple is the ImpactGraph class. Green is documentation. Solid lines are structural relationships (imports, calls). Dashed red lines are semantic assumptions — the places where a change in one module can silently break another.
+Here is the actual impact graph from Holtz's own codebase. Blue nodes are modules. Gray are functions. Yellow are enforcement hooks. Purple is the ImpactGraph class. Green is documentation. Teal is the merge agent. Indigo nodes are test modules, with dotted purple lines showing what they cover. Solid lines are structural relationships (imports, calls). Dashed red lines are semantic assumptions — the places where a change in one module can silently break another. Dashed orange lines are divergences — where documentation and code have drifted apart.
 
 <p align="center"><img src="docs/diagrams/impact-graph.svg" alt="Holtz impact graph"></p>
 
