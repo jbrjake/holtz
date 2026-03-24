@@ -2528,6 +2528,43 @@ def test_cli_resolved_before_render(tmp_path, make_item):
     assert "BH-003" in result.stdout      # OPEN, always kept
 
 
+def test_render_items_correct_offset_after_code_fences(make_item):
+    """render_items must extract correct content for items after code fences.
+
+    BH-001 (run 13): render_items used masked character offsets to index
+    original content. Since mask_code_fences replaces fenced lines with
+    empty strings, offsets diverge after code fences. Items after the
+    first code fence would be extracted from the wrong position.
+    """
+    # Build 3 items — each has a ```bash validation command (code fence)
+    content = (
+        "# Holtz Punchlist\n> Generated: 2026-03-22\n\n"
+        "## Summary\n\n## Patterns\n\n## Items\n\n"
+        + make_item(item_id="BH-001", status="RESOLVED",
+                    resolution="Fixed in a1b2c3d",
+                    problem="First item problem text.")
+        + make_item(item_id="BH-002", status="RESOLVED",
+                    resolution="Fixed in b2c3d4e",
+                    problem="Second item problem text.")
+        + make_item(item_id="BH-003", status="OPEN",
+                    problem="Third item unique marker ZZZQQQ.")
+    )
+    all_items = vp.parse_punchlist(content)
+    # Filter to only BH-003 (the 3rd item, after 2 items with code fences)
+    filtered = [i for i in all_items if i.id == "BH-003"]
+    output = vp.render_items(content, filtered)
+    # The rendered content must contain BH-003's actual content
+    assert "BH-003" in output
+    assert "Third item unique marker ZZZQQQ" in output, (
+        "render_items extracted wrong content — offset mismatch after code fences"
+    )
+    # Must NOT contain content from earlier items (including Resolution bleed)
+    assert "First item problem text" not in output
+    assert "Second item problem text" not in output
+    assert "Fixed in a1b2c3d" not in output, "BH-001 Resolution leaked into BH-003 render"
+    assert "Fixed in b2c3d4e" not in output, "BH-002 Resolution leaked into BH-003 render"
+
+
 def test_cli_without_render_runs_validation(tmp_path, make_item):
     """Without --render, CLI runs normal validation (existing behavior)."""
     punchlist = tmp_path / "PUNCHLIST.md"

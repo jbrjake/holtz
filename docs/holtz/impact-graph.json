@@ -94,9 +94,9 @@
       "id": "validate_punchlist::validate",
       "type": "function",
       "file": "skills/holtz/scripts/validate_punchlist.py",
-      "line": 257,
-      "last_audited": "2026-03-22",
-      "audit_count": 1,
+      "line": 360,
+      "last_audited": "2026-03-23",
+      "audit_count": 2,
       "risk_score": 0.0
     },
     "convergence_check::count_items": {
@@ -284,6 +284,51 @@
       "type": "module",
       "file": "tests/test_markdown_utils.py",
       "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "validate_punchlist::filter_items": {
+      "id": "validate_punchlist::filter_items",
+      "type": "function",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": 274,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "validate_punchlist::render_items": {
+      "id": "validate_punchlist::render_items",
+      "type": "function",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": 317,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "pattern_brief_compact::parse_brief": {
+      "id": "pattern_brief_compact::parse_brief",
+      "type": "function",
+      "file": "skills/holtz/scripts/pattern_brief_compact.py",
+      "line": 36,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "pattern_brief_compact::format_compact": {
+      "id": "pattern_brief_compact::format_compact",
+      "type": "function",
+      "file": "skills/holtz/scripts/pattern_brief_compact.py",
+      "line": 98,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "merge-agent": {
+      "id": "merge-agent",
+      "type": "agent",
+      "file": "agents/merge-agent.md",
+      "line": 1,
       "last_audited": "2026-03-23",
       "audit_count": 1,
       "risk_score": 0.0
@@ -576,6 +621,43 @@
         "discovered": "2026-03-23",
         "confidence": "medium",
         "note": "Gate checks for impact-graph.json existence -- assumes impact_graph.py creates it at that path"
+      }
+    },
+    {
+      "source": "validate_punchlist::render_items",
+      "target": "validate_punchlist::parse_punchlist",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "validate_punchlist::render_items",
+      "target": "markdown_utils::mask_code_fences",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "validate_punchlist::render_items",
+      "target": "validate_punchlist::parse_punchlist",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium",
+        "note": "render_items uses masked char offsets to index original_content \u2014 assumes mask_code_fences preserves character offsets, but it does not (fenced lines replaced with empty strings)"
+      }
+    },
+    {
+      "source": "validate_punchlist::filter_items",
+      "target": "validate_punchlist::parse_punchlist",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
       }
     }
   ]
