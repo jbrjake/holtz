@@ -47,7 +47,7 @@ digraph {
     fontcolor="#742a2a"
   ]
   scan [
-    label="Single-pass audit:\nALL lenses simultaneously\n(integration → security →\ndata-flow → error-propagation\n→ contract → component)"
+    label="Single-pass audit:\nALL lenses simultaneously\n(component → integration → security →\nerror-propagation → data-flow → contract →\nsemantic-fidelity → temporal-protocol →\npublic-contract)"
     fillcolor="#e9d8fd"
     color="#6b46c1"
     fontcolor="#44337a"
