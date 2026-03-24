@@ -156,9 +156,35 @@ Before starting ANY work, check for existing output files in `docs/holtz/justine
 
 ### Phase 0: Recon
 
+**Two modes — determined by dispatch prompt:**
+
+#### Inherited Recon Mode (default when dispatched by Holtz)
+
+When dispatched by Holtz after his Phase 0 completes, his raw recon data is already on disk. Skip data collection and inherit his work:
+
+1. **Create output directories:** `docs/holtz/justine/` and `docs/holtz/justine/recon/`
+2. **Read Holtz's raw recon data:** Read `docs/holtz/recon/0a-project-overview.md` through `docs/holtz/recon/0f-skipped-tests.md`. Do NOT copy these files — read them for context, then write your own outputs.
+3. **Guard:** If `docs/holtz/recon/0g-recon-summary.md` does not exist, Holtz's recon is incomplete. Fall back to Solo Recon Mode — run the full Phase 0 procedure. Do not proceed with partial inheritance.
+4. **Read Holtz's recon summary:** Read `docs/holtz/recon/0g-recon-summary.md` for his synthesis.
+5. **Read shared resources:** Read `docs/holtz/patterns-brief.md` (if it exists), `docs/holtz/architecture-baseline.md` (if it exists, read-only), and `docs/holtz/LIVING-PUNCHLIST.md` (if it exists, read-only).
+6. **Run global pattern library scan:** Read pattern files at `${CLAUDE_PLUGIN_ROOT}/skills/holtz/patterns/*.md`, filter by detected language (from Holtz's 0a/0b), run detection heuristics. This step is NOT inherited — Justine runs her own heuristic checks because her lens ordering (integration-first) may prioritize different heuristic hits.
+7. **Initialize impact graph:** Create `docs/holtz/justine/impact-graph.json` — reconcile against project structure per [impact-graph-operations.md](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/impact-graph-operations.md) (Justine's Graph section).
+8. **Write your own recon summary (0g):** Write `docs/holtz/justine/recon/0g-recon-summary.md` with YOUR synthesis — emphasize integration boundaries, cross-module contracts, and data-flow paths (your lens ordering). This may differ significantly from Holtz's summary.
+9. **Write your own predictions (0h):** Write `docs/holtz/justine/recon/0h-predictions.md` using YOUR confidence calibration (aggressive: HIGH = one strong signal) and YOUR lens ordering (integration-first). These predictions will differ from Holtz's — that is the point.
+10. **Recommendation escalation:** Scan `docs/holtz/archive/justine-*/SUMMARY.md` for recurring recommendations per [recommendation-escalation.md](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/recommendation-escalation.md).
+11. **Update STATUS.md** after each completed step.
+
+**What is inherited:** Raw data collection (0a-0f) — project structure, test infra, test baseline, lint results, churn analysis, skipped tests. This data is objective and does not benefit from a second independent collection.
+
+**What is NOT inherited:** Recon summary (0g), predictions (0h), pattern library scan, impact graph initialization, architecture drift detection, recommendation escalation. These involve judgment, perspective, and Justine's specific calibration.
+
+#### Solo Recon Mode (standalone invocation)
+
+When invoked standalone (not by Holtz), run the full Phase 0 procedure:
+
 Follow the same recon procedure as Holtz — see [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/phase-0-recon.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/phase-0-recon.md) — but write all output to `docs/holtz/justine/` instead of `docs/holtz/`. Use `docs/holtz/justine/impact-graph.json` for graph operations — see [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/impact-graph-operations.md`](${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/impact-graph-operations.md) (Justine's Graph section).
 
-**Justine-specific overrides for Phase 0:**
+**Justine-specific overrides for Phase 0 (apply to BOTH modes):**
 
 - **Aggressive confidence calibration:** HIGH = one strong signal (pattern library match, high risk_score, or clear semantic edge). Justine does NOT require multiple converging signals for HIGH. Mira's bug had one obvious signal. One is enough.
 - **Mutation data override:** Rubber Stamp (#11) and Permissive Validator (#12) are checked FIRST and at ONE SEVERITY LEVEL HIGHER per Justine's override.
