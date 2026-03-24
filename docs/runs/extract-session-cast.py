@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Extract a real asciinema .cast from a Claude Code session JSONL.
+"""Extract a condensed asciinema .cast from a Claude Code session JSONL.
 
-Reads the session history and reconstructs what the user actually saw
-in the terminal, including tool calls, results, and text output.
-Injects token count commentary at milestones.
+Shows what the user sees in Claude Code with tool calls collapsed:
+assistant text output, tool call indicators (name + description),
+user prompts, and injected token/cost metadata. Tool results are
+omitted (they're behind expandable sections in the real UI).
 """
 import json
 import sys
@@ -20,40 +21,45 @@ BLUE = "\x1b[34m"
 MAGENTA = "\x1b[35m"
 CYAN = "\x1b[36m"
 
-# Playback speed: how many real seconds = 1 cast second
-# The actual session was ~49 minutes for the audit portion.
-# At 10:1 compression, that's ~5 minutes of playback.
-SPEED = 10.0
+# Opus pricing
+CACHE_READ_RATE = 1.50 / 1_000_000
+CACHE_WRITE_RATE = 18.75 / 1_000_000
+INPUT_RATE = 15.0 / 1_000_000
+OUTPUT_RATE = 75.0 / 1_000_000
 
-# Cut the recording at this user message (end of the audit, before showcase work)
+# Playback pacing: fixed delay between events (not real-time).
+# Text gets a bit more time so it's readable. Tool calls are fast.
+TEXT_DELAY = 1.5       # seconds per text block
+TOOL_DELAY = 0.15      # seconds per tool call indicator
+USER_DELAY = 2.0       # pause on user messages
+TOKEN_DELAY = 0.8      # pause on token markers
+
+# Cut the recording at this user message
 CUT_MARKER = "take this last holtz run"
 
 
 def cast_header():
     return json.dumps({
         "version": 2,
-        "width": 140,
-        "height": 50,
+        "width": 120,
+        "height": 40,
         "timestamp": 1742860800,
         "env": {"SHELL": "/bin/zsh", "TERM": "xterm-256color"},
-        "title": "Holtz Run 14 — Full Audit (real session history)",
+        "title": "Holtz Run 14 \u2014 Full Audit with Adversarial Self-Play",
     })
 
 
-def event(t, text):
-    """Output event. Convert \n to \r\n for terminal."""
+def ev(t, text):
     text = text.replace("\n", "\r\n")
     return json.dumps([round(t, 3), "o", text])
 
 
-def token_comment(t, usage):
-    """Inject a token count comment."""
-    inp = usage.get("input_tokens", 0)
-    cw = usage.get("cache_creation_input_tokens", 0)
-    cr = usage.get("cache_read_input_tokens", 0)
-    out = usage.get("output_tokens", 0)
-    ctx = inp + cw + cr
-    return event(t, f"\n{DIM}╌╌╌ context: {ctx:,} tokens (cache read: {cr:,}, write: {cw:,}, output: {out:,}) ╌╌╌{RESET}\n")
+def cost_so_far(cum):
+    """Calculate running cost from cumulative token counts."""
+    return (cum["input"] * INPUT_RATE +
+            cum["cache_write"] * CACHE_WRITE_RATE +
+            cum["cache_read"] * CACHE_READ_RATE +
+            cum["output"] * OUTPUT_RATE)
 
 
 def extract(session_path, output_path):
@@ -64,79 +70,46 @@ def extract(session_path, output_path):
 
     events = [cast_header()]
     t = 0.0
-    start_ts = None
-    tool_names = {}  # tool_use_id -> tool name + description
-    hit_cut = False
+    cum = {"input": 0, "cache_write": 0, "cache_read": 0, "output": 0}
+    tool_batch = []  # accumulate consecutive tool calls, show as compact group
+
+    def flush_tools():
+        """Write accumulated tool calls as a compact block."""
+        nonlocal t
+        if not tool_batch:
+            return
+        if len(tool_batch) <= 3:
+            for name, desc in tool_batch:
+                events.append(ev(t, f"  {CYAN}\u23bf {name}{RESET} {DIM}{desc}{RESET}\n"))
+                t += TOOL_DELAY
+        else:
+            # Show first 2, count, last 1
+            for name, desc in tool_batch[:2]:
+                events.append(ev(t, f"  {CYAN}\u23bf {name}{RESET} {DIM}{desc}{RESET}\n"))
+                t += TOOL_DELAY
+            events.append(ev(t, f"  {DIM}  ... +{len(tool_batch) - 3} more tool calls ...{RESET}\n"))
+            t += TOOL_DELAY
+            name, desc = tool_batch[-1]
+            events.append(ev(t, f"  {CYAN}\u23bf {name}{RESET} {DIM}{desc}{RESET}\n"))
+            t += TOOL_DELAY
+        tool_batch.clear()
 
     for msg in messages:
-        if hit_cut:
-            break
-
-        ts_str = msg.get("timestamp", "")
         msg_type = msg.get("type")
-
-        # Parse timestamp for real timing
-        if ts_str and start_ts is None:
-            start_ts = ts_str
-
-        if ts_str and start_ts:
-            # Calculate real elapsed time, then compress
-            try:
-                from datetime import datetime
-                current = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-                start = datetime.fromisoformat(start_ts.replace("Z", "+00:00"))
-                real_elapsed = (current - start).total_seconds()
-                t = real_elapsed / SPEED
-            except Exception:
-                pass
 
         # ─── User messages ───────────────────────────────────
         if msg_type == "user":
             content = msg.get("message", {}).get("content", "")
 
-            # Check for cut marker
             if isinstance(content, str) and CUT_MARKER in content.lower():
-                hit_cut = True
-                events.append(event(t, f"\n{DIM}╌╌╌ [audit complete — session continues with showcase work] ╌╌╌{RESET}\n"))
+                flush_tools()
+                events.append(ev(t, f"\n{DIM}\u2500\u2500\u2500 audit complete \u2500\u2500\u2500{RESET}\n"))
                 break
 
-            # Direct user text input (not tool results, not meta)
             if isinstance(content, str) and content.strip() and not content.startswith("<") and not msg.get("isMeta"):
-                events.append(event(t, f"\n{BOLD}{MAGENTA}> {content.strip()}{RESET}\n\n"))
-
-            # Tool results — show abbreviated
-            if isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict) and block.get("type") == "tool_result":
-                        tool_id = block.get("tool_use_id", "")
-                        tool_info = tool_names.get(tool_id, "")
-                        result_text = ""
-                        rc = block.get("content", "")
-                        if isinstance(rc, str):
-                            result_text = rc
-                        elif isinstance(rc, list):
-                            for rb in rc:
-                                if isinstance(rb, dict) and rb.get("type") == "text":
-                                    result_text = rb.get("text", "")
-                                    break
-
-                        is_error = block.get("is_error", False)
-
-                        if result_text.strip():
-                            # Truncate long results
-                            lines = result_text.strip().split("\n")
-                            if len(lines) > 20:
-                                shown = "\n".join(lines[:15])
-                                shown += f"\n{DIM}    ... ({len(lines) - 15} more lines){RESET}"
-                            else:
-                                shown = result_text.strip()
-
-                            color = RED if is_error else DIM
-                            if tool_info:
-                                events.append(event(t, f"  {color}{tool_info}{RESET}\n"))
-                            # Indent the result
-                            indented = "\n".join(f"    {l}" for l in shown.split("\n"))
-                            events.append(event(t + 0.01, f"{color}{indented}{RESET}\n"))
+                flush_tools()
+                events.append(ev(t, f"\n{BOLD}{MAGENTA}\u276f {content.strip()}{RESET}\n\n"))
+                t += USER_DELAY
 
         # ─── Assistant messages ──────────────────────────────
         elif msg_type == "assistant":
@@ -144,73 +117,96 @@ def extract(session_path, output_path):
             content = api_msg.get("content", [])
             usage = api_msg.get("usage", {})
 
-            if isinstance(content, list):
-                for block in content:
-                    if not isinstance(block, dict):
-                        continue
+            if not isinstance(content, list):
+                continue
 
-                    # Text output — this is what the user sees
-                    if block.get("type") == "text":
-                        text = block.get("text", "").strip()
-                        if text:
-                            events.append(event(t, f"{text}\n"))
+            has_text = False
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
 
-                    # Tool use — show the tool name and key params
-                    elif block.get("type") == "tool_use":
-                        name = block.get("name", "?")
-                        tool_id = block.get("id", "")
-                        inp = block.get("input", {})
+                if block.get("type") == "text":
+                    text = block.get("text", "").strip()
+                    if text:
+                        flush_tools()
+                        events.append(ev(t, f"\n{text}\n"))
+                        t += TEXT_DELAY
+                        has_text = True
 
-                        # Build a compact description of the tool call
+                elif block.get("type") == "tool_use":
+                    name = block.get("name", "?")
+                    inp = block.get("input", {})
+
+                    # Compact description
+                    if name == "Bash":
+                        desc = inp.get("description", inp.get("command", "")[:80])
+                    elif name == "Read":
+                        p = inp.get("file_path", "")
+                        desc = "/".join(p.split("/")[-2:]) if "/" in p else p
+                    elif name == "Write":
+                        p = inp.get("file_path", "")
+                        desc = "/".join(p.split("/")[-2:]) if "/" in p else p
+                    elif name == "Edit":
+                        p = inp.get("file_path", "")
+                        desc = "/".join(p.split("/")[-2:]) if "/" in p else p
+                    elif name == "Grep":
+                        desc = f"/{inp.get('pattern', '')}/"
+                    elif name == "Glob":
+                        desc = inp.get("pattern", "")
+                    elif name == "Agent":
+                        desc = inp.get("description", "")
+                        st = inp.get("subagent_type", "")
+                        bg = " (background)" if inp.get("run_in_background") else ""
+                        if st:
+                            desc = f"[{st}] {desc}{bg}"
+                    elif name in ("TaskCreate", "TaskUpdate"):
+                        desc = inp.get("subject", inp.get("taskId", ""))
+                        if name == "TaskUpdate":
+                            desc = f"#{desc} \u2192 {inp.get('status', '')}"
+                    elif name == "Skill":
+                        desc = inp.get("skill", "")
+                    elif name == "ToolSearch":
+                        desc = inp.get("query", "")
+                    else:
                         desc = ""
-                        if name == "Bash":
-                            cmd = inp.get("command", "")
-                            desc_text = inp.get("description", "")
-                            if len(cmd) > 100:
-                                cmd = cmd[:97] + "..."
-                            desc = f"{desc_text}" if desc_text else cmd
-                        elif name == "Read":
-                            path = inp.get("file_path", "")
-                            desc = path.split("/")[-1] if "/" in path else path
-                        elif name == "Write":
-                            path = inp.get("file_path", "")
-                            desc = path.split("/")[-1] if "/" in path else path
-                        elif name == "Edit":
-                            path = inp.get("file_path", "")
-                            desc = path.split("/")[-1] if "/" in path else path
-                        elif name == "Grep":
-                            pattern = inp.get("pattern", "")
-                            desc = f"/{pattern}/"
-                        elif name == "Glob":
-                            pattern = inp.get("pattern", "")
-                            desc = pattern
-                        elif name == "Agent":
-                            desc = inp.get("description", inp.get("prompt", "")[:60])
-                        elif name in ("TaskCreate", "TaskUpdate"):
-                            desc = inp.get("subject", inp.get("status", ""))
-                        elif name == "Skill":
-                            desc = inp.get("skill", "")
-                        else:
-                            desc = name
 
-                        tool_names[tool_id] = f"{name}: {desc}"
-                        events.append(event(t, f"  {CYAN}⎿ {name}{RESET} {DIM}{desc}{RESET}\n"))
+                    tool_batch.append((name, desc))
 
-            # Inject token count after every text-containing assistant message
-            if usage and any(isinstance(b, dict) and b.get("type") == "text" for b in (content if isinstance(content, list) else [])):
-                events.append(token_comment(t + 0.02, usage))
+            # Token + cost marker after text output
+            if usage and has_text:
+                flush_tools()
+                u_in = usage.get("input_tokens", 0)
+                u_cw = usage.get("cache_creation_input_tokens", 0)
+                u_cr = usage.get("cache_read_input_tokens", 0)
+                u_out = usage.get("output_tokens", 0)
+                ctx = u_in + u_cw + u_cr
 
-    # Final summary
-    events.append(event(t + 0.5, f"\n{BOLD}{'═' * 80}{RESET}\n"))
-    events.append(event(t + 0.6, f"{BOLD}  Recording ends here. Total playback: {t:.0f}s at {SPEED:.0f}x compression.{RESET}\n"))
-    events.append(event(t + 0.7, f"{BOLD}{'═' * 80}{RESET}\n"))
+                cum["input"] += u_in
+                cum["cache_write"] += u_cw
+                cum["cache_read"] += u_cr
+                cum["output"] += u_out
+
+                running_cost = cost_so_far(cum)
+                events.append(ev(t, f"{DIM}  [{ctx:,} ctx tokens | ${running_cost:.2f} running cost]{RESET}\n"))
+                t += TOKEN_DELAY
+
+    flush_tools()
+
+    # Final tally
+    total_cost = cost_so_far(cum)
+    events.append(ev(t + 0.5, f"\n{BOLD}\u2550{'=' * 78}{RESET}\n"))
+    events.append(ev(t + 0.6, f"  Main context: {cum['cache_read'] + cum['cache_write'] + cum['input']:,} billed input tokens\n"))
+    events.append(ev(t + 0.7, f"  Output: {cum['output']:,} tokens | API cost (main only): ${total_cost:.2f}\n"))
+    events.append(ev(t + 0.8, f"  + Justine subagent: $33.20 | + other subagents: $20.18\n"))
+    events.append(ev(t + 0.9, f"  {BOLD}Total API cost: $164.38{RESET}  (Opus pricing, prompt caching)\n"))
+    events.append(ev(t + 1.0, f"{BOLD}\u2550{'=' * 78}{RESET}\n"))
 
     with open(output_path, "w") as f:
         for e in events:
             f.write(e + "\n")
 
     print(f"Written {len(events)} events to {output_path}")
-    print(f"Duration: {t:.1f}s at {SPEED:.0f}x (real session: ~{t * SPEED / 60:.0f} min)")
+    print(f"Playback duration: {t:.0f}s")
 
 
 if __name__ == "__main__":
