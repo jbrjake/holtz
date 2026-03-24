@@ -162,10 +162,11 @@ If any is missing, STOP and complete Phase 0 first. Run `ls docs/holtz/impact-gr
 
 1. Read project docs, `docs/holtz/recon/0g-recon-summary.md`, and `docs/holtz/recon/0h-predictions.md`
 2. Extract testable claims into a checklist file: `docs/holtz/audit/1-doc-claims.md`
-3. **Prioritize predicted areas first** — process claims matching HIGH-confidence predictions before others, then MEDIUM, then LOW, then unpredicted areas. No audit work is skipped; predictions change the order, not the scope.
-4. **For each claim** (or batch of 3-5 related claims): check if a real test exists, write punchlist items to `docs/holtz/PUNCHLIST.md` IMMEDIATELY, then move to next batch. When a finding matches a prediction, include `**Predicted:** Prediction {N} (confidence: {X})` in the punchlist item and mark the prediction CONFIRMED in `0h-predictions.md`.
-5. **Add semantic edges** (`assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). After the phase, run `stats` — if edge count did not increase and you processed 5+ claims, STOP and re-examine for missed relationships.
-6. Update `docs/holtz/STATUS.md`. Mark unconfirmed predictions as UNCONFIRMED in `0h-predictions.md`.
+3. **README.md is mandatory.** If a README exists, extract every concrete claim into the doc-claims checklist. README claims outrank internal doc claims. Classify each as: VERIFIED, OVERSTATED (code does something weaker), FABRICATED (code doesn't do this — HIGH severity), or UNDERSTATED (code does more).
+4. **Prioritize predicted areas first** — process claims matching HIGH-confidence predictions before others, then MEDIUM, then LOW, then unpredicted areas. No audit work is skipped; predictions change the order, not the scope.
+5. **For each claim** (or batch of 3-5 related claims): check if a real test exists, write punchlist items to `docs/holtz/PUNCHLIST.md` IMMEDIATELY, then move to next batch. When a finding matches a prediction, include `**Predicted:** Prediction {N} (confidence: {X})` in the punchlist item and mark the prediction CONFIRMED in `0h-predictions.md`.
+6. **Add semantic edges** (`assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). After the phase, run `stats` — if edge count did not increase and you processed 5+ claims, STOP and re-examine for missed relationships.
+7. Update `docs/holtz/STATUS.md`. Mark unconfirmed predictions as UNCONFIRMED in `0h-predictions.md`.
 
 ### Phase 2: Test Quality Audit
 

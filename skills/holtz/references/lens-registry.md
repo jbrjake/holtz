@@ -51,3 +51,9 @@ Users can add custom lenses by appending new sections following the same four-fi
 **Audit priorities:** State transitions that fire before/after their documented trigger point, transient states with no meaningful duration between entry and exit, operations that assume prior operations completed but don't verify, workflow steps documented in one file but executed differently in another
 **Failure modes:** Exit-labeled states (transition fires after work instead of before), double-tap transitions (two consecutive state changes with no work between), phantom states (entered and exited in the same code block — never observable), protocol drift between orchestrator docs and agent docs
 **Entry point:** Pick a workflow that spans 2+ files. Trace the actual execution sequence step by step. At each state change, ask: "What work happened since the last state change? What work remains before the next? Is there a state that exists for zero work?"
+
+## public-contract
+**Focus:** Whether user-facing documentation (README, CHANGELOG, help output, install instructions) accurately describes runtime behavior
+**Audit priorities:** README feature claims vs actual implementation, install/setup instruction accuracy, dependency list correctness, feature coverage gaps
+**Failure modes:** Aspirational documentation that describes intended behavior instead of implemented behavior, stale install instructions, feature gaps where code has capabilities the README omits, marketing-code divergence
+**Entry point:** Read README.md end-to-end. For each concrete claim, grep for the implementing code. Classify as VERIFIED, OVERSTATED (code does something weaker), FABRICATED (code does not do this), or UNDERSTATED (code does more than claimed)
