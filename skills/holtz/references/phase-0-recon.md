@@ -11,6 +11,7 @@ Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is 
 | 0a | Read project structure, docs, CLAUDE.md, architecture | `docs/holtz/recon/0a-project-overview.md` |
 | 0b | Identify test framework, runner, build system | `docs/holtz/recon/0b-test-infra.md` |
 | 0c | Run test suite, capture pass/fail/skip/time/coverage | `docs/holtz/recon/0c-test-baseline.md` |
+| 0c.1 | Check CI pipeline status (see below) | `docs/holtz/recon/0c1-ci-status.md` |
 | 0d | Run linters/type checkers if configured | `docs/holtz/recon/0d-lint-results.md` |
 | 0e | Git churn analysis (top 20 most-changed files in last 50 commits) | `docs/holtz/recon/0e-churn.md` |
 | 0e.1 | Mutation scan (optional — see below) | `docs/holtz/recon/0e1-mutation-scan.md` |
@@ -40,6 +41,17 @@ Output: `docs/holtz/recon/0e1-mutation-scan.md` — survival by function (worst 
 | **Impact graph** | `update_risk` on nodes based on survival rate: >50% survival → +0.3, 30-50% → +0.2, 10-30% → +0.1 |
 | **Phase 2 (test audit)** | When auditing a test file, check whether tests kill mutations. Tests that pass but don't kill mutations are evidence for Rubber Stamp (#11) or Permissive Validator (#12) |
 | **Phase 4 (fix loop)** | After writing reproduction test and fix, re-run mutations on changed function to verify improved kill rate. Record before/after score in Resolution notes. Quality check, not gate. |
+
+## Step 0c.1 — CI Pipeline Status
+
+Mandatory for projects with CI configured. Skip if no CI is detected.
+
+1. Run `gh run list --limit 5` (or equivalent). Record pass/fail for each run.
+2. If ANY run is failing: record failure details (test name, error, consecutive failure count) and create a HIGH-severity punchlist item immediately.
+3. Compare CI test matrix (OS, language version) against local environment. Record divergences as risk factors.
+4. For golden/snapshot tests: compare recording commit dates against code change dates. Stale recordings cause CI-only failures.
+
+Output: `docs/holtz/recon/0c1-ci-status.md` — last 5 run results, failure details, environment comparison, snapshot freshness.
 
 ## Before Step 0a — Pattern Loading
 
