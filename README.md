@@ -149,7 +149,7 @@ Holtz has been auditing his own codebase since it was written. Thirteen runs. He
 
 **Run 13** found a bug in the new punchlist filtering code — `render_items` used character offsets from masked content to index into the original, but `mask_code_fences` replaces fenced lines with empty strings, so offsets diverge after the first fence. Every item after a code fence extracted content from the wrong position. The kind of bug that only appears when two utilities that each work correctly in isolation get composed. The temporal-protocol lens would have caught it. It didn't exist yet during the run that introduced the code.
 
-After 13 runs: 321 tests across 8,500 lines. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+After 13 runs: 324 tests across 8,600 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
 
 ## The hooks
 
@@ -169,7 +169,7 @@ Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-1 skill, 3 agents, 17 reference docs, 1 example, 5 Python scripts, 6 seed patterns, 4 enforcement hooks, 321 tests across 8,500 lines, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+1 skill, 3 agents, 17 reference docs, 1 example, 5 Python scripts, 6 seed patterns, 4 enforcement hooks, 324 tests across 8,600 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Who Holtz is
 

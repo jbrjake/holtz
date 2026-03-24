@@ -235,18 +235,89 @@ def test_readme_metrics_match_actual():
     )
     assert m, "Could not find 'What's inside' line in README.md"
 
+    claimed_skills = int(m.group(1))
+    claimed_agents = int(m.group(2))
+    claimed_ref_docs = int(m.group(3))
+    claimed_examples = int(m.group(4))
+    claimed_scripts = int(m.group(5))
+    claimed_patterns = int(m.group(6))
+    claimed_hooks = int(m.group(7))
     claimed_tests = int(m.group(8))
+    claimed_lines = int(m.group(9).replace(",", ""))
 
-    # Count actual tests
+    # Count actual values
+    actual_skills = len(list((root / "skills").rglob("SKILL.md")))
+    actual_agents = len(list((root / "agents").glob("*.md")))
+    actual_ref_docs = len(list((root / "skills" / "holtz" / "references").glob("*.md")))
+    actual_examples = len(list((root / "skills" / "holtz" / "examples").glob("*.md")))
+    actual_scripts = len(list((root / "skills" / "holtz" / "scripts").glob("*.py")))
+    actual_patterns = len(list((root / "skills" / "holtz" / "patterns").glob("*.md")))
+    actual_hooks = len([f for f in (root / "hooks").glob("*.py") if f.name != "_common.py"])
+
     result = subprocess.run(
         ["python", "-m", "pytest", "tests/", "--co", "-q"],
         capture_output=True, text=True, cwd=str(root),
     )
-    # Last line is "N tests collected" or "N test/N tests collected"
     test_line = result.stdout.strip().split("\n")[-1]
     actual_tests = int(re.search(r"(\d+) test", test_line).group(1))
 
-    assert claimed_tests == actual_tests, (
-        f"README says {claimed_tests} tests but {actual_tests} collected. "
-        f"Update the 'What's inside' line in README.md."
+    actual_lines = 0
+    for d in [root / "tests", root / "skills" / "holtz" / "scripts", root / "hooks"]:
+        for f in d.glob("*.py"):
+            actual_lines += len(f.read_text().splitlines())
+
+    errors = []
+    for label, claimed, actual in [
+        ("skills", claimed_skills, actual_skills),
+        ("agents", claimed_agents, actual_agents),
+        ("reference docs", claimed_ref_docs, actual_ref_docs),
+        ("examples", claimed_examples, actual_examples),
+        ("Python scripts", claimed_scripts, actual_scripts),
+        ("seed patterns", claimed_patterns, actual_patterns),
+        ("enforcement hooks", claimed_hooks, actual_hooks),
+        ("tests", claimed_tests, actual_tests),
+    ]:
+        if claimed != actual:
+            errors.append(f"{label}: README says {claimed}, actual {actual}")
+
+    # Line count: allow ±100 tolerance for rounding (README says "8,500" for 8,545)
+    if abs(claimed_lines - actual_lines) > 100:
+        errors.append(f"lines: README says {claimed_lines}, actual {actual_lines}")
+
+    assert not errors, (
+        "README 'What's inside' counts are stale. Update README.md:\n  "
+        + "\n  ".join(errors)
+    )
+
+
+def test_no_backslash_s_in_source_regex():
+    r"""Source regex must use [ \t] not \s for horizontal whitespace (PAT-003).
+
+    The project convention documented in architecture-baseline.md is to use
+    [ \t] instead of \s in regex to prevent newline leaks. This test prevents
+    regression. BH-002 run 14.
+    """
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    scripts_dir = root / "skills" / "holtz" / "scripts"
+
+    violations = []
+    for py_file in sorted(scripts_dir.glob("*.py")):
+        content = py_file.read_text()
+        for i, line in enumerate(content.split("\n"), 1):
+            # Skip comments and docstrings (rough heuristic: lines starting
+            # with # or inside triple quotes are not regex)
+            stripped = line.strip()
+            if stripped.startswith("#") or stripped.startswith('"""') or stripped.startswith("'''"):
+                continue
+            # Look for \s with quantifier in regex context (inside r'' or r"")
+            if re.search(r"r['\"].*\\s[*+?]", line):
+                violations.append(f"{py_file.name}:{i}: {stripped}")
+
+    assert not violations, (
+        "Source regex uses \\s instead of [ \\t]. "
+        "Replace \\s with [ \\t] to prevent newline leaks:\n  "
+        + "\n  ".join(violations)
     )
