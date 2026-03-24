@@ -22,13 +22,13 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 _PHASE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("recon", re.compile(r"Phase\s*0|recon|phase-0-recon", re.IGNORECASE)),
-    ("phase-1", re.compile(r"Phase\s*1|Doc.*Audit|doc.*claim", re.IGNORECASE)),
-    ("phase-2", re.compile(r"Phase\s*2|Test.*Quality|Test.*Audit", re.IGNORECASE)),
-    ("phase-3", re.compile(r"Phase\s*3|Adversarial.*Code|Adversarial.*Audit", re.IGNORECASE)),
+    ("recon", re.compile(r"Phase[ \t]*0|recon|phase-0-recon", re.IGNORECASE)),
+    ("phase-1", re.compile(r"Phase[ \t]*1|Doc.*Audit|doc.*claim", re.IGNORECASE)),
+    ("phase-2", re.compile(r"Phase[ \t]*2|Test.*Quality|Test.*Audit", re.IGNORECASE)),
+    ("phase-3", re.compile(r"Phase[ \t]*3|Adversarial.*Code|Adversarial.*Audit", re.IGNORECASE)),
     ("merge", re.compile(r"Merge|Justine.*findings|classify.*findings", re.IGNORECASE)),
-    ("fix-loop", re.compile(r"Phase\s*4|TDD|fix\s*loop|failing\s*test", re.IGNORECASE)),
-    ("convergence", re.compile(r"converg|SUMMARY\.md|final\s*commit", re.IGNORECASE)),
+    ("fix-loop", re.compile(r"Phase[ \t]*4|TDD|fix[ \t]*loop|failing[ \t]*test", re.IGNORECASE)),
+    ("convergence", re.compile(r"converg|SUMMARY\.md|final[ \t]*commit", re.IGNORECASE)),
 ]
 
 # ---------------------------------------------------------------------------
@@ -37,8 +37,8 @@ _PHASE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 _SUBAGENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("justine", re.compile(r"Justine", re.IGNORECASE)),
-    ("test-audit", re.compile(r"test\s+files.*audit|read\s+all.*test", re.IGNORECASE)),
-    ("source-audit", re.compile(r"source\s+modules|subtle\s+bugs|analyze.*modules", re.IGNORECASE)),
+    ("test-audit", re.compile(r"test[ \t]+files.*audit|read[ \t]+all.*test", re.IGNORECASE)),
+    ("source-audit", re.compile(r"source[ \t]+modules|subtle[ \t]+bugs|analyze.*modules", re.IGNORECASE)),
 ]
 
 # ---------------------------------------------------------------------------
@@ -47,8 +47,8 @@ _SUBAGENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 _DETECT_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"holtz", re.IGNORECASE),
-    re.compile(r"phase\s*0", re.IGNORECASE),
-    re.compile(r"full\s+audit", re.IGNORECASE),
+    re.compile(r"phase[ \t]*0", re.IGNORECASE),
+    re.compile(r"full[ \t]+audit", re.IGNORECASE),
 ]
 
 

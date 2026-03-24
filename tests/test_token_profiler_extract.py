@@ -1,10 +1,7 @@
 """Tests for token_profiler JSONL extraction module."""
 
 import json
-import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from token_profiler.extract import (
     classify_tool_result_content,

@@ -1,11 +1,5 @@
 """Tests for token_profiler data models and plugin protocol."""
 
-import sys
-from pathlib import Path
-
-# Add scripts/token_profiler to path so we can import the package
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-
 from token_profiler.models import (
     BucketBreakdown,
     CompactionEvent,
