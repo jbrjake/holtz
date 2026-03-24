@@ -2,6 +2,8 @@
 
 This file defines the merge classification rules and protocol for Adversarial Self-Play — the mode where Holtz and Justine audit the same codebase in parallel and their findings are merged into a unified punchlist. The parent process orchestrates the merge after both auditors reach convergence (or one stalls).
 
+> **Note:** This protocol is consumed by the merge-agent (Sonnet model) during automated merges, and by Holtz directly when reviewing merge output. The rules must be precise enough for algorithmic execution without worked examples — see [merge-examples.md](merge-examples.md) for examples when classification is ambiguous.
+
 ## Overview
 
 Adversarial Self-Play dispatches both auditors simultaneously against the same codebase. Each auditor works independently through their full audit methodology — Holtz with depth-first analysis, Justine with breadth-first analysis. Neither auditor sees the other's findings during the audit.
