@@ -2,7 +2,7 @@
 
 > **What you're reading:** The complete trace of Holtz's 14th audit of his own codebase, including reasoning, commands, findings, and fixes. This was a full adversarial self-play audit — Holtz and Justine auditing in parallel, merging findings, then Holtz running the TDD fix loop.
 >
-> **Token usage:** 207,110 tokens in the main context + 141,876 tokens in Justine's parallel subagent = 348,986 total across 2 execution contexts. All token counts are real, extracted from `~/.claude/` session logs.
+> **Token usage:** 207,110 tokens in the main context + 139,976 tokens in Justine's parallel subagent = 347,086 total across 2 execution contexts. All token counts are real, extracted from `~/.claude/` session logs.
 >
 > **Result:** 8 findings (6 MEDIUM, 2 LOW), all resolved. 2 real code bugs found and fixed. 3 tests added. Pattern library predicted both bugs before any code was read.
 
@@ -21,7 +21,7 @@ This codebase is Holtz himself — the Claude Code plugin that performs these au
 
 ---
 
-## Phase 0: Recon (~45K tokens)
+## Phase 0: Recon (31K → 103K tokens)
 
 Recon maps the codebase before a single line of code is read. 8 steps, each written to disk immediately (context can compact at any time — files are Holtz's durable memory).
 
@@ -133,7 +133,7 @@ Recommendations that appear in 2+ prior audit summaries get escalated to punchli
 - "validate() redundant masking" — `masked_content` now passed as parameter
 </details>
 
-### Predictive Recon (~52K tokens)
+### Predictive Recon (103K tokens)
 
 After recon completes, Holtz synthesizes 6 input sources into ranked predictions of where bugs are most likely hiding. These get written to disk and checked against actual findings at the end of the run.
 
@@ -147,7 +147,7 @@ After recon completes, Holtz synthesizes 6 input sources into ranked predictions
 
 ---
 
-## Justine Dispatch (~52K tokens in main context)
+## Justine Dispatch (104K tokens in main context)
 
 After Phase 0, Holtz dispatches Justine as a background subagent. She inherits the raw recon data but runs her own synthesis and predictions independently. Same inputs, different methodology (breadth-first vs depth-first), different conclusions.
 
@@ -155,7 +155,7 @@ After Phase 0, Holtz dispatches Justine as a background subagent. She inherits t
 Agent(subagent_type="holtz:justine", run_in_background=true, ...)
 ```
 
-Justine runs for ~15 minutes, uses 142K tokens, makes 109 tool calls. She produces her own punchlist, impact graph, and predictions. Holtz doesn't see her findings until the merge — that's the point.
+Justine runs for ~15 minutes, uses 140K tokens, makes 153 turns. She produces her own punchlist, impact graph, and predictions. Holtz doesn't see her findings until the merge — that's the point.
 
 **Justine's results (received later):** 5 findings, 3 MEDIUM + 2 LOW. 0/5 predictions confirmed. Her assessment: "This codebase is clean... the defensive coding patterns held up under adversarial testing."
 
@@ -163,7 +163,7 @@ She was wrong about one thing. She noted the `\s` convention violation and calle
 
 ---
 
-## Phase 1: Doc-to-Implementation Audit (~78K tokens)
+## Phase 1: Doc-to-Implementation Audit (104K → 131K tokens)
 
 Every testable claim in the documentation checked against reality. Predicted areas first (Prediction 4).
 
@@ -201,7 +201,7 @@ Prediction 4: **UNCONFIRMED** — counts are currently correct. But BH-001 remai
 
 ---
 
-## Phase 2: Test Quality Audit (~110K tokens)
+## Phase 2: Test Quality Audit (131K → 142K tokens)
 
 Every test file scored against 12 anti-patterns across 3 tiers. A subagent audited the 4 large test files (5,381 lines total) while Holtz focused on the predicted area.
 
@@ -225,7 +225,7 @@ No real quality concerns in the mature test files.
 
 ---
 
-## Phase 3: Adversarial Code Audit (~140K tokens)
+## Phase 3: Adversarial Code Audit (142K → 155K tokens)
 
 Source modules reviewed for bugs, error paths, boundary conditions. Predicted areas first.
 
@@ -262,7 +262,7 @@ A subagent audited the remaining 9 source modules. 21 observations, 18 INFO/LOW.
 
 ---
 
-## Pre-Phase 4: Adversarial Merge (~160K tokens)
+## Pre-Phase 4: Adversarial Merge (155K → 175K tokens)
 
 Holtz and Justine audited independently. Now their findings merge.
 
@@ -291,7 +291,7 @@ Holtz and Justine audited independently. Now their findings merge.
 
 ---
 
-## Phase 4: TDD Fix Loop (~195K tokens)
+## Phase 4: TDD Fix Loop (175K → 191K tokens)
 
 Every fix starts with a failing test. Not after. Before.
 
@@ -361,7 +361,7 @@ Documented that hook `in` path matching is a design decision (Claude Code provid
 
 ---
 
-## Convergence (~210K tokens)
+## Convergence (207K tokens)
 
 | Metric | Baseline | Final |
 |--------|----------|-------|
@@ -408,9 +408,9 @@ Context window size at each milestone, extracted from `~/.claude/` session logs:
 
 | Execution Context | Context Window | Output Tokens | Tool Calls | Duration |
 |-------------------|---------------|---------------|------------|----------|
-| **Holtz (main)** | **207,110** | ~73K total | 381 turns | ~49 min |
-| **Justine (parallel subagent)** | **141,876** | — | 109 calls | ~15 min |
-| **Total** | **348,986** | — | **490 turns** | — |
+| **Holtz (main)** | **207,110** | 73,658 | 338 turns | ~49 min |
+| **Justine (parallel subagent)** | **139,976** | 39,323 | 153 turns | ~15 min |
+| **Total** | **347,086** | **112,981** | **491 turns** | — |
 
 *Context window = input_tokens + cache_creation_input_tokens + cache_read_input_tokens per API call.
 This is the number displayed in the Claude Code status bar.*
