@@ -13,7 +13,6 @@ Usage:
 """
 import argparse
 import json
-import sys
 from pathlib import Path
 
 RESET = "\x1b[0m"
@@ -52,11 +51,19 @@ def ev(t: float, text: str) -> str:
     return json.dumps([round(t, 3), "o", text])
 
 
-def process_messages(messages, events, t, text_delay, tool_delay, user_delay, token_delay):
+def process_messages(
+    messages: list[dict],
+    events: list[str],
+    t: float,
+    text_delay: float,
+    tool_delay: float,
+    user_delay: float,
+    token_delay: float,
+) -> float:
     """Process a list of messages into cast events. Returns updated t."""
-    tool_batch = []
+    tool_batch: list[tuple[str, str]] = []
 
-    def flush_tools():
+    def flush_tools() -> None:
         nonlocal t
         if not tool_batch:
             return
@@ -99,7 +106,9 @@ def process_messages(messages, events, t, text_delay, tool_delay, user_delay, to
                     first_line = text.split("\n")[0][:120]
                     events.append(ev(t, f"\n{BOLD}{MAGENTA}\u276f {first_line}...{RESET}\n\n"))
                 elif len(text) > 500:
-                    events.append(ev(t, f"\n{BOLD}{MAGENTA}\u276f {text[:500]}\n{DIM}  ... ({len(text)} chars total){RESET}\n\n"))
+                    preview = text[:500]
+                    suffix = f"{DIM}  ... ({len(text)} chars total){RESET}"
+                    events.append(ev(t, f"\n{BOLD}{MAGENTA}\u276f {preview}\n{suffix}\n\n"))
                 else:
                     events.append(ev(t, f"\n{BOLD}{MAGENTA}\u276f {text}{RESET}\n\n"))
                 t += user_delay
@@ -185,9 +194,9 @@ def merge_cast(
     injected = set()
 
     # Split parent messages into chunks: before each Agent dispatch, inject the subagent
-    tool_batch = []
+    tool_batch: list[tuple[str, str]] = []
 
-    def flush_tools():
+    def flush_tools() -> None:
         nonlocal t
         if not tool_batch:
             return
@@ -206,7 +215,7 @@ def merge_cast(
             t += tool_delay
         tool_batch.clear()
 
-    def inject_subagent(label: str):
+    def inject_subagent(label: str) -> None:
         nonlocal t
         if label in injected:
             return
@@ -309,7 +318,7 @@ def merge_cast(
     print(f"Playback: {t:.0f}s ({t/60:.1f} min)")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Merge parent session + subagent(s) into one asciinema cast",
     )
