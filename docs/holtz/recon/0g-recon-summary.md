@@ -1,27 +1,48 @@
-# Phase 0g: Recon Summary (Run 13)
+# Step 0g: Recon Summary
 
-**Scope:** Targeted audit of 24 commits since run 12, 16 files changed (+1,166/-315 lines)
+**Run 14 — Full Audit | 2026-03-24**
 
-## Key Changes
-1. **New script:** `pattern_brief_compact.py` — parses patterns-brief.md and produces compressed output for subagent consumption (oneliner/twoliner/structured formats)
-2. **Expanded script:** `validate_punchlist.py` — added `filter_items()`, `render_items()`, `resolution_order` tracking, and CLI `--filter-status`/`--resolved-before`/`--render` flags
-3. **New agent:** `merge-agent.md` — deterministic merge subagent (sonnet model) for adversarial self-play
-4. **Extracted reference:** `merge-examples.md` — worked examples pulled from merge-protocol.md
-5. **Justine inherited recon:** Two-mode Phase 0 — reads Holtz's raw data (0a-0f) when dispatched by Holtz
-6. **3 new lenses:** semantic-fidelity, temporal-protocol, public-contract (total now 9)
-7. **SKILL.md changes:** Filtered punchlist reads in Phases 4-6, merge subagent dispatch, post-convergence baseline update subagent, README mandatory audit step in Phase 1
+## Codebase State
 
-## Baseline
-- 320 tests passing, 0 fail, 0 skip, 2.57s, 67% coverage
-- Ruff: **4 errors** in tests/test_pattern_brief_compact.py (import sort + ambiguous var names)
-- Mypy: clean
+- 21 Python files, 8,545 lines
+- 321 tests passing, 0 failing, 0 skipped (2.63s)
+- 67% coverage (hooks 0% due to subprocess testing)
+- Ruff clean, mypy clean
+- No source code changes since run 13 (5 docs/config commits only)
+
+## Architecture
+
+Clean two-layer design. Dependencies match baseline exactly. One drift detected: `validate_punchlist::validate` shifted from line 360→374 (updated in graph). No new modules, no dependency reversals, no boundary erosion.
 
 ## Graph
-- 37 nodes, 35 edges after reconciliation
-- 1 drift: validate_punchlist::validate shifted from line 257 to 360 (new code above it)
-- New nodes added for filter_items, render_items, parse_brief, format_compact, merge-agent
 
-## Risk Areas
-- **render_items** (new, line 317): Uses masked character offsets to index original content. mask_code_fences replaces fenced lines with empty strings, changing character offsets. Items after code fences will extract from wrong positions.
-- **README counts:** Reference doc count says 15, actual is 17. Line count says 7,800, actual is 8,494.
-- **Ruff lint errors:** 4 errors in new test file shipped without lint check.
+37 nodes, 35 edges (10 imports, 5 calls, 9 assumes, 1 diverges_from, 10 tests). All files exist. No pruned nodes.
+
+## Pattern Library Heuristic Results
+
+All 6 seed pattern heuristics ran. Results:
+
+1. **code-fence-unaware-parsing**: No raw content regex found (masking layer in use throughout)
+2. **regex-newline-leak**: 2 hits in `pattern_brief_compact.py`:
+   - Line 41: `\s*$` in header regex — may match trailing newline before `$`
+   - Line 53: `\s*` after field bold marker — could match newline, causing `(.*?)` to capture from next line
+3. **dual-parser-divergence**: 5 parse/load functions found but each handles a distinct format (punchlist, history, graph, brief, events) — no divergence
+4. **incomplete-layer-isolation**: No abstraction layers detected
+5. **missing-edge-case-handling**: Needs manual review per module (deferred to Phase 3)
+6. **doc-spec-drift**: Needs claim-by-claim comparison (deferred to Phase 1)
+
+## Churn
+
+High-churn: `validate_punchlist.py` (7), `pattern_brief_compact.py` (4), hooks (14 total). README (15) is documentation.
+
+## Recommendation Escalation
+
+2 recurring recommendations escalated to punchlist:
+1. **README metrics test incomplete** (runs 9, 10, 13, Justine): test checks test count only, not ref docs, line count, etc. (4 appearances)
+2. **\s convention check not in CI** (run 11, Justine run 11): no automated prevention of `\s` regression (2 appearances)
+
+## Key Observations
+
+- `pattern_brief_compact.py` is the newest module (4 changes) and the only one using `\s` in regex — a convention violation the rest of the codebase has eliminated
+- The codebase is mature: 13 prior runs, findings per run trending down, severity trending LOW
+- No new source code since run 13 means this run is primarily testing whether prior findings remain fixed + whether pattern heuristics catch things human review missed in `pattern_brief_compact.py`
