@@ -37,18 +37,10 @@ digraph {
     label="markdown_utils"
     fillcolor="#bee3f8" color="#3182ce" fontcolor="#2a4365"
   ]
-  pattern_brief_compact [
-    label="pattern_brief_compact"
-    fillcolor="#bee3f8" color="#3182ce" fontcolor="#2a4365"
-  ]
 
   // Functions — light gray
   parse_punchlist [
     label="parse_punchlist()"
-    fillcolor="#f0f4f8" color="#4a5568" fontcolor="#1a202c"
-  ]
-  validate_fn [
-    label="validate()"
     fillcolor="#f0f4f8" color="#4a5568" fontcolor="#1a202c"
   ]
   count_items [
@@ -59,24 +51,8 @@ digraph {
     label="check_convergence()"
     fillcolor="#f0f4f8" color="#4a5568" fontcolor="#1a202c"
   ]
-  save_history [
-    label="save_history()"
-    fillcolor="#f0f4f8" color="#4a5568" fontcolor="#1a202c"
-  ]
-  detect_test_runner [
-    label="detect_test_runner()"
-    fillcolor="#f0f4f8" color="#4a5568" fontcolor="#1a202c"
-  ]
-  get_test_counts [
-    label="get_test_counts()"
-    fillcolor="#f0f4f8" color="#4a5568" fontcolor="#1a202c"
-  ]
   mask_code_fences [
     label="mask_code_fences()"
-    fillcolor="#f0f4f8" color="#4a5568" fontcolor="#1a202c"
-  ]
-  has_unclosed_fence [
-    label="has_unclosed_fence()"
     fillcolor="#f0f4f8" color="#4a5568" fontcolor="#1a202c"
   ]
   filter_items [
@@ -85,14 +61,6 @@ digraph {
   ]
   render_items [
     label="render_items()"
-    fillcolor="#f0f4f8" color="#4a5568" fontcolor="#1a202c"
-  ]
-  parse_brief [
-    label="parse_brief()"
-    fillcolor="#f0f4f8" color="#4a5568" fontcolor="#1a202c"
-  ]
-  format_compact [
-    label="format_compact()"
     fillcolor="#f0f4f8" color="#4a5568" fontcolor="#1a202c"
   ]
 
@@ -132,12 +100,6 @@ digraph {
   references [
     label="references/"
     fillcolor="#c6f6d5" color="#38a169" fontcolor="#22543d"
-  ]
-
-  // Agent — teal
-  merge_agent [
-    label="merge-agent"
-    fillcolor="#b2f5ea" color="#319795" fontcolor="#234e52"
   ]
 
   // Tests — light indigo
