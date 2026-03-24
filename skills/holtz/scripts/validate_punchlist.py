@@ -306,6 +306,49 @@ def filter_items(
     return result
 
 
+def render_items(
+    original_content: str,
+    items: list[PunchlistItem],
+    *,
+    total_count: int | None = None,
+) -> str:
+    """Render filtered punchlist items as valid punchlist markdown.
+
+    Extracts item blocks verbatim from the original content rather than
+    reconstructing them, preserving all formatting and fields.
+
+    Args:
+        original_content: The full original punchlist markdown.
+        items: Filtered list of items to include.
+        total_count: Total items before filtering (for metadata line).
+
+    Returns:
+        Valid punchlist markdown containing only the specified items.
+    """
+    if not items:
+        showing = f"0 of {total_count}" if total_count else "0"
+        return f"# Holtz Punchlist (filtered: showing {showing} items)\n\nNo items match the filter.\n"
+
+    item_ids = {i.id for i in items}
+    _, masked = mask_code_fences(original_content)
+
+    # Find item header positions in masked content
+    item_pattern = re.compile(r'^### (B[HJ]-\d+):[ \t]*(.*)$', re.MULTILINE)
+    matches = list(item_pattern.finditer(masked))
+
+    blocks = []
+    for i, match in enumerate(matches):
+        if match.group(1) in item_ids:
+            start = match.start()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(original_content)
+            blocks.append(original_content[start:end].rstrip())
+
+    showing = f"{len(items)} of {total_count}" if total_count else str(len(items))
+    header = f"# Holtz Punchlist (filtered: showing {showing} items)\n"
+
+    return header + "\n" + "\n\n".join(blocks) + "\n"
+
+
 def validate(items: list[PunchlistItem], content: str = "", masked_content: str = "") -> ValidationResult:
     """Validate parsed punchlist items."""
     result = ValidationResult()
