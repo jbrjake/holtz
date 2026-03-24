@@ -205,12 +205,14 @@ Before starting any fix work, check whether Justine has produced results:
 
 1. **Check for Justine's output.** If `docs/holtz/justine/PUNCHLIST.md` exists, Justine has findings to merge.
 2. **If Justine is still running** (no `docs/holtz/justine/SUMMARY.md` and no `docs/holtz/justine/PUNCHLIST.md`), check her `docs/holtz/justine/STATUS.md` for stall indicators: STATUS.md not updated in >30 minutes, or 3 consecutive fix iterations with no progress. If stalled, proceed with whatever she has. If she's still actively working, wait — her breadth-first pass is fast.
-3. **If Justine has results**, run the merge protocol per [references/merge-protocol.md](references/merge-protocol.md):
-   - Classify findings: agreements, Holtz-only, Justine-only, severity disagreements, contradictions
-   - Produce `docs/holtz/PUNCHLIST-MERGED.md` (unified worklist) and `docs/holtz/MERGE-REPORT.md` (statistics + blind spot analysis)
-   - Merge impact graphs: Justine's `docs/holtz/justine/impact-graph.json` into canonical `docs/holtz/impact-graph.json` (higher risk_score wins, audit_count summed, notes merged), then delete Justine's graph
-   - Archive Justine's audit: move `docs/holtz/justine/` to `docs/holtz/archive/justine-{ISO date}/`
-4. **If no Justine output exists** (she wasn't dispatched or produced nothing), proceed with `docs/holtz/PUNCHLIST.md` as the worklist.
+3. **If Justine has results**, dispatch the merge agent:
+
+```
+Agent(subagent_type="merge-agent", prompt="Merge Holtz's punchlist at docs/holtz/PUNCHLIST.md with Justine's at docs/holtz/justine/PUNCHLIST.md. Follow the merge protocol at ${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/merge-protocol.md. Merge impact graphs per protocol. Write PUNCHLIST-MERGED.md and MERGE-REPORT.md to docs/holtz/. Archive docs/holtz/justine/ to docs/holtz/archive/justine-{ISO date}/. Return: merged total, agreement count, Holtz-only count, Justine-only count, contradiction count.")
+```
+
+4. **After the merge completes:** Read `docs/holtz/MERGE-REPORT.md` for blind spot analysis and contradiction flags. Read `docs/holtz/PUNCHLIST-MERGED.md` — this is your worklist for Phase 4. **Spot-check 2-3 items** against the original punchlists if the merge report shows disagreements or contradictions.
+5. **If no Justine output exists** (she wasn't dispatched or produced nothing), proceed with `docs/holtz/PUNCHLIST.md` as the worklist.
 
 ### Phase 4: Fix Loop (TDD)
 
