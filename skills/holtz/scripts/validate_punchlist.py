@@ -43,6 +43,7 @@ class PunchlistItem:
     has_validation_command: bool = False
     has_resolution: bool = False
     validation_command: str = ""
+    resolution_order: int = 0
 
 
 @dataclass
@@ -251,6 +252,13 @@ def parse_punchlist(content: str, *, _masked: tuple[str, str] | None = None) -> 
         item.has_resolution = bool(resolution_content and len(resolution_content.strip()) > 5)
 
         items.append(item)
+
+    # Assign resolution order to resolved items (position-based proxy)
+    resolved_counter = 0
+    for item in items:
+        if item.status == "RESOLVED":
+            resolved_counter += 1
+            item.resolution_order = resolved_counter
 
     return items
 

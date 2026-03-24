@@ -2307,3 +2307,36 @@ def test_make_item_empty_problem(make_item):
     items = vp.parse_punchlist(content)
     assert len(items) == 1
     assert not items[0].has_problem
+
+
+# --- Design 1: Filtered punchlist reads ---
+
+def test_resolution_order_assigned_to_resolved_items(make_item):
+    """Resolved items get a resolution_order based on position among resolved items."""
+    content = (
+        make_item(item_id="BH-001", status="RESOLVED",
+                  resolution="Fixed in commit a1b2c3d")
+        + make_item(item_id="BH-002", status="OPEN")
+        + make_item(item_id="BH-003", status="RESOLVED",
+                  resolution="Fixed in commit d4e5f6a")
+        + make_item(item_id="BH-004", status="RESOLVED",
+                  resolution="Fixed in commit f7a8b9c")
+    )
+    items = vp.parse_punchlist(content)
+    resolved = [i for i in items if i.status == "RESOLVED"]
+    assert resolved[0].resolution_order == 1  # BH-001, first resolved
+    assert resolved[1].resolution_order == 2  # BH-003, second resolved
+    assert resolved[2].resolution_order == 3  # BH-004, third resolved
+    # Non-resolved items get 0
+    assert items[1].resolution_order == 0  # BH-002, OPEN
+
+
+def test_resolution_order_zero_for_non_resolved(make_item):
+    """OPEN, IN PROGRESS, and DEFERRED items have resolution_order 0."""
+    content = (
+        make_item(item_id="BH-001", status="OPEN")
+        + make_item(item_id="BH-002", status="IN PROGRESS")
+        + make_item(item_id="BH-003", status="DEFERRED")
+    )
+    items = vp.parse_punchlist(content)
+    assert all(i.resolution_order == 0 for i in items)
