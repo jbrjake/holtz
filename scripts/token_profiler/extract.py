@@ -167,13 +167,23 @@ def tool_description(name: str, inp: dict) -> str:
 def discover_subagents(session_path: Path) -> list[Path]:
     """Find subagent JSONL files relative to a session file.
 
-    Looks for ``<session_dir>/subagents/*.jsonl`` where ``session_dir``
-    is the parent directory of the session file.
+    Checks two locations (Claude Code layout varies):
+    1. ``<parent>/<session_stem>/subagents/*.jsonl`` — standard Claude Code layout
+       where ``<session_uuid>.jsonl`` sits next to ``<session_uuid>/subagents/``.
+    2. ``<parent>/subagents/*.jsonl`` — fallback for sessions already inside
+       a session-specific directory.
     """
+    # Primary: sibling directory named after session stem
+    stem_dir = session_path.parent / session_path.stem / "subagents"
+    if stem_dir.is_dir():
+        return sorted(stem_dir.glob("*.jsonl"))
+
+    # Fallback: subagents directly under session file's parent
     sub_dir = session_path.parent / "subagents"
-    if not sub_dir.is_dir():
-        return []
-    return sorted(sub_dir.glob("*.jsonl"))
+    if sub_dir.is_dir():
+        return sorted(sub_dir.glob("*.jsonl"))
+
+    return []
 
 
 def find_project_dir(project_root: str | None = None) -> Path | None:
