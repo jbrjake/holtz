@@ -317,7 +317,24 @@ This keeps recently-resolved items visible for pattern recognition while filteri
 
 #### Post-Convergence: Pattern Library Contribution
 
-After convergence, read [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) and follow the protocol: discover new patterns from `docs/holtz/patterns-brief.md`, generalize, PII-scrub, ask user permission, then submit via `gh` CLI / MCP / manual staging.
+After convergence, dispatch a subagent to update the architecture baseline in the background while you handle pattern contribution:
+
+**Architecture Baseline Update:** Dispatch in the background — it runs while you handle Pattern Library Contribution (which requires user interaction). By the time you reach Living Punchlist Update, the baseline will be current.
+
+```
+Agent(run_in_background=true, prompt="Update the architecture baseline at docs/holtz/architecture-baseline.md.
+Read the format spec at ${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/architecture-baseline-format.md.
+
+1. STRUCTURAL SNAPSHOT: Re-infer the current module dependency graph from code (trace imports/requires across all significant modules). Update the Module Dependencies table, Entry Points list, and Export Surface. Only update what changed — do not rewrite unchanged sections.
+
+2. DOCUMENTED INTENT: Read current project docs (CLAUDE.md, README, ARCHITECTURE.md if they exist). Compare against the Documented Intent section of the baseline. If documented rules changed, update Layering Rules, Boundaries, Conventions, and Invariants to match. Note any changes.
+
+Do NOT modify the Drift Log — it was already updated during Phase 0 step 0a.1.
+
+Write changes to docs/holtz/architecture-baseline.md. Report what sections changed and why.")
+```
+
+**Pattern Library Contribution:** Read [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) and follow the protocol: discover new patterns from `docs/holtz/patterns-brief.md`, generalize, PII-scrub, ask user permission, then submit via `gh` CLI / MCP / manual staging.
 
 **Living Punchlist Update:** After convergence and before writing SUMMARY.md, update `docs/holtz/LIVING-PUNCHLIST.md` (or create it on first run — see [references/living-punchlist-format.md](references/living-punchlist-format.md)):
 
