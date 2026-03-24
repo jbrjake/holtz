@@ -92,7 +92,7 @@ def build_cast():
     events.append(event(t + 0.5, f"{DIM}Prior runs: 13 | Known patterns: 3 | Impact graph: 37 nodes{RESET}\r\n"))
     t += 1.5
 
-    events.append(token_marker(t, 2500, "session start"))
+    events.append(token_marker(t, 31707, "session start (real)"))
     t += 0.5
 
     # ─── Phase 0: Recon ─────────────────────────────────────────
@@ -188,7 +188,7 @@ Coverage: 67% | markdown_utils 100% | validate_punchlist 80% | impact_graph 65%
     events.extend(o)
     t += 1.0
 
-    events.append(token_marker(t, 45000, "recon complete"))
+    events.append(token_marker(t, 103136, "recon complete (real)"))
     t += 0.5
 
     # Predictive recon
@@ -222,7 +222,7 @@ Coverage: 67% | markdown_utils 100% | validate_punchlist 80% | impact_graph 65%
     events.append(event(t + 0.6, f"  Holtz continues with Phase 1. They do not coordinate during the audit.\r\n"))
     t += 1.5
 
-    events.append(token_marker(t, 52000, "Justine dispatched, Phase 1 starting"))
+    events.append(token_marker(t, 104084, "Justine dispatched (real)"))
     t += 0.5
 
     # ─── Phase 1: Doc Audit ─────────────────────────────────────
@@ -258,7 +258,7 @@ Coverage: 67% | markdown_utils 100% | validate_punchlist 80% | impact_graph 65%
     events.append(event(t, f"\r\n  {OK}Phase 1: 0 new findings. All claims verified.{RESET}\r\n"))
     t += 1.0
 
-    events.append(token_marker(t, 78000, "Phase 1 complete"))
+    events.append(token_marker(t, 131282, "Phase 1 complete (real)"))
     t += 0.5
 
     # ─── Phase 2: Test Audit ────────────────────────────────────
@@ -287,7 +287,7 @@ Coverage: 67% | markdown_utils 100% | validate_punchlist 80% | impact_graph 65%
     events.append(event(t + 0.3, f"  {DIM}Severity: MEDIUM | Category: test/shallow | Predicted by: Predictions 1 + 3{RESET}\r\n"))
     t += 1.0
 
-    events.append(token_marker(t, 110000, "Phase 2 complete, entering Phase 3"))
+    events.append(token_marker(t, 142164, "Phase 2 complete (real)"))
     t += 0.5
 
     # ─── Phase 3: Adversarial Code Audit ────────────────────────
@@ -335,7 +335,7 @@ Coverage: 67% | markdown_utils 100% | validate_punchlist 80% | impact_graph 65%
     events.append(event(t + 0.8, f"  {DIM}Both in PAT-001/PAT-003 family — pattern library predicted them.{RESET}\r\n"))
     t += 1.5
 
-    events.append(token_marker(t, 140000, "Phases 1-3 complete"))
+    events.append(token_marker(t, 155261, "Phases 1-3 complete (real)"))
     t += 0.5
 
     # ─── Pre-Phase 4: Merge ─────────────────────────────────────
@@ -367,7 +367,7 @@ Coverage: 67% | markdown_utils 100% | validate_punchlist 80% | impact_graph 65%
     events.append(event(t, f"\r\n  {BOLD}Merged worklist: 8 items (6 MEDIUM, 2 LOW){RESET}\r\n"))
     t += 1.0
 
-    events.append(token_marker(t, 160000, "merge complete, entering fix loop"))
+    events.append(token_marker(t, 174760, "merge complete (real)"))
     t += 0.5
 
     # ─── Phase 4: Fix Loop ──────────────────────────────────────
@@ -456,7 +456,7 @@ Coverage: 67% | markdown_utils 100% | validate_punchlist 80% | impact_graph 65%
     events.append(event(t, f"\r\n  {DIM}git commit cfcf762: fix(hooks,scripts): document path matching, distinguish stall vs regress{RESET}\r\n"))
     t += 1.0
 
-    events.append(token_marker(t, 195000, "all 8 items fixed"))
+    events.append(token_marker(t, 191404, "all 8 items fixed (real)"))
     t += 0.5
 
     # ─── Convergence ────────────────────────────────────────────
@@ -498,7 +498,7 @@ Coverage: 67% | markdown_utils 100% | validate_punchlist 80% | impact_graph 65%
     events.extend(o)
     t += 1.0
 
-    events.append(token_marker(t, 210000, "run 14 complete"))
+    events.append(token_marker(t, 207110, "run 14 converged (real)"))
     t += 0.5
 
     # Summary box
@@ -508,8 +508,8 @@ Coverage: 67% | markdown_utils 100% | validate_punchlist 80% | impact_graph 65%
     events.append(event(t + 0.3, f"  2 real bugs found and fixed with TDD\r\n"))
     events.append(event(t + 0.4, f"  3 tests added, 28 files changed\r\n"))
     events.append(event(t + 0.5, f"  Pattern library predicted both bugs before code was read\r\n"))
-    events.append(event(t + 0.7, f"\r\n  {DIM}Main context: ~210K tokens | Justine subagent: ~142K tokens{RESET}\r\n"))
-    events.append(event(t + 0.8, f"  {DIM}Total: ~352K tokens across 2 parallel execution contexts{RESET}\r\n"))
+    events.append(event(t + 0.7, f"\r\n  {DIM}Main context: 207,110 tokens | Justine subagent: 141,876 tokens{RESET}\r\n"))
+    events.append(event(t + 0.8, f"  {DIM}Total: 348,986 tokens across 2 parallel execution contexts{RESET}\r\n"))
     events.append(event(t + 1.0, f"{BOLD}{'═' * 80}{RESET}\r\n"))
     t += 2.0
 
