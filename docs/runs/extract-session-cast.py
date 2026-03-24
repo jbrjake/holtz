@@ -34,7 +34,7 @@ SUMMARY_LINE_DELAY = 0.06
 CUT_MARKER = "take this last holtz run"
 
 
-def cast_header():
+def cast_header() -> str:
     return json.dumps({
         "version": 2,
         "width": 120,
@@ -45,12 +45,12 @@ def cast_header():
     })
 
 
-def ev(t, text):
+def ev(t: float, text: str) -> str:
     text = text.replace("\n", "\r\n")
     return json.dumps([round(t, 3), "o", text])
 
 
-def extract(session_path, output_path, summary_path=None):
+def extract(session_path: str, output_path: str, summary_path: str | None = None) -> None:
     messages = []
     with open(session_path) as f:
         for line in f:
@@ -60,7 +60,7 @@ def extract(session_path, output_path, summary_path=None):
     t = 0.0
     tool_batch = []
 
-    def flush_tools():
+    def flush_tools() -> None:
         nonlocal t
         if not tool_batch:
             return
@@ -123,13 +123,7 @@ def extract(session_path, output_path, summary_path=None):
 
                     if name == "Bash":
                         desc = inp.get("description", inp.get("command", "")[:80])
-                    elif name == "Read":
-                        p = inp.get("file_path", "")
-                        desc = "/".join(p.split("/")[-2:]) if "/" in p else p
-                    elif name == "Write":
-                        p = inp.get("file_path", "")
-                        desc = "/".join(p.split("/")[-2:]) if "/" in p else p
-                    elif name == "Edit":
+                    elif name in ("Read", "Write", "Edit"):
                         p = inp.get("file_path", "")
                         desc = "/".join(p.split("/")[-2:]) if "/" in p else p
                     elif name == "Grep":
@@ -205,8 +199,9 @@ def extract(session_path, output_path, summary_path=None):
 
 
 if __name__ == "__main__":
-    session = sys.argv[1] if len(sys.argv) > 1 else str(
-        Path.home() / ".claude/projects/-Users-jonr-Documents-non-nitro-repos-holtz/8ab6ac7a-eaaf-48e7-a6c5-9786f81887f5.jsonl"
-    )
+    if len(sys.argv) < 2:
+        print("Usage: python extract-session-cast.py <session.jsonl> [output.cast]", file=sys.stderr)
+        sys.exit(1)
+    session = sys.argv[1]
     output = sys.argv[2] if len(sys.argv) > 2 else "docs/runs/run-14.cast"
     extract(session, output)

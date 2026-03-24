@@ -115,13 +115,7 @@ def tool_description(name: str, inp: dict) -> str:
     """Compact one-line description of a tool call."""
     if name == "Bash":
         return inp.get("description", inp.get("command", "")[:80])
-    elif name == "Read":
-        p = inp.get("file_path", "")
-        return "/".join(p.split("/")[-2:]) if "/" in p else p
-    elif name == "Write":
-        p = inp.get("file_path", "")
-        return "/".join(p.split("/")[-2:]) if "/" in p else p
-    elif name == "Edit":
+    elif name in ("Read", "Write", "Edit"):
         p = inp.get("file_path", "")
         return "/".join(p.split("/")[-2:]) if "/" in p else p
     elif name == "Grep":
@@ -187,7 +181,7 @@ def extract(
     t = 0.0
     tool_batch: list[tuple[str, str]] = []
 
-    def flush_tools():
+    def flush_tools() -> None:
         nonlocal t
         if not tool_batch:
             return
@@ -286,7 +280,7 @@ def extract(
     print(f"Playback: {t:.0f}s ({t/60:.1f} min)")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Convert a Claude Code session JSONL into an asciinema .cast file",
         formatter_class=argparse.RawDescriptionHelpFormatter,
