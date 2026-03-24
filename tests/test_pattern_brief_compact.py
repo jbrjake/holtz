@@ -43,3 +43,34 @@ def test_parse_brief_empty():
     header_only = "# Holtz Pattern Brief\n\n> Read this before starting.\n"
     entries = pbc.parse_brief(header_only)
     assert len(entries) == 0
+
+
+def test_format_oneliner():
+    """Oneliner format: one pipe-delimited line per pattern."""
+    entries = pbc.parse_brief(SAMPLE_BRIEF)
+    output = pbc.format_compact(entries, fmt="oneliner")
+    lines = [l for l in output.strip().split('\n') if l.strip() and not l.startswith('#')]
+    assert len(lines) == 3
+    assert "PAT-001" in lines[0]
+    assert "|" in lines[0]
+    assert all(len(l) < 200 for l in lines)
+
+
+def test_format_twoliner():
+    """Twoliner format: description + detection on two lines."""
+    entries = pbc.parse_brief(SAMPLE_BRIEF)
+    output = pbc.format_compact(entries, fmt="twoliner")
+    assert "PAT-001" in output
+    assert "Detect:" in output
+    content_lines = [l for l in output.strip().split('\n') if l.strip()]
+    assert len(content_lines) >= 6  # 3 entries x 2 lines
+
+
+def test_format_structured():
+    """Structured format: header + look for + detect + example."""
+    entries = pbc.parse_brief(SAMPLE_BRIEF)
+    output = pbc.format_compact(entries, fmt="structured")
+    assert "## PAT-001" in output
+    assert "Look for:" in output
+    assert "Detect:" in output
+    assert "e.g.:" in output
