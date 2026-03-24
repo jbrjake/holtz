@@ -2340,3 +2340,83 @@ def test_resolution_order_zero_for_non_resolved(make_item):
     )
     items = vp.parse_punchlist(content)
     assert all(i.resolution_order == 0 for i in items)
+
+
+def test_filter_items_by_status(make_item):
+    """Filter to only OPEN items."""
+    content = (
+        make_item(item_id="BH-001", status="OPEN")
+        + make_item(item_id="BH-002", status="RESOLVED",
+                  resolution="Fixed in a1b2c3d")
+        + make_item(item_id="BH-003", status="OPEN")
+        + make_item(item_id="BH-004", status="DEFERRED")
+    )
+    items = vp.parse_punchlist(content)
+    filtered = vp.filter_items(items, status_include={"OPEN"})
+    assert [i.id for i in filtered] == ["BH-001", "BH-003"]
+
+
+def test_filter_items_resolved_before(make_item):
+    """Keep only the 2 most recently resolved items."""
+    content = (
+        make_item(item_id="BH-001", status="RESOLVED",
+                  resolution="Fixed in a1b2c3d")
+        + make_item(item_id="BH-002", status="RESOLVED",
+                  resolution="Fixed in b2c3d4e")
+        + make_item(item_id="BH-003", status="RESOLVED",
+                  resolution="Fixed in c3d4e5f")
+        + make_item(item_id="BH-004", status="OPEN")
+    )
+    items = vp.parse_punchlist(content)
+    filtered = vp.filter_items(items, resolved_before=2)
+    ids = [i.id for i in filtered]
+    assert "BH-001" not in ids  # oldest resolved, filtered out
+    assert "BH-002" in ids     # within recency window
+    assert "BH-003" in ids     # most recent, kept
+    assert "BH-004" in ids     # OPEN, always kept
+
+
+def test_filter_items_combined(make_item):
+    """status_include + resolved_before combine."""
+    content = (
+        make_item(item_id="BH-001", status="RESOLVED",
+                  resolution="Fixed in a1b2c3d")
+        + make_item(item_id="BH-002", status="RESOLVED",
+                  resolution="Fixed in b2c3d4e")
+        + make_item(item_id="BH-003", status="OPEN")
+        + make_item(item_id="BH-004", status="IN PROGRESS")
+    )
+    items = vp.parse_punchlist(content)
+    filtered = vp.filter_items(
+        items,
+        status_include={"OPEN", "IN PROGRESS", "RESOLVED"},
+        resolved_before=1,
+    )
+    ids = [i.id for i in filtered]
+    assert "BH-001" not in ids  # resolved too long ago
+    assert "BH-002" in ids     # most recently resolved
+    assert "BH-003" in ids     # OPEN
+    assert "BH-004" in ids     # IN PROGRESS
+
+
+def test_filter_items_no_filters_returns_all(make_item):
+    """No filter parameters returns all items unchanged."""
+    content = (
+        make_item(item_id="BH-001", status="OPEN")
+        + make_item(item_id="BH-002", status="RESOLVED",
+                  resolution="Fixed in a1b2c3d")
+    )
+    items = vp.parse_punchlist(content)
+    filtered = vp.filter_items(items)
+    assert len(filtered) == 2
+
+
+def test_filter_items_resolved_before_with_no_resolved(make_item):
+    """resolved_before with no RESOLVED items returns all items."""
+    content = (
+        make_item(item_id="BH-001", status="OPEN")
+        + make_item(item_id="BH-002", status="IN PROGRESS")
+    )
+    items = vp.parse_punchlist(content)
+    filtered = vp.filter_items(items, resolved_before=3)
+    assert len(filtered) == 2

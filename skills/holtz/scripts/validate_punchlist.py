@@ -263,6 +263,49 @@ def parse_punchlist(content: str, *, _masked: tuple[str, str] | None = None) -> 
     return items
 
 
+def filter_items(
+    items: list[PunchlistItem],
+    *,
+    status_include: set[str] | None = None,
+    resolved_before: int | None = None,
+) -> list[PunchlistItem]:
+    """Filter parsed punchlist items by status and/or resolution recency.
+
+    Args:
+        items: Parsed punchlist items (with resolution_order assigned).
+        status_include: If set, only include items with these statuses.
+        resolved_before: If set, exclude RESOLVED items resolved more than N
+            fixes ago. Items with other statuses are always included.
+            The N most recently resolved items are kept.
+
+    Returns:
+        Filtered list of PunchlistItem objects.
+    """
+    if status_include is None and resolved_before is None:
+        return list(items)
+
+    max_order = max((i.resolution_order for i in items), default=0)
+
+    result = []
+    for item in items:
+        # Status filter
+        if status_include is not None and item.status not in status_include:
+            continue
+
+        # Recency filter for RESOLVED items
+        if (
+            resolved_before is not None
+            and item.status == "RESOLVED"
+            and item.resolution_order > 0
+            and item.resolution_order <= max_order - resolved_before
+        ):
+            continue
+
+        result.append(item)
+
+    return result
+
+
 def validate(items: list[PunchlistItem], content: str = "", masked_content: str = "") -> ValidationResult:
     """Validate parsed punchlist items."""
     result = ValidationResult()
