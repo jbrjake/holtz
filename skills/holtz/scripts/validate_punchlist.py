@@ -479,8 +479,20 @@ def validate(items: list[PunchlistItem], content: str = "", masked_content: str 
 
 
 def main() -> None:
-    path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("docs/holtz/PUNCHLIST.md")
+    import argparse
 
+    parser = argparse.ArgumentParser(description="Holtz Punchlist Validator")
+    parser.add_argument("path", nargs="?", default="docs/holtz/PUNCHLIST.md",
+                        help="Path to punchlist file")
+    parser.add_argument("--filter-status", nargs="+", metavar="STATUS",
+                        help="Only include items with these statuses (OPEN, RESOLVED, etc.)")
+    parser.add_argument("--resolved-before", type=int, metavar="N",
+                        help="Keep only the N most recently resolved items")
+    parser.add_argument("--render", action="store_true",
+                        help="Output filtered items as markdown instead of validation report")
+    args = parser.parse_args()
+
+    path = Path(args.path)
     if not path.exists():
         print(f"ERROR: {path} not found")
         sys.exit(1)
@@ -495,9 +507,29 @@ def main() -> None:
             print("HINT: File contains an unclosed code fence — content after the fence is invisible to the parser")
         sys.exit(1)
 
+    # Filter mode
+    if args.filter_status or args.resolved_before is not None:
+        status_set = set(args.filter_status) if args.filter_status else None
+        filtered = filter_items(
+            items,
+            status_include=status_set,
+            resolved_before=args.resolved_before,
+        )
+        if args.render:
+            print(render_items(content, filtered, total_count=len(items)))
+            sys.exit(0)
+        else:
+            # Validate only filtered items
+            items = filtered
+
+    elif args.render:
+        # Render all items (no filter)
+        print(render_items(content, items, total_count=len(items)))
+        sys.exit(0)
+
+    # Normal validation (existing behavior)
     result = validate(items, content, masked_content=precomputed[1])
 
-    # Print report
     print(f"\n{'='*60}")
     print(f"Holtz Punchlist Validation: {path}")
     print(f"{'='*60}")

@@ -1,5 +1,8 @@
 """Tests for validate_punchlist.py."""
 
+import subprocess
+from pathlib import Path
+
 import validate_punchlist as vp
 
 # --- BH-001: Section regex eating adjacent sections on empty headers ---
@@ -2475,3 +2478,64 @@ def test_render_items_preserves_original_markdown(make_item):
     items = vp.parse_punchlist(content)
     output = vp.render_items(content, items)
     assert "A very specific problem description here." in output
+
+
+REPO_ROOT = str(Path(__file__).parent.parent)
+
+
+def test_cli_filter_status_render(tmp_path, make_item):
+    """CLI --filter-status OPEN --render outputs only OPEN items as markdown."""
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text(
+        "# Holtz Punchlist\n> Generated: 2026-03-22\n\n"
+        "## Summary\n\n## Patterns\n\n## Items\n\n"
+        + make_item(item_id="BH-001", status="OPEN")
+        + make_item(item_id="BH-002", status="RESOLVED",
+                  resolution="Fixed in a1b2c3d")
+    )
+    result = subprocess.run(
+        ["python", "skills/holtz/scripts/validate_punchlist.py",
+         str(punchlist), "--filter-status", "OPEN", "--render"],
+        capture_output=True, text=True,
+        cwd=REPO_ROOT,
+    )
+    assert result.returncode == 0
+    assert "BH-001" in result.stdout
+    assert "BH-002" not in result.stdout
+
+
+def test_cli_resolved_before_render(tmp_path, make_item):
+    """CLI --resolved-before 1 --render keeps only the most recent resolved item."""
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text(
+        "# Holtz Punchlist\n> Generated: 2026-03-22\n\n"
+        "## Summary\n\n## Patterns\n\n## Items\n\n"
+        + make_item(item_id="BH-001", status="RESOLVED",
+                  resolution="Fixed in a1b2c3d")
+        + make_item(item_id="BH-002", status="RESOLVED",
+                  resolution="Fixed in b2c3d4e")
+        + make_item(item_id="BH-003", status="OPEN")
+    )
+    result = subprocess.run(
+        ["python", "skills/holtz/scripts/validate_punchlist.py",
+         str(punchlist), "--resolved-before", "1", "--render"],
+        capture_output=True, text=True,
+        cwd=REPO_ROOT,
+    )
+    assert result.returncode == 0
+    assert "BH-001" not in result.stdout  # oldest resolved, filtered
+    assert "BH-002" in result.stdout      # most recent resolved, kept
+    assert "BH-003" in result.stdout      # OPEN, always kept
+
+
+def test_cli_without_render_runs_validation(tmp_path, make_item):
+    """Without --render, CLI runs normal validation (existing behavior)."""
+    punchlist = tmp_path / "PUNCHLIST.md"
+    punchlist.write_text(make_item(item_id="BH-001", status="OPEN", wrap=True))
+    result = subprocess.run(
+        ["python", "skills/holtz/scripts/validate_punchlist.py", str(punchlist)],
+        capture_output=True, text=True,
+        cwd=REPO_ROOT,
+    )
+    # Normal validation output
+    assert "Holtz Punchlist Validation" in result.stdout
