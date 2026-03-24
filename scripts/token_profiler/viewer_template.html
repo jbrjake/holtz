@@ -1,0 +1,1647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TOKEN PROFILER</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+/* =========================================================================
+   CYBERPUNK TOKEN PROFILER — CSS
+   ========================================================================= */
+
+/* --- Reset & Base --- */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    border-radius: 0;
+}
+
+:root {
+    --bg-deep: #0a0a0f;
+    --bg-panel: #0d0d14;
+    --bg-row-alt: #111118;
+    --bg-row-hover: #1a1a2e;
+    --text-primary: #e0e0e0;
+    --text-dim: #888899;
+    --neon-magenta: #ff00ff;
+    --neon-cyan: #00ffff;
+    --neon-green: #39ff14;
+    --neon-amber: #ffb700;
+    --heat-cold: #1a1a4e;
+    --heat-mid: #ff00ff;
+    --heat-hot: #ffffff;
+    --border-subtle: rgba(0, 255, 255, 0.15);
+    --border-glow: rgba(255, 0, 255, 0.3);
+    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+html {
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+body {
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* --- Scan-line overlay --- */
+body::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.08) 2px,
+        rgba(0, 0, 0, 0.08) 4px
+    );
+}
+
+/* --- Scrollbar --- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--neon-magenta); }
+
+/* --- Header --- */
+header {
+    padding: 24px 32px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: linear-gradient(180deg, #0f0f18 0%, var(--bg-deep) 100%);
+}
+
+header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 20px rgba(0, 255, 255, 0.5), 0 0 40px rgba(0, 255, 255, 0.2);
+    margin-bottom: 12px;
+}
+
+/* --- Glitch animation --- */
+.glitch {
+    position: relative;
+    display: inline-block;
+}
+.glitch::before,
+.glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+.glitch::before {
+    color: var(--neon-magenta);
+    z-index: -1;
+    animation: glitch-1 3s infinite linear alternate-reverse;
+}
+.glitch::after {
+    color: var(--neon-green);
+    z-index: -2;
+    animation: glitch-2 2s infinite linear alternate-reverse;
+}
+
+@keyframes glitch-1 {
+    0%, 90%, 100% { clip-path: inset(0 0 0 0); transform: translate(0); }
+    92% { clip-path: inset(20% 0 40% 0); transform: translate(-3px, 1px); }
+    94% { clip-path: inset(60% 0 10% 0); transform: translate(3px, -1px); }
+    96% { clip-path: inset(40% 0 30% 0); transform: translate(-2px, 2px); }
+    98% { clip-path: inset(10% 0 70% 0); transform: translate(2px, -2px); }
+}
+
+@keyframes glitch-2 {
+    0%, 88%, 100% { clip-path: inset(0 0 0 0); transform: translate(0); }
+    90% { clip-path: inset(50% 0 20% 0); transform: translate(2px, 1px); }
+    93% { clip-path: inset(10% 0 60% 0); transform: translate(-2px, -1px); }
+    95% { clip-path: inset(70% 0 5% 0); transform: translate(1px, 2px); }
+    97% { clip-path: inset(30% 0 40% 0); transform: translate(-1px, -2px); }
+}
+
+/* --- Summary bar --- */
+#summary-bar {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    padding-top: 8px;
+}
+
+.stat-box {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.stat-label {
+    font-size: 10px;
+    font-weight: 300;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+}
+
+.stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 10px rgba(0, 255, 255, 0.4);
+}
+
+.stat-value.dollars {
+    color: var(--neon-green);
+    text-shadow: 0 0 10px rgba(57, 255, 20, 0.4);
+}
+
+.stat-value.hot {
+    color: var(--neon-magenta);
+    text-shadow: 0 0 10px rgba(255, 0, 255, 0.4);
+}
+
+/* --- Navigation tabs --- */
+nav#view-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0 32px;
+    background: var(--bg-panel);
+}
+
+.tab-btn {
+    padding: 10px 20px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 0, 255, 0.05);
+}
+
+.tab-btn.active {
+    color: var(--neon-cyan);
+    border-bottom-color: var(--neon-cyan);
+    text-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+}
+
+/* --- Views --- */
+main {
+    padding: 24px 32px;
+}
+
+.view {
+    display: none;
+}
+
+.view.active {
+    display: block;
+}
+
+.view-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--neon-magenta);
+    text-shadow: 0 0 12px rgba(255, 0, 255, 0.3);
+    margin-bottom: 20px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-glow);
+}
+
+/* =========================================================================
+   VIEW 1: HEAT STRIP
+   ========================================================================= */
+
+.heatstrip-container {
+    margin-bottom: 24px;
+}
+
+.heatstrip-label {
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+}
+
+.heatstrip {
+    position: relative;
+    height: 48px;
+    border: 1px solid var(--border-subtle);
+    display: flex;
+    overflow: hidden;
+    animation: strip-pulse 2s ease-in-out;
+}
+
+@keyframes strip-pulse {
+    0% { opacity: 0.3; }
+    100% { opacity: 1; }
+}
+
+.heat-slice {
+    height: 100%;
+    position: relative;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    border-right: 1px solid rgba(10, 10, 15, 0.5);
+}
+
+.heat-slice:hover {
+    opacity: 0.8;
+    box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.3);
+}
+
+.compaction-line {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background: #ff3333;
+    box-shadow: 0 0 6px #ff3333;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.phase-divider {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.3);
+    z-index: 2;
+    pointer-events: none;
+}
+
+.phase-divider-label {
+    position: absolute;
+    top: -18px;
+    transform: translateX(-50%);
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* --- Tooltip --- */
+.tooltip {
+    position: fixed;
+    z-index: 10000;
+    padding: 10px 14px;
+    background: #111118;
+    border: 1px solid var(--neon-cyan);
+    box-shadow: 0 0 12px rgba(0, 255, 255, 0.3);
+    font-size: 11px;
+    color: var(--text-primary);
+    pointer-events: none;
+    white-space: pre;
+    max-width: 400px;
+    display: none;
+}
+
+/* =========================================================================
+   VIEW 2: TURN TABLE
+   ========================================================================= */
+
+.table-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    align-items: center;
+}
+
+.table-controls label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.table-controls select,
+.table-controls input {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--bg-panel);
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    padding: 4px 8px;
+    outline: none;
+}
+
+.table-controls select:focus,
+.table-controls input:focus {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 4px rgba(0, 255, 255, 0.3);
+}
+
+.turn-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border-subtle);
+}
+
+table.turn-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+table.turn-table th {
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--neon-cyan);
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-subtle);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+table.turn-table th:hover {
+    color: var(--neon-magenta);
+}
+
+table.turn-table th .sort-arrow {
+    margin-left: 4px;
+    font-size: 9px;
+    color: var(--text-dim);
+}
+
+table.turn-table th .sort-arrow.active {
+    color: var(--neon-magenta);
+}
+
+table.turn-table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+table.turn-table tr.turn-row {
+    cursor: pointer;
+}
+
+table.turn-table tr.turn-row:nth-child(odd) {
+    background: var(--bg-panel);
+}
+
+table.turn-table tr.turn-row:nth-child(even) {
+    background: var(--bg-row-alt);
+}
+
+table.turn-table tr.turn-row:hover {
+    background: var(--bg-row-hover);
+    box-shadow: inset 0 0 15px rgba(255, 0, 255, 0.05);
+}
+
+table.turn-table tr.turn-row.fade-in {
+    animation: row-fade 0.3s ease-out;
+}
+
+@keyframes row-fade {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+table.turn-table tr.sub-row {
+    background: #08080d;
+}
+
+table.turn-table tr.sub-row td {
+    padding: 4px 12px 4px 36px;
+    font-size: 11px;
+    color: var(--text-dim);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.heat-cell {
+    padding: 2px 8px;
+    font-weight: 700;
+    display: inline-block;
+}
+
+/* --- Phase badge --- */
+.phase-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: 1px solid;
+    white-space: nowrap;
+}
+
+/* =========================================================================
+   VIEW 3: SUNBURST
+   ========================================================================= */
+
+.sunburst-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px 0;
+}
+
+.sunburst-container svg {
+    overflow: visible;
+}
+
+.sunburst-segment {
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.sunburst-segment:hover {
+    opacity: 0.8;
+}
+
+.sunburst-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    fill: var(--text-primary);
+    pointer-events: none;
+}
+
+.sunburst-center-label {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 700;
+    fill: var(--neon-cyan);
+}
+
+.sunburst-center-sub {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    fill: var(--text-dim);
+}
+
+.sunburst-legend {
+    margin-top: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+.legend-swatch {
+    width: 12px;
+    height: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* =========================================================================
+   VIEW 4: SANKEY
+   ========================================================================= */
+
+.sankey-container {
+    display: flex;
+    justify-content: center;
+    padding: 24px 0;
+}
+
+.sankey-container svg {
+    overflow: visible;
+}
+
+.sankey-band {
+    transition: opacity 0.2s;
+}
+
+.sankey-band:hover {
+    opacity: 0.9;
+}
+
+.sankey-node-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    fill: var(--text-primary);
+}
+
+.sankey-value-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    fill: var(--text-dim);
+}
+
+/* =========================================================================
+   VIEW 5: SESSION CARDS
+   ========================================================================= */
+
+.session-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 20px;
+}
+
+.session-card {
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-panel);
+    padding: 20px;
+}
+
+.session-card:hover {
+    border-color: var(--border-glow);
+    box-shadow: 0 0 12px rgba(255, 0, 255, 0.1);
+}
+
+.session-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.session-card-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 8px rgba(0, 255, 255, 0.3);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.session-card-type {
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 2px 8px;
+    border: 1px solid var(--border-subtle);
+}
+
+.session-card-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 16px;
+    margin-bottom: 16px;
+}
+
+.session-card-stat {
+    display: flex;
+    flex-direction: column;
+}
+
+.session-card-stat .stat-label {
+    font-size: 9px;
+}
+
+.session-card-stat .stat-value {
+    font-size: 14px;
+}
+
+.session-mini-strip {
+    height: 24px;
+    display: flex;
+    border: 1px solid var(--border-subtle);
+    overflow: hidden;
+    margin-top: 8px;
+}
+
+.session-mini-strip .heat-slice {
+    height: 100%;
+}
+
+.session-card-meta {
+    margin-top: 12px;
+    font-size: 10px;
+    color: var(--text-dim);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+    header { padding: 16px; }
+    main { padding: 16px; }
+    nav#view-tabs { padding: 0 16px; overflow-x: auto; }
+    .tab-btn { padding: 8px 12px; font-size: 10px; }
+    header h1 { font-size: 20px; letter-spacing: 3px; }
+    .session-cards { grid-template-columns: 1fr; }
+}
+
+    </style>
+</head>
+<body>
+    <header>
+        <h1><span class="glitch" data-text="TOKEN PROFILER">TOKEN PROFILER</span></h1>
+        <div id="summary-bar"></div>
+    </header>
+    <nav id="view-tabs">
+        <button class="tab-btn active" data-view="view-heatstrip">Heat Strip</button>
+        <button class="tab-btn" data-view="view-table">Turn Table</button>
+        <button class="tab-btn" data-view="view-sunburst">Sunburst</button>
+        <button class="tab-btn" data-view="view-sankey">Sankey</button>
+        <button class="tab-btn" data-view="view-sessions">Sessions</button>
+    </nav>
+    <main>
+        <section id="view-heatstrip" class="view active"></section>
+        <section id="view-table" class="view"></section>
+        <section id="view-sunburst" class="view"></section>
+        <section id="view-sankey" class="view"></section>
+        <section id="view-sessions" class="view"></section>
+    </main>
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>/* __PROFILE_DATA_PLACEHOLDER__ */</script>
+    <script>
+/* =========================================================================
+   CYBERPUNK TOKEN PROFILER — JS
+   ========================================================================= */
+(function() {
+'use strict';
+
+const D = PROFILE_DATA;
+
+// ---- Phase color palette ----
+const PHASE_COLORS = [
+    '#00ffff', '#ff00ff', '#39ff14', '#ffb700', '#ff3366',
+    '#7b68ee', '#00ff88', '#ff6b35', '#e040fb', '#64ffda',
+    '#ffd700', '#ff1744', '#00e5ff', '#76ff03', '#ea80fc'
+];
+const phaseColorMap = {};
+let phaseColorIdx = 0;
+
+function getPhaseColor(phase) {
+    if (!phase) return '#555';
+    if (!phaseColorMap[phase]) {
+        phaseColorMap[phase] = PHASE_COLORS[phaseColorIdx % PHASE_COLORS.length];
+        phaseColorIdx++;
+    }
+    return phaseColorMap[phase];
+}
+
+// ---- Utility functions ----
+function heatColor(ratio) {
+    // 0.0 = dark blue (#1a1a4e), 0.5 = magenta (#ff00ff), 1.0 = white (#ffffff)
+    ratio = Math.max(0, Math.min(1, ratio));
+    let r, g, b;
+    if (ratio <= 0.5) {
+        const t = ratio / 0.5;
+        r = Math.round(26 + (255 - 26) * t);
+        g = Math.round(26 + (0 - 26) * t);
+        b = Math.round(78 + (255 - 78) * t);
+    } else {
+        const t = (ratio - 0.5) / 0.5;
+        r = 255;
+        g = Math.round(0 + 255 * t);
+        b = 255;
+    }
+    return `rgb(${r},${g},${b})`;
+}
+
+function formatNumber(n) {
+    if (n == null) return '0';
+    return Number(n).toLocaleString('en-US');
+}
+
+function formatDollars(n) {
+    if (n == null) return '$0.0000';
+    return '$' + Number(n).toFixed(4);
+}
+
+function formatTimestamp(ts) {
+    if (!ts) return '--:--:--';
+    // Extract HH:MM:SS from ISO string
+    const match = String(ts).match(/(\d{2}:\d{2}:\d{2})/);
+    return match ? match[1] : ts;
+}
+
+function formatCompact(n) {
+    if (n == null || n === 0) return '0';
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return String(n);
+}
+
+// ---- Tooltip ----
+const tooltipEl = document.getElementById('tooltip');
+
+function showTooltip(e, html) {
+    tooltipEl.innerHTML = html;
+    tooltipEl.style.display = 'block';
+    const x = e.clientX + 12;
+    const y = e.clientY + 12;
+    tooltipEl.style.left = Math.min(x, window.innerWidth - 420) + 'px';
+    tooltipEl.style.top = Math.min(y, window.innerHeight - 200) + 'px';
+}
+
+function hideTooltip() {
+    tooltipEl.style.display = 'none';
+}
+
+// ---- Collect all turns with session context ----
+function getAllTurns(session) {
+    return (session.turns || []);
+}
+
+function getMaxSessionCost(sessions) {
+    let max = 0;
+    for (const s of sessions) {
+        for (const t of s.turns || []) {
+            if (t.session_cost_tokens > max) max = t.session_cost_tokens;
+        }
+    }
+    return max || 1;
+}
+
+// ---- Tab switching ----
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.view).classList.add('active');
+    });
+});
+
+// ---- Summary bar ----
+function renderSummary() {
+    const bar = document.getElementById('summary-bar');
+    const cs = D.cross_session_summary || {};
+    const mainSession = D.sessions && D.sessions[0] ? D.sessions[0] : {};
+    const summary = mainSession.summary || {};
+
+    const stats = [
+        { label: 'Run', value: D.run_id || '?', cls: '' },
+        { label: 'Sessions', value: D.sessions ? D.sessions.length : 0, cls: '' },
+        { label: 'API Calls', value: formatNumber(summary.total_api_calls), cls: '' },
+        { label: 'Peak Context', value: formatCompact(summary.peak_context_window), cls: 'hot' },
+        { label: 'Session Cost', value: formatCompact(cs.total_session_cost_tokens || summary.total_session_cost), cls: 'hot' },
+        { label: 'Total $', value: formatDollars(cs.total_dollars || summary.total_dollars), cls: 'dollars' },
+    ];
+
+    bar.innerHTML = stats.map(s =>
+        `<div class="stat-box">
+            <span class="stat-label">${s.label}</span>
+            <span class="stat-value ${s.cls}">${s.value}</span>
+        </div>`
+    ).join('');
+}
+
+// =========================================================================
+// VIEW 1: HEAT STRIP
+// =========================================================================
+function renderHeatStrip() {
+    const container = document.getElementById('view-heatstrip');
+    container.innerHTML = '<h2 class="view-title">Timeline Heat Strip</h2>';
+
+    const sessions = D.sessions || [];
+    const maxCost = getMaxSessionCost(sessions);
+
+    for (const session of sessions) {
+        const turns = session.turns || [];
+        if (turns.length === 0) continue;
+
+        const label = session.session_type === 'subagent'
+            ? (session.subagent_name || session.session_id)
+            : 'Main Session';
+
+        const wrap = document.createElement('div');
+        wrap.className = 'heatstrip-container';
+        wrap.innerHTML = `<div class="heatstrip-label">${label} (${turns.length} turns)</div>`;
+
+        const strip = document.createElement('div');
+        strip.className = 'heatstrip';
+        strip.style.position = 'relative';
+
+        // Determine phase boundaries
+        const phases = [];
+        let lastPhase = null;
+        for (let i = 0; i < turns.length; i++) {
+            const ph = turns[i].phase;
+            if (ph !== lastPhase) {
+                phases.push({ phase: ph, startIdx: i });
+                lastPhase = ph;
+            }
+        }
+
+        // Render slices
+        const sliceWidth = 100 / turns.length;
+        for (let i = 0; i < turns.length; i++) {
+            const t = turns[i];
+            const ratio = t.session_cost_tokens / maxCost;
+            const color = heatColor(ratio);
+
+            const slice = document.createElement('div');
+            slice.className = 'heat-slice';
+            slice.style.width = sliceWidth + '%';
+            slice.style.minWidth = '1px';
+            slice.style.background = color;
+
+            slice.addEventListener('mouseenter', (e) => {
+                const raw = t.raw || {};
+                const usage = raw.usage || {};
+                const tools = (t.tool_attributions || [])
+                    .filter(a => a.tool_name !== '_assistant_overhead')
+                    .map(a => a.tool_name + ': ' + a.description)
+                    .join('\n  ');
+                showTooltip(e,
+                    `Turn #${raw.index != null ? raw.index : i}\n` +
+                    `Time: ${formatTimestamp(raw.timestamp)}\n` +
+                    `Phase: ${t.phase || 'unknown'}\n` +
+                    `Context: ${formatNumber(t.context_window)}\n` +
+                    `Delta: ${formatNumber(t.delta)}\n` +
+                    `Session Cost: ${formatNumber(t.session_cost_tokens)}\n` +
+                    `Output: ${formatNumber(usage.output_tokens)}\n` +
+                    (tools ? `Tools:\n  ${tools}` : '')
+                );
+            });
+            slice.addEventListener('mousemove', (e) => {
+                tooltipEl.style.left = Math.min(e.clientX + 12, window.innerWidth - 420) + 'px';
+                tooltipEl.style.top = Math.min(e.clientY + 12, window.innerHeight - 200) + 'px';
+            });
+            slice.addEventListener('mouseleave', hideTooltip);
+
+            strip.appendChild(slice);
+        }
+
+        // Compaction event lines
+        for (const ce of (session.compaction_events || [])) {
+            const pct = (ce.turn_index / turns.length) * 100;
+            const line = document.createElement('div');
+            line.className = 'compaction-line';
+            line.style.left = pct + '%';
+            strip.appendChild(line);
+        }
+
+        // Phase dividers
+        for (let p = 1; p < phases.length; p++) {
+            const pct = (phases[p].startIdx / turns.length) * 100;
+            const divider = document.createElement('div');
+            divider.className = 'phase-divider';
+            divider.style.left = pct + '%';
+            strip.appendChild(divider);
+
+            const lbl = document.createElement('div');
+            lbl.className = 'phase-divider-label';
+            lbl.style.left = pct + '%';
+            lbl.textContent = phases[p].phase;
+            strip.appendChild(lbl);
+        }
+
+        // First phase label
+        if (phases.length > 0) {
+            const lbl = document.createElement('div');
+            lbl.className = 'phase-divider-label';
+            lbl.style.left = '0%';
+            lbl.style.transform = 'none';
+            lbl.textContent = phases[0].phase;
+            strip.appendChild(lbl);
+        }
+
+        wrap.appendChild(strip);
+        container.appendChild(wrap);
+    }
+
+    // Heat scale legend
+    const legend = document.createElement('div');
+    legend.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:16px;font-size:10px;color:var(--text-dim);';
+    legend.innerHTML = '<span>LOW</span>';
+    const grad = document.createElement('div');
+    grad.style.cssText = 'width:200px;height:12px;border:1px solid var(--border-subtle);background:linear-gradient(90deg, #1a1a4e, #ff00ff, #ffffff);';
+    legend.appendChild(grad);
+    legend.innerHTML += '<span>HIGH</span>';
+    container.appendChild(legend);
+}
+
+// =========================================================================
+// VIEW 2: TURN TABLE
+// =========================================================================
+function renderTurnTable() {
+    const container = document.getElementById('view-table');
+    container.innerHTML = '<h2 class="view-title">Turn Table</h2>';
+
+    // For multi-session, combine all turns with session info
+    const sessions = D.sessions || [];
+    const allTurns = [];
+    const maxCost = getMaxSessionCost(sessions);
+
+    for (const s of sessions) {
+        for (const t of (s.turns || [])) {
+            allTurns.push({ turn: t, session: s });
+        }
+    }
+
+    if (allTurns.length === 0) {
+        container.innerHTML += '<p style="color:var(--text-dim)">No turns to display.</p>';
+        return;
+    }
+
+    // Controls
+    const controls = document.createElement('div');
+    controls.className = 'table-controls';
+    controls.innerHTML = `
+        <label>Sort:</label>
+        <select id="sort-col">
+            <option value="session_cost" selected>Session Cost</option>
+            <option value="index">#</option>
+            <option value="delta">Delta</option>
+            <option value="context">Context</option>
+            <option value="output">Output</option>
+        </select>
+        <select id="sort-dir">
+            <option value="desc" selected>Desc</option>
+            <option value="asc">Asc</option>
+        </select>
+        <label style="margin-left:auto;">Filter:</label>
+        <input type="text" id="filter-input" placeholder="phase or tool..." style="width:160px;">
+    `;
+    container.appendChild(controls);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'turn-table-wrap';
+    const table = document.createElement('table');
+    table.className = 'turn-table';
+    table.innerHTML = `
+        <thead>
+            <tr>
+                <th data-col="index"># <span class="sort-arrow">&#9650;</span></th>
+                <th data-col="time">Time</th>
+                <th data-col="phase">Phase</th>
+                <th data-col="delta">Delta <span class="sort-arrow">&#9650;</span></th>
+                <th data-col="context">Remaining <span class="sort-arrow">&#9650;</span></th>
+                <th data-col="session_cost">Session Cost <span class="sort-arrow active">&#9660;</span></th>
+                <th>Tools</th>
+                <th data-col="output">Output</th>
+            </tr>
+        </thead>
+        <tbody id="turn-tbody"></tbody>
+    `;
+    wrap.appendChild(table);
+    container.appendChild(wrap);
+
+    function buildRows(sorted) {
+        const tbody = document.getElementById('turn-tbody');
+        tbody.innerHTML = '';
+
+        for (const { turn: t, session: s } of sorted) {
+            const raw = t.raw || {};
+            const usage = raw.usage || {};
+            const ratio = t.session_cost_tokens / maxCost;
+            const color = heatColor(ratio);
+            const phColor = getPhaseColor(t.phase);
+            const tools = (t.tool_attributions || []).filter(a => a.tool_name !== '_assistant_overhead');
+            const toolNames = tools.map(a => a.tool_name).join(', ') || '-';
+
+            const tr = document.createElement('tr');
+            tr.className = 'turn-row';
+            tr.innerHTML = `
+                <td>${raw.index != null ? raw.index : '-'}</td>
+                <td>${formatTimestamp(raw.timestamp)}</td>
+                <td><span class="phase-badge" style="border-color:${phColor};color:${phColor}">${t.phase || '?'}</span></td>
+                <td style="color:${t.delta > 0 ? 'var(--neon-amber)' : t.delta < 0 ? 'var(--neon-green)' : 'var(--text-dim)'}">${formatNumber(t.delta)}</td>
+                <td>${formatNumber(t.context_window)}</td>
+                <td><span class="heat-cell" style="color:${color};text-shadow:0 0 8px ${color}">${formatNumber(t.session_cost_tokens)}</span></td>
+                <td title="${tools.map(a => a.tool_name + ': ' + a.description).join(', ')}">${toolNames}</td>
+                <td>${formatNumber(usage.output_tokens)}</td>
+            `;
+
+            // Toggle sub-rows
+            if (tools.length > 0) {
+                tr.addEventListener('click', () => {
+                    const existing = tbody.querySelectorAll(`.sub-row-${raw.index}`);
+                    if (existing.length > 0) {
+                        existing.forEach(el => el.remove());
+                        return;
+                    }
+                    let nextSibling = tr.nextSibling;
+                    for (const attr of tools) {
+                        const sub = document.createElement('tr');
+                        sub.className = `sub-row sub-row-${raw.index}`;
+                        sub.innerHTML = `
+                            <td></td>
+                            <td colspan="2" style="color:var(--neon-cyan)">${attr.tool_name}</td>
+                            <td>${attr.description || ''}</td>
+                            <td>${formatNumber(attr.result_size_tokens_est)} tok est</td>
+                            <td style="color:${heatColor(attr.attributed_session_cost / maxCost)}">${formatNumber(attr.attributed_session_cost)}</td>
+                            <td>${(attr.fraction_of_delta * 100).toFixed(0)}%</td>
+                            <td>${formatNumber(attr.attributed_delta)}</td>
+                        `;
+                        tbody.insertBefore(sub, nextSibling);
+                        nextSibling = sub.nextSibling;
+                    }
+                });
+            }
+
+            tbody.appendChild(tr);
+        }
+
+        // Fade-in with IntersectionObserver
+        if ('IntersectionObserver' in window) {
+            const obs = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('fade-in');
+                        obs.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.1 });
+            tbody.querySelectorAll('.turn-row').forEach(row => obs.observe(row));
+        }
+    }
+
+    function sortAndFilter() {
+        const col = document.getElementById('sort-col').value;
+        const dir = document.getElementById('sort-dir').value;
+        const filterText = (document.getElementById('filter-input').value || '').toLowerCase();
+
+        let filtered = allTurns;
+        if (filterText) {
+            filtered = allTurns.filter(({ turn: t }) => {
+                if ((t.phase || '').toLowerCase().includes(filterText)) return true;
+                if ((t.tool_attributions || []).some(a =>
+                    a.tool_name.toLowerCase().includes(filterText) ||
+                    (a.description || '').toLowerCase().includes(filterText)
+                )) return true;
+                return false;
+            });
+        }
+
+        const sorted = [...filtered].sort((a, b) => {
+            let va, vb;
+            const ta = a.turn, tb = b.turn;
+            switch (col) {
+                case 'index': va = (ta.raw || {}).index || 0; vb = (tb.raw || {}).index || 0; break;
+                case 'delta': va = ta.delta; vb = tb.delta; break;
+                case 'context': va = ta.context_window; vb = tb.context_window; break;
+                case 'session_cost': va = ta.session_cost_tokens; vb = tb.session_cost_tokens; break;
+                case 'output': va = (ta.raw && ta.raw.usage ? ta.raw.usage.output_tokens : 0); vb = (tb.raw && tb.raw.usage ? tb.raw.usage.output_tokens : 0); break;
+                default: va = 0; vb = 0;
+            }
+            return dir === 'desc' ? (vb - va) : (va - vb);
+        });
+
+        buildRows(sorted);
+    }
+
+    document.getElementById('sort-col').addEventListener('change', sortAndFilter);
+    document.getElementById('sort-dir').addEventListener('change', sortAndFilter);
+    document.getElementById('filter-input').addEventListener('input', sortAndFilter);
+
+    // Initial render — sorted by session_cost desc
+    sortAndFilter();
+}
+
+// =========================================================================
+// VIEW 3: SUNBURST
+// =========================================================================
+function renderSunburst() {
+    const container = document.getElementById('view-sunburst');
+    container.innerHTML = '<h2 class="view-title">Phase Sunburst</h2>';
+
+    // Aggregate data: inner ring = phases, outer ring = tools within phases
+    const sessions = D.sessions || [];
+    const phaseMap = {};
+    let totalCost = 0;
+
+    for (const s of sessions) {
+        for (const ph of (s.phases || [])) {
+            if (!phaseMap[ph.phase]) {
+                phaseMap[ph.phase] = { cost: 0, tools: {} };
+            }
+            phaseMap[ph.phase].cost += ph.session_cost_sum;
+            totalCost += ph.session_cost_sum;
+            for (const [tool, cost] of (ph.top_tools || [])) {
+                phaseMap[ph.phase].tools[tool] = (phaseMap[ph.phase].tools[tool] || 0) + cost;
+            }
+        }
+    }
+
+    const phaseNames = Object.keys(phaseMap);
+    if (phaseNames.length === 0) {
+        container.innerHTML += '<p style="color:var(--text-dim)">No phase data available.</p>';
+        return;
+    }
+
+    const svgSize = 500;
+    const cx = svgSize / 2;
+    const cy = svgSize / 2;
+    const innerR1 = 60;
+    const innerR2 = 130;
+    const outerR1 = 140;
+    const outerR2 = 210;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', svgSize);
+    svg.setAttribute('height', svgSize);
+    svg.setAttribute('viewBox', `0 0 ${svgSize} ${svgSize}`);
+
+    function arcPath(cx, cy, r1, r2, startAngle, endAngle) {
+        const largeArc = (endAngle - startAngle) > Math.PI ? 1 : 0;
+        const x1o = cx + r2 * Math.cos(startAngle);
+        const y1o = cy + r2 * Math.sin(startAngle);
+        const x2o = cx + r2 * Math.cos(endAngle);
+        const y2o = cy + r2 * Math.sin(endAngle);
+        const x1i = cx + r1 * Math.cos(endAngle);
+        const y1i = cy + r1 * Math.sin(endAngle);
+        const x2i = cx + r1 * Math.cos(startAngle);
+        const y2i = cy + r1 * Math.sin(startAngle);
+        return `M ${x1o} ${y1o} A ${r2} ${r2} 0 ${largeArc} 1 ${x2o} ${y2o} L ${x1i} ${y1i} A ${r1} ${r1} 0 ${largeArc} 0 ${x2i} ${y2i} Z`;
+    }
+
+    // Inner ring: phases
+    let angle = -Math.PI / 2;
+    const phaseArcs = [];
+
+    for (const name of phaseNames) {
+        const pct = phaseMap[name].cost / (totalCost || 1);
+        const sweep = pct * 2 * Math.PI;
+        if (sweep < 0.001) { angle += sweep; continue; }
+
+        const endAngle = angle + sweep;
+        const color = getPhaseColor(name);
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', arcPath(cx, cy, innerR1, innerR2, angle, endAngle - 0.005));
+        path.setAttribute('fill', color);
+        path.setAttribute('fill-opacity', '0.6');
+        path.setAttribute('stroke', '#0a0a0f');
+        path.setAttribute('stroke-width', '1');
+        path.classList.add('sunburst-segment');
+        path.addEventListener('mouseenter', (e) => {
+            showTooltip(e, `Phase: ${name}\nCost: ${formatNumber(phaseMap[name].cost)}\n${(pct * 100).toFixed(1)}% of total`);
+        });
+        path.addEventListener('mousemove', (e) => {
+            tooltipEl.style.left = Math.min(e.clientX + 12, window.innerWidth - 420) + 'px';
+            tooltipEl.style.top = Math.min(e.clientY + 12, window.innerHeight - 200) + 'px';
+        });
+        path.addEventListener('mouseleave', hideTooltip);
+        svg.appendChild(path);
+
+        // Label if big enough
+        if (pct > 0.06) {
+            const midAngle = angle + sweep / 2;
+            const lr = (innerR1 + innerR2) / 2;
+            const lx = cx + lr * Math.cos(midAngle);
+            const ly = cy + lr * Math.sin(midAngle);
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            label.setAttribute('x', lx);
+            label.setAttribute('y', ly);
+            label.setAttribute('text-anchor', 'middle');
+            label.setAttribute('dominant-baseline', 'central');
+            label.classList.add('sunburst-label');
+            label.textContent = name;
+            svg.appendChild(label);
+        }
+
+        phaseArcs.push({ name, startAngle: angle, endAngle, cost: phaseMap[name].cost, tools: phaseMap[name].tools, color });
+        angle = endAngle;
+    }
+
+    // Outer ring: tools within phases
+    for (const arc of phaseArcs) {
+        const tools = Object.entries(arc.tools).sort((a, b) => b[1] - a[1]);
+        let tAngle = arc.startAngle;
+        const phaseTotal = arc.cost || 1;
+
+        for (const [toolName, toolCost] of tools) {
+            const tPct = toolCost / phaseTotal;
+            const tSweep = tPct * (arc.endAngle - arc.startAngle);
+            if (tSweep < 0.003) { tAngle += tSweep; continue; }
+
+            const tEndAngle = tAngle + tSweep;
+
+            // Lighten or shift the phase color for tools
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', arcPath(cx, cy, outerR1, outerR2, tAngle, tEndAngle - 0.003));
+            path.setAttribute('fill', arc.color);
+            path.setAttribute('fill-opacity', String(0.3 + 0.5 * tPct));
+            path.setAttribute('stroke', '#0a0a0f');
+            path.setAttribute('stroke-width', '1');
+            path.classList.add('sunburst-segment');
+            path.addEventListener('mouseenter', (e) => {
+                showTooltip(e, `Tool: ${toolName}\nPhase: ${arc.name}\nCost: ${formatNumber(toolCost)}\n${(tPct * 100).toFixed(1)}% of phase`);
+            });
+            path.addEventListener('mousemove', (e) => {
+                tooltipEl.style.left = Math.min(e.clientX + 12, window.innerWidth - 420) + 'px';
+                tooltipEl.style.top = Math.min(e.clientY + 12, window.innerHeight - 200) + 'px';
+            });
+            path.addEventListener('mouseleave', hideTooltip);
+            svg.appendChild(path);
+
+            // Label if big enough
+            if (tPct > 0.12) {
+                const midAngle = tAngle + tSweep / 2;
+                const lr = (outerR1 + outerR2) / 2;
+                const lx = cx + lr * Math.cos(midAngle);
+                const ly = cy + lr * Math.sin(midAngle);
+                const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                label.setAttribute('x', lx);
+                label.setAttribute('y', ly);
+                label.setAttribute('text-anchor', 'middle');
+                label.setAttribute('dominant-baseline', 'central');
+                label.classList.add('sunburst-label');
+                label.style.fontSize = '8px';
+                label.textContent = toolName;
+                svg.appendChild(label);
+            }
+
+            tAngle = tEndAngle;
+        }
+    }
+
+    // Center label
+    const centerText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    centerText.setAttribute('x', cx);
+    centerText.setAttribute('y', cy - 8);
+    centerText.setAttribute('text-anchor', 'middle');
+    centerText.classList.add('sunburst-center-label');
+    centerText.textContent = formatCompact(totalCost);
+    svg.appendChild(centerText);
+
+    const centerSub = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    centerSub.setAttribute('x', cx);
+    centerSub.setAttribute('y', cy + 10);
+    centerSub.setAttribute('text-anchor', 'middle');
+    centerSub.classList.add('sunburst-center-sub');
+    centerSub.textContent = 'session cost';
+    svg.appendChild(centerSub);
+
+    const svgWrap = document.createElement('div');
+    svgWrap.className = 'sunburst-container';
+    svgWrap.appendChild(svg);
+    container.appendChild(svgWrap);
+
+    // Legend
+    const legend = document.createElement('div');
+    legend.className = 'sunburst-legend';
+    for (const name of phaseNames) {
+        const color = getPhaseColor(name);
+        legend.innerHTML += `<div class="legend-item"><div class="legend-swatch" style="background:${color}"></div>${name} (${formatCompact(phaseMap[name].cost)})</div>`;
+    }
+    container.appendChild(legend);
+}
+
+// =========================================================================
+// VIEW 4: SANKEY
+// =========================================================================
+function renderSankey() {
+    const container = document.getElementById('view-sankey');
+    container.innerHTML = '<h2 class="view-title">Cost Bucket Sankey</h2>';
+
+    // Aggregate: phases -> buckets
+    const sessions = D.sessions || [];
+    const phaseData = {};
+    const bucketNames = ['input_tokens', 'cache_creation_tokens', 'cache_read_tokens', 'output_tokens'];
+    const bucketLabels = { input_tokens: 'Input', cache_creation_tokens: 'Cache Create', cache_read_tokens: 'Cache Read', output_tokens: 'Output' };
+    const bucketColors = { input_tokens: '#00ffff', cache_creation_tokens: '#ff00ff', cache_read_tokens: '#39ff14', output_tokens: '#ffb700' };
+
+    for (const s of sessions) {
+        for (const ph of (s.phases || [])) {
+            if (!phaseData[ph.phase]) {
+                phaseData[ph.phase] = { input_tokens: 0, cache_creation_tokens: 0, cache_read_tokens: 0, output_tokens: 0 };
+            }
+            const bb = ph.bucket_breakdown || {};
+            phaseData[ph.phase].input_tokens += bb.input_tokens || 0;
+            phaseData[ph.phase].cache_creation_tokens += bb.cache_creation_tokens || 0;
+            phaseData[ph.phase].cache_read_tokens += bb.cache_read_tokens || 0;
+            phaseData[ph.phase].output_tokens += bb.output_tokens || 0;
+        }
+    }
+
+    const phaseNames = Object.keys(phaseData);
+    if (phaseNames.length === 0) {
+        container.innerHTML += '<p style="color:var(--text-dim)">No phase data available.</p>';
+        return;
+    }
+
+    // Layout parameters
+    const svgW = 800;
+    const marginTop = 30;
+    const marginBottom = 30;
+    const nodeW = 18;
+    const leftX = 50;
+    const rightX = svgW - 50 - nodeW;
+    const gapY = 6;
+
+    // Compute totals
+    const phaseTotals = {};
+    let grandTotal = 0;
+    for (const pn of phaseNames) {
+        const total = bucketNames.reduce((s, b) => s + phaseData[pn][b], 0);
+        phaseTotals[pn] = total;
+        grandTotal += total;
+    }
+
+    const bucketTotals = {};
+    for (const b of bucketNames) {
+        bucketTotals[b] = phaseNames.reduce((s, pn) => s + phaseData[pn][b], 0);
+    }
+
+    // Height proportional to total
+    const usableH = Math.max(400, phaseNames.length * 60 + 100);
+    const svgH = usableH + marginTop + marginBottom;
+    const dataH = usableH - ((phaseNames.length - 1) * gapY);
+
+    // Phase node positions (left)
+    const phaseNodes = [];
+    let py = marginTop;
+    for (const pn of phaseNames) {
+        const h = Math.max(12, (phaseTotals[pn] / (grandTotal || 1)) * dataH);
+        phaseNodes.push({ name: pn, x: leftX, y: py, w: nodeW, h, total: phaseTotals[pn] });
+        py += h + gapY;
+    }
+
+    // Bucket node positions (right)
+    const bucketNodes = [];
+    let by = marginTop;
+    const activeBuckets = bucketNames.filter(b => bucketTotals[b] > 0);
+    const dataHB = usableH - ((activeBuckets.length - 1) * gapY);
+    for (const b of activeBuckets) {
+        const h = Math.max(12, (bucketTotals[b] / (grandTotal || 1)) * dataHB);
+        bucketNodes.push({ name: b, label: bucketLabels[b], x: rightX, y: by, w: nodeW, h, total: bucketTotals[b], color: bucketColors[b] });
+        by += h + gapY;
+    }
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', svgW);
+    svg.setAttribute('height', svgH);
+    svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+
+    // Draw bands
+    for (const pNode of phaseNodes) {
+        let srcOffset = 0;
+        for (const bNode of bucketNodes) {
+            const val = phaseData[pNode.name][bNode.name] || 0;
+            if (val === 0) continue;
+
+            const srcH = (val / (pNode.total || 1)) * pNode.h;
+            const dstH = (val / (bNode.total || 1)) * bNode.h;
+
+            // Find dst offset
+            let dstOffset = 0;
+            for (const prevPhase of phaseNames) {
+                if (prevPhase === pNode.name) break;
+                const prevVal = phaseData[prevPhase][bNode.name] || 0;
+                dstOffset += (prevVal / (bNode.total || 1)) * bNode.h;
+            }
+
+            const x0 = pNode.x + pNode.w;
+            const y0 = pNode.y + srcOffset;
+            const x1 = bNode.x;
+            const y1 = bNode.y + dstOffset;
+            const midX = (x0 + x1) / 2;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d',
+                `M ${x0} ${y0} C ${midX} ${y0}, ${midX} ${y1}, ${x1} ${y1} ` +
+                `L ${x1} ${y1 + dstH} C ${midX} ${y1 + dstH}, ${midX} ${y0 + srcH}, ${x0} ${y0 + srcH} Z`
+            );
+            path.setAttribute('fill', bNode.color);
+            path.setAttribute('fill-opacity', '0.25');
+            path.setAttribute('stroke', bNode.color);
+            path.setAttribute('stroke-opacity', '0.4');
+            path.setAttribute('stroke-width', '0.5');
+            path.classList.add('sankey-band');
+            path.addEventListener('mouseenter', (e) => {
+                path.setAttribute('fill-opacity', '0.5');
+                showTooltip(e, `${pNode.name} -> ${bNode.label}\n${formatNumber(val)} tokens`);
+            });
+            path.addEventListener('mousemove', (e) => {
+                tooltipEl.style.left = Math.min(e.clientX + 12, window.innerWidth - 420) + 'px';
+                tooltipEl.style.top = Math.min(e.clientY + 12, window.innerHeight - 200) + 'px';
+            });
+            path.addEventListener('mouseleave', () => {
+                path.setAttribute('fill-opacity', '0.25');
+                hideTooltip();
+            });
+            svg.appendChild(path);
+
+            srcOffset += srcH;
+        }
+    }
+
+    // Draw phase nodes (left)
+    for (const pNode of phaseNodes) {
+        const color = getPhaseColor(pNode.name);
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', pNode.x);
+        rect.setAttribute('y', pNode.y);
+        rect.setAttribute('width', pNode.w);
+        rect.setAttribute('height', pNode.h);
+        rect.setAttribute('fill', color);
+        rect.setAttribute('fill-opacity', '0.8');
+        svg.appendChild(rect);
+
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', pNode.x - 6);
+        label.setAttribute('y', pNode.y + pNode.h / 2);
+        label.setAttribute('text-anchor', 'end');
+        label.setAttribute('dominant-baseline', 'central');
+        label.classList.add('sankey-node-label');
+        label.style.fill = color;
+        label.textContent = pNode.name;
+        svg.appendChild(label);
+
+        const valLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        valLabel.setAttribute('x', pNode.x - 6);
+        valLabel.setAttribute('y', pNode.y + pNode.h / 2 + 14);
+        valLabel.setAttribute('text-anchor', 'end');
+        valLabel.setAttribute('dominant-baseline', 'central');
+        valLabel.classList.add('sankey-value-label');
+        valLabel.textContent = formatCompact(pNode.total);
+        svg.appendChild(valLabel);
+    }
+
+    // Draw bucket nodes (right)
+    for (const bNode of bucketNodes) {
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', bNode.x);
+        rect.setAttribute('y', bNode.y);
+        rect.setAttribute('width', bNode.w);
+        rect.setAttribute('height', bNode.h);
+        rect.setAttribute('fill', bNode.color);
+        rect.setAttribute('fill-opacity', '0.8');
+        svg.appendChild(rect);
+
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', bNode.x + bNode.w + 6);
+        label.setAttribute('y', bNode.y + bNode.h / 2);
+        label.setAttribute('text-anchor', 'start');
+        label.setAttribute('dominant-baseline', 'central');
+        label.classList.add('sankey-node-label');
+        label.style.fill = bNode.color;
+        label.textContent = bNode.label;
+        svg.appendChild(label);
+
+        const valLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        valLabel.setAttribute('x', bNode.x + bNode.w + 6);
+        valLabel.setAttribute('y', bNode.y + bNode.h / 2 + 14);
+        valLabel.setAttribute('text-anchor', 'start');
+        valLabel.setAttribute('dominant-baseline', 'central');
+        valLabel.classList.add('sankey-value-label');
+        valLabel.textContent = formatCompact(bNode.total);
+        svg.appendChild(valLabel);
+    }
+
+    const svgWrap = document.createElement('div');
+    svgWrap.className = 'sankey-container';
+    svgWrap.appendChild(svg);
+    container.appendChild(svgWrap);
+}
+
+// =========================================================================
+// VIEW 5: SESSION COMPARISON
+// =========================================================================
+function renderSessions() {
+    const container = document.getElementById('view-sessions');
+    container.innerHTML = '<h2 class="view-title">Session Comparison</h2>';
+
+    const sessions = D.sessions || [];
+    if (sessions.length === 0) {
+        container.innerHTML += '<p style="color:var(--text-dim)">No sessions to display.</p>';
+        return;
+    }
+
+    const maxCost = getMaxSessionCost(sessions);
+    const cards = document.createElement('div');
+    cards.className = 'session-cards';
+
+    for (const s of sessions) {
+        const summary = s.summary || {};
+        const name = s.session_type === 'subagent'
+            ? (s.subagent_name || s.session_id)
+            : 'Main Session';
+        const typeBadge = s.session_type === 'main' ? 'MAIN' : 'SUBAGENT';
+
+        const card = document.createElement('div');
+        card.className = 'session-card';
+
+        card.innerHTML = `
+            <div class="session-card-header">
+                <span class="session-card-name">${name}</span>
+                <span class="session-card-type">${typeBadge}</span>
+            </div>
+            <div class="session-card-stats">
+                <div class="session-card-stat">
+                    <span class="stat-label">API Calls</span>
+                    <span class="stat-value">${formatNumber(summary.total_api_calls)}</span>
+                </div>
+                <div class="session-card-stat">
+                    <span class="stat-label">Peak Context</span>
+                    <span class="stat-value hot">${formatCompact(summary.peak_context_window)}</span>
+                </div>
+                <div class="session-card-stat">
+                    <span class="stat-label">Session Cost</span>
+                    <span class="stat-value hot">${formatCompact(summary.total_session_cost)}</span>
+                </div>
+                <div class="session-card-stat">
+                    <span class="stat-label">Dollars</span>
+                    <span class="stat-value dollars">${formatDollars(summary.total_dollars)}</span>
+                </div>
+            </div>
+        `;
+
+        // Mini heat strip
+        const turns = s.turns || [];
+        if (turns.length > 0) {
+            const miniStrip = document.createElement('div');
+            miniStrip.className = 'session-mini-strip';
+            const sliceW = 100 / turns.length;
+            for (const t of turns) {
+                const ratio = t.session_cost_tokens / maxCost;
+                const slice = document.createElement('div');
+                slice.className = 'heat-slice';
+                slice.style.width = sliceW + '%';
+                slice.style.minWidth = '1px';
+                slice.style.background = heatColor(ratio);
+                miniStrip.appendChild(slice);
+            }
+            card.appendChild(miniStrip);
+        }
+
+        // Meta info
+        const meta = document.createElement('div');
+        meta.className = 'session-card-meta';
+        meta.innerHTML = `
+            <span>Model: ${s.model || 'unknown'}</span>
+            <span>Session ID: ${(s.session_id || '').substring(0, 16)}...</span>
+            ${s.dispatched_at_turn != null ? `<span>Dispatched at turn: ${s.dispatched_at_turn}</span>` : ''}
+            ${s.returned_at_turn != null ? `<span>Returned at turn: ${s.returned_at_turn}</span>` : ''}
+        `;
+        card.appendChild(meta);
+
+        // Hottest tools
+        if (summary.hottest_tools && summary.hottest_tools.length > 0) {
+            const toolsList = document.createElement('div');
+            toolsList.style.cssText = 'margin-top:12px;font-size:10px;color:var(--text-dim);';
+            toolsList.innerHTML = '<span style="color:var(--neon-amber);text-transform:uppercase;letter-spacing:1px;">Hottest Tools</span>';
+            const ul = document.createElement('div');
+            ul.style.cssText = 'margin-top:4px;display:flex;flex-direction:column;gap:2px;';
+            for (const [tool, cost] of summary.hottest_tools.slice(0, 5)) {
+                ul.innerHTML += `<span><span style="color:var(--neon-cyan)">${tool}</span> ${formatCompact(cost)}</span>`;
+            }
+            toolsList.appendChild(ul);
+            card.appendChild(toolsList);
+        }
+
+        cards.appendChild(card);
+    }
+
+    container.appendChild(cards);
+}
+
+// =========================================================================
+// INIT
+// =========================================================================
+function init() {
+    renderSummary();
+    renderHeatStrip();
+    renderTurnTable();
+    renderSunburst();
+    renderSankey();
+    renderSessions();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
+
+})();
+    </script>
+</body>
+</html>
