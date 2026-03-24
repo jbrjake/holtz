@@ -74,3 +74,48 @@ def test_format_structured():
     assert "Look for:" in output
     assert "Detect:" in output
     assert "e.g.:" in output
+
+
+# --- BH-004 (run 14): Empty field value causes content bleed ---
+
+def test_parse_brief_empty_field_value():
+    """Field with no value on its line returns empty string, not next field's content."""
+    brief = (
+        "## PAT-001: test-pattern (Run 1, 2026-03-20)\n"
+        "**What to look for:**\n"
+        "**Detection heuristic:** `grep -rn 'foo' .`\n"
+        "**Example:** A test case\n"
+    )
+    entries = pbc.parse_brief(brief)
+    assert len(entries) == 1
+    assert entries[0].what_to_look_for == "", (
+        f"Expected empty string for field with no value, got: {entries[0].what_to_look_for!r}"
+    )
+    assert "`grep" in entries[0].detection_heuristic
+    assert "test case" in entries[0].example
+
+
+# --- BH-005 (run 14): Code fence header matched as real entry ---
+
+def test_parse_brief_ignores_code_fenced_headers():
+    """Pattern headers inside code fences are not matched as real entries."""
+    brief = (
+        "## PAT-001: real-pattern (Run 1, 2026-03-20)\n"
+        "**What to look for:** Real description\n"
+        "**Detection heuristic:** `grep something`\n"
+        "**Example:** Real example\n"
+        "\n"
+        "```\n"
+        "## PAT-999: fake-pattern (Run 99, 2099-01-01)\n"
+        "**What to look for:** This should not be parsed\n"
+        "```\n"
+        "\n"
+        "## PAT-002: second-real (Run 2, 2026-03-21)\n"
+        "**What to look for:** Second real pattern\n"
+        "**Detection heuristic:** manual check\n"
+        "**Example:** Second example\n"
+    )
+    entries = pbc.parse_brief(brief)
+    ids = [e.pattern_id for e in entries]
+    assert "PAT-999" not in ids, "Code fence header should not be matched as a real entry"
+    assert ids == ["PAT-001", "PAT-002"], f"Expected only real entries, got: {ids}"
