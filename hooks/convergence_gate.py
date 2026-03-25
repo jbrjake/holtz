@@ -27,10 +27,13 @@ STALENESS_THRESHOLD = 1800
 
 
 def _count_open_items(cwd: str) -> int:
-    """Approximate count of open punchlist items.
+    """Count open punchlist items, scoped to item blocks only.
 
     Masks code fences before counting to avoid false matches
     from punchlist examples inside fenced blocks (PAT-001).
+    Only counts Status fields within item blocks (### BH-NNN: or
+    ### BJ-NNN: headers) to avoid inflation from Pattern blocks
+    or preamble text (BH-005 run 18).
     The count is informational (for the block reason message),
     not decisional — the gate decision is based on STATUS.md
     and SUMMARY.md existence.
@@ -44,9 +47,18 @@ def _count_open_items(cwd: str) -> int:
             except OSError:
                 continue
             masked = mask_fenced_blocks(content)
-            open_count = len(re.findall(r'\*\*Status:\*\*[ \t]*OPEN', masked))
-            in_progress = len(re.findall(r'\*\*Status:\*\*[ \t]*IN PROGRESS', masked))
-            return open_count + in_progress
+            # Split on item headers so we only count Status inside items.
+            item_pattern = re.compile(r'^### B[HJ]-\d+:', re.MULTILINE)
+            item_starts = [m.start() for m in item_pattern.finditer(masked)]
+            count = 0
+            for idx, start in enumerate(item_starts):
+                end = item_starts[idx + 1] if idx + 1 < len(item_starts) else len(masked)
+                block = masked[start:end]
+                status_match = re.search(
+                    r'\*\*Status:\*\*[ \t]*(OPEN|IN PROGRESS)', block)
+                if status_match:
+                    count += 1
+            return count
     return 0
 
 

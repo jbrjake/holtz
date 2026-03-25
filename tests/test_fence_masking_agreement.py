@@ -23,14 +23,12 @@ import re
 import sys
 from pathlib import Path
 
-import pytest
-
 # Import both implementations
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "holtz" / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hooks"))
 
-from markdown_utils import mask_code_fences  # noqa: E402
 from _common import mask_fenced_blocks  # noqa: E402
+from markdown_utils import mask_code_fences  # noqa: E402
 
 # Matches CommonMark fence delimiters (backtick or tilde, optionally indented 0-3 spaces)
 _FENCE_LINE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
@@ -58,7 +56,7 @@ def _compare(text: str) -> None:
     )
 
     for i, (orig, mu_line, common_line) in enumerate(
-        zip(original_lines, mu_lines, common_lines)
+        zip(original_lines, mu_lines, common_lines, strict=True)
     ):
         # Skip fence delimiter lines — they differ intentionally
         if _FENCE_LINE.match(orig):

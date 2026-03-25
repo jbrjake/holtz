@@ -154,14 +154,14 @@ that already happened in the main session.
 
 ### Pattern: Recon Bloat
 
-**Symptom:** Phase 0 (reconnaissance/exploration) dominates the heat map.
+**Symptom:** Steps 0-4 (reconnaissance/exploration) dominate the heat map.
 Large file reads and broad grep searches at the start of the session
 create high deltas that multiply across all remaining turns.
 
-**Fix:** Audit which recon reads are actually referenced in later phases.
+**Fix:** Audit which recon reads are actually referenced in later steps.
 If a file is read early but never used, that is pure waste multiplied by
 the full session length. Profile the dependency edges between recon and
-execution phases.
+execution steps.
 
 ---
 
