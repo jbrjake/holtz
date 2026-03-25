@@ -228,6 +228,7 @@ Dispatch a subagent to run in parallel:
 - Git churn analysis (top 20 most-changed files in last 50 commits)
 - Mutation scan (optional — auto-detected)
 - Find skipped/disabled tests
+- Cold file coverage scan: list all source files, scan `docs/holtz/archive/*/PUNCHLIST.md` for file paths mentioned in findings and `docs/holtz/LIVING-PUNCHLIST.md` if it exists. A file counts as "audited" if it appears in any prior punchlist finding. On first run (no archive), all files are cold. Compute `cold_file_ratio = files_never_audited / total_source_files`. Write inventory to `docs/holtz/recon/step2-cold-files.md`.
 
 Output: `docs/holtz/recon/step2-code-signals.md`
 
@@ -239,7 +240,7 @@ Output: `docs/holtz/recon/step3-recon-summary.md`
 
 ### Step 4: Predictions
 
-Use extended thinking (ultrathink). Rank where bugs are likely to be found using six input sources: pattern brief, impact graph risk scores, impact graph edges, git churn, prior run findings, recon observations. Each prediction includes: Target, Predicted Issue, Confidence (HIGH/MEDIUM/LOW), Basis, Lens, Graph Support, Outcome.
+Use extended thinking (ultrathink). Rank where bugs are likely to be found using seven input sources: pattern brief, impact graph risk scores, impact graph edges, git churn, prior run findings, recon observations, and cold file inventory. When `cold_file_ratio` exceeds 40%, add at least 3 cold files to predictions as MEDIUM-confidence targets with basis "never audited — unknown risk," prioritizing files closest to entry points or with the most inbound impact graph edges. Each prediction includes: Target, Predicted Issue, Confidence (HIGH/MEDIUM/LOW), Basis, Lens, Graph Support, Outcome.
 
 Output: `docs/holtz/recon/step4-predictions.md`
 

@@ -118,9 +118,9 @@ Write `docs/holtz/recon/step3-recon-summary.md` — a SHORT synthesis (this is w
 
 ## Step 4 — Predictive Recon
 
-Use extended thinking (ultrathink) for this step — synthesizing six input sources into ranked predictions requires deep reasoning.
+Use extended thinking (ultrathink) for this step — synthesizing seven input sources into ranked predictions requires deep reasoning.
 
-After Step 3, produce `docs/holtz/recon/step4-predictions.md` ranking where bugs are likely to be found. Draw from six input sources:
+After Step 3, produce `docs/holtz/recon/step4-predictions.md` ranking where bugs are likely to be found. Draw from seven input sources:
 
 | Input | What it suggests |
 |-------|-----------------|
@@ -130,5 +130,6 @@ After Step 3, produce `docs/holtz/recon/step4-predictions.md` ranking where bugs
 | Git churn (Step 2) | High-churn files → predict bugs where code changes most |
 | Prior run findings | Categories that recurred → predict same categories in untested areas |
 | Recon observations | Architectural concerns noted during Steps 0-3 → predict specific failure modes |
+| Cold file inventory (Step 2) | Never-audited files → predict unknown risk in uninspected areas. When `cold_file_ratio` > 40%, add at least 3 cold files as MEDIUM-confidence predictions |
 
 Each prediction includes: **Target** (file/function), **Predicted Issue**, **Confidence** (HIGH/MEDIUM/LOW), **Basis** (evidence from recon), **Lens** (which analytical lens), **Graph Support** (relevant edges/risk scores), **Outcome** (CONFIRMED/UNCONFIRMED — filled in after relevant step). Confidence levels: HIGH = multiple converging signals, MEDIUM = two signals or one strong, LOW = single weak signal. Update STATUS.md with Step 4 completion.
