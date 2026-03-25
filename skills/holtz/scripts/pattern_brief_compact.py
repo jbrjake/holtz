@@ -58,7 +58,6 @@ def parse_brief(content: str) -> list[PatternEntry]:
     # divergence (BH-003 run 16, PAT-001).  mask_code_fences preserves line
     # count, so line numbers are safe to map between masked and original.
     original_lines = content.split('\n')
-    masked_lines = masked.split('\n')
 
     def _line_of(pos: int) -> int:
         """Convert a character offset in masked to a line number."""
