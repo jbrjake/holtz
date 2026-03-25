@@ -1,38 +1,38 @@
-# Merge Report — Run 17
+# Adversarial Self-Play Merge Report
 
 **Date:** 2026-03-25
-**Holtz items:** 4 (2 HIGH, 1 MEDIUM, 1 LOW)
-**Justine items:** 6 (3 HIGH, 3 MEDIUM)
-**Merged total:** 7
+**Holtz findings:** 3 total items
+**Justine findings:** 6 total items
+**Merged total:** 7 items
 
-## Classification
+## Agreement
+2 items found by both auditors (including 1 with severity disagreement)
 
-### Agreements (3)
-| Holtz | Justine | Finding | Severity | Notes |
-|-------|---------|---------|----------|-------|
-| BH-001 | BJ-002 | README run count stale (15→16) | HIGH | Identical finding |
-| BH-002 | BJ-001 | README prediction accuracy wrong (72%→65%) | HIGH | Identical finding, same evidence |
-| BH-003 | BJ-006 | Research data partially stale | MEDIUM | Both found partial update state |
+- **BH-001:** README "Eight steps" recon claim is stale — Holtz BH-001 + Justine BJ-004
+- **BH-002:** Token profiling playbook has stale Phase references — Holtz BH-002 + Justine BJ-005
 
-### Holtz-Only (1)
-| ID | Finding | Severity | Notes |
-|----|---------|----------|-------|
-| BH-004 | README PAT-001 count understated (4 vs 12) | LOW | Justine didn't check narrative claims about PAT-001 history |
+## Holtz-only
+1 item — suggests depth-first analysis found subtle bugs
 
-### Justine-Only (3)
-| ID | Finding | Severity | Notes |
-|----|---------|----------|-------|
-| BJ-003 | README claims 7 edge types but co_fixed/shares_pattern never instantiated | HIGH→MEDIUM | Downgraded: edge types ARE defined in protocol, just never used. README describes model, not state. |
-| BJ-004 | Living punchlist stale (Audits Completed: 1, missing Run 16) | MEDIUM | Holtz noted during recon but didn't punchlist it. Valid finding. |
-| BJ-005 | generate-changelog.py has lint errors and no tests | MEDIUM | Holtz noted lint but didn't flag missing tests. Valid finding. |
+- **BH-006:** convergence_check.py output messages use stale "phases" terminology — Holtz BH-003
 
-### Contradictions (0)
-None.
+## Justine-only
+4 items — suggests breadth-first analysis found surface bugs
+
+- **BH-003:** _common.py mask_fenced_blocks ignores indented code fences (1-3 spaces) — Justine BJ-001
+- **BH-004:** _common.py mask_fenced_blocks accepts backticks in backtick fence info strings — Justine BJ-002
+- **BH-005:** convergence_gate _count_open_items inflated by non-item Status fields — Justine BJ-003
+- **BH-007:** No cross-implementation fence masking test — Justine BJ-006
+
+## Severity Disagreements
+1 item — listed with both ratings
+
+- **BH-001:** Holtz=HIGH, Justine=MEDIUM. Using HIGH.
+
+## Contradictions
+0 items — none found
 
 ## Blind Spot Analysis
-- **Holtz missed:** Edge type instantiation gap (BJ-003). Holtz verified all paths exist but didn't check whether claimed edge types were actually in use.
-- **Holtz missed:** Justine was more aggressive about punchlisting borderline items (living punchlist stale, generate-changelog tests) that Holtz noted but didn't escalate.
-- **Justine missed:** PAT-001 count staleness (BH-004). Justine focused on current code accuracy but didn't check narrative claims about historical pattern manifestation counts.
-
-## Severity Adjustments
-- BJ-003: HIGH → MEDIUM. The README describes the edge type model (seven types are defined and documented). The graph tool supports them. They just haven't been created in practice. This is aspirational documentation, not fabrication.
+Based on what each auditor missed:
+- **Holtz's blind spots:** Missed 4 findings in the hooks/ layer — 2 concrete CommonMark correctness bugs in mask_fenced_blocks (indented fences, backtick info strings), 1 count-inflation bug in convergence_gate, and 1 missing cross-implementation test. All 4 are in code files Holtz catalogued in the impact graph but did not audit at the function level in this run. Justine's breadth-first approach surfaced these by directly comparing the two masker implementations side-by-side.
+- **Justine's blind spots:** Missed 1 doc/drift finding in skills/holtz/scripts/convergence_check.py (stale "phases" terminology in output strings). This required tracing commit history (commit 66e4d67) to confirm the update was incomplete — a depth-first pattern consistent with Holtz's methodology. Justine inherited Holtz's two predictions but did not independently scan scripts/ for stale terminology beyond what those predictions covered.

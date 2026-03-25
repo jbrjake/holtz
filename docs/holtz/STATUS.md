@@ -3,34 +3,37 @@
 **Project:** holtz
 **Started:** 2026-03-25
 **Last Updated:** 2026-03-25
-**Run:** 17 (full audit, dev mode — using local SKILL.md)
+**Run:** 18 (full audit, dev mode — local SKILL.md)
 
 ## Current Position
-**Phase:** 6
-**Step:** Convergence check passed — running mandatory Phase 1-3 resweep
-**Status:** IN PROGRESS
+**Step:** 20
+**Status:** CONVERGED
 
 ## Completed
-- [x] Phase 0a: Project overview
-- [x] Phase 0b: Test infrastructure
-- [x] Phase 0c: Test baseline (619/0/0, 62% coverage)
-- [x] Phase 0c.1: CI status (green, 1 prior failure fixed)
-- [x] Phase 0d: Lint results (3 ruff errors in generate-changelog.py, core clean)
-- [x] Phase 0e: Churn analysis (README 15, SKILL.md 10, pattern_brief_compact.py 6)
-- [x] Phase 0f: Skipped tests (0 permanent skips)
-- [x] Phase 0 graph reconciliation: 52 nodes, 53 edges, 2 line-shift drifts (same as Run 16, not updated)
-- [x] Phase 0 architecture drift: line shifts only, no structural drift
-- [x] Phase 0 pattern loading: all 6 seed patterns clean, proactive check clean
-- [x] Phase 0 recommendation escalation: 0 items escalated (all prior addressed)
-- [x] Phase 0g: Recon summary
-- [x] Phase 0h: Predictive recon (6 predictions: 2 HIGH, 3 MEDIUM, 1 LOW)
-- [ ] Dispatch Justine (background)
-- [x] Phase 1: Doc-to-implementation audit (3 findings: BH-001 HIGH, BH-002 HIGH, BH-003 MEDIUM)
-- [x] Phase 2: Test quality audit (0 findings — tests solid after 16 audits)
-- [x] Phase 3: Adversarial code audit (1 finding: BH-004 LOW doc/drift)
+- [x] Step 0: Project overview + drift detection
+- [x] Step 1: Run toolchain (subagent) — 619/0/0, 62% cov, ruff clean, mypy clean, CI 4/5 green
+- [x] Step 2: Code signals (subagent) — plugin.json 20, README 11, 1 conditional skip, no mutation tools
+- [x] Step 3: Recon summary
+- [x] Step 4: Predictions (6 predictions: 2 HIGH, 3 MEDIUM, 1 LOW)
+- [x] Step 5: Dispatch Justine (background)
+- [x] Step 6: Doc-to-implementation audit (2 findings: BH-001 HIGH, BH-002 MEDIUM)
+- [x] Step 7: Test quality audit (0 punchlist items — test suite solid after 18 audits)
+- [x] Step 8: Adversarial code audit (1 finding: BH-003 LOW doc/drift)
+- [x] Step 9: Merge Justine findings — 7 merged (2 agreement, 1 Holtz-only, 4 Justine-only, 0 contradictions)
+- [x] Step 10: TDD fix loop — all 7 items fixed in 2 commits
+- [x] Step 11: Pattern analysis — PAT-004 (dual-implementation divergence) identified
+- [x] Step 12: Per-fix hardening — cross-impl test with 21 cases
+- [x] Step 13: Blast radius check — convergence_gate updated for scoped counting
+- [x] Step 14: Lens rotation — component lens, all items resolved
+- [x] Step 15: Convergence check — CONVERGED (3 iterations, exit 0)
+- [x] Step 16: Resweep — clean (640 passed, ruff clean, mypy clean, no new findings)
+- [x] Step 17: Architecture baseline update (subagent — background)
+- [ ] Step 18: Pattern library contribution (skipped — no new global patterns)
+- [x] Step 19: Living punchlist update (subagent — background)
+- [x] Step 20: Write SUMMARY.md
 
 ## Next Action
-Run Phase 1-3 final sweep across ALL lenses to confirm convergence. If any finding surfaces, add to punchlist and loop.
+Run 18 complete. CONVERGED.
 
 ## Metrics
 | Metric | Baseline | Current |
@@ -41,11 +44,11 @@ Run Phase 1-3 final sweep across ALL lenses to confirm convergence. If any findi
 | Punchlist open | — | 0 |
 | Punchlist resolved | — | 7 |
 | Punchlist deferred | — | 0 |
-| Patterns identified | — | 0 |
+| Patterns identified | — | 1 (PAT-004) |
 | Convergence iterations | — | 3 (CONVERGED) |
 
 ## Notes
-Run 17: fresh audit after Run 16 converged (4 findings, all resolved). Self-audit in dev mode. Key recon findings: README stale (run count, prediction accuracy), generate-changelog.py lint errors, living punchlist not updated for Run 16.
+Run 18: fresh audit after incomplete Run 17 (archived). Major recent change: step numbering flattened from Phase N to Step N. 2 line drifts in impact graph (same as Runs 16-17). All 6 seed patterns clean. 0 recommendations escalated.
 
 ## Active Lens
 **Current:** component
@@ -59,14 +62,14 @@ Run 17: fresh audit after Run 16 converged (4 findings, all resolved). Self-audi
 - [ ] semantic-fidelity
 - [ ] temporal-protocol
 - [ ] public-contract
-**Finding Rate (current lens):** 4 findings across Phases 1-3
+**Finding Rate (current lens):** 0
 
 ## Pattern Library
-- **PAT-001:** code-fence-unaware parsing (8 instances across 16 runs)
-- **PAT-002:** incomplete code-fence isolation (1 instance, run 2)
-- **PAT-003:** regex convention violation (3 instances, run 11)
+- **PAT-001:** code-fence-unaware parsing (12+ instances across 16 runs)
+- **PAT-002:** incomplete code-fence isolation (1 instance, Run 2)
+- **PAT-003:** regex convention violation (3 instances, Run 11)
 
 ## Strategy
-**High-Risk Areas:** README semantic claims (run count, prediction accuracy), generate-changelog.py lint, SKILL.md path references, living punchlist staleness
-**Last Insight:** README doc drift is recurring — same class as Run 16 BH-002. This project adds runs faster than it updates the README narrative.
-**Approach:** Prediction-prioritized audit. HIGH predictions first (README run count + prediction accuracy), then MEDIUM (lint, SKILL.md paths, research data), then sweep remaining.
+**High-Risk Areas:** README narrative claims (run counts, prediction accuracy), token-profiling-playbook.md stale Phase references, convergence_check.py line drifts
+**Last Insight:** Step numbering refactor touched all active files — any file that missed the update is a drift finding.
+**Approach:** Prediction-prioritized audit. Focus on README semantic claims and recently-refactored files for drift, then standard component audit.
