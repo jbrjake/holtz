@@ -45,7 +45,7 @@ digraph {
     fontcolor="#744210"
   ]
   recon [
-    label="recon/ dir exists?\n(crashed in Phase 0)"
+    label="recon/ dir exists?\n(crashed in Step 0)"
     shape=diamond
     fillcolor="#fefcbf"
     color="#d69e2e"
@@ -59,7 +59,7 @@ digraph {
     fontcolor="#744210"
   ]
   fresh [
-    label="Start fresh\n(Phase 0)"
+    label="Start fresh\n(Step 0)"
     fillcolor="#c6f6d5"
     color="#38a169"
     fontcolor="#22543d"
