@@ -1,5 +1,28 @@
 # Holtz
 
+[![CI](https://github.com/jbrjake/holtz/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/jbrjake/holtz/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)
+![619 tests](https://img.shields.io/badge/tests-619_passed-brightgreen.svg)
+![62% coverage](https://img.shields.io/badge/coverage-62%25-yellow.svg)
+
+**Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
+
+```
+/plugin marketplace add jbrjake/claude-plugin-marketplace
+/plugin install holtz@jbrjake
+```
+
+Or from a local clone: `claude --plugin-dir /path/to/holtz`
+
+<p align="center">
+
+[![Run 14: Full audit with adversarial self-play (~3 min)](https://asciinema.org/a/mFXtFyzeKqZnNgIy.svg)](https://asciinema.org/a/mFXtFyzeKqZnNgIy)
+
+</p>
+
+---
+
 A Claude Code plugin that audits your entire codebase, documents every defect in a structured punchlist, fixes them with TDD, and then does it again. And again. Until two consecutive passes find nothing new. You will think your code is clean. Holtz will disagree. He will keep disagreeing until he can't anymore, and then he will stop.
 
 He will not apologize for any of it.
@@ -15,19 +38,6 @@ Holtz goes back to check.
 He runs a seven-phase audit and then starts over. Finds what the fixes uncovered. Fixes those too. Runs again. This continues until two consecutive passes produce zero new findings across nine analytical lenses. That's convergence. Everything before that is just progress.
 
 The moment you stop looking is the moment something gets through.
-
-## Installation
-
-```
-/plugin marketplace add jbrjake/claude-plugin-marketplace
-/plugin install holtz@jbrjake
-```
-
-Or from a local clone:
-
-```bash
-claude --plugin-dir /path/to/holtz
-```
 
 The skill activates when you ask Claude to find bugs, audit tests, create a punchlist, review code quality, or polish a codebase. Or just tell Holtz to audit and get out of the way.
 
@@ -109,6 +119,16 @@ Holtz is built to be added to.
 
 PRs with new lenses, patterns, or edge types are welcome. The whole point of the pattern library is that it gets better as more codebases get audited.
 
+## Cross-harness compatibility
+
+Holtz is a Claude Code plugin, but the architecture is portable. The skill, patterns, reference docs, and seed patterns are markdown. The scripts are standalone Python. The enforcement hooks are shell scripts that call Python. None of it depends on Claude Code internals beyond the plugin loading convention.
+
+**Cursor.** The skill markdown works as a `.cursorrules` file or project-level instruction. The hooks need adaptation — Cursor doesn't have a PreToolUse/PostToolUse hook system, so enforcement would move to the prompt layer. The scripts and patterns transfer unchanged.
+
+**Codex CLI.** The skill works as an `AGENTS.md` instruction. Codex CLI supports tool-use patterns similar to Claude Code. The main gap is subagent dispatch — Justine's parallel audit would need to run as a separate Codex session rather than an inline subagent. The convergence loop, impact graph, and pattern library all work as-is.
+
+**Other harnesses.** Any system that can (1) inject a system prompt, (2) run shell commands, and (3) read/write files can run the core audit loop. The enforcement hooks are the hardest part to port — they require event-driven gates that most harnesses don't support natively. Without hooks, the process still works but relies on advisory compliance, which is how Holtz ran for his first seven runs before the hooks existed. It works. It works less reliably.
+
 ## The seven phases
 
 **Phase 0: Recon.** Project structure, test infrastructure, baseline metrics, lint, git churn, skipped tests, mutation scanning, architecture drift, predictive recon. Eight steps, each written to disk immediately. By the time Phase 1 starts, Holtz has a map.
@@ -167,6 +187,8 @@ For the complete trace with reasoning chains, code diffs, and prediction accurac
 
 After 15 runs: 619 tests across 13,800 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
 
+The full dataset — prediction accuracy calibration, PAT-001 recurrence timeline, adversarial merge blind-spot analysis, convergence iteration counts, and test growth curves across all 15 runs — is published in [docs/research/convergence-data.md](docs/research/convergence-data.md).
+
 ## The hooks
 
 Advisory instructions weren't enough. Holtz understood the instructions. He agreed with the instructions. He did not follow the instructions. This was not the plan. The plan was for Holtz to follow instructions like a professional. The hooks are what happened instead.
@@ -190,6 +212,10 @@ Advisory language asks. Hooks enforce.
 ## What's inside
 
 1 skill, 3 agents, 17 reference docs, 1 example, 6 Python scripts, 6 seed patterns, 6 enforcement hooks, 619 tests across 13,800 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+
+## Why the backstories
+
+These backstories aren't flavor text. The narrative gives the model a persona with intrinsic motivation and places it in the right region of embedding space to reason with the relentlessness the audit loop requires. The archetypes — a man who lost his family to untested code, a woman who lost her sister to a unit conversion nobody validated — tap into patterns the model associates with obsessive thoroughness, personal stakes, and refusal to cut corners. That's not creative indulgence. It's prompt engineering. Without narrative grounding, the model drifts toward agreeableness and premature convergence. With it, the model stays in an investigative mindset that treats "good enough" as a failure mode. The depth is a technical decision about where in embedding space you want the model to operate.
 
 ## Who Holtz is
 
