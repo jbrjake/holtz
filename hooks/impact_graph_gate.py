@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Impact Graph Gate — PreToolUse hook for Write|Edit.
 
-Blocks writing Phase 1+ audit files unless the corresponding
+Blocks writing Step 6+ audit files unless the corresponding
 impact-graph.json exists on disk. Enforces the HARD-GATE that
 was violated for 10+ consecutive runs despite advisory instructions.
 """

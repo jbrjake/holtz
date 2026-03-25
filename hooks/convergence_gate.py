@@ -69,7 +69,7 @@ def main() -> None:
     if not os.path.isfile(status_path):
         exit_stop_allow()
 
-    # Read STATUS.md for status field and phase info.
+    # Read STATUS.md for status field and step info.
     try:
         with open(status_path) as f:
             content = f.read()
@@ -98,13 +98,13 @@ def main() -> None:
             exit_stop_allow()
 
     # Active run, not converged — block.
-    phase_match = re.search(r'\*\*Phase:\*\*[ \t]*(.*)', masked)
-    phase = phase_match.group(1).strip() if phase_match else "unknown"
+    step_match = re.search(r'\*\*Step:\*\*[ \t]*(.*)', masked)
+    step = step_match.group(1).strip() if step_match else "unknown"
     open_items = _count_open_items(cwd)
 
     exit_stop_block(
         f"CONVERGENCE GATE: Holtz audit has not converged. "
-        f"Phase: {phase}. Open items: ~{open_items}. "
+        f"Step: {step}. Open items: ~{open_items}. "
         f"You MUST: "
         f"(1) Update docs/holtz/STATUS.md with your exact position and next action. "
         f"(2) Tell the user: 'Not converged. Type /clear then any message to continue "
