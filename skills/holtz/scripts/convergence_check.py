@@ -479,7 +479,7 @@ def main() -> None:
     print(f"\n{message}")
 
     if converged:
-        print("\nThe fix loop has converged. Run a final Phase 1-3 sweep to confirm.")
+        print("\nThe fix loop has converged. Run a final Steps 6-8 sweep to confirm.")
         sys.exit(0)
     else:
         sys.exit(1)  # non-zero = keep going

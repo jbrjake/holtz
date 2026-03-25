@@ -57,7 +57,7 @@ def main() -> None:
         exit_ok()
 
     fields = _read_status_fields(cwd)
-    phase = fields.get("phase", "unknown")
+    step = fields.get("step", fields.get("phase", "unknown"))
     status = fields.get("status", "unknown")
     next_action = fields.get("next_action", "read STATUS.md for details")
 
@@ -67,7 +67,7 @@ def main() -> None:
 
     exit_warn(
         f"HOLTZ CONVERGENCE LOOP — ACTIVE: "
-        f"Unfinished audit at Phase {phase} (status: {status}). "
+        f"Unfinished audit at Step {step} (status: {status}). "
         f"Next action: {next_action}. "
         f"Unless the user is explicitly asking about something else, resume the audit "
         f"by reading docs/holtz/STATUS.md and continuing from where you left off. "
