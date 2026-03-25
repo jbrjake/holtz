@@ -183,7 +183,7 @@ Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-1 skill, 3 agents, 17 reference docs, 1 example, 6 Python scripts, 6 seed patterns, 4 enforcement hooks, 555 tests across 12,600 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+1 skill, 3 agents, 17 reference docs, 1 example, 6 Python scripts, 6 seed patterns, 4 enforcement hooks, 573 tests across 12,788 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Who Holtz is
 
