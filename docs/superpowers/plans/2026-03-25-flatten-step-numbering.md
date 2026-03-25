@@ -544,19 +544,24 @@ Line 11: `Standard Phases 1-3` -> `Standard Steps 6-8`
 Line 50: `assess determinism during Phase 3 (adversarial audit)` -> `assess determinism during Step 8 (adversarial code audit)`
 Line 56: `reproduction strategy in Phase 4` -> `reproduction strategy in Step 10`
 
-- [ ] **Step 5: Update living-punchlist-format.md, investigation-format.md, architecture-baseline-format.md**
+- [ ] **Step 5: Update merge-protocol.md**
+
+Line 28: `"at what phase"` -> `"at what step"`
+Line 129: `"Phases 4-6 (fix loop, pattern analysis, convergence)"` -> `"Steps 10-16 (fix loop, pattern analysis, convergence, resweep)"`
+
+- [ ] **Step 6: Update living-punchlist-format.md, investigation-format.md, architecture-baseline-format.md**
 
 Search each for any Phase references and update. These may have zero references — verify with grep.
 
-- [ ] **Step 6: Verify all reference docs are clean**
+- [ ] **Step 7: Verify all reference docs are clean**
 
 ```bash
-grep -rn -i "phase" skills/holtz/references/ | grep -v "step-10-fix-loop.md:1" | head -20
+grep -rn -i "phase" skills/holtz/references/ | grep -v "step-10-fix-loop.md" | head -20
 ```
 
-Expected: zero matches (except the file title of step-10-fix-loop.md if it still says "Phase" in a historical context note).
+Expected: zero matches.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add skills/holtz/references/
@@ -641,29 +646,50 @@ grep -n "_PHASE_PATTERNS" skills/holtz/scripts/profiler_plugin.py
 
 Replace every occurrence.
 
-- [ ] **Step 5: Run existing tests to see what breaks**
+- [ ] **Step 5: Update docstrings and string literals in profiler_plugin.py**
+
+Beyond the pattern arrays, update these stale references:
+- Line 1 module docstring: `"phase detection"` -> `"step detection"`
+- Line 63 `detect()` docstring: `"'holtz', 'phase 0', or 'full audit'"` -> `"'holtz', 'step 0', or 'full audit'"`
+- Line 109 `optimization_patterns()`: `"defer deep reads to audit phases"` -> `"defer deep reads to audit steps"`
+- Line 114 `optimization_patterns()`: `"Phase 0 accounts for >30% of total session cost"` -> `"Steps 0-4 account for >30% of total session cost"`
+- Rename `_detect_phase()` (line 136) to `_detect_step()` and update call site at line 141
+
+Note: `label_phases()` method name cannot change — it's the plugin protocol interface. Leave as-is.
+
+- [ ] **Step 6: Run existing tests to see what breaks**
 
 ```bash
 python -m pytest tests/test_token_profiler_plugin.py -v
 ```
 
-Expected: failures in `test_full_phase_progression` and `test_phase_detected_by_regex_patterns` due to old labels.
+Expected: failures in `test_full_phase_progression`, `test_phase_detected_by_regex_patterns`, `test_detects_phase_0_reference`, and `test_all_turns_get_labels` due to old labels/patterns.
 
-- [ ] **Step 6: Update test_token_profiler_plugin.py**
+- [ ] **Step 7: Update test_token_profiler_plugin.py**
 
 Read: `tests/test_token_profiler_plugin.py`
 
+In `test_detects_phase_0_reference` (line 44):
+- Rename to `test_detects_step_0_reference`
+- Change input from `"Starting phase 0 reconnaissance."` to `"Starting step 0 reconnaissance."`
+
+In `test_all_turns_get_labels` (line 113):
+- Change turn text from `"Phase 0 recon begins."` to `"Step 0 recon begins."`
+- Update assertion: `result[1] == "recon"` -> `result[1] == "step-0-4"`
+- Update assertion: `result[2] == "recon"` -> `result[2] == "step-0-4"`
+
 In `test_full_phase_progression` (~lines 87-111):
+- Rename to `test_full_step_progression`
 - Update turn text strings from `"Starting Phase 0 reconnaissance"` to `"Starting Step 0 reconnaissance"`
 - Update turn text from `"Phase 1 Doc Audit"` to `"Step 6 Doc Audit"`, etc.
-- Update expected label assertions from `"recon"` to `"step-0-4"`, `"phase-1"` to `"step-6"`, etc.
+- Update expected label assertions: `"recon"` -> `"step-0-4"`, `"phase-1"` -> `"step-6"`, `"phase-2"` -> `"step-7"`, `"phase-3"` -> `"step-8"`, `"merge"` -> `"step-9"`, `"fix-loop"` -> `"step-10"`, `"convergence"` -> `"step-14-15"`
 
 In `test_phase_detected_by_regex_patterns` (~lines 129-148):
-- Update regex test strings and expected labels to match new patterns.
+- Rename to `test_step_detected_by_regex_patterns`
+- Change `"Starting phase-0-recon scan."` to `"Starting recon-procedures scan."` (matches new regex)
+- Update expected labels to match new pattern names
 
-Rename test functions:
-- `test_full_phase_progression` -> `test_full_step_progression`
-- `test_phase_detected_by_regex_patterns` -> `test_step_detected_by_regex_patterns`
+Rename class: `TestLabelPhases` -> `TestLabelPhases` (keep — matches protocol method name)
 
 - [ ] **Step 7: Run tests to verify**
 
@@ -682,11 +708,13 @@ git commit -m "feat: rename profiler phase detection to step detection"
 
 ---
 
-### Task 9: Update convergence_check.py and impact_graph_gate.py
+### Task 9: Update scripts and hooks
 
 **Files:**
 - Modify: `skills/holtz/scripts/convergence_check.py:482`
 - Modify: `hooks/impact_graph_gate.py:4`
+- Modify: `hooks/convergence_gate.py:72,101,107`
+- Modify: `hooks/convergence_primer.py:60,70`
 
 - [ ] **Step 1: Update convergence_check.py**
 
@@ -712,19 +740,86 @@ New:
 Blocks writing Step 6+ audit files unless the corresponding
 ```
 
-- [ ] **Step 3: Run hook tests**
+- [ ] **Step 3: Update convergence_gate.py**
 
-```bash
-python -m pytest tests/test_hooks.py -v -k "impact_graph_gate or convergence"
+This hook parses `**Phase:**` from STATUS.md at runtime. After STATUS.md is rewritten to use `**Step:**`, this regex must match.
+
+Line 72 comment, old: `# Read STATUS.md for status field and phase info.`
+New: `# Read STATUS.md for status field and step info.`
+
+Line 101, old:
+```python
+    phase_match = re.search(r'\*\*Phase:\*\*[ \t]*(.*)', masked)
 ```
 
-Expected: PASS (these tests don't assert on the specific string content).
+New:
+```python
+    step_match = re.search(r'\*\*Step:\*\*[ \t]*(.*)', masked)
+```
 
-- [ ] **Step 4: Commit**
+Line 102, old:
+```python
+    phase = phase_match.group(1).strip() if phase_match else "unknown"
+```
+
+New:
+```python
+    step = step_match.group(1).strip() if step_match else "unknown"
+```
+
+Lines 105-107, old:
+```python
+    exit_stop_block(
+        f"CONVERGENCE GATE: Holtz audit has not converged. "
+        f"Phase: {phase}. Open items: ~{open_items}. "
+```
+
+New:
+```python
+    exit_stop_block(
+        f"CONVERGENCE GATE: Holtz audit has not converged. "
+        f"Step: {step}. Open items: ~{open_items}. "
+```
+
+- [ ] **Step 4: Update convergence_primer.py**
+
+This hook reads STATUS.md and injects resume context. It must read `**Step:**` instead of `**Phase:**`.
+
+Line 60, old:
+```python
+    phase = fields.get("phase", "unknown")
+```
+
+New:
+```python
+    step = fields.get("step", fields.get("phase", "unknown"))
+```
+
+Note: the fallback to `fields.get("phase")` provides backward compatibility with STATUS.md files written before this migration. `_read_status_fields` at line 35 already reads both "Phase" and "Step" fields.
+
+Line 70, old:
+```python
+        f"Unfinished audit at Phase {phase} (status: {status}). "
+```
+
+New:
+```python
+        f"Unfinished audit at Step {step} (status: {status}). "
+```
+
+- [ ] **Step 5: Run hook tests**
 
 ```bash
-git add skills/holtz/scripts/convergence_check.py hooks/impact_graph_gate.py
-git commit -m "fix: update phase references in convergence_check.py and impact_graph_gate.py"
+python -m pytest tests/test_hooks.py -v -k "convergence"
+```
+
+Expected: failures in tests that assert on "Phase N" output strings — these will be fixed in Task 10.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add skills/holtz/scripts/convergence_check.py hooks/impact_graph_gate.py hooks/convergence_gate.py hooks/convergence_primer.py
+git commit -m "feat: update scripts and hooks to step numbering"
 ```
 
 ---
@@ -752,9 +847,10 @@ For IN PROGRESS tests: use the step number that matches the test's intent.
 
 - [ ] **Step 3: Update assertion strings**
 
-Line 732: `"Phase: 4"` in assertion -> `"Step: 10"`
-Line 891: `"Phase 3"` in assertion -> `"Step 8"`
-Line 947: `"Phase 4"` in assertion -> `"Step 10"`
+These assertions check the *output* of the convergence hooks (updated in Task 9):
+Line 732: `"Phase: 4"` in assertion -> `"Step: 10"` (matches convergence_gate.py output)
+Line 891: `"Phase 3"` in assertion -> `"Step 8"` (matches convergence_primer.py output)
+Line 947: `"Phase 4"` in assertion -> `"Step 10"` (matches convergence_primer.py output)
 
 - [ ] **Step 4: Run tests**
 
@@ -896,7 +992,7 @@ Read: `README.md`
 Lines ~131-147. Rename section header and all phase descriptions:
 
 Old: `## The seven phases`
-New: `## The twenty-one steps`
+New: `## Steps 0-20`
 
 Replace each phase paragraph:
 - `**Phase 0: Recon.**` -> `**Steps 0-4: Recon.**`
@@ -909,7 +1005,7 @@ Replace each phase paragraph:
 
 - [ ] **Step 3: Update intro paragraph**
 
-Line ~37: `seven-phase audit` -> `twenty-one-step audit`
+Line ~37: `seven-phase audit` -> `twenty-one step audit`
 
 - [ ] **Step 4: Update Phase 4 triage image path**
 
@@ -1002,7 +1098,7 @@ Key replacements:
 - [ ] **Step 3: Update token-profiling-analysis-playbook.md**
 
 Key replacements:
-- Line 112: `## Step 6: Phase Breakdown` -> `## Step 6: Step Breakdown`
+- Line 112: `## Step 6: Phase Breakdown` -> `## Step 6: Audit Step Breakdown`
 - Lines 118-126: Phase cost table labels:
   - `recon` -> `step-0-4`
   - `phase-1` -> `step-6`
