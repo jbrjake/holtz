@@ -1,35 +1,38 @@
-# Step 0e: Git Churn Analysis
+# 0e: Churn Analysis
 
-**Date:** 2026-03-24
-**Scope:** Last 50 commits
+Git churn: top 20 most-changed files in the last 50 commits.
 
-## Top 20 Most-Changed Files
-| Rank | Changes | File |
-|------|---------|------|
-| 1 | 10 | README.md |
-| 2 | 6 | docs/runs/run-14.cast |
-| 3 | 5 | skills/holtz/SKILL.md |
-| 4 | 4 | docs/runs/extract-session-cast.py |
-| 5 | 4 | .claude-plugin/plugin.json |
-| 6 | 3 | docs/runs/run-14-walkthrough.md |
-| 7 | 3 | docs/runs/generate-run14-cast.py |
-| 8 | 3 | docs/holtz/SUMMARY.md |
-| 9 | 3 | docs/holtz/STATUS.md |
-| 10 | 3 | docs/holtz/recon/* (multiple recon files) |
-| 11 | 3 | docs/holtz/PUNCHLIST.md |
-| 12 | 3 | docs/holtz/impact-graph.json |
-| 13 | 3 | docs/holtz/audit/1-doc-claims.md |
-| 14 | 2 | tests/test_token_profiler_*.py (multiple) |
-| 15 | 2 | skills/holtz/scripts/* |
+| Changes | File |
+|---------|------|
+| 49 | (blank — format artifact) |
+| 15 | README.md |
+| 11 | .claude-plugin/plugin.json |
+| 10 | skills/holtz/SKILL.md |
+| 6 | skills/holtz/scripts/pattern_brief_compact.py |
+| 5 | docs/runs/run-14.cast |
+| 4 | tests/test_pattern_brief_compact.py |
+| 4 | docs/holtz/SUMMARY.md |
+| 4 | docs/holtz/STATUS.md |
+| 4 | docs/holtz/PUNCHLIST.md |
+| 4 | docs/holtz/impact-graph.json |
+| 3 | tests/test_hooks.py |
+| 3 | skills/holtz/scripts/convergence_check.py |
+| 3 | skills/holtz/references/lens-registry.md |
+| 3 | skills/holtz/references/justine-skill.md |
+| 3 | hooks/_common.py |
+| 3 | docs/runs/extract-session-cast.py |
+| 3 | docs/holtz/recon/0h-predictions.md |
+| 3 | docs/holtz/recon/0g-recon-summary.md |
+| 3 | docs/holtz/recon/0f-skipped-tests.md |
 
-## Analysis
-- README.md is highest churn (10 changes in 50 commits) — frequent doc updates, risk of doc/code drift
-- SKILL.md at 5 changes — active process evolution, risk of inconsistencies
-- plugin.json at 4 — version bumps from automated hook
-- Token profiler files are recent additions (2 changes each) — newly written code, less battle-tested
-- Holtz runtime data (PUNCHLIST, STATUS, recon) appear because of audit runs
+## High-Churn Source Files
+1. **README.md (15)** — documentation drift risk, frequently updated
+2. **SKILL.md (10)** — protocol changes, high audit sensitivity
+3. **pattern_brief_compact.py (6)** — PAT-001 recurrence target, multiple fixes
+4. **convergence_check.py (3)** — core convergence logic
+5. **hooks/_common.py (3)** — shared hook utilities
 
-## High-Risk Indicators
-- **SKILL.md** — high churn on process definition. Process gaps or contradictions likely.
-- **README.md** — aspirational claims that may outpace implementation.
-- **Token profiler** — new module (~8 files), added recently, moderate test coverage.
+## Notes
+- plugin.json churn is from auto-version-bumping (expected)
+- Audit artifacts (STATUS/PUNCHLIST/SUMMARY) churn is expected from prior runs
+- pattern_brief_compact.py has highest source churn — PAT-001 has hit it twice

@@ -63,7 +63,7 @@ Not just your code.
 
 ## The graph
 
-The graph is how Holtz thinks. Every function, class, module, and test in your codebase becomes a node. Every relationship becomes an edge. Seven edge types: `imports`, `calls`, `tests`, `assumes`, `diverges_from`, `shares_pattern`, `co_fixed`. Each node carries a risk score (0.0 to 1.0) that increases with every bug found nearby and decreases as clean audits accumulate. The graph persists across runs.
+The graph is how Holtz thinks. Every function, class, module, and test in your codebase becomes a node. Every relationship becomes an edge. Seven defined edge types: `imports`, `calls`, `tests`, `assumes`, `diverges_from` — the five in active use — plus `shares_pattern` and `co_fixed` for pattern analysis and blast radius tracking. Each node carries a risk score (0.0 to 1.0) that increases with every bug found nearby and decreases as clean audits accumulate. The graph persists across runs.
 
 The interesting edges are the semantic ones: `assumes` and `diverges_from`. These encode things that don't appear in any import statement or call stack. The implicit contracts between modules that nobody writes down and everybody violates.
 
@@ -99,9 +99,9 @@ Holtz gets better at auditing your specific project every time he runs.
 
 Every 3-5 fixes, he groups resolved items and looks for shared root causes. When two or more bugs share one, that's a pattern. He names it, writes a detection heuristic — a grep command or structural check — and searches the codebase for siblings. The bugs he found are a sample. The pattern tells him the population. This is usually unwelcome news.
 
-On the next run, that heuristic fires during recon before Holtz reads a line of code. PAT-001 in his own codebase — code-fence-unaware parsing — showed up four times across four runs. Same root cause, different disguise each time. By run 4 he was predicting it before finding it.
+On the next run, that heuristic fires during recon before Holtz reads a line of code. PAT-001 in his own codebase — code-fence-unaware parsing — showed up twelve times across six runs. Same root cause, different disguise each time. By run 4 he was predicting it before finding it.
 
-Predictive recon synthesizes the graph's risk scores, git churn, known patterns, mutation survival rates, and prior findings to rank where bugs are most likely hiding. He writes predictions to disk with confidence levels and checks them against actual findings at the end of every run. On his own codebase across 10 runs with prediction tracking, HIGH-confidence predictions confirm 72% of the time (range 33-100%). MEDIUM at 38% (range 0-100%). LOW at 0%. HIGH performs best when converging on a known pattern family — when Holtz has seen the bug class before, he predicts where it will appear next. MEDIUM predictions are directionally correct more often than the numbers suggest: they point to the right code but overestimate severity. The model calibrates to your specific project's failure modes. Not generic advice. A vulnerability profile that gets sharper every time he comes back.
+Predictive recon synthesizes the graph's risk scores, git churn, known patterns, mutation survival rates, and prior findings to rank where bugs are most likely hiding. He writes predictions to disk with confidence levels and checks them against actual findings at the end of every run. On his own codebase across 11 runs with prediction tracking, HIGH-confidence predictions confirm 65% of the time (range 0-100%). MEDIUM at 38% (range 0-100%). LOW at 0%. HIGH performs best when converging on a known pattern family — when Holtz has seen the bug class before, he predicts where it will appear next. MEDIUM predictions are directionally correct more often than the numbers suggest: they point to the right code but overestimate severity. The model calibrates to your specific project's failure modes. Not generic advice. A vulnerability profile that gets sharper every time he comes back.
 
 The living punchlist is the institutional memory. It records which bug classes your project is susceptible to, which code areas repeatedly produce bugs, what structural weaknesses exist, and what detection heuristics should run on every new change. Recommendations that go unaddressed in two or more runs stop being optional. They become punchlist items. Holtz tracks what he told you to fix. If you didn't fix it, it stops being a suggestion.
 
@@ -157,7 +157,7 @@ Default behavior between runs is resume, not restart:
 
 ## What this looks like in practice
 
-Holtz has been auditing his own codebase since it was written. Fifteen runs. Here's what happened.
+Holtz has been auditing his own codebase since it was written. Sixteen runs. Here's what happened.
 
 Here is run 14 — a full adversarial self-play audit. Holtz and Justine auditing in parallel, merging findings, then Holtz running the TDD fix loop through convergence. Every tool call, every finding, every fix. Token counts after each step.
 
@@ -183,11 +183,13 @@ For the complete trace with reasoning chains, code diffs, and prediction accurac
 
 **Run 14** was the first full adversarial self-play since run 12. The pattern library predicted both bugs before any code was read: `parse_brief()` used `\s*` instead of `[ \t]*` in its field extraction regex, causing empty fields to silently consume the next field's content. And `parse_brief()` applied its header regex without masking code fences, so a `## PAT-NNN:` header inside a code example matched as a real entry. PAT-001 again — the same root cause family, fifth manifestation across fourteen runs. Justine found the convention violation and called it "functionally harmless." She tested CRLF handling and cross-entry bleeding. The wrong edge cases. Holtz tested empty fields and code fences. Found the actual bugs. That's what adversarial self-play is for.
 
-**Run 15** audited the convergence enforcement itself. The convergence checker had a silent data integrity bug — its CLI accepted nonexistent punchlist paths without error, returning empty results that looked like clean convergence. The SKILL.md lacked a hard gate requiring `convergence_check.py` to return exit 0 before writing SUMMARY.md — advisory language said "verify convergence" but Holtz skipped it anyway. And PAT-001 came back a sixth time: the hooks' fence masking function tracked only the fence character type, not the count, so a ```` fence was prematurely closed by ```. Nine items found and fixed, including four more PAT-001 instances. The convergence loop that the skill promised for fifteen runs finally has enforcement with teeth.
+**Run 15** audited the convergence enforcement itself. The convergence checker had a silent data integrity bug — its CLI accepted nonexistent punchlist paths without error, returning empty results that looked like clean convergence. The SKILL.md lacked a hard gate requiring `convergence_check.py` to return exit 0 before writing SUMMARY.md — advisory language said "verify convergence" but Holtz skipped it anyway. And PAT-001 came back for its seventh through tenth manifestations: the hooks' fence masking function tracked only the fence character type, not the count, so a ```` fence was prematurely closed by ```. Nine items found and fixed, including four more PAT-001 instances. The convergence loop that the skill promised for fifteen runs finally has enforcement with teeth.
 
-After 15 runs: 619 tests across 13,800 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+**Run 16** found the run count stale again (same class as every run since 14) and the prediction accuracy overstated. Also PAT-001 for its eleventh and twelfth manifestations: `parse_brief()` applied regex without masking code fences (offset-divergence variant), and the hooks' fence masking tracked fence character but not fence count (grammar variant). Four items, all resolved.
 
-The full dataset — prediction accuracy calibration, PAT-001 recurrence timeline, adversarial merge blind-spot analysis, convergence iteration counts, and test growth curves across all 15 runs — is published in [docs/research/convergence-data.md](docs/research/convergence-data.md).
+After 16 runs: 619 tests across 13,800 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+
+The full dataset — prediction accuracy calibration, PAT-001 recurrence timeline, adversarial merge blind-spot analysis, convergence iteration counts, and test growth curves across all 16 runs — is published in [docs/research/convergence-data.md](docs/research/convergence-data.md).
 
 ## The hooks
 

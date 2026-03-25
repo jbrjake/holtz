@@ -2,8 +2,8 @@
 
 **Project:** holtz
 **Established:** 2026-03-24
-**Last Updated:** 2026-03-24
-**Audits Completed:** 1
+**Last Updated:** 2026-03-25
+**Audits Completed:** 2
 
 ## Active Vulnerability Model
 
@@ -60,6 +60,12 @@
 - LOW-confidence predictions from git churn (historical README line counts) are unreliable — README narrative accurately describes historical state, not current state.
 
 ## History
+
+### 2026-03-25: Run 16 completed
+- Added: 2 more PAT-001 instances (pattern_brief_compact.py offset-divergence, hooks fence grammar)
+- Removed: none
+- Calibration: Run 16 prediction accuracy 33% (2 of 6 confirmed). HIGH: 50% (1/2). MEDIUM: 33% (1/3). LOW: 0% (0/1). Cumulative HIGH across 2 runs: 40% (2/5). README doc drift predictions remain the most reliable signal.
+- Notes: Run 16 was a dev-mode self-audit. 4 items found and resolved (1 HIGH, 2 MEDIUM, 1 LOW). All were either doc/drift or PAT-001 family. Convergence achieved in 3 iterations.
 
 ### 2026-03-24: Run 15 completed
 - Added: PAT-001 (4 instances), 1 architectural risk (pytest-cov coverage gap), 1 proactive check (code-fence regex detection)

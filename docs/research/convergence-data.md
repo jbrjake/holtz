@@ -1,6 +1,6 @@
-# Convergence Data: 15 Runs of Adversarial Self-Audit
+# Convergence Data: 16 Runs of Adversarial Self-Audit
 
-Raw data from Holtz auditing his own codebase across 15 runs. This is the convergence behavior of an LLM-driven TDD audit loop operating on real code with real bugs, not synthetic benchmarks.
+Raw data from Holtz auditing his own codebase across 16 runs. This is the convergence behavior of an LLM-driven TDD audit loop operating on real code with real bugs, not synthetic benchmarks.
 
 ## 1. Findings Progression
 
@@ -21,13 +21,14 @@ Raw data from Holtz auditing his own codebase across 15 runs. This is the conver
 | 13 | 2026-03-23 | 4 | 0 | 2 | 2 | 320 | 321 | 1 | Targeted delta audit. |
 | 14 | 2026-03-24 | 8 | 0 | 6 | 2 | 321 | 324 | 3 | Full adversarial self-play. PAT-001 5th manifestation. |
 | 15 | 2026-03-24 | 9 | 4 | 4 | 1 | 595 | 613 | 18 | Convergence enforcement audit. 4 HIGH from process gaps. |
+| 16 | 2026-03-24 | 4 | 1 | 2 | 1 | 613 | 617 | 4 | Dev mode self-audit. PAT-001 7th-8th manifestation. Doc drift. |
 
 **Observations:**
 - Findings never reach zero. Each fix changes the terrain.
 - HIGH severity disappeared after run 1, returned in run 8 (new code layer), returned in run 15 (process layer audit).
 - Severity distribution shifted from HIGH/MEDIUM to MEDIUM/LOW to predominantly LOW across runs 1-7.
 - New code layers (hooks in run 8, token profiler pre-run 15) cause findings spikes.
-- Test count: 0 -> 619 across 15 runs. Every finding produces at least one test.
+- Test count: 0 -> 619 across 16 runs. Every finding produces at least one test.
 
 ## 2. PAT-001: Code-Fence-Unaware Parsing
 
@@ -45,11 +46,14 @@ The signature recurring pattern. Same root cause, different disguise each time.
 | 8th | 15 | `convergence_primer.py` | Same pattern as convergence_gate | Recon prediction |
 | 9th | 15 | `hooks/_common.py` | `mask_fenced_blocks` tracks fence character but not fence count; ```` closed by ``` | Phase 4 fix uncovered it |
 | 10th | 15 | Hook test fixtures | No adversarial code-fence fixtures in convergence hook tests | Sibling search |
+| 11th | 16 | `pattern_brief_compact.py` | `parse_brief` uses masked offsets to index original content — offset divergence after code fences | Recon prediction (confirmed) |
+| 12th | 16 | `hooks/_common.py` | `mask_fenced_blocks` ignores fence character count — 4-backtick fence closed by 3 backticks | Phase 3 adversarial audit |
 
 **Pattern evolution:**
 - Runs 1-4: Same module, same bug class, increasingly subtle manifestation. Each fix narrowed the gap but didn't close it.
 - Run 14: Jumped to a new module (`pattern_brief_compact.py`). The pattern library predicted it before any code was read.
 - Run 15: Jumped to the enforcement layer (hooks). The hooks that were supposed to prevent audit gaps had the same parsing gap they were enforcing against.
+- Run 16: Returned to `pattern_brief_compact.py` (offset-divergence variant, same class as run 13) and `hooks/_common.py` (fence grammar variant, same class as run 15 9th). Both were the same root cause family in different layers.
 
 The pattern never presented the same way twice. It was always technically a different bug. But the root cause — parsing structured markdown without accounting for code fences — was identical every time. By run 14, the pattern library was predicting it before Holtz read a line of code.
 

@@ -1,60 +1,67 @@
-# Step 0h: Predictive Recon
+# 0h: Predictive Recon
 
-**Date:** 2026-03-24
-**Run:** 16
+Run 17 predictions — ranked by expected yield.
 
-## Predictions
+## Input Sources
+1. Pattern Brief: no patterns-brief.md exists (no project-specific patterns to match)
+2. Impact Graph: 14 `assumes` edges, 2 `diverges_from` edges — all verified in Run 16
+3. Git churn: README.md (15), SKILL.md (10), pattern_brief_compact.py (6)
+4. Prior run findings: Run 16 found README doc drift (BH-001, BH-002) and PAT-001 instances (BH-003, BH-004)
+5. Recon observations: stale run count, overstated prediction accuracy, generate-changelog.py lint
+6. Living punchlist: PAT-001 proactive check clean, no hotspots above 0.5
+
+---
 
 ### Prediction 1
-**Target:** README.md — "What's inside" line and semantic claims throughout
-**Predicted Issue:** doc/drift — README counts stale after Run 15 added tests/fixed code, or semantic claims overstated
+**Target:** README.md lines 160, 186-190
+**Predicted Issue:** README says "Fifteen runs" but 16 have completed. "After 15 runs: 619 tests" is also stale (Run 16 added tests). Same pattern as BH-002 (Run 16) which fixed "Fourteen" to "Fifteen."
 **Confidence:** HIGH
-**Basis:** README has highest churn (10/50), Run 15 added 18 tests (595→613). Integration test checks counts but not semantic accuracy of descriptive claims. Prior runs found README drift.
-**Lens:** public-contract
-**Graph Support:** diverges_from edges exist between README and implementation nodes
-**Outcome:** CONFIRMED — BH-001 (prediction accuracy overstated), BH-002 (run count stale)
-
-### Prediction 2
-**Target:** skills/holtz/SKILL.md — `${CLAUDE_PLUGIN_ROOT}` references in dev mode
-**Predicted Issue:** doc/drift — SKILL.md contains `${CLAUDE_PLUGIN_ROOT}` path references that don't resolve in dev mode (running from local clone). Process instructions may be incorrect for the current execution context.
-**Confidence:** HIGH
-**Basis:** SKILL.md has 5 changes in 50 commits. Run 15 found process gaps (BH-008, BH-009). The skill is designed for installed plugin context but being tested in dev mode. `${CLAUDE_PLUGIN_ROOT}` appears in CLI commands throughout.
-**Lens:** contract
-**Graph Support:** assumes edges between SKILL.md and script CLI interfaces
-**Outcome:** UNCONFIRMED — ${CLAUDE_PLUGIN_ROOT} is a runtime variable resolved by Claude Code; SKILL.md references are correct by design
-
-### Prediction 3
-**Target:** scripts/token_profiler/ — new module with moderate coverage
-**Predicted Issue:** test/shallow or bug/logic — Token profiler is newest code, less battle-tested. Coverage gaps in CLI edge cases.
-**Confidence:** MEDIUM
-**Basis:** Token profiler added in last 15 commits. 8 test files but new code often has shallow tests. Not previously audited by Holtz. Living punchlist has no entries for this module.
-**Lens:** component
-**Graph Support:** No prior risk scores — new nodes with no history
-**Outcome:** UNCONFIRMED — Phase 2 found minor anti-patterns (time bomb, permissive validator) but no actual bugs; Phase 3 found no bugs in token profiler
-
-### Prediction 4
-**Target:** hooks/convergence_gate.py, hooks/convergence_primer.py
-**Predicted Issue:** design/inconsistency — Hooks may have edge cases around STATUS.md format parsing after Run 15's process changes
-**Confidence:** MEDIUM
-**Basis:** Run 15 found 4 PAT-001 instances in hooks (BH-003/004/005/006, all fixed). Convergence hooks parse STATUS.md which changed format during Run 15. Hooks now use mask_fenced_blocks but edge cases may remain.
-**Lens:** integration
-**Graph Support:** assumes edges between hooks and STATUS.md format; risk_score lowered by Run 15 fixes
-**Outcome:** CONFIRMED — BH-004 (mask_fenced_blocks ignores fence count, weaker than markdown_utils.py implementation)
-
-### Prediction 5
-**Target:** skills/holtz/scripts/impact_graph.py — CLI entry points
-**Predicted Issue:** test/missing or bug/logic — 65% coverage, lowest among core scripts. CLI subcommands (blast_radius, update_risk, prune_missing, drift_check) may have edge cases not covered
-**Confidence:** MEDIUM
-**Basis:** Coverage data shows 97 uncovered statements. Lines 320-431 (blast_radius, CLI main) uncovered. Prior runs haven't found bugs here but coverage gap is real.
-**Lens:** component
-**Graph Support:** impact_graph node has moderate risk score from coverage-based assessment
-**Outcome:** UNCONFIRMED — Phase 3 found O(D*N*E) blast_radius performance concern but no actual bugs in CLI paths
-
-### Prediction 6
-**Target:** README.md — "nine analytical lenses" claim
-**Predicted Issue:** doc/drift — README says "nine analytical lenses" but lens registry may have a different count
-**Confidence:** LOW
-**Basis:** Lens registry has been expanded over time. README narrative may not have been updated to reflect current count. The integration test checks component counts but not the lens count.
+**Basis:** Direct observation during recon (lines 160, 188, 190). Same issue recurred every run since Run 15.
 **Lens:** public-contract
 **Graph Support:** —
-**Outcome:** UNCONFIRMED — lens registry has exactly 9 lenses, README is accurate
+**Outcome:** CONFIRMED — BH-001
+
+### Prediction 2
+**Target:** README.md prediction accuracy claims (line ~104)
+**Predicted Issue:** README claims HIGH predictions confirm "72% of the time" across "10 runs." Research data (docs/research/convergence-data.md) shows 65% across 11 runs. Both the percentage and run count are wrong.
+**Confidence:** HIGH
+**Basis:** Direct comparison between README text and research data aggregate table. Run 15 diluted the accuracy (1/3 confirmed) and Run 16 held at 50% (1/2). The 72% figure was accurate through Run 14 but not updated since.
+**Lens:** public-contract
+**Graph Support:** diverges_from edge between README and convergence-data.md (if one existed)
+**Outcome:** CONFIRMED — BH-002
+
+### Prediction 3
+**Target:** scripts/generate-changelog.py
+**Predicted Issue:** 3 ruff lint errors (F541 empty f-string, SIM108 ternary, ANN201 missing return type). Not in core source but potentially signals less review rigor on this newer file.
+**Confidence:** MEDIUM
+**Basis:** ruff output during recon step 0d. File was added recently (commit 0dc6533).
+**Lens:** component
+**Graph Support:** —
+**Outcome:** UNCONFIRMED — lint errors exist but no code bugs found. Script logic is correct.
+
+### Prediction 4
+**Target:** SKILL.md `${CLAUDE_PLUGIN_ROOT}` references
+**Predicted Issue:** In dev mode, `${CLAUDE_PLUGIN_ROOT}` paths in SKILL.md reference the installed plugin location, not the local repo. If any script path is wrong or a script was renamed/moved, the SKILL.md instructions would break in production.
+**Confidence:** MEDIUM
+**Basis:** SKILL.md has 10+ references to `${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/`. High churn (10 changes). Scripts have been renamed/added over time.
+**Lens:** contract
+**Graph Support:** —
+**Outcome:** UNCONFIRMED — all paths verified, all referenced scripts and reference docs exist**
+
+### Prediction 5
+**Target:** docs/research/convergence-data.md
+**Predicted Issue:** Research data may not include Run 16 results, or may have stale aggregate totals if Run 16 data was appended without updating the aggregates.
+**Confidence:** MEDIUM
+**Basis:** Research file was updated (Run 16 data exists in the table) but aggregate tables may not include Run 16.
+**Lens:** public-contract
+**Graph Support:** —
+**Outcome:** CONFIRMED — BH-003 (title, findings table, observations stale; prediction table was updated)
+
+### Prediction 6
+**Target:** Living punchlist (docs/holtz/LIVING-PUNCHLIST.md)
+**Predicted Issue:** Says "Audits Completed: 1" but Run 16 completed. Prediction accuracy table may not include Run 16 data. History section doesn't have a Run 16 entry.
+**Confidence:** LOW
+**Basis:** Observation during recon — living punchlist wasn't updated at Run 16 convergence.
+**Lens:** semantic-fidelity
+**Graph Support:** —
+**Outcome:** CONFIRMED — "Audits Completed: 1" should be 2, no Run 16 entry in History. Will be updated at Run 17 convergence.**

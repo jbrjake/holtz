@@ -1,63 +1,60 @@
-# Step 0h: Justine Predictions
+# 0h: Justine Predictive Recon
 
-**Date:** 2026-03-24
-**Run:** 16
-**Calibration:** Aggressive (HIGH = one strong signal)
+Run 17 predictions -- Justine's own calibration and lens ordering.
 
-## Predictions
+## Input Sources
+1. Holtz recon (0a-0f): baseline, churn, test infra, lint
+2. Direct code reading: README, research data, source files, test files
+3. Architecture baseline: no drift
+4. Living punchlist: PAT-001 proactive check, stale metadata
+5. Impact graph (Holtz): 14 assumes edges, 2 diverges_from edges
 
-### Prediction 1
-**Target:** README.md -- semantic claims about features, counts, capabilities
-**Predicted Issue:** doc/drift -- README makes specific claims (test count, line count, component counts, feature descriptions) that may not match current implementation. Prior test only checks test count.
+---
+
+### Prediction J1
+**Target:** README.md line 104
+**Predicted Issue:** README claims HIGH predictions confirm "72% of the time" across "10 runs." Research data shows 65% across 11 runs. Both values are wrong.
 **Confidence:** HIGH
-**Basis:** Appeared in ALL 4 prior Justine runs. test_readme_metrics_match_actual extracts 9 fields but only fully validates test count. One strong signal: 4/4 recurring recommendation. The test that checks format but not value is a rubber stamp.
-**Lens:** integration + contract
-**Outcome:** UNCONFIRMED -- test_readme_metrics_match_actual now validates all 9 component counts plus line count (within 100 tolerance). The test is not a rubber stamp for the "What's inside" line. Other README semantic claims (lens count, edge types, iterations) verified manually -- all accurate.
+**Basis:** Direct comparison of README text vs convergence-data.md aggregate table. This is an observable factual discrepancy, not an inference.
+**Lens:** public-contract
+**Outcome:** CONFIRMED -- BJ-001
 
-### Prediction 2
-**Target:** Token profiler module (scripts/token_profiler/) -- test quality
-**Predicted Issue:** test/shallow or test/bogus -- New module (8 source files, 8 test files) never audited by Justine. Tests may check format/structure without checking computed values. Rubber Stamp risk at +1 severity per Justine override.
+### Prediction J2
+**Target:** README.md lines 160, 188, 190
+**Predicted Issue:** README says "Fifteen runs" (line 160), "After 15 runs" (line 188), "all 15 runs" (line 190). Run 16 has completed (evidenced by convergence-data.md Run 16 row). All three are stale.
 **Confidence:** HIGH
-**Basis:** New code that has not been through a Justine audit. One strong signal: zero prior Justine coverage of this module. 8 test files = large surface for anti-patterns.
-**Lens:** component + contract
-**Outcome:** UNCONFIRMED -- Token profiler tests are excellent. They check computed values (delta * remaining = session_cost, pricing at $15/MTok, context_window = input + cache_creation + cache_read). No rubber stamps found. No Tautology Tests, Green Bar Addicts, or Permissive Validators. The test suite earns a clean bill on anti-pattern scan.
+**Basis:** convergence-data.md has 16 data rows (runs 1-15 listed, Run 16 in prediction accuracy table). Same class as Run 16 BH-002.
+**Lens:** public-contract
+**Outcome:** CONFIRMED -- BJ-002
 
-### Prediction 3
-**Target:** hooks/ -- enforcement scope after Run 15 fixes
-**Predicted Issue:** bug/logic or test/missing -- Run 15 claimed to fix hook enforcement scope (BJ-001, BJ-002 from prior runs). The fix may be incomplete or may have introduced new edge cases.
+### Prediction J3
+**Target:** README.md line 66
+**Predicted Issue:** README claims "Seven edge types: imports, calls, tests, assumes, diverges_from, shares_pattern, co_fixed." But co_fixed appears nowhere in impact_graph.py source code (0 grep hits). shares_pattern is never instantiated in the actual graph (0 edges of this type). The claim is aspirational, not descriptive.
 **Confidence:** HIGH
-**Basis:** Hook enforcement gaps appeared in 2/4 prior Justine runs. Fixes were applied in a602d76. One strong signal: fixing boundary enforcement is where new boundary bugs appear.
-**Lens:** integration + security
-**Outcome:** PARTIALLY CONFIRMED -- Hook enforcement scope was widened in Run 15 (tests verify PUNCHLIST.md, PUNCHLIST-MERGED.md, justine/ paths for impact_graph_gate; status deletion detection for staleness_gate). However, BJ-002 found a new bug in mask_fenced_blocks that affects ALL hooks using it. The boundary enforcement fix introduced a new boundary bug -- exactly as predicted.
+**Basis:** grep -c "co_fixed" impact_graph.py = 0. Graph edge type analysis shows only 5 types in use.
+**Lens:** public-contract, contract
+**Outcome:** CONFIRMED -- BJ-003
 
-### Prediction 4
-**Target:** convergence_check.py + validate_punchlist.py -- header regex alignment
-**Predicted Issue:** bug/logic -- Both modules split on `### B[HJ]-\d+:` but the regex details may diverge subtly (anchoring, whitespace handling, multiline flags).
+### Prediction J4
+**Target:** docs/holtz/LIVING-PUNCHLIST.md line 6
+**Predicted Issue:** "Audits Completed: 1" is stale. Run 16 completed but living punchlist was not updated. History section has no Run 16 entry.
+**Confidence:** HIGH
+**Basis:** Direct observation. Living punchlist last updated 2026-03-24 (Run 15). Run 16 completed after that.
+**Lens:** semantic-fidelity
+**Outcome:** CONFIRMED -- BJ-004
+
+### Prediction J5
+**Target:** scripts/generate-changelog.py
+**Predicted Issue:** 3 ruff lint errors (F541, SIM108, ANN201). No test file exists for this script. Functions like update_changelog() do string manipulation on markdown and have multiple failure modes.
 **Confidence:** MEDIUM
-**Basis:** This seam has been identified in 2 prior runs as an `assumes` edge. Integration test verifies count agreement. But count agreement does not verify that both parsers extract the same items in the same order -- it is a rubber stamp of the seam.
-**Lens:** integration + data-flow
-**Outcome:** CONFIRMED via BJ-001 -- parse_brief has the same offset divergence bug. The seam between masking and extraction is exactly where the bug lives. Not in convergence_check/validate_punchlist (which was the predicted target) but in pattern_brief_compact, which uses the same masked-offset-to-original-content pattern. Same class, different location.
+**Basis:** ruff output + grep for test files. No test_generate_changelog.py exists.
+**Lens:** component, contract
+**Outcome:** CONFIRMED -- BJ-005
 
-### Prediction 5
-**Target:** validate_punchlist.py -- filter/render with edge-case punchlists
-**Predicted Issue:** bug/logic -- filter_items + render_items are newer code (added for filtered reads). Edge cases: empty punchlist, single item, all-resolved, mixed BH/BJ namespaces, items with code fences containing fake headers.
+### Prediction J6
+**Target:** convergence-data.md aggregate tables
+**Predicted Issue:** Research data may have stale aggregate totals that don't include Run 16. The per-run table goes through Run 15 but the prediction accuracy section includes Run 16 data in the Holtz predictions table. Aggregate totals may need recalculation.
 **Confidence:** MEDIUM
-**Basis:** render_items was added to support convergence loop filtered reads. It maps between masked and original content using line-number offsets. Offset mapping is a known fragile pattern.
-**Lens:** data-flow + error-propagation
-**Outcome:** UNCONFIRMED -- filter_items and render_items in validate_punchlist.py use line-number mapping (not character offsets) for masked-to-original conversion. This was fixed in Run 13. The approach is correct and tested.
-
-### Prediction 6
-**Target:** SKILL.md and justine-skill.md -- `${CLAUDE_PLUGIN_ROOT}` references
-**Predicted Issue:** doc/drift -- Process docs contain `${CLAUDE_PLUGIN_ROOT}` path references in CLI commands. In dev mode, these don't resolve. Some references may point to files that don't exist or have been renamed.
-**Confidence:** MEDIUM
-**Basis:** SKILL.md has 5 changes in 50 commits. justine-skill.md references multiple script paths. File renames or reorganizations may not have updated all references.
-**Lens:** contract
-**Outcome:** UNCONFIRMED -- SKILL.md and justine-skill.md use ${CLAUDE_PLUGIN_ROOT} throughout, which is expected for installed plugin context. In dev mode, callers use local paths per CLAUDE.md instructions. Not a bug, design intent.
-
-### Prediction 7
-**Target:** impact_graph.py -- blast_radius and drift_check edge cases
-**Predicted Issue:** bug/logic -- blast_radius BFS with depth=0 returns empty (tested). But: what about nodes with no edges? Nodes that don't exist? Self-edges? drift_check with entities that have special regex characters in names?
-**Confidence:** LOW
-**Basis:** 65% coverage. Lines 320-431 (CLI) uncovered. Core logic tested but edge cases may remain. Prior run said "CLI entrypoints and some subcommands uncovered."
-**Lens:** component + error-propagation
-**Outcome:** UNCONFIRMED -- blast_radius correctly handles: nodes with no edges (returns []), nodes that don't exist (returns []), self-edges (includes origin), depth=0 (returns []). drift_check uses re.escape on entity names. Coverage is 65% but the uncovered code is CLI glue, not algorithm.
+**Basis:** Run 16 appears in prediction accuracy table but findings progression table only goes through Run 15.
+**Lens:** data-flow, public-contract
+**Outcome:** CONFIRMED -- BJ-006**
