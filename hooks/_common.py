@@ -104,21 +104,29 @@ def mask_fenced_blocks(text: str) -> str:
     Preserves line count so regex line numbers stay valid.
     Mirrors the convention from markdown_utils.py but kept here
     to avoid cross-layer imports (hooks and scripts are independent).
+
+    Per CommonMark spec, a closing fence must use the same character type
+    (backtick or tilde) and have at least as many characters as the opener
+    (BH-004 run 16).
     """
     lines = text.split("\n")
     result = []
-    fence_marker = ""
+    fence_char = ""
+    fence_count = 0
     in_fence = False
     for line in lines:
         m = _FENCE_RE.match(line)
         if m:
+            marker = m.group(1)
             if not in_fence:
                 in_fence = True
-                fence_marker = m.group(1)[0]
+                fence_char = marker[0]
+                fence_count = len(marker)
                 result.append(line)
-            elif line.strip().startswith(fence_marker):
+            elif marker[0] == fence_char and len(marker) >= fence_count:
                 in_fence = False
-                fence_marker = ""
+                fence_char = ""
+                fence_count = 0
                 result.append(line)
             else:
                 result.append("")

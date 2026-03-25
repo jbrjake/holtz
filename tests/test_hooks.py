@@ -213,6 +213,64 @@ class TestModernOutputFormat:
         assert stderr == ""
 
 
+# --- _common.py mask_fenced_blocks ---
+
+
+class TestMaskFencedBlocks:
+    """Tests for _common.mask_fenced_blocks fence length enforcement.
+
+    BH-004 run 16: mask_fenced_blocks must track fence character count so
+    a 4-backtick fence is NOT closed by a 3-backtick line (CommonMark spec).
+    """
+
+    def _mask(self, text):
+        code_str = (
+            f"import sys; sys.path.insert(0, {HOOKS_DIR!r}); "
+            f"from _common import mask_fenced_blocks; "
+            f"print(mask_fenced_blocks({text!r}))"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code_str],
+            capture_output=True, text=True, timeout=10,
+        )
+        assert result.returncode == 0, result.stderr
+        return result.stdout.rstrip("\n")
+
+    def test_4_backtick_fence_not_closed_by_3(self):
+        """A 4-backtick opening fence must NOT be closed by 3 backticks."""
+        text = "Before\n````python\ncode inside\n```\nstill inside\n````\nAfter"
+        masked = self._mask(text)
+        lines = masked.split("\n")
+        # "still inside" (line index 4) must be masked (empty)
+        assert lines[4] == "", (
+            f"Line 'still inside' should be masked but got: {lines[4]!r}"
+        )
+        # "After" (line index 6) must NOT be masked
+        assert lines[6] == "After", (
+            f"Line 'After' should not be masked but got: {lines[6]!r}"
+        )
+
+    def test_longer_closer_valid(self):
+        """A 5-backtick line CAN close a 3-backtick fence (CommonMark)."""
+        text = "Before\n```\ncode\n`````\nAfter"
+        masked = self._mask(text)
+        lines = masked.split("\n")
+        # "code" (line index 2) should be masked
+        assert lines[2] == "", f"'code' should be masked but got: {lines[2]!r}"
+        # "After" (line index 4) should NOT be masked
+        assert lines[4] == "After", f"'After' should not be masked but got: {lines[4]!r}"
+
+    def test_tilde_fence_not_closed_by_backtick(self):
+        """A tilde fence cannot be closed by backticks."""
+        text = "Before\n~~~\ncode\n```\nstill fenced\n~~~\nAfter"
+        masked = self._mask(text)
+        lines = masked.split("\n")
+        assert lines[4] == "", (
+            f"'still fenced' should be masked but got: {lines[4]!r}"
+        )
+        assert lines[6] == "After"
+
+
 # --- _common.py read_event ---
 
 
