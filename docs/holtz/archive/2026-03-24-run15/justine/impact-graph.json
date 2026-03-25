@@ -1,0 +1,106 @@
+{
+  "nodes": {
+    "convergence_gate": {
+      "id": "convergence_gate",
+      "type": "module",
+      "file": "hooks/convergence_gate.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "convergence_primer": {
+      "id": "convergence_primer",
+      "type": "module",
+      "file": "hooks/convergence_primer.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_commit_msg_hook": {
+      "id": "test_commit_msg_hook",
+      "type": "test",
+      "file": "tests/test_commit_msg_hook.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "post_commit_hook": {
+      "id": "post_commit_hook",
+      "type": "module",
+      "file": "git-hooks/post-commit",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "README": {
+      "id": "README",
+      "type": "doc",
+      "file": "README.md",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "_common": {
+      "id": "_common",
+      "type": "module",
+      "file": "hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks_json": {
+      "id": "hooks_json",
+      "type": "config",
+      "file": "hooks/hooks.json",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    }
+  },
+  "edges": [
+    {
+      "source": "convergence_gate",
+      "target": "_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_primer",
+      "target": "_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_commit_msg_hook",
+      "target": "post_commit_hook",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_gate",
+      "target": "convergence_primer",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Both parse STATUS.md with bare regex - no fence masking"
+      }
+    }
+  ]
+}
