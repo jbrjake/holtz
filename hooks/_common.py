@@ -95,7 +95,13 @@ def exit_stop_allow() -> None:
     sys.exit(0)
 
 
-_FENCE_RE = re.compile(r"^(`{3,}|~{3,}).*$", re.MULTILINE)
+# CommonMark allows code fences to be indented 0-3 spaces (BH-003 run 18).
+# Backtick fences must not have backticks in the info string (BH-004 run 18).
+# Tilde fences may have tildes in the info string per CommonMark spec.
+_BACKTICK_OPEN_RE = re.compile(r"^ {0,3}(`{3,})[^`]*$")
+_TILDE_OPEN_RE = re.compile(r"^ {0,3}(~{3,}).*$")
+_BACKTICK_CLOSE_TMPL = r"^ {0,3}`{%d,}[ \t]*$"
+_TILDE_CLOSE_TMPL = r"^ {0,3}~{%d,}[ \t]*$"
 
 
 def mask_fenced_blocks(text: str) -> str:
@@ -105,35 +111,43 @@ def mask_fenced_blocks(text: str) -> str:
     Mirrors the convention from markdown_utils.py but kept here
     to avoid cross-layer imports (hooks and scripts are independent).
 
-    Per CommonMark spec, a closing fence must use the same character type
-    (backtick or tilde) and have at least as many characters as the opener
-    (BH-004 run 16).
+    Per CommonMark spec:
+    - Opening fences may be indented 0-3 spaces (BH-003 run 18)
+    - Closing fences may be indented 0-3 spaces independently
+    - Backtick info strings must not contain backtick characters (BH-004 run 18)
+    - Closing fence must use same character type and at least as many chars (BH-004 run 16)
     """
     lines = text.split("\n")
     result = []
-    fence_char = ""
     fence_count = 0
+    close_re: re.Pattern[str] | None = None
     in_fence = False
     for line in lines:
-        m = _FENCE_RE.match(line)
-        if m:
-            marker = m.group(1)
-            if not in_fence:
+        if not in_fence:
+            m = _BACKTICK_OPEN_RE.match(line)
+            if m:
                 in_fence = True
-                fence_char = marker[0]
-                fence_count = len(marker)
+                fence_count = len(m.group(1))
+                close_re = re.compile(_BACKTICK_CLOSE_TMPL % fence_count)
                 result.append(line)
-            elif marker[0] == fence_char and len(marker) >= fence_count:
+                continue
+            m = _TILDE_OPEN_RE.match(line)
+            if m:
+                in_fence = True
+                fence_count = len(m.group(1))
+                close_re = re.compile(_TILDE_CLOSE_TMPL % fence_count)
+                result.append(line)
+                continue
+            result.append(line)
+        else:
+            assert close_re is not None
+            if close_re.match(line):
                 in_fence = False
-                fence_char = ""
+                close_re = None
                 fence_count = 0
                 result.append(line)
             else:
                 result.append("")
-        elif in_fence:
-            result.append("")
-        else:
-            result.append(line)
     return "\n".join(result)
 
 
