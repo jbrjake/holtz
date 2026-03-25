@@ -1,4 +1,4 @@
-"""Holtz profiler plugin — session-type-specific phase detection and patterns.
+"""Holtz profiler plugin — session-type-specific step detection and patterns.
 
 Loaded at runtime by the token profiler CLI via::
 
@@ -18,17 +18,17 @@ if TYPE_CHECKING:
     from token_profiler.models import RawTurn
 
 # ---------------------------------------------------------------------------
-# Phase detection patterns (order matters: later = higher priority)
+# Step detection patterns (order matters: later = higher priority)
 # ---------------------------------------------------------------------------
 
-_PHASE_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("recon", re.compile(r"Phase[ \t]*0|recon|phase-0-recon", re.IGNORECASE)),
-    ("phase-1", re.compile(r"Phase[ \t]*1|Doc.*Audit|doc.*claim", re.IGNORECASE)),
-    ("phase-2", re.compile(r"Phase[ \t]*2|Test.*Quality|Test.*Audit", re.IGNORECASE)),
-    ("phase-3", re.compile(r"Phase[ \t]*3|Adversarial.*Code|Adversarial.*Audit", re.IGNORECASE)),
-    ("merge", re.compile(r"Merge|Justine.*findings|classify.*findings", re.IGNORECASE)),
-    ("fix-loop", re.compile(r"Phase[ \t]*4|TDD|fix[ \t]*loop|failing[ \t]*test", re.IGNORECASE)),
-    ("convergence", re.compile(r"converg|SUMMARY\.md|final[ \t]*commit", re.IGNORECASE)),
+_STEP_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("step-0-4", re.compile(r"Step[ \t]*[01234](?!\d)|recon|recon-procedures", re.IGNORECASE)),
+    ("step-6", re.compile(r"Step[ \t]*6|Doc.*Audit|doc.*claim", re.IGNORECASE)),
+    ("step-7", re.compile(r"Step[ \t]*7|Test.*Quality|Test.*Audit", re.IGNORECASE)),
+    ("step-8", re.compile(r"Step[ \t]*8|Adversarial.*Code|Adversarial.*Audit", re.IGNORECASE)),
+    ("step-9", re.compile(r"Step[ \t]*9|Merge|Justine.*findings|classify.*findings", re.IGNORECASE)),
+    ("step-10", re.compile(r"Step[ \t]*10|TDD|fix[ \t]*loop|failing[ \t]*test", re.IGNORECASE)),
+    ("step-14-15", re.compile(r"Step[ \t]*1[45]|converg|SUMMARY\.md|final[ \t]*commit", re.IGNORECASE)),
 ]
 
 # ---------------------------------------------------------------------------
@@ -47,7 +47,7 @@ _SUBAGENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 
 _DETECT_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"holtz", re.IGNORECASE),
-    re.compile(r"phase[ \t]*0", re.IGNORECASE),
+    re.compile(r"step[ \t]*0", re.IGNORECASE),
     re.compile(r"full[ \t]+audit", re.IGNORECASE),
 ]
 
@@ -60,7 +60,7 @@ class HoltzProfilerPlugin:
     def detect(self, turns: list[RawTurn]) -> bool:
         """Return True if the session looks like a Holtz audit run.
 
-        Checks the first 10 turns for "holtz", "phase 0", or "full audit".
+        Checks the first 10 turns for "holtz", "step 0", or "full audit".
         """
         for turn in turns[:10]:
             text = turn.assistant_text
@@ -80,7 +80,7 @@ class HoltzProfilerPlugin:
         current_phase = "unknown"
 
         for turn in turns:
-            detected = self._detect_phase(turn.assistant_text)
+            detected = self._detect_step(turn.assistant_text)
             if detected is not None:
                 current_phase = detected
             labels[turn.index] = current_phase
@@ -107,11 +107,11 @@ class HoltzProfilerPlugin:
             {
                 "name": "Heavy Early Read",
                 "symptom": "Recon phase reads every file, causing large context window before any analysis begins.",
-                "fix": "Use targeted reads based on manifest/config files; defer deep reads to audit phases.",
+                "fix": "Use targeted reads based on manifest/config files; defer deep reads to audit steps.",
             },
             {
                 "name": "Recon Bloat",
-                "symptom": "Phase 0 accounts for >30% of total session cost despite producing no findings.",
+                "symptom": "Steps 0-4 account for >30% of total session cost despite producing no findings.",
                 "fix": "Cap recon to directory listings and key config files; let audit subagents read source.",
             },
             {
@@ -133,12 +133,12 @@ class HoltzProfilerPlugin:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _detect_phase(text: str) -> str | None:
-        """Return the highest-priority phase label matching *text*, or None."""
+    def _detect_step(text: str) -> str | None:
+        """Return the highest-priority step label matching *text*, or None."""
         # Iterate in order; later patterns have higher priority, so we
         # keep scanning and return the last match.
         matched: str | None = None
-        for phase_label, pattern in _PHASE_PATTERNS:
+        for step_label, pattern in _STEP_PATTERNS:
             if pattern.search(text):
-                matched = phase_label
+                matched = step_label
         return matched
