@@ -185,6 +185,7 @@ Output: `docs/holtz/recon/step4-predictions.md`
 ### Step 5: Dispatch Justine
 
 After Steps 0-4 complete, dispatch Justine as a background subagent to run her own parallel audit. Use the Agent tool with the `justine` agent:
+<!-- Justine stays on Opus — her independent synthesis and prediction require full reasoning capability. Do not downgrade. -->
 
 ```
 Agent(subagent_type="justine", run_in_background=true, prompt="Run a full audit on this codebase. You are being dispatched in parallel with Holtz.
@@ -220,6 +221,8 @@ If any is missing, STOP and complete Steps 0-4 first. Run `ls docs/holtz/impact-
 
 Use **Agent subagents** for this step when possible — each subagent audits a batch of test files and writes findings directly to a temp file. You merge them into the punchlist.
 
+**Model routing:** Dispatch test audit subagents with `model: "sonnet"`. Test quality auditing against a rubric is mechanical pattern-matching work that Sonnet handles well at 5x lower cost. Reserve Opus for the main session where architectural reasoning and cross-referencing happen.
+
 1. Read `docs/holtz/recon/step3-recon-summary.md` for test file locations and `docs/holtz/recon/step4-predictions.md` for predicted areas
 2. Partition test files into batches (3-5 files each). **Prioritize predicted areas first.**
 3. **Subagent brief:** Instruct each subagent to: (a) read the compact pattern brief by running `python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md` — if a finding matches a pattern ID, reference it in the punchlist item; if a pattern match seems likely but uncertain, read the full entry from `docs/holtz/patterns-brief.md` for that specific pattern ID, (b) check known patterns against the code being reviewed, (c) write findings to disk before returning, (d) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT, (e) choose the most conservative default for ambiguities — report NEEDS_CONTEXT only if genuinely impossible without human input. **When reviewing subagent output:** verify findings by reading actual code. Subagents may have missed context or misidentified patterns. Confirm each finding before it enters the punchlist.
@@ -232,6 +235,8 @@ If not using subagents: audit one file at a time, write findings before opening 
 ### Step 8: Adversarial Code Audit
 
 Same subagent strategy. Partition source modules into batches.
+
+**Model routing:** Dispatch source module audit subagents with `model: "sonnet"`. File-level code review against known patterns is a Sonnet-grade task. The main session's adversarial reasoning (testing predictions, confirming bugs) stays on Opus.
 
 1. Read `docs/holtz/recon/step3-recon-summary.md`, `docs/holtz/recon/step2-code-signals.md`, and `docs/holtz/recon/step4-predictions.md`. **Prioritize predicted areas first**, then high-churn files.
 2. **Subagent brief:** Instruct each subagent to: (a) read the compact pattern brief by running `python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md` — if a finding matches a pattern ID, reference it in the punchlist item; if a pattern match seems likely but uncertain, read the full entry from `docs/holtz/patterns-brief.md` for that specific pattern ID, (b) check known patterns against the code being reviewed, (c) write findings to disk before returning, (d) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT, (e) choose the most conservative default for ambiguities. **When reviewing subagent output:** verify findings by reading actual code. Confirm each finding before it enters the punchlist.
