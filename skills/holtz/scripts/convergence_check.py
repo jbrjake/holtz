@@ -314,7 +314,7 @@ def check_convergence(history: list) -> tuple[bool, str]:
                     return False, (
                         f"RAPID-FIRE REJECTED: Iterations {j + 1}→{j + 2} are only {gap:.0f}s apart "
                         f"(minimum {MIN_ITERATION_SECONDS}s). Each iteration must represent a genuine "
-                        "audit cycle — re-read punchlist, sweep phases, run full test suite. "
+                        "audit cycle — re-read punchlist, sweep steps, run full test suite. "
                         "Do the work."
                     )
             except (ValueError, TypeError):
@@ -328,7 +328,7 @@ def check_convergence(history: list) -> tuple[bool, str]:
     # A punchlist that has always been empty (total == 0 across all history) cannot converge.
     max_total = max(_get_punchlist(h)["total"] for h in history)
     if max_total == 0:
-        return False, "NO ITEMS: Punchlist has never contained any items. Run audit phases first."
+        return False, "NO ITEMS: Punchlist has never contained any items. Run audit steps first."
 
     # Convergence requires items to have been resolved/deferred, not just deleted.
     # If items existed but current total is 0, they were deleted not resolved.

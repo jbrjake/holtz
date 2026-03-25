@@ -3,8 +3,8 @@
 [![CI](https://github.com/jbrjake/holtz/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/jbrjake/holtz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)
-![619 tests](https://img.shields.io/badge/tests-619_passed-brightgreen.svg)
-![62% coverage](https://img.shields.io/badge/coverage-62%25-yellow.svg)
+![640 tests](https://img.shields.io/badge/tests-640_passed-brightgreen.svg)
+![65% coverage](https://img.shields.io/badge/coverage-65%25-yellow.svg)
 
 **Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
 
@@ -131,7 +131,7 @@ Holtz is a Claude Code plugin, but the architecture is portable. The skill, patt
 
 ## Steps 0-20
 
-**Steps 0-4: Recon.** Project structure, test infrastructure, baseline metrics, lint, git churn, skipped tests, mutation scanning, architecture drift, predictive recon. Eight steps, each written to disk immediately. By the time Step 6 starts, Holtz has a map.
+**Steps 0-4: Recon.** Project structure, test infrastructure, baseline metrics, lint, git churn, skipped tests, mutation scanning, architecture drift, predictive recon. Five steps, each written to disk immediately. By the time Step 6 starts, Holtz has a map.
 
 **Step 6: Doc-to-implementation audit.** Every testable claim checked against reality. Every finding adds `assumes` and `diverges_from` edges to the graph.
 
@@ -213,7 +213,7 @@ Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-1 skill, 3 agents, 17 reference docs, 1 example, 6 Python scripts, 6 seed patterns, 6 enforcement hooks, 619 tests across 13,800 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+1 skill, 3 agents, 17 reference docs, 1 example, 6 Python scripts, 6 seed patterns, 6 enforcement hooks, 640 tests across 13,900 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Why the backstories
 
