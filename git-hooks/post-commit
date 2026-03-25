@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-COMMIT_MSG_FILE="$1"
+# Guard against recursion when we amend
+[[ "${_HOLTZ_VERSION_BUMPED:-}" == "1" ]] && exit 0
+
 PLUGIN_JSON=".claude-plugin/plugin.json"
 
-# Read the first line of the commit message
-FIRST_LINE=$(head -1 "$COMMIT_MSG_FILE")
+# Read the just-created commit
+FIRST_LINE=$(git log -1 --pretty=%s)
+BODY=$(git log -1 --pretty=%b)
 
 # Skip merge commits
 if [[ "$FIRST_LINE" =~ ^Merge ]]; then
@@ -14,7 +17,7 @@ fi
 
 # Check for BREAKING CHANGE in body
 HAS_BREAKING=false
-if grep -q "^BREAKING CHANGE" "$COMMIT_MSG_FILE" 2>/dev/null; then
+if echo "$BODY" | grep -q "^BREAKING CHANGE" 2>/dev/null; then
     HAS_BREAKING=true
 fi
 
@@ -25,7 +28,6 @@ if [[ "$FIRST_LINE" =~ $CONV_COMMIT_RE ]]; then
     TYPE="${BASH_REMATCH[1]}"
     BANG="${BASH_REMATCH[3]}"
 else
-    # Not a conventional commit — no bump
     exit 0
 fi
 
@@ -42,16 +44,10 @@ else
     exit 0
 fi
 
-# Guard: skip if plugin.json has unstaged changes (manual edit in progress)
-if [[ -n "$(git diff --name-only -- "$PLUGIN_JSON" 2>/dev/null)" ]]; then
-    echo "commit-msg: plugin.json already modified, skipping auto-bump." >&2
-    exit 0
-fi
-
 # Check plugin.json exists
 if [[ ! -f "$PLUGIN_JSON" ]]; then
-    echo "commit-msg: $PLUGIN_JSON not found, aborting." >&2
-    exit 1
+    echo "post-commit: $PLUGIN_JSON not found, skipping version bump." >&2
+    exit 0
 fi
 
 # Bump version using Python for reliable JSON handling
@@ -64,13 +60,13 @@ with open('$PLUGIN_JSON') as f:
 version = data.get('version', '0.0.0')
 parts = version.split('.')
 if len(parts) != 3:
-    print(f'commit-msg: malformed version \"{version}\"', file=sys.stderr)
+    print(f'post-commit: malformed version \"{version}\"', file=sys.stderr)
     sys.exit(1)
 
 try:
     major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
 except ValueError:
-    print(f'commit-msg: non-numeric version \"{version}\"', file=sys.stderr)
+    print(f'post-commit: non-numeric version \"{version}\"', file=sys.stderr)
     sys.exit(1)
 
 bump = '$BUMP'
@@ -93,11 +89,13 @@ with open('$PLUGIN_JSON', 'w') as f:
 
 print(new_version)
 ") || {
-    echo "commit-msg: version bump failed" >&2
-    exit 1
+    echo "post-commit: version bump failed" >&2
+    exit 0
 }
 
-# Stage the updated plugin.json
+# Stage and amend the commit to include the version bump
 git add "$PLUGIN_JSON"
+export _HOLTZ_VERSION_BUMPED=1
+git commit --amend --no-edit
 
-echo "commit-msg: bumped version to $NEW_VERSION ($BUMP)" >&2
+echo "post-commit: bumped version to $NEW_VERSION ($BUMP)" >&2
