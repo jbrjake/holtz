@@ -35,7 +35,7 @@ Code review happens once. The comments get addressed, the reviewer approves, eve
 
 Holtz goes back to check.
 
-He runs a seven-phase audit and then starts over. Finds what the fixes uncovered. Fixes those too. Runs again. This continues until two consecutive passes produce zero new findings across nine analytical lenses. That's convergence. Everything before that is just progress.
+He runs a twenty-one step audit and then starts over. Finds what the fixes uncovered. Fixes those too. Runs again. This continues until two consecutive passes produce zero new findings across nine analytical lenses. That's convergence. Everything before that is just progress.
 
 The moment you stop looking is the moment something gets through.
 
@@ -91,7 +91,7 @@ Bugs that can't be reproduced don't get silently dropped. They get their own pro
 
 After every fix: edge case hardening (null, empty, boundary, concurrent), then blast radius analysis via the impact graph. Did the fix break an assumption two hops away? If so, new punchlist item. Fixes that create bugs are worse than the bugs they fixed.
 
-<p align="center"><img src="docs/diagrams/phase4-triage.svg" alt="Phase 4 triage flowchart"></p>
+<p align="center"><img src="docs/diagrams/step10-triage.svg" alt="Step 10 triage flowchart"></p>
 
 ## Patterns and learning
 
@@ -129,21 +129,21 @@ Holtz is a Claude Code plugin, but the architecture is portable. The skill, patt
 
 **Other harnesses.** Any system that can (1) inject a system prompt, (2) run shell commands, and (3) read/write files can run the core audit loop. The enforcement hooks are the hardest part to port — they require event-driven gates that most harnesses don't support natively. Without hooks, the process still works but relies on advisory compliance, which is how Holtz ran for his first seven runs before the hooks existed. It works. It works less reliably.
 
-## The seven phases
+## Steps 0-20
 
-**Phase 0: Recon.** Project structure, test infrastructure, baseline metrics, lint, git churn, skipped tests, mutation scanning, architecture drift, predictive recon. Eight steps, each written to disk immediately. By the time Phase 1 starts, Holtz has a map.
+**Steps 0-4: Recon.** Project structure, test infrastructure, baseline metrics, lint, git churn, skipped tests, mutation scanning, architecture drift, predictive recon. Eight steps, each written to disk immediately. By the time Step 6 starts, Holtz has a map.
 
-**Phase 1: Doc-to-implementation audit.** Every testable claim checked against reality. Every finding adds `assumes` and `diverges_from` edges to the graph.
+**Step 6: Doc-to-implementation audit.** Every testable claim checked against reality. Every finding adds `assumes` and `diverges_from` edges to the graph.
 
-**Phase 2: Test quality audit.** Every test file scored against twelve anti-patterns. If mutation data is available, tests that don't kill mutations get called what they are.
+**Step 7: Test quality audit.** Every test file scored against twelve anti-patterns. If mutation data is available, tests that don't kill mutations get called what they are.
 
-**Phase 3: Adversarial code audit.** Source modules in priority order: error paths, boundaries, state transitions, external integrations, security. High-churn files first.
+**Step 8: Adversarial code audit.** Source modules in priority order: error paths, boundaries, state transitions, external integrations, security. High-churn files first.
 
-**Phase 4: Fix loop.** Described above. The serious part.
+**Step 10: Fix loop.** Described above. The serious part.
 
-**Phase 5: Pattern analysis.** Group resolved items, find shared root causes, search for siblings.
+**Step 11: Pattern analysis.** Group resolved items, find shared root causes, search for siblings.
 
-**Phase 6: Convergence.** Repeat Phases 4-5 until clean, then run a final sweep across all nine lenses — component, integration, security, error propagation, data flow, contract, semantic fidelity, temporal protocol, public contract. If any lens finds something, the loop continues. Circuit breakers prevent runaway: max 15 iterations, max 3 attempts per item, stall detection after 3 iterations with no progress. Without these, Holtz would audit forever. He would not consider this a problem.
+**Steps 14-16: Convergence.** Repeat Steps 10-11 until clean, then run a final sweep across all nine lenses — component, integration, security, error propagation, data flow, contract, semantic fidelity, temporal protocol, public contract. If any lens finds something, the loop continues. Circuit breakers prevent runaway: max 15 iterations, max 3 attempts per item, stall detection after 3 iterations with no progress. Without these, Holtz would audit forever. He would not consider this a problem.
 
 <p align="center"><img src="docs/diagrams/holtz-convergence.svg" alt="Holtz convergence loop"></p>
 
@@ -197,7 +197,7 @@ Advisory instructions weren't enough. Holtz understood the instructions. He agre
 
 Six enforcement hooks — deterministic gates that block operations when the process isn't followed.
 
-**Impact graph gate.** Before any write to a Phase 1+ audit file, checks whether `impact-graph.json` exists. If it doesn't, the write is blocked. You cannot audit code you haven't mapped.
+**Impact graph gate.** Before any write to a Step 6+ audit file, checks whether `impact-graph.json` exists. If it doesn't, the write is blocked. You cannot audit code you haven't mapped.
 
 **Status staleness gate.** Before any findings write, checks whether `STATUS.md` was updated in the last five minutes. STATUS.md is Holtz's program counter. If it's stale, he's lost track of where he is, and findings written without position tracking are findings that get lost on resume.
 
