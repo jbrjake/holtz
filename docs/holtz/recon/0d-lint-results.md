@@ -1,16 +1,20 @@
-# Step 0d: Lint Results
+# 0d: Lint Results
 
-**Date:** 2026-03-24
+## ruff
 
-## Ruff
-```
-All checks passed!
-```
+**3 errors** in `scripts/generate-changelog.py` (utility script, not core Holtz source):
 
-## Mypy
-```
-Success: no issues found in 13 source files
-```
+1. **F541** `scripts/generate-changelog.py:117` — f-string without placeholders (`f""`)
+2. **SIM108** `scripts/generate-changelog.py:159` — if/else block could be ternary
+3. **ANN201** `scripts/generate-changelog.py:169` — missing return type on `main()`
 
-## Summary
-Clean baseline. No lint or type errors.
+**Core source (scripts/, hooks/):** clean.
+
+## mypy
+
+**0 errors.** All 13 source files pass type checking.
+
+## Notes
+- ruff errors are in a dev utility script, not in the plugin's runtime code
+- These errors exist because `scripts/generate-changelog.py` was added recently and may not have gone through full lint
+- The ruff config covers `skills/holtz/scripts`, `tests`, `hooks` — but `scripts/` (top-level) may or may not be in scope depending on path matching

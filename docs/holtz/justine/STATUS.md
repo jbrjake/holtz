@@ -1,78 +1,64 @@
 # Justine Status
 
-**Project:** holtz v0.5.2
-**Started:** 2026-03-24
-**Last Updated:** 2026-03-24T01:00:00
+**Project:** holtz
+**Started:** 2026-03-25
+**Last Updated:** 2026-03-25T01:00:00
 **Iteration:** 1
 
 ## Current Position
-**Phase:** 6 (convergence)
-**Step:** Final sweep complete -- convergence achieved
+**Phase:** 6
+**Step:** Post-convergence
 **Status:** CONVERGED
 
 ## Completed
-- [x] Phase 0: Inherited recon from Holtz (0a-0f)
-- [x] Phase 0g: Justine recon summary (integration-first)
-- [x] Phase 0h: Justine predictions (7 predictions, 3 HIGH)
-- [x] Phase 0: Impact graph initialized (15 nodes, 12 edges)
-- [x] Phase 0: Recommendation escalation (README metrics: 4/4 runs -- now addressed)
-- [x] README.md (integration, contract, public-contract) -- CLEAN
-- [x] Token profiler tests (component, contract) -- CLEAN, no anti-patterns
-- [x] Token profiler source (component, data-flow) -- CLEAN
-- [x] hooks/ enforcement (integration, security) -- BJ-002 found
-- [x] hooks/_common.py (component, security) -- BJ-002 confirmed
-- [x] convergence_check.py <-> validate_punchlist.py seam (integration, data-flow) -- CLEAN
-- [x] validate_punchlist.py (data-flow, error-propagation) -- CLEAN
-- [x] convergence_check.py (component, error-propagation) -- CLEAN
-- [x] impact_graph.py (component, error-propagation) -- CLEAN
-- [x] pattern_brief_compact.py (integration, data-flow) -- BJ-001 found
-- [x] markdown_utils.py (component) -- CLEAN
-- [x] SKILL.md / justine-skill.md references (contract) -- CLEAN
-- [x] profiler_plugin.py (component) -- CLEAN
-- [x] hooks.json configuration (contract) -- CLEAN
+- [x] Inherited Holtz recon (0a-0f)
+- [x] Impact graph initialized (9 nodes, 3 edges)
+- [x] 0g: Recon summary
+- [x] 0h: Predictions (6 predictions, all CONFIRMED)
+- [x] Phases 1-3: Multi-lens audit (6 items found)
+- [x] Phase 4-5: N/A (adversarial self-play -- Holtz fixes)
+- [x] Phase 6: Convergence (final sweep: zero new findings)
 
 ## Lens Coverage
-| Area | integration | security | data-flow | error-prop | contract | component |
-|------|-------------|----------|-----------|------------|----------|-----------|
-| README.md | Y | - | - | - | Y | - |
-| token_profiler/ | - | - | Y | - | Y | Y |
-| hooks/ | Y | Y | - | - | - | Y |
-| validate_punchlist.py | Y | - | Y | Y | Y | - |
-| convergence_check.py | Y | - | - | Y | - | Y |
-| impact_graph.py | - | - | - | Y | - | Y |
-| pattern_brief_compact.py | Y | - | Y | - | - | Y |
-| markdown_utils.py | - | - | - | - | - | Y |
-| SKILL.md / refs | - | - | - | - | Y | - |
+| Area | integration | security | data-flow | error-propagation | contract | component |
+|------|-------------|----------|-----------|-------------------|----------|-----------|
+| README.md | done | done | -- | -- | done | done |
+| convergence_check.py | done | -- | done | done | done | done |
+| validate_punchlist.py | done | -- | done | -- | done | done |
+| impact_graph.py | done | -- | -- | -- | done | done |
+| hooks/ | done | -- | -- | -- | done | done |
+| generate-changelog.py | -- | -- | -- | -- | done | done |
+| tests/ | done | -- | -- | -- | done | done |
+| LIVING-PUNCHLIST.md | -- | -- | -- | -- | done | -- |
+| convergence-data.md | -- | -- | done | -- | done | -- |
+| profiler_plugin.py | -- | -- | -- | -- | -- | done |
+| CI workflows | -- | -- | -- | -- | done | done |
 
 ## Priority Queue
 (empty -- all areas examined)
 
 ## Next Action
-CONVERGED. Write SUMMARY.md. Holtz handles the fix loop.
+Write SUMMARY.md. Justine's audit is complete. Holtz handles the merge and fix loop.
 
 ## Metrics
 | Metric | Baseline | Current |
 |--------|----------|---------|
-| Tests passing | 613 | 613 |
+| Tests passing | 619 | 619 |
 | Tests failing | 0 | 0 |
 | Tests skipped | 0 | 0 |
-| Punchlist open | -- | 2 |
+| Punchlist open | -- | 6 |
 | Punchlist resolved | -- | 0 |
 | Punchlist deferred | -- | 0 |
-| Patterns identified | -- | 1 (PAT-001 recurrence) |
+| Patterns identified | -- | 1 |
 | Convergence iterations | -- | 1 |
 
 ## Notes
-- Parallel dispatch with Holtz run 16. Writing to docs/holtz/justine/.
-- Both findings are PAT-001 manifestations: code-fence-unaware parsing in different forms.
-- BJ-001: character offset divergence between masked and original content in parse_brief.
-- BJ-002: fence length enforcement bug in hooks/_common.py mask_fenced_blocks.
-- README metrics recurring recommendation from prior 4 runs is now RESOLVED -- test_readme_metrics_match_actual checks all 9 fields.
+Adversarial self-play mode. Justine identifies, Holtz fixes. All 6 predictions confirmed (100% accuracy this run). All findings are doc/drift (5) and bug/logic (1, CI-breaking lint). The Python source code is clean -- bugs live in the documentation layer.
 
 ## Pattern Library
-- **PAT-001:** code-fence-unaware parsing (6 instances across 16 runs, recurring)
+- **PAT-002:** Stale documentation counter (1 instance this run): README run count, living punchlist audit count, and research data table all fall behind by one run because documentation updates are not automated. BJ-001, BJ-002, BJ-004, BJ-006 are all instances.
 
 ## Strategy
-**High-Risk Areas:** None remaining at this scan depth.
-**Last Insight:** PAT-001 has now appeared in EVERY component that does masked/original content mapping. The two remaining instances are in (1) parse_brief offset mapping and (2) hooks fence length matching. Both are boundary bugs at the seam between masking and extraction.
-**Approach:** Convergence reached in single pass. Two findings, both HIGH severity, both PAT-001 family.
+**High-Risk Areas:** README.md (multiple stale claims), LIVING-PUNCHLIST.md (stale metadata)
+**Last Insight:** All 6 findings are documentation staleness, not implementation bugs. The codebase's implementation quality is high, but each run produces documentation drift that the next run catches. This is a systemic pattern -- the same class as prior runs' BH-001/BH-002 findings.
+**Approach:** Complete. Filing SUMMARY.md for Holtz merge.

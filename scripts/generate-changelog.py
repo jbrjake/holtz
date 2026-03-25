@@ -114,7 +114,7 @@ def format_changelog(commits: list[dict], version: str, since: str | None) -> st
     order = ["Added", "Fixed", "Changed", "Documentation", "Infrastructure", "Other"]
     lines = [f"## [{version}] - {date.today().isoformat()}"]
     if since:
-        lines.append(f"")
+        lines.append("")
         lines.append(f"_Changes since {since}_")
 
     if breaking:
@@ -156,17 +156,14 @@ def update_changelog(entry: str) -> None:
 
     # Find next version heading
     next_heading = re.search(r"^## \[", after, re.MULTILINE)
-    if next_heading:
-        rest = after[next_heading.start():]
-    else:
-        rest = ""
+    rest = after[next_heading.start():] if next_heading else ""
 
     new_content = parts[0] + marker + "\n\n" + entry + "\n\n" + rest
     CHANGELOG.write_text(new_content)
     print(f"Updated {CHANGELOG}")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Generate changelog from conventional commits")
     parser.add_argument("--write", action="store_true", help="Write to CHANGELOG.md")
     parser.add_argument("--since", help="Base ref (default: last version tag)")

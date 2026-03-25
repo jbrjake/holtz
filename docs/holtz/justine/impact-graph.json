@@ -1,153 +1,117 @@
 {
   "nodes": {
-    "validate_punchlist": {
-      "id": "validate_punchlist",
+    "README": {
+      "id": "README",
       "type": "module",
-      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "file": "README.md",
       "line": null,
-      "last_audited": "2026-03-24",
+      "last_audited": "2026-03-25",
       "audit_count": 1,
-      "risk_score": 0.1
+      "risk_score": 0.0
+    },
+    "SKILL": {
+      "id": "SKILL",
+      "type": "module",
+      "file": "skills/holtz/SKILL.md",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
     },
     "convergence_check": {
       "id": "convergence_check",
       "type": "module",
       "file": "skills/holtz/scripts/convergence_check.py",
       "line": null,
-      "last_audited": "2026-03-24",
+      "last_audited": "2026-03-25",
       "audit_count": 1,
-      "risk_score": 0.1
+      "risk_score": 0.0
+    },
+    "validate_punchlist": {
+      "id": "validate_punchlist",
+      "type": "module",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
     },
     "impact_graph": {
       "id": "impact_graph",
       "type": "module",
       "file": "skills/holtz/scripts/impact_graph.py",
       "line": null,
-      "last_audited": "2026-03-24",
+      "last_audited": "2026-03-25",
       "audit_count": 1,
-      "risk_score": 0.2
+      "risk_score": 0.0
     },
     "markdown_utils": {
       "id": "markdown_utils",
       "type": "module",
       "file": "skills/holtz/scripts/markdown_utils.py",
       "line": null,
-      "last_audited": "2026-03-24",
+      "last_audited": "2026-03-25",
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "hooks._common": {
-      "id": "hooks._common",
+    "generate_changelog": {
+      "id": "generate_changelog",
       "type": "module",
-      "file": "hooks/_common.py",
+      "file": "scripts/generate-changelog.py",
       "line": null,
-      "last_audited": "2026-03-24",
+      "last_audited": "2026-03-25",
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "hooks.convergence_gate": {
-      "id": "hooks.convergence_gate",
-      "type": "module",
-      "file": "hooks/convergence_gate.py",
-      "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.1
-    },
-    "hooks.convergence_primer": {
-      "id": "hooks.convergence_primer",
-      "type": "module",
-      "file": "hooks/convergence_primer.py",
-      "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.1
-    },
-    "hooks.impact_graph_gate": {
-      "id": "hooks.impact_graph_gate",
-      "type": "module",
-      "file": "hooks/impact_graph_gate.py",
-      "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.1
-    },
-    "hooks.status_staleness_gate": {
-      "id": "hooks.status_staleness_gate",
-      "type": "module",
-      "file": "hooks/status_staleness_gate.py",
-      "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.1
-    },
-    "hooks.artifact_verification": {
-      "id": "hooks.artifact_verification",
-      "type": "module",
-      "file": "hooks/artifact_verification.py",
-      "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "hooks.subagent_findings_check": {
-      "id": "hooks.subagent_findings_check",
-      "type": "module",
-      "file": "hooks/subagent_findings_check.py",
-      "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "README": {
-      "id": "README",
+    "living_punchlist": {
+      "id": "living_punchlist",
       "type": "doc",
-      "file": "README.md",
+      "file": "docs/holtz/LIVING-PUNCHLIST.md",
       "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.3
-    },
-    "token_profiler": {
-      "id": "token_profiler",
-      "type": "module",
-      "file": "scripts/token_profiler/__init__.py",
-      "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.2
-    },
-    "pattern_brief_compact": {
-      "id": "pattern_brief_compact",
-      "type": "module",
-      "file": "skills/holtz/scripts/pattern_brief_compact.py",
-      "line": null,
-      "last_audited": "2026-03-24",
+      "last_audited": "2026-03-25",
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "test_integration": {
-      "id": "test_integration",
-      "type": "test",
-      "file": "tests/test_integration.py",
+    "convergence_data": {
+      "id": "convergence_data",
+      "type": "doc",
+      "file": "docs/research/convergence-data.md",
       "line": null,
-      "last_audited": "2026-03-24",
+      "last_audited": "2026-03-25",
       "audit_count": 1,
       "risk_score": 0.0
     }
   },
   "edges": [
-    {"source": "validate_punchlist", "target": "markdown_utils", "type": "imports", "metadata": {"discovered": "2026-03-24", "confidence": "high"}},
-    {"source": "convergence_check", "target": "markdown_utils", "type": "imports", "metadata": {"discovered": "2026-03-24", "confidence": "high"}},
-    {"source": "convergence_check", "target": "validate_punchlist", "type": "assumes", "metadata": {"discovered": "2026-03-24", "confidence": "high", "note": "header regex alignment: both split on ### B[HJ]-\\d+:"}},
-    {"source": "hooks.convergence_gate", "target": "hooks._common", "type": "imports", "metadata": {"discovered": "2026-03-24", "confidence": "high"}},
-    {"source": "hooks.convergence_primer", "target": "hooks._common", "type": "imports", "metadata": {"discovered": "2026-03-24", "confidence": "high"}},
-    {"source": "hooks.impact_graph_gate", "target": "hooks._common", "type": "imports", "metadata": {"discovered": "2026-03-24", "confidence": "high"}},
-    {"source": "hooks.status_staleness_gate", "target": "hooks._common", "type": "imports", "metadata": {"discovered": "2026-03-24", "confidence": "high"}},
-    {"source": "hooks.artifact_verification", "target": "hooks._common", "type": "imports", "metadata": {"discovered": "2026-03-24", "confidence": "high"}},
-    {"source": "hooks.subagent_findings_check", "target": "hooks._common", "type": "imports", "metadata": {"discovered": "2026-03-24", "confidence": "high"}},
-    {"source": "test_integration", "target": "README", "type": "tests", "metadata": {"discovered": "2026-03-24", "confidence": "medium", "note": "README metrics test - checks test count but not all semantic claims"}},
-    {"source": "hooks.impact_graph_gate", "target": "hooks.status_staleness_gate", "type": "assumes", "metadata": {"discovered": "2026-03-24", "confidence": "medium", "note": "shared path matching pattern for holtz files"}},
-    {"source": "README", "target": "validate_punchlist", "type": "diverges_from", "metadata": {"discovered": "2026-03-24", "confidence": "medium", "note": "README claims may not match actual script capabilities"}}
+    {
+      "source": "README",
+      "target": "convergence_data",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "README claims 72% across 10 runs; research shows 65% across 11 runs"
+      }
+    },
+    {
+      "source": "README",
+      "target": "living_punchlist",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "README run count should match living punchlist audit count"
+      }
+    },
+    {
+      "source": "convergence_data",
+      "target": "README",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "Research data aggregates feed README accuracy claims"
+      }
+    }
   ]
 }
