@@ -1,86 +1,33 @@
 # Holtz Punchlist
-> Generated: 2026-03-25 | Merge of Holtz run-18 + Justine run-18 | Project: holtz | Baseline: 619 pass, 0 fail, 0 skip
+> Generated: 2026-03-25 | Project: holtz | Baseline: 619 pass, 0 fail, 0 skip
 
 ## Summary
 | Severity | Open | Resolved | Deferred |
 |----------|------|----------|----------|
 | CRITICAL | 0 | 0 | 0 |
-| HIGH     | 0 | 3 | 0 |
-| MEDIUM   | 0 | 3 | 0 |
-| LOW      | 0 | 1 | 0 |
+| HIGH     | 2 | 0 | 0 |
+| MEDIUM   | 3 | 0 | 0 |
+| LOW      | 1 | 0 | 0 |
 
 ## Patterns
 
-### Pattern: PAT-001: Dual-implementation divergence
-**Instances:** BH-003, BH-004
+## Pattern: PAT-004: Dual-implementation divergence
+**Instances:** BJ-001, BJ-002
 **Root Cause:** hooks/_common.py reimplements markdown_utils.py fence masking with a simpler algorithm that omits CommonMark edge cases (indented fences, backtick info string restrictions). The two implementations diverge on inputs that are valid per CommonMark but not handled by the simpler version.
 **Systemic Fix:** Either (a) make hooks import markdown_utils (breaking the documented no-cross-layer-import convention) or (b) add the missing CommonMark handling to _common.py's mask_fenced_blocks or (c) add a test that verifies both implementations produce identical output on a shared test corpus.
 **Detection Rule:** `grep -rn "def mask_" skills/holtz/scripts/ hooks/` -- any file that implements its own masking is a divergence risk.
 
 ## Items
 
-### BH-001: README "Eight steps" recon claim is stale after step-numbering refactor
-**Severity:** HIGH
-**Category:** doc/drift
-**Location:** `README.md:134`
-**Status:** RESOLVED
-**Lens:** public-contract
-**Found by:** both auditors
-**Severity disagreement:** Holtz=HIGH, Justine=MEDIUM. Using HIGH.
-<!-- Was: Holtz BH-001 + Justine BJ-004 -->
-
-**Problem:** README says "Steps 0-4: Recon. ... Eight steps, each written to disk immediately." The step-numbering refactor collapsed old Phase 0 sub-phases (0a-0h) into 5 discrete steps (Steps 0-4). "Eight steps" is no longer accurate — it describes the old Phase 0 sub-step count.
-
-**Evidence:** README line 134: `**Steps 0-4: Recon.** ... Eight steps, each written to disk immediately.` — SKILL.md defines exactly 5 recon steps (Step 0 through Step 4). The old Phase 0 had 8+ sub-phases (0a through 0h) which are now collapsed into Steps 0-4 where Steps 1 and 2 are subagent-dispatched bundles.
-
-**Discovery Chain:** Recon Step 0 noted step numbering refactor → README line 134 checked → "Eight steps" doesn't match Step 0-4 count (5 steps) → stale from pre-refactor Phase 0 sub-step count
-
-**Acceptance Criteria:**
-- [ ] README line 134 accurately describes the number of recon steps
-- [ ] Count matches the actual step definitions in SKILL.md
-
-**Validation Command:**
-```bash
-grep -c "^### Step [0-4]:" skills/holtz/SKILL.md && grep "steps" README.md | grep -i "recon"
-```
-
-### BH-002: Token profiling playbook has stale Phase references
-**Severity:** MEDIUM
-**Category:** doc/drift
-**Location:** `docs/token-profiling-playbook.md:157`
-**Status:** RESOLVED
-**Lens:** semantic-fidelity
-**Found by:** both auditors
-<!-- Was: Holtz BH-002 + Justine BJ-005 -->
-
-**Problem:** The token-profiling-playbook.md uses "Phase 0" (line 157), "later phases" (line 161), and "execution phases" (line 163-164) after the step-numbering refactor updated all active project files from Phase N to Step N. The playbook was listed in commit 3dba525 ("update showcase and profiling playbook to step numbering") but these references survived the update.
-
-**Evidence:**
-- Line 157: `**Symptom:** Phase 0 (reconnaissance/exploration) dominates the heat map.`
-- Line 161: `**Fix:** Audit which recon reads are actually referenced in later phases.`
-- Line 163-164: `Profile the dependency edges between recon and execution phases.`
-
-**Discovery Chain:** Step 0 recon found "Phase 0" on line 157 → commit 3dba525 claimed to update this file → grep confirmed 3 stale Phase references survived → partial update
-
-**Acceptance Criteria:**
-- [ ] No "Phase N" references remain in token-profiling-playbook.md
-- [ ] Terminology matches current step-numbering convention
-
-**Validation Command:**
-```bash
-grep -n "Phase [0-9]" docs/token-profiling-playbook.md && echo "FAIL: stale Phase refs" || echo "PASS: no stale refs"
-```
-
-### BH-003: _common.py mask_fenced_blocks ignores indented code fences (1-3 spaces)
+### BJ-001: _common.py mask_fenced_blocks ignores indented code fences (1-3 spaces)
 **Severity:** HIGH
 **Category:** bug/logic
 **Location:** `hooks/_common.py:95`
-**Status:** RESOLVED
-**Pattern:** PAT-001
+**Status:** OPEN
+**Pattern:** PAT-004
 **Determinism:** deterministic
 **Lens:** integration
-**Found by:** Justine only
-<!-- Was: Justine BJ-001 -->
+**Predicted:** Prediction 1 (confidence: HIGH)
 
 **Problem:** hooks/_common.py mask_fenced_blocks uses the regex `^(\`{3,}|~{3,}).*$` which only matches fences that start at column 0. Per CommonMark spec, code fences can be indented 0-3 spaces. markdown_utils.py correctly handles this with `^( {0,3})(\`{3,})` patterns. When a punchlist or STATUS.md contains an indented fence (e.g., inside a list or blockquote), _common.py will not mask it. This means hooks (convergence_gate, convergence_primer, status_staleness_gate) that use mask_fenced_blocks for PAT-001 protection will fail to mask indented fences, allowing field headers inside those fences to interfere with extraction.
 
@@ -115,16 +62,15 @@ print('PASS')
 "
 ```
 
-### BH-004: _common.py mask_fenced_blocks accepts backticks in backtick fence info strings
+### BJ-002: _common.py mask_fenced_blocks accepts backticks in backtick fence info strings
 **Severity:** HIGH
 **Category:** bug/logic
 **Location:** `hooks/_common.py:95`
-**Status:** RESOLVED
-**Pattern:** PAT-001
+**Status:** OPEN
+**Pattern:** PAT-004
 **Determinism:** deterministic
 **Lens:** integration
-**Found by:** Justine only
-<!-- Was: Justine BJ-002 -->
+**Predicted:** Prediction 1 (confidence: HIGH)
 
 **Problem:** Per CommonMark spec, a backtick fence's info string must not contain backtick characters. markdown_utils enforces this with `[^\`]*$` in the opener regex. _common.py uses `.*$` which allows backticks. When a line like `` ```some`thing `` appears, _common.py treats it as a fence opener while markdown_utils does not. This causes _common.py to enter fence-masking state when markdown_utils does not, leading to divergent masking of all subsequent content until the next fence-like line.
 
@@ -155,15 +101,14 @@ print('PASS')
 "
 ```
 
-### BH-005: convergence_gate _count_open_items inflated by non-item Status fields
+### BJ-003: convergence_gate _count_open_items inflated by non-item Status fields
 **Severity:** MEDIUM
 **Category:** bug/logic
 **Location:** `hooks/convergence_gate.py:35`
-**Status:** RESOLVED
+**Status:** OPEN
 **Determinism:** deterministic
 **Lens:** integration
-**Found by:** Justine only
-<!-- Was: Justine BJ-003 -->
+**Predicted:** Prediction 5 (confidence: MEDIUM)
 
 **Problem:** convergence_gate._count_open_items counts `**Status:** OPEN` occurrences anywhere in the masked punchlist, including in Pattern description blocks, preamble text, or any other non-item context. convergence_check.count_items correctly scopes to item blocks by splitting on `### BH-NNN:` headers. While the code documents the count as "informational, not decisional," an inflated count in the convergence gate's block message could mislead the auditor about remaining work. A Pattern block that says "**Status:** OPEN issue in upstream" would add 1 to the open count.
 
@@ -193,41 +138,57 @@ print('PASS')
 "
 ```
 
-### BH-006: convergence_check.py output messages use stale "phases" terminology
-**Severity:** LOW
+### BJ-004: README "Eight steps" for recon is stale
+**Severity:** MEDIUM
 **Category:** doc/drift
-**Location:** `skills/holtz/scripts/convergence_check.py:317`
-**Status:** RESOLVED
-**Lens:** semantic-fidelity
-**Found by:** Holtz only
-<!-- Was: Holtz BH-003 -->
+**Location:** `README.md:134`
+**Status:** OPEN
+**Lens:** public-contract
 
-**Problem:** Two output messages in convergence_check.py use "phases" instead of "steps" after the step-numbering refactor. Line 317: "sweep phases" in the RAPID-FIRE rejection message. Line 331: "Run audit phases first" in the NO_ITEMS message. These are displayed to the auditor and should use current terminology.
+**Problem:** README says "Eight steps, each written to disk immediately" for Steps 0-4 recon. The step-numbering refactor collapsed Phase 0 sub-phases (0a-0h) into 5 discrete steps (0-4). "Eight steps" is stale.
 
-**Evidence:**
-- Line 317: `"audit cycle — re-read punchlist, sweep phases, run full test suite. "`
-- Line 331: `"NO ITEMS: Punchlist has never contained any items. Run audit phases first."`
+**Evidence:** README line 134: "Steps 0-4: Recon. ... Eight steps, each written to disk immediately." SKILL.md defines Steps 0-4 (5 steps).
 
-**Discovery Chain:** Step 8 adversarial code audit → grep for "phase|Phase" in scripts/*.py → 2 stale references in convergence_check.py output strings survived commit 66e4d67 ("update scripts and hooks to step numbering")
+**Discovery Chain:** inherited from Holtz prediction 1 -> verified step count in SKILL.md -> confirmed stale
 
 **Acceptance Criteria:**
-- [ ] No "phases" references in convergence_check.py output strings
-- [ ] Terms match current step-numbering convention
+- [ ] README accurately describes the number of recon steps
+- [ ] Count matches SKILL.md step definitions
 
 **Validation Command:**
 ```bash
-grep -n "phase" skills/holtz/scripts/convergence_check.py | grep -v "label_phases\|current_phase" && echo "FAIL" || echo "PASS"
+grep -c "^### Step [0-4]:" skills/holtz/SKILL.md && grep "Eight steps" README.md | wc -l
 ```
 
-### BH-007: No cross-implementation fence masking test
+### BJ-005: Token profiling playbook has stale Phase references
+**Severity:** MEDIUM
+**Category:** doc/drift
+**Location:** `docs/token-profiling-playbook.md:157`
+**Status:** OPEN
+**Lens:** semantic-fidelity
+
+**Problem:** Token profiling playbook uses "Phase 0" (line 157), "later phases" (line 161), and "execution phases" (lines 163-164) after the step-numbering refactor.
+
+**Evidence:** Lines 157, 161, 163-164 contain "Phase" references that survived the step-numbering update in commit 3dba525.
+
+**Discovery Chain:** inherited from Holtz prediction 2 -> grep confirmed stale Phase references
+
+**Acceptance Criteria:**
+- [ ] No "Phase N" references in token-profiling-playbook.md
+- [ ] Terminology matches step-numbering convention
+
+**Validation Command:**
+```bash
+grep -n "Phase [0-9]" docs/token-profiling-playbook.md | wc -l
+```
+
+### BJ-006: No cross-implementation fence masking test
 **Severity:** LOW
 **Category:** test/integration-gap
 **Location:** `tests/`
-**Status:** RESOLVED
-**Pattern:** PAT-001
+**Status:** OPEN
+**Pattern:** PAT-004
 **Lens:** integration
-**Found by:** Justine only
-<!-- Was: Justine BJ-006 -->
 
 **Problem:** markdown_utils.mask_code_fences and hooks/_common.mask_fenced_blocks are two independent implementations of the same logical operation (mask content inside code fences). No test verifies they produce identical output on the same inputs. The existing tests for each implementation are isolated -- test_markdown_utils.py tests mask_code_fences extensively (including indented fences, tilde fences, CommonMark edge cases) while test_hooks.py tests hooks as black boxes via subprocess without directly testing mask_fenced_blocks behavior. The lack of a cross-implementation test allowed BJ-001 and BJ-002 to survive 18 runs.
 

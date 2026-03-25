@@ -1,38 +1,37 @@
-# Phase 1: Doc-to-Implementation Audit — Claims Checklist
+# Doc-to-Implementation Claims Checklist — Run 18
 
-## README.md Claims
+## README.md
 
-### Component Counts (line 214 "What's inside")
-- [x] 1 skill — VERIFIED (skills/holtz/SKILL.md)
-- [x] 3 agents — VERIFIED (agents/holtz.md, justine.md, merge-agent.md)
-- [x] 17 reference docs — VERIFIED (skills/holtz/references/*.md = 17)
-- [x] 1 example — VERIFIED (skills/holtz/examples/*.md = 1)
-- [x] 6 Python scripts — VERIFIED (skills/holtz/scripts/*.py = 6)
-- [x] 6 seed patterns — VERIFIED (skills/holtz/patterns/*.md = 6)
-- [x] 6 enforcement hooks — VERIFIED (hooks/*.py excluding _common.py = 6)
-- [x] 619 tests — VERIFIED (619 passed locally)
-- [x] 13,800 lines — VERIFIED (within ±100 tolerance, integration test passes)
+| # | Claim | Location | Status | Notes |
+|---|-------|----------|--------|-------|
+| 1 | 619 tests badge | L6 | VERIFIED | 619 collected |
+| 2 | 62% coverage badge | L7 | VERIFIED | 62% from pytest-cov |
+| 3 | "twenty-one step audit" | L38 | VERIFIED | Steps 0-20 = 21 |
+| 4 | "nine analytical lenses" | L38 | VERIFIED | 9 in lens-registry.md |
+| 5 | "twelve anti-patterns across three tiers" | L50 | VERIFIED | 12 in anti-patterns.md, 3 tiers |
+| 6 | "Seven defined edge types" | L66 | VERIFIED | imports, calls, tests, assumes, diverges_from, shares_pattern, co_fixed |
+| 7 | "the five in active use" | L66 | VERIFIED | Only 5 types have edges in graph |
+| 8 | "Eight steps" for recon | L134 | **OVERSTATED** | Steps 0-4 = 5 steps. BH-001 |
+| 9 | "Sixteen runs" | L160 | VERIFIED | 16 completed runs |
+| 10 | "619 tests across 13,800 lines" | L190 | VERIFIED | 619 tests, 13,737 lines (within tolerance) |
+| 11 | Prediction accuracy "65% HIGH, 38% MEDIUM" | L104 | VERIFIED | Matches convergence-data.md |
+| 12 | "11 runs with prediction tracking" | L104 | VERIFIED | Runs 6-16 = 11 |
+| 13 | "Six seed patterns" | L108 | VERIFIED | 6 files in patterns/ |
+| 14 | PAT-001 "twelve times across six runs" | L102 | VERIFIED | convergence-data.md: 12 manifestations, 6 unique runs |
+| 15 | "Six enforcement hooks" | L198 | VERIFIED | 6 hook .py files (excl _common.py) |
+| 16 | "1 skill, 3 agents, 17 reference docs..." | L216 | VERIFIED | All counts match (integration test guards this) |
+| 17 | Hook descriptions (6 hooks) | L200-210 | VERIFIED | Descriptions match actual hook behavior |
 
-### Narrative Claims
-- [x] "seven-phase audit" — VERIFIED (Phases 0-6 in SKILL.md)
-- [x] "nine analytical lenses" — VERIFIED (9 lenses in lens-registry.md)
-- [x] "Seven edge types" — VERIFIED (imports, calls, tests, assumes, diverges_from, shares_pattern, co_fixed)
-- [x] "twelve anti-patterns across three tiers" — VERIFIED (anti-patterns.md: 4+4+4)
-- [x] "Six enforcement hooks" — VERIFIED (6 hook files)
-- [ ] "Fifteen runs" (line 160) — **OVERSTATED**: 16 runs completed (Run 16 SUMMARY exists in archive)
-- [ ] "After 15 runs" (line 188) — **OVERSTATED**: should be "After 16 runs"
-- [ ] "across all 15 runs" (line 190) — **OVERSTATED**: should reference 16 runs
-- [ ] "across 10 runs with prediction tracking" (line 104) — **OVERSTATED**: 11 runs (6-16)
-- [ ] "72% of the time" for HIGH (line 104) — **OVERSTATED**: actual 65% (15/23)
-- [ ] "range 33-100%" for HIGH (line 104) — **OVERSTATED**: actual range 0-100% (Run 7 had 0%)
-- [x] "MEDIUM at 38%" (line 104) — VERIFIED (10/26 = 38%)
-- [x] "range 0-100%" for MEDIUM — VERIFIED
-- [ ] "showed up four times across four runs" for PAT-001 (line 102) — **UNDERSTATED**: 10+ manifestations across runs 1-15
+## docs/token-profiling-playbook.md
 
-### Research Data (docs/research/convergence-data.md)
-- [ ] Title "15 Runs" — **OVERSTATED**: 16 runs completed
-- [ ] Findings progression table — stops at Run 15, missing Run 16
-- [ ] Observation "0 -> 619 across 15 runs" (line 30) — should reference 16 runs
-- [x] Prediction accuracy tables — include Run 16 data
-- [ ] Aggregate accuracy tables — HIGH shows 65%, but README claims 72%
-- [ ] PAT-001 table — shows 10 manifestations through Run 15, missing Run 16's BH-003/BH-004
+| # | Claim | Location | Status | Notes |
+|---|-------|----------|--------|-------|
+| 18 | "Phase 0" reference | L157 | **OVERSTATED** | Should be "Steps 0-4" or "recon". BH-002 |
+| 19 | "later phases" | L161 | **OVERSTATED** | Should be "later steps". BH-002 |
+| 20 | "execution phases" | L163 | **OVERSTATED** | Should be "execution steps". BH-002 |
+
+## Summary
+- 17 claims VERIFIED
+- 3 claims OVERSTATED (all related to step-numbering refactor)
+- 0 claims FABRICATED
+- 0 claims UNDERSTATED

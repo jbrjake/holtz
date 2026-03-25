@@ -5,132 +5,85 @@
 | Severity | Open | Resolved | Deferred |
 |----------|------|----------|----------|
 | CRITICAL | 0 | 0 | 0 |
-| HIGH | 2 | 0 | 0 |
-| MEDIUM | 1 | 0 | 0 |
-| LOW | 1 | 0 | 0 |
+| HIGH     | 1 | 0 | 0 |
+| MEDIUM   | 1 | 0 | 0 |
+| LOW      | 1 | 0 | 0 |
 
 ## Patterns
 
+_(none yet)_
+
 ## Items
 
-### BH-001: README run count stale — says "Fifteen" but 16 runs completed
+### BH-001: README "Eight steps" recon claim is stale after step-numbering refactor
 **Severity:** HIGH
 **Category:** doc/drift
-**Location:** `README.md:160`
+**Location:** `README.md:134`
 **Status:** OPEN
 **Lens:** public-contract
 **Predicted:** Prediction 1 (confidence: HIGH)
 
-**Problem:** README says "Fifteen runs. Here's what happened." (line 160), "After 15 runs: 619 tests" (line 188), and "across all 15 runs" (line 190). But Run 16 completed (SUMMARY.md archived at docs/holtz/archive/2026-03-25-run16/). Same pattern as BH-002 in Run 16 which fixed "Fourteen" to "Fifteen."
+**Problem:** README says "Steps 0-4: Recon. ... Eight steps, each written to disk immediately." The step-numbering refactor collapsed old Phase 0 sub-phases (0a-0h) into 5 discrete steps (Steps 0-4). "Eight steps" is no longer accurate — it describes the old Phase 0 sub-step count.
 
-**Evidence:**
-- README.md:160 — "Holtz has been auditing his own codebase since it was written. Fifteen runs."
-- README.md:188 — "After 15 runs: 619 tests across 13,800 lines of code."
-- README.md:190 — "across all 15 runs"
-- docs/holtz/archive/2026-03-25-run16/SUMMARY.md exists — Run 16 completed
+**Evidence:** README line 134: `**Steps 0-4: Recon.** ... Eight steps, each written to disk immediately.` — SKILL.md defines exactly 5 recon steps (Step 0 through Step 4). The old Phase 0 had 8+ sub-phases (0a through 0h) which are now collapsed into Steps 0-4 where Steps 1 and 2 are subagent-dispatched bundles.
 
-**Discovery Chain:** Recon step 0g noted "Fifteen runs" in README → checked archive for Run 16 SUMMARY → SUMMARY.md exists → run count is stale
+**Discovery Chain:** Recon Step 0 noted step numbering refactor → README line 134 checked → "Eight steps" doesn't match Step 0-4 count (5 steps) → stale from pre-refactor Phase 0 sub-step count
 
 **Acceptance Criteria:**
-- [ ] README references 16 runs, not 15
-- [ ] All three occurrences (lines 160, 188, 190) updated
-- [ ] Validation: `grep -c "15 runs\|Fifteen runs\|fifteen runs" README.md` returns 0
+- [ ] README line 134 accurately describes the number of recon steps
+- [ ] Count matches the actual step definitions in SKILL.md
 
 **Validation Command:**
 ```bash
-grep -n "15 runs\|Fifteen runs\|fifteen runs" README.md | grep -v "Run 15"
+grep -c "^### Step [0-4]:" skills/holtz/SKILL.md && grep "steps" README.md | grep -i "recon"
 ```
 
-### BH-002: README overstates prediction accuracy — claims 72% but actual is 65%
-**Severity:** HIGH
-**Category:** doc/drift
-**Location:** `README.md:104`
-**Status:** OPEN
-**Lens:** public-contract
-**Predicted:** Prediction 2 (confidence: HIGH)
-
-**Problem:** README claims "HIGH-confidence predictions confirm 72% of the time" across "10 runs with prediction tracking." Research data (docs/research/convergence-data.md) shows 65% (15/23) across 11 runs (6-16). Additionally, the range "33-100%" excludes Run 7 which had 0% (0/3), making the actual range 0-100%.
-
-**Evidence:**
-- README.md:104 — "across 10 runs with prediction tracking, HIGH-confidence predictions confirm 72% of the time (range 33-100%)"
-- docs/research/convergence-data.md aggregate table: HIGH = 23 predicted, 15 confirmed = 65%
-- Run 7 in research data: HIGH = 3 predicted, 0 confirmed = 0%
-
-**Discovery Chain:** Recon identified prediction accuracy claims in README → compared against research data aggregate table → 72% vs 65% divergence confirmed → also found run count (10 vs 11) and range (33-100% vs 0-100%) discrepancies
-
-**Acceptance Criteria:**
-- [ ] README accuracy figure updated to match research data aggregate (65%)
-- [ ] Run count updated from "10 runs" to "11 runs"
-- [ ] HIGH range updated from "33-100%" to "0-100%"
-- [ ] Validation: research data aggregate table matches README claims
-
-**Validation Command:**
-```bash
-python -c "
-import re
-readme = open('README.md').read()
-m = re.search(r'across (\d+) runs.*HIGH.*?(\d+)%.*?range (\d+)-(\d+)%', readme)
-assert m, 'Pattern not found'
-runs, pct, lo, hi = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
-assert runs == 11, f'runs: {runs} != 11'
-assert pct == 65, f'pct: {pct} != 65'
-assert lo == 0, f'lo: {lo} != 0'
-print('PASS')
-"
-```
-
-### BH-003: Research data partially stale — title, findings table, and observations missing Run 16
+### BH-002: Token profiling playbook has stale Phase references
 **Severity:** MEDIUM
 **Category:** doc/drift
-**Location:** `docs/research/convergence-data.md:1`
+**Location:** `docs/token-profiling-playbook.md:157`
 **Status:** OPEN
-**Lens:** public-contract
-**Predicted:** Prediction 5 (confidence: MEDIUM)
+**Lens:** semantic-fidelity
+**Predicted:** Prediction 2 (confidence: HIGH)
 
-**Problem:** Research data title says "15 Runs of Adversarial Self-Audit" but 16 runs exist. The findings progression table (Section 1) stops at Run 15. Observations reference "0 -> 619 across 15 runs." However, the prediction accuracy table (Section 3) was updated with Run 16 data. The file is in a partially-updated state.
+**Problem:** The token-profiling-playbook.md uses "Phase 0" (line 157), "later phases" (line 161), and "execution phases" (line 163-164) after the step-numbering refactor updated all active project files from Phase N to Step N. The playbook was listed in commit 3dba525 ("update showcase and profiling playbook to step numbering") but these references survived the update.
 
 **Evidence:**
-- Line 1: "# Convergence Data: 15 Runs of Adversarial Self-Audit"
-- Line 30: "0 -> 619 across 15 runs"
-- Findings table: last row is Run 15
-- Prediction table: includes Run 16 (verified during recon)
-- PAT-001 table: shows 10 manifestations through Run 15, missing Run 16's 2 instances (BH-003/BH-004 from Run 16)
+- Line 157: `**Symptom:** Phase 0 (reconnaissance/exploration) dominates the heat map.`
+- Line 161: `**Fix:** Audit which recon reads are actually referenced in later phases.`
+- Line 163-164: `Profile the dependency edges between recon and execution phases.`
 
-**Discovery Chain:** README references research data → read research data during audit → title says "15 Runs" → prediction table has Run 16 but findings table does not → partially updated file
+**Discovery Chain:** Step 0 recon found "Phase 0" on line 157 → commit 3dba525 claimed to update this file → grep confirmed 3 stale Phase references survived → partial update
 
 **Acceptance Criteria:**
-- [ ] Title updated to "16 Runs"
-- [ ] Findings progression table includes Run 16 row (4 findings, 0 HIGH, 2 MEDIUM, 0 LOW; but Run 16 had 1 HIGH per SUMMARY)
-- [ ] PAT-001 table includes Run 16 instances
-- [ ] Observations updated to reference 16 runs
-- [ ] Aggregate totals recalculated including Run 16
+- [ ] No "Phase N" references remain in token-profiling-playbook.md
+- [ ] Terminology matches current step-numbering convention
 
 **Validation Command:**
 ```bash
-head -1 docs/research/convergence-data.md | grep -q "16 Runs" && echo "PASS" || echo "FAIL: title still says 15"
+grep -n "Phase [0-9]" docs/token-profiling-playbook.md && echo "FAIL: stale Phase refs" || echo "PASS: no stale refs"
 ```
 
-### BH-004: README understates PAT-001 count — says "four times across four runs" but actual is 12 across 6 runs
+### BH-003: convergence_check.py output messages use stale "phases" terminology
 **Severity:** LOW
 **Category:** doc/drift
-**Location:** `README.md:102`
+**Location:** `skills/holtz/scripts/convergence_check.py:317`
 **Status:** OPEN
-**Lens:** public-contract
+**Lens:** semantic-fidelity
 
-**Problem:** README says "PAT-001 in his own codebase — code-fence-unaware parsing — showed up four times across four runs." Research data (docs/research/convergence-data.md Section 2) documents 10 manifestations through Run 15, plus 2 in Run 16 = 12 total, across runs 1, 2, 4, 14, 15, 16 = 6 runs. The claim was accurate through Run 4 but was never updated.
+**Problem:** Two output messages in convergence_check.py use "phases" instead of "steps" after the step-numbering refactor. Line 317: "sweep phases" in the RAPID-FIRE rejection message. Line 331: "Run audit phases first" in the NO_ITEMS message. These are displayed to the auditor and should use current terminology.
 
 **Evidence:**
-- README.md:102 — "showed up four times across four runs"
-- docs/research/convergence-data.md PAT-001 table: 10 entries (runs 1-15)
-- docs/holtz/archive/2026-03-25-run16/SUMMARY.md: "PAT-001: code-fence-unaware parsing — 2 instances this run"
+- Line 317: `"audit cycle — re-read punchlist, sweep phases, run full test suite. "`
+- Line 331: `"NO ITEMS: Punchlist has never contained any items. Run audit phases first."`
 
-**Discovery Chain:** Doc-claims checklist flagged PAT-001 count → compared README against research data → 4 vs 12 manifestations → understated by 3x
+**Discovery Chain:** Step 8 adversarial code audit → grep for "phase|Phase" in scripts/*.py → 2 stale references in convergence_check.py output strings survived commit 66e4d67 ("update scripts and hooks to step numbering")
 
 **Acceptance Criteria:**
-- [ ] README PAT-001 count updated to reflect actual total
-- [ ] Validation: README PAT-001 description matches research data
+- [ ] No "phases" references in convergence_check.py output strings
+- [ ] Terms match current step-numbering convention
 
 **Validation Command:**
 ```bash
-grep "four times across four runs" README.md && echo "FAIL: still says four" || echo "PASS"
+grep -n "phase" skills/holtz/scripts/convergence_check.py | grep -v "label_phases\|current_phase" && echo "FAIL" || echo "PASS"
 ```

@@ -2,7 +2,7 @@
 
 **Project:** holtz
 **Established:** 2026-03-22
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-25
 
 ## Documented Intent
 
@@ -16,8 +16,8 @@ CLAUDE.md defines branch model (main/dev/feature), conventional commit format, r
 
 - `markdown_utils.py` is the shared leaf module for scripts — imported by validators and convergence tracker but imports nothing from the project
 - `hooks/_common.py` is the shared leaf module for hooks — imported by all hook scripts but imports nothing from the project (parallel to `markdown_utils.py` for the scripts layer)
-- `validate_punchlist.py` and `convergence_check.py` depend on `markdown_utils.py` but not on each other
-- `impact_graph.py` is standalone — no internal imports
+- `validate_punchlist.py`, `convergence_check.py`, and `pattern_brief_compact.py` depend on `markdown_utils.py` but not on each other
+- `impact_graph.py` and `profiler_plugin.py` are standalone — no internal imports
 - Tests depend on source modules (one-way); source never imports from tests
 
 ### Boundaries
@@ -29,6 +29,8 @@ CLAUDE.md defines branch model (main/dev/feature), conventional commit format, r
 - `impact_graph.py` owns knowledge graph operations
 - `convergence_gate.py` owns stop-event blocking until audit converges (reads STATUS.md, checks staleness)
 - `convergence_primer.py` owns resume-context injection on UserPromptSubmit (reads STATUS.md fields, primes model to continue)
+- `pattern_brief_compact.py` owns pattern brief parsing and compact formatting for subagent consumption (reads `patterns-brief.md`, outputs oneliner/twoliner/structured formats)
+- `profiler_plugin.py` owns Holtz-specific session-type detection and step patterns for the token profiler (standalone plugin loaded at runtime via duck-typed protocol)
 - All JSON persistence uses atomic writes (tempfile + rename)
 
 ### Conventions
@@ -56,6 +58,8 @@ CLAUDE.md defines branch model (main/dev/feature), conventional commit format, r
 |--------|-----------|
 | `validate_punchlist.py` | `markdown_utils.py` |
 | `convergence_check.py` | `markdown_utils.py` |
+| `pattern_brief_compact.py` | `markdown_utils.py` |
+| `profiler_plugin.py` | (none — standalone) |
 | `impact_graph.py` | (none — standalone) |
 | `markdown_utils.py` | (none — leaf) |
 | `hooks/_common.py` | (none — hook leaf) |
@@ -71,7 +75,7 @@ CLAUDE.md defines branch model (main/dev/feature), conventional commit format, r
 **Assessment:** clean top-down
 
 **Layers (top to bottom):**
-1. Application layer: `validate_punchlist.py`, `convergence_check.py`, `impact_graph.py`
+1. Application layer: `validate_punchlist.py`, `convergence_check.py`, `impact_graph.py`, `pattern_brief_compact.py`, `profiler_plugin.py`
 2. Hook layer: `impact_graph_gate.py`, `status_staleness_gate.py`, `artifact_verification.py`, `subagent_findings_check.py`, `convergence_gate.py`, `convergence_primer.py`
 3. Utility layer: `markdown_utils.py`, `hooks/_common.py`
 
@@ -95,6 +99,8 @@ CLAUDE.md defines branch model (main/dev/feature), conventional commit format, r
 - Fence state machine cleanly isolated in `markdown_utils.py`
 - Impact graph fully self-contained with no leaked internals
 - `convergence_check.py` contains both test runner detection AND convergence logic — two responsibilities, but they're cohesive (convergence depends on test results)
+- `pattern_brief_compact.py` well-contained: parses one input format, produces compact output, depends only on `markdown_utils` for fence masking
+- `profiler_plugin.py` fully standalone: implements duck-typed protocol, no runtime project imports (TYPE_CHECKING-only reference to external `token_profiler.models`)
 
 ## Drift Log
 
