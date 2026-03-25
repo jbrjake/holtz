@@ -57,3 +57,27 @@ Users can add custom lenses by appending new sections following the same four-fi
 **Audit priorities:** README feature claims vs actual implementation, install/setup instruction accuracy, dependency list correctness, feature coverage gaps
 **Failure modes:** Aspirational documentation that describes intended behavior instead of implemented behavior, stale install instructions, feature gaps where code has capabilities the README omits, marketing-code divergence
 **Entry point:** Read README.md end-to-end. For each concrete claim, grep for the implementing code. Classify as VERIFIED, OVERSTATED (code does something weaker), FABRICATED (code does not do this), or UNDERSTATED (code does more than claimed)
+
+## concurrency
+**Focus:** Thread safety, race conditions, synchronization correctness, deadlock potential
+**Audit priorities:** Shared mutable state protection, lock ordering consistency, atomic operation correctness, timeout presence on blocking calls, absence of TOCTOU patterns at trust boundaries
+**Failure modes:** Data races, deadlocks, priority inversion, blocked-thread pool exhaustion, non-deterministic corruption that passes all tests and only manifests under production load
+**Entry point:** Identify all shared mutable state (globals, class-level mutables, caches, connection pools). For each: trace all access sites, check synchronization. Run `go test -race` or equivalent. Ask: "What happens if two requests hit this code path simultaneously?"
+
+## resource-lifecycle
+**Focus:** Acquisition, use, and release of system resources on all code paths
+**Audit priorities:** File handles, DB connections, sockets, locks, temp files, subprocesses — each must have a corresponding release on every path including exceptions and early returns. Language-idiomatic cleanup (Python `with`, Go `defer`, Java try-with-resources) should be the norm, not the exception.
+**Failure modes:** Gradual handle/connection exhaustion, "too many open files" after hours of runtime, connection pool depletion, orphaned temp files filling disk, leaked locks causing deadlocks
+**Entry point:** Grep for resource acquisition calls (`open`, `connect`, `socket`, `Lock.acquire`, `subprocess.Popen`). For each: verify cleanup on all paths. Check that cleanup itself handles errors. Ask: "If this function raises on line N, which resources are leaked?"
+
+## idempotency
+**Focus:** Whether operations are safe to execute more than once with the same input
+**Audit priorities:** Database writes (INSERT vs UPSERT), payment/billing operations, notification dispatch, event handlers, API endpoints that mutate state, queue consumers that may receive duplicate messages
+**Failure modes:** Duplicate charges, duplicate notifications, duplicate database records, double-counted metrics, non-convergent state after retry
+**Entry point:** For each state-mutating operation: what happens if the exact same request arrives twice? Is there a deduplication key, idempotency token, or UPSERT? For event consumers: does the handler use at-least-once delivery semantics? Ask: "If the network hiccups and this message is delivered twice, does the user get charged twice?"
+
+## observability
+**Focus:** Whether the code emits enough telemetry to diagnose failures in production without attaching a debugger
+**Audit priorities:** Structured logging at decision points, correlation IDs propagated across service boundaries, metrics for latency/error-rate/saturation, error logs with sufficient context (request ID, user ID, input summary), no PII in logs, log levels appropriate to severity
+**Failure modes:** On-call engineer cannot diagnose a 2 AM page without reproducing locally, missing correlation IDs make distributed traces unfollowable, PII leakage in logs, log volume so high that signal is buried, metrics gaps that hide degradation
+**Entry point:** For each error path: is there a log entry with enough context to diagnose without source code? For each service boundary: is a correlation ID propagated? For each critical operation: is there a latency metric? Ask: "If this fails at 2 AM, can the on-call engineer figure out what happened from the logs alone?"
