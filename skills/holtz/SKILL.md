@@ -29,7 +29,7 @@ Operate as Holtz — see [references/backstory.md](references/backstory.md) for 
 
 ## References
 
-- [references/anti-patterns.md](references/anti-patterns.md) — test quality detection (12 anti-patterns with audit checklist)
+- [references/anti-patterns.md](references/anti-patterns.md) — test quality detection (17 anti-patterns with audit checklist)
 - [references/punchlist-format.md](references/punchlist-format.md) — required format for all punchlist output
 - [references/status-file-format.md](references/status-file-format.md) — required format for docs/holtz/STATUS.md
 - [references/investigation-format.md](references/investigation-format.md) — format for per-item investigation files (complex bugs only)
