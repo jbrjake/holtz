@@ -85,7 +85,7 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 - **One step, one file.** Each recon step and audit batch writes to its own file IMMEDIATELY. Write first, think later.
 - **Subagents for heavy scanning.** Delegate grep/read-heavy work (test file audits, module scans) to Agent subagents. Their tool output stays in THEIR context, not yours. They return a short summary + write detailed findings to disk.
 - **Re-read before every phase.** At the start of each phase, read the output files you need. Assume prior context is gone.
-- **After compaction: STOP.** Re-read `docs/holtz/STATUS.md` and the latest phase output files before continuing.
+- **After compaction or `/clear`: STOP.** Re-read `docs/holtz/STATUS.md` and the latest phase output files before continuing. After `/clear`, the convergence primer hook injects resume context automatically.
 - **`docs/holtz/STATUS.md` is your program counter.** Update it after completing each step with: current phase, current step, what's done, what's next. This is the FIRST file you read after any compaction. After compaction, re-read STATUS.md to recover position *and strategy* — which lens is active, what patterns have been found, and what tactical approach is being used.
 
 ## Lifecycle: Resuming Prior Runs
@@ -269,7 +269,7 @@ Read [references/lens-registry.md](references/lens-registry.md) for the full set
 - **MAX_ITERATIONS:** 15 total fix-loop iterations. After 15, stop and report remaining items to the user.
 - **SAME_ITEM:** 3 attempts on the same punchlist item. After 3, escalate to the user.
 - **NO_PROGRESS:** 3 consecutive iterations with no items resolved. Stop and report.
-- **CONTEXT_BUDGET:** If context utilization exceeds 60%, compact proactively — re-read STATUS.md and worklist after compaction.
+- **CONTEXT_BUDGET:** If context utilization exceeds 60%, wrap up the current item and proceed to the convergence boundary — update STATUS.md and instruct `/clear`. Do not wait for compaction.
 
 ```dot
 digraph {
@@ -289,25 +289,36 @@ digraph {
   clean [label="Clean?" shape=diamond]
   converged [label="CONVERGED"]
   reset [label="Add findings to punchlist\nReset affected lenses\nto incomplete"]
+  boundary [label="Update STATUS.md\nTell user: /clear\nSTOP" shape=octagon style=bold]
 
   recover -> fix_loop
   fix_loop -> breaker
   breaker -> stop [label="yes"]
   breaker -> lens_clean [label="no"]
   lens_clean -> mark [label="yes"]
-  lens_clean -> recover [label="no\n(continue fixing)"]
+  lens_clean -> boundary [label="no\n(iteration boundary)"]
   mark -> switch
   switch -> next_lens [label="yes"]
   switch -> all_done [label="no"]
-  next_lens -> recover
+  next_lens -> boundary
   all_done -> final [label="yes"]
-  all_done -> recover [label="no"]
+  all_done -> boundary [label="no"]
   final -> clean
   clean -> converged [label="yes"]
   clean -> reset [label="no"]
-  reset -> recover
+  reset -> boundary
+  boundary -> recover [style=dashed label="/clear + resume"]
 }
 ```
+
+#### Convergence Boundary Protocol
+
+Each iteration gets fresh context. At the end of each iteration — regardless of remaining context:
+
+1. Run `convergence_check.py`. If **CONVERGED**, write `docs/holtz/SUMMARY.md` and stop.
+2. If not: update STATUS.md (position, next action, active lens, lens state). Tell the user: *"Not converged. `/clear` then any message to continue."* Stop.
+
+After `/clear`, the convergence primer hook injects resume context — the user types anything and the model resumes from STATUS.md. The convergence gate hook enforces this: blocks premature stops until the `/clear` instruction is delivered.
 
 **Filtered reads in convergence loop:** Each iteration re-reads the punchlist. If the punchlist has more than 6 items, use:
 ```bash
@@ -373,4 +384,4 @@ Write changes to docs/holtz/architecture-baseline.md. Report what sections chang
 3. Complete every phase in order. Convergence is reached when the process says so, not when you think so.
 4. Every finding needs evidence, acceptance criteria, and a validation command. No exceptions.
 5. Verify artifacts exist with `ls` before claiming a phase is complete. If `impact-graph.json` does not exist on disk, the graph was not created — regardless of what you believe you did.
-6. Keep coming back until convergence. Not until anyone is tired. Until it converges.
+6. Keep coming back until convergence. Each iteration gets fresh context — update STATUS.md, tell the user to `/clear`, and stop. The convergence gate hook enforces this.

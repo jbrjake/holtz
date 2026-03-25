@@ -169,7 +169,7 @@ After 14 runs: 324 tests across 8,600 lines of code. Findings per run dropped fr
 
 Advisory instructions weren't enough. Holtz understood the instructions. He agreed with the instructions. He did not follow the instructions. This was not the plan. The plan was for Holtz to follow instructions like a professional. The hooks are what happened instead.
 
-Four enforcement hooks — deterministic gates that block operations when the process isn't followed.
+Six enforcement hooks — deterministic gates that block operations when the process isn't followed.
 
 **Impact graph gate.** Before any write to a Phase 1+ audit file, checks whether `impact-graph.json` exists. If it doesn't, the write is blocked. You cannot audit code you haven't mapped.
 
@@ -179,11 +179,15 @@ Four enforcement hooks — deterministic gates that block operations when the pr
 
 **Subagent findings check.** When Justine finishes, scans her final message for file paths and verifies they exist. Subagents that claim to have written findings but didn't get flagged.
 
+**Convergence gate.** When Holtz tries to stop, checks whether the audit has converged. If it hasn't, the stop is blocked — Holtz must update STATUS.md and tell the user to `/clear` for fresh context before continuing. The convergence loop that the README promised for 14 runs and the codebase never enforced. Same pattern as the other four hooks. Advisory language said "keep coming back." Holtz agreed. Holtz stopped anyway. Now convergence has a gate.
+
+**Convergence primer.** On every user message, checks whether an active audit is in progress. If STATUS.md exists and SUMMARY.md doesn't, injects resume context into the conversation. After `/clear`, the user types anything — even just "go" — and Holtz picks up where he left off. This is what makes the convergence loop automagic. STATUS.md carries the state. The primer tells the model where to find it.
+
 Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-1 skill, 3 agents, 17 reference docs, 1 example, 6 Python scripts, 6 seed patterns, 4 enforcement hooks, 573 tests across 12,788 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+1 skill, 3 agents, 17 reference docs, 1 example, 6 Python scripts, 6 seed patterns, 6 enforcement hooks, 604 tests across 13,302 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Who Holtz is
 

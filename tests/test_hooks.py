@@ -67,6 +67,20 @@ def assert_warned(code, output, reason_substring=""):
         assert reason_substring in context
 
 
+def assert_stop_blocked(code, output, reason_substring=""):
+    """Assert that the Stop hook blocked the stop."""
+    assert code == 0, f"Expected exit 0, got {code}"
+    assert output.get("decision") == "block"
+    if reason_substring:
+        assert reason_substring in output.get("reason", "")
+
+
+def assert_stop_allowed(code, output):
+    """Assert that the Stop hook allowed the stop (no output)."""
+    assert code == 0, f"Expected exit 0, got {code}"
+    assert output == {}
+
+
 # --- _common.py output format ---
 
 
@@ -159,6 +173,43 @@ class TestModernOutputFormat:
 
     def test_exit_block_no_stderr(self):
         _, _, stderr = self._run_common_func("exit_block", "test block")
+        assert stderr == ""
+
+    # -- exit_stop_allow --
+
+    def test_exit_stop_allow_exits_zero(self):
+        code, _, _ = self._run_common_func("exit_stop_allow")
+        assert code == 0
+
+    def test_exit_stop_allow_no_output(self):
+        """Stop allow should produce no stdout (empty = allow)."""
+        _, output, _ = self._run_common_func("exit_stop_allow")
+        assert output == {}
+
+    def test_exit_stop_allow_no_stderr(self):
+        _, _, stderr = self._run_common_func("exit_stop_allow")
+        assert stderr == ""
+
+    # -- exit_stop_block --
+
+    def test_exit_stop_block_exits_zero(self):
+        code, _, _ = self._run_common_func("exit_stop_block", "test reason")
+        assert code == 0
+
+    def test_exit_stop_block_outputs_stop_format(self):
+        """Stop block should use decision/reason format, not PreToolUse format."""
+        _, output, _ = self._run_common_func("exit_stop_block", "test reason")
+        assert output.get("decision") == "block"
+        assert output.get("reason") == "test reason"
+
+    def test_exit_stop_block_no_pretooluse_fields(self):
+        """Stop hooks should NOT use PreToolUse format."""
+        _, output, _ = self._run_common_func("exit_stop_block", "test reason")
+        assert "hookSpecificOutput" not in output
+        assert "continue" not in output
+
+    def test_exit_stop_block_no_stderr(self):
+        _, _, stderr = self._run_common_func("exit_stop_block", "test reason")
         assert stderr == ""
 
 
@@ -527,5 +578,250 @@ class TestSubagentFindingsCheck:
         """SubagentStop hooks should not include hookSpecificOutput."""
         event = {"last_assistant_message": ""}
         code, output, _ = run_hook("subagent_findings_check.py", event)
+        assert code == 0
+        assert "hookSpecificOutput" not in output
+
+
+# --- convergence_gate.py (Stop) ---
+
+
+class TestConvergenceGate:
+    """Tests for the convergence gate Stop hook."""
+
+    def _make_status(self, tmp_path, content="**Phase:** 4\n**Status:** IN PROGRESS", stale=False):
+        """Create a STATUS.md with the given content."""
+        holtz = tmp_path / "docs" / "holtz"
+        holtz.mkdir(parents=True, exist_ok=True)
+        status = holtz / "STATUS.md"
+        status.write_text(
+            f"# Holtz Status\n\n{content}\n\n## Next Action\nContinue fixing items."
+        )
+        if stale:
+            os.utime(str(status), (0, 0))
+        return status
+
+    def _make_summary(self, tmp_path):
+        """Create a SUMMARY.md (indicates convergence)."""
+        holtz = tmp_path / "docs" / "holtz"
+        holtz.mkdir(parents=True, exist_ok=True)
+        (holtz / "SUMMARY.md").write_text("# Summary\nConverged.")
+
+    def _make_punchlist(self, tmp_path, open_count=3):
+        """Create a PUNCHLIST.md with open items."""
+        holtz = tmp_path / "docs" / "holtz"
+        holtz.mkdir(parents=True, exist_ok=True)
+        items = "\n".join(
+            f"### BH-{i:03d}: Item {i}\n**Status:** OPEN\n"
+            for i in range(1, open_count + 1)
+        )
+        (holtz / "PUNCHLIST.md").write_text(f"# Punchlist\n\n{items}")
+
+    def test_allows_when_no_holtz_dir(self, tmp_path):
+        """No docs/holtz/ means no active run — allow stop."""
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert_stop_allowed(code, output)
+
+    def test_allows_when_summary_exists(self, tmp_path):
+        """SUMMARY.md exists means converged — allow stop."""
+        self._make_status(tmp_path)
+        self._make_summary(tmp_path)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert_stop_allowed(code, output)
+
+    def test_allows_when_stop_hook_active(self, tmp_path):
+        """Second stop attempt (stop_hook_active=true) — allow regardless."""
+        self._make_status(tmp_path)
+        event = {"cwd": str(tmp_path), "stop_hook_active": True}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert_stop_allowed(code, output)
+
+    def test_allows_when_status_complete(self, tmp_path):
+        """STATUS.md says COMPLETE — allow stop."""
+        self._make_status(tmp_path, content="**Phase:** 6\n**Status:** COMPLETE")
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert_stop_allowed(code, output)
+
+    def test_allows_when_status_converged(self, tmp_path):
+        """STATUS.md says CONVERGED — allow stop."""
+        self._make_status(tmp_path, content="**Phase:** 6\n**Status:** CONVERGED")
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert_stop_allowed(code, output)
+
+    def test_allows_when_status_stale(self, tmp_path):
+        """Stale STATUS.md (>30 min) likely from previous session — allow stop."""
+        self._make_status(tmp_path, stale=True)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert_stop_allowed(code, output)
+
+    def test_blocks_when_active_run(self, tmp_path):
+        """Active run, not converged — block stop."""
+        self._make_status(tmp_path)
+        self._make_punchlist(tmp_path, open_count=5)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert_stop_blocked(code, output, "CONVERGENCE GATE")
+
+    def test_block_includes_phase(self, tmp_path):
+        """Block message should include current phase."""
+        self._make_status(tmp_path, content="**Phase:** 4\n**Status:** IN PROGRESS")
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert_stop_blocked(code, output, "Phase: 4")
+
+    def test_block_includes_open_count(self, tmp_path):
+        """Block message should include approximate open item count."""
+        self._make_status(tmp_path)
+        self._make_punchlist(tmp_path, open_count=3)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert_stop_blocked(code, output, "~3")
+
+    def test_blocks_converging_status(self, tmp_path):
+        """STATUS.md says CONVERGING (not CONVERGED) — block stop."""
+        self._make_status(tmp_path, content="**Phase:** 6\n**Status:** CONVERGING")
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert_stop_blocked(code, output, "CONVERGENCE GATE")
+
+    def test_stop_output_format_has_no_pretooluse_fields(self, tmp_path):
+        """Stop hook output should use Stop format, not PreToolUse format."""
+        self._make_status(tmp_path)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert code == 0
+        assert output.get("decision") == "block"
+        assert "reason" in output
+        assert "hookSpecificOutput" not in output
+        assert "continue" not in output
+
+    def test_handles_empty_stdin(self):
+        """Empty stdin should not crash."""
+        result = subprocess.run(
+            [sys.executable, os.path.join(HOOKS_DIR, "convergence_gate.py")],
+            input="",
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 0
+
+    def test_blocks_with_no_punchlist(self, tmp_path):
+        """Active run with no punchlist yet (mid-recon) — still block."""
+        self._make_status(tmp_path, content="**Phase:** 0\n**Status:** IN PROGRESS")
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert_stop_blocked(code, output, "CONVERGENCE GATE")
+
+    def test_block_message_includes_clear_instruction(self, tmp_path):
+        """Block reason should tell Holtz to instruct user to /clear."""
+        self._make_status(tmp_path)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert_stop_blocked(code, output, "/clear")
+
+
+# --- convergence_primer.py (UserPromptSubmit) ---
+
+
+class TestConvergencePrimer:
+    """Tests for the convergence primer UserPromptSubmit hook."""
+
+    def _make_status(self, tmp_path, content="**Phase:** 4\n**Status:** IN PROGRESS"):
+        """Create a STATUS.md with the given content."""
+        holtz = tmp_path / "docs" / "holtz"
+        holtz.mkdir(parents=True, exist_ok=True)
+        status = holtz / "STATUS.md"
+        status.write_text(
+            f"# Holtz Status\n\n{content}\n\n## Next Action\nFix BH-005 via fast path."
+        )
+        return status
+
+    def _make_summary(self, tmp_path):
+        """Create a SUMMARY.md (indicates convergence)."""
+        holtz = tmp_path / "docs" / "holtz"
+        holtz.mkdir(parents=True, exist_ok=True)
+        (holtz / "SUMMARY.md").write_text("# Summary\nConverged.")
+
+    def test_silent_when_no_holtz_dir(self, tmp_path):
+        """No docs/holtz/ means no active run — silent."""
+        event = {"cwd": str(tmp_path), "user_message": "go"}
+        code, output, _ = run_hook("convergence_primer.py", event)
+        assert_allowed(code, output)
+
+    def test_silent_when_summary_exists(self, tmp_path):
+        """SUMMARY.md exists means converged — silent."""
+        self._make_status(tmp_path)
+        self._make_summary(tmp_path)
+        event = {"cwd": str(tmp_path), "user_message": "go"}
+        code, output, _ = run_hook("convergence_primer.py", event)
+        assert_allowed(code, output)
+
+    def test_silent_when_status_complete(self, tmp_path):
+        """STATUS.md says COMPLETE — silent."""
+        self._make_status(tmp_path, content="**Phase:** 6\n**Status:** COMPLETE")
+        event = {"cwd": str(tmp_path), "user_message": "go"}
+        code, output, _ = run_hook("convergence_primer.py", event)
+        assert_allowed(code, output)
+
+    def test_silent_when_status_converged(self, tmp_path):
+        """STATUS.md says CONVERGED — silent."""
+        self._make_status(tmp_path, content="**Phase:** 6\n**Status:** CONVERGED")
+        event = {"cwd": str(tmp_path), "user_message": "go"}
+        code, output, _ = run_hook("convergence_primer.py", event)
+        assert_allowed(code, output)
+
+    def test_injects_context_when_active(self, tmp_path):
+        """Active run should inject resume context."""
+        self._make_status(tmp_path)
+        event = {"cwd": str(tmp_path), "user_message": "go"}
+        code, output, _ = run_hook("convergence_primer.py", event)
+        assert_warned(code, output, "HOLTZ CONVERGENCE LOOP")
+
+    def test_context_includes_phase(self, tmp_path):
+        """Injected context should include phase info."""
+        self._make_status(tmp_path, content="**Phase:** 3\n**Status:** IN PROGRESS")
+        event = {"cwd": str(tmp_path), "user_message": "continue"}
+        code, output, _ = run_hook("convergence_primer.py", event)
+        assert_warned(code, output, "Phase 3")
+
+    def test_context_includes_next_action(self, tmp_path):
+        """Injected context should include next action from STATUS.md."""
+        self._make_status(tmp_path)
+        event = {"cwd": str(tmp_path), "user_message": "go"}
+        code, output, _ = run_hook("convergence_primer.py", event)
+        assert_warned(code, output, "Fix BH-005")
+
+    def test_handles_empty_stdin(self):
+        """Empty stdin should not crash."""
+        result = subprocess.run(
+            [sys.executable, os.path.join(HOOKS_DIR, "convergence_primer.py")],
+            input="",
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 0
+
+    def test_handles_malformed_status(self, tmp_path):
+        """Malformed STATUS.md should not crash, uses 'unknown' for missing fields."""
+        holtz = tmp_path / "docs" / "holtz"
+        holtz.mkdir(parents=True, exist_ok=True)
+        (holtz / "STATUS.md").write_text("This is not a valid status file")
+        event = {"cwd": str(tmp_path), "user_message": "go"}
+        code, output, _ = run_hook("convergence_primer.py", event)
+        # Should still inject context with 'unknown' fields
+        assert code == 0
+        assert_warned(code, output, "HOLTZ CONVERGENCE LOOP")
+
+    def test_userpromptsubmit_does_not_include_hook_specific_output(self, tmp_path):
+        """UserPromptSubmit hooks should not include hookSpecificOutput."""
+        self._make_status(tmp_path)
+        event = {"cwd": str(tmp_path), "user_message": "go"}
+        code, output, _ = run_hook("convergence_primer.py", event)
         assert code == 0
         assert "hookSpecificOutput" not in output
