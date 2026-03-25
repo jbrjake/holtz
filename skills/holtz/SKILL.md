@@ -91,6 +91,8 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 
 - **One step, one file.** Each recon step and audit batch writes to its own file IMMEDIATELY. Write first, think later.
 - **Subagents for heavy scanning.** Delegate grep/read-heavy work (test file audits, module scans) to Agent subagents. Their tool output stays in THEIR context, not yours. They return a short summary + write detailed findings to disk.
+- **Batch independent tool calls.** When multiple checks are independent (no data dependency between them), execute them as parallel tool calls in a single turn. Do not narrate between independent operations. Each eliminated turn saves its narration text from being cached on every subsequent API call.
+- **Terse within phases.** Between tool calls within a phase, do not explain what you are about to do. Execute, then report findings. Save narrative for phase boundaries and significant discoveries. Every sentence of narration enters context permanently.
 - **Re-read before every step.** At the start of each step, read the output files you need. Assume prior context is gone.
 - **After compaction or `/clear`: STOP.** Re-read `docs/holtz/STATUS.md` and the latest step output files before continuing. After `/clear`, the convergence primer hook injects resume context automatically.
 - **`docs/holtz/STATUS.md` is your program counter.** Update it after completing each step with: current step, what's done, what's next. This is the FIRST file you read after any compaction. After compaction, re-read STATUS.md to recover position *and strategy* — which lens is active, what patterns have been found, and what tactical approach is being used.
