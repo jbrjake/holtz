@@ -646,7 +646,7 @@ class TestSubagentFindingsCheck:
 class TestConvergenceGate:
     """Tests for the convergence gate Stop hook."""
 
-    def _make_status(self, tmp_path, content="**Phase:** 4\n**Status:** IN PROGRESS", stale=False):
+    def _make_status(self, tmp_path, content="**Step:** 10\n**Status:** IN PROGRESS", stale=False):
         """Create a STATUS.md with the given content."""
         holtz = tmp_path / "docs" / "holtz"
         holtz.mkdir(parents=True, exist_ok=True)
@@ -697,14 +697,14 @@ class TestConvergenceGate:
 
     def test_allows_when_status_complete(self, tmp_path):
         """STATUS.md says COMPLETE — allow stop."""
-        self._make_status(tmp_path, content="**Phase:** 6\n**Status:** COMPLETE")
+        self._make_status(tmp_path, content="**Step:** 20\n**Status:** COMPLETE")
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_hook("convergence_gate.py", event)
         assert_stop_allowed(code, output)
 
     def test_allows_when_status_converged(self, tmp_path):
         """STATUS.md says CONVERGED — allow stop."""
-        self._make_status(tmp_path, content="**Phase:** 6\n**Status:** CONVERGED")
+        self._make_status(tmp_path, content="**Step:** 20\n**Status:** CONVERGED")
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_hook("convergence_gate.py", event)
         assert_stop_allowed(code, output)
@@ -724,12 +724,12 @@ class TestConvergenceGate:
         code, output, _ = run_hook("convergence_gate.py", event)
         assert_stop_blocked(code, output, "CONVERGENCE GATE")
 
-    def test_block_includes_phase(self, tmp_path):
-        """Block message should include current phase."""
-        self._make_status(tmp_path, content="**Phase:** 4\n**Status:** IN PROGRESS")
+    def test_block_includes_step(self, tmp_path):
+        """Block message should include current step."""
+        self._make_status(tmp_path, content="**Step:** 10\n**Status:** IN PROGRESS")
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_hook("convergence_gate.py", event)
-        assert_stop_blocked(code, output, "Phase: 4")
+        assert_stop_blocked(code, output, "Step: 10")
 
     def test_block_includes_open_count(self, tmp_path):
         """Block message should include approximate open item count."""
@@ -741,7 +741,7 @@ class TestConvergenceGate:
 
     def test_blocks_converging_status(self, tmp_path):
         """STATUS.md says CONVERGING (not CONVERGED) — block stop."""
-        self._make_status(tmp_path, content="**Phase:** 6\n**Status:** CONVERGING")
+        self._make_status(tmp_path, content="**Step:** 15\n**Status:** CONVERGING")
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_hook("convergence_gate.py", event)
         assert_stop_blocked(code, output, "CONVERGENCE GATE")
@@ -770,7 +770,7 @@ class TestConvergenceGate:
 
     def test_blocks_with_no_punchlist(self, tmp_path):
         """Active run with no punchlist yet (mid-recon) — still block."""
-        self._make_status(tmp_path, content="**Phase:** 0\n**Status:** IN PROGRESS")
+        self._make_status(tmp_path, content="**Step:** 0\n**Status:** IN PROGRESS")
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_hook("convergence_gate.py", event)
         assert_stop_blocked(code, output, "CONVERGENCE GATE")
@@ -791,9 +791,9 @@ class TestConvergenceGate:
         fenced_content = (
             "```markdown\n"
             "**Status:** CONVERGED\n"
-            "**Phase:** 6\n"
+            "**Step:** 20\n"
             "```\n\n"
-            "**Phase:** 4\n"
+            "**Step:** 10\n"
             "**Status:** IN PROGRESS"
         )
         self._make_status(tmp_path, content=fenced_content)
@@ -832,7 +832,7 @@ class TestConvergenceGate:
 class TestConvergencePrimer:
     """Tests for the convergence primer UserPromptSubmit hook."""
 
-    def _make_status(self, tmp_path, content="**Phase:** 4\n**Status:** IN PROGRESS"):
+    def _make_status(self, tmp_path, content="**Step:** 10\n**Status:** IN PROGRESS"):
         """Create a STATUS.md with the given content."""
         holtz = tmp_path / "docs" / "holtz"
         holtz.mkdir(parents=True, exist_ok=True)
@@ -864,14 +864,14 @@ class TestConvergencePrimer:
 
     def test_silent_when_status_complete(self, tmp_path):
         """STATUS.md says COMPLETE — silent."""
-        self._make_status(tmp_path, content="**Phase:** 6\n**Status:** COMPLETE")
+        self._make_status(tmp_path, content="**Step:** 20\n**Status:** COMPLETE")
         event = {"cwd": str(tmp_path), "user_message": "go"}
         code, output, _ = run_hook("convergence_primer.py", event)
         assert_allowed(code, output)
 
     def test_silent_when_status_converged(self, tmp_path):
         """STATUS.md says CONVERGED — silent."""
-        self._make_status(tmp_path, content="**Phase:** 6\n**Status:** CONVERGED")
+        self._make_status(tmp_path, content="**Step:** 20\n**Status:** CONVERGED")
         event = {"cwd": str(tmp_path), "user_message": "go"}
         code, output, _ = run_hook("convergence_primer.py", event)
         assert_allowed(code, output)
@@ -883,12 +883,12 @@ class TestConvergencePrimer:
         code, output, _ = run_hook("convergence_primer.py", event)
         assert_warned(code, output, "HOLTZ CONVERGENCE LOOP")
 
-    def test_context_includes_phase(self, tmp_path):
-        """Injected context should include phase info."""
-        self._make_status(tmp_path, content="**Phase:** 3\n**Status:** IN PROGRESS")
+    def test_context_includes_step(self, tmp_path):
+        """Injected context should include step info."""
+        self._make_status(tmp_path, content="**Step:** 8\n**Status:** IN PROGRESS")
         event = {"cwd": str(tmp_path), "user_message": "continue"}
         code, output, _ = run_hook("convergence_primer.py", event)
-        assert_warned(code, output, "Phase 3")
+        assert_warned(code, output, "Step 8")
 
     def test_context_includes_next_action(self, tmp_path):
         """Injected context should include next action from STATUS.md."""
@@ -928,20 +928,20 @@ class TestConvergencePrimer:
         assert "hookSpecificOutput" not in output
 
     def test_fence_does_not_mislead_primer(self, tmp_path):
-        """Code fence with **Phase:** 6 must not override real Phase 4 (PAT-001).
+        """Code fence with **Step:** 20 must not override real Step 10 (PAT-001).
 
         BH-004/BH-005 run 15: primer must mask code fences before field extraction.
         """
         fenced_content = (
             "```markdown\n"
-            "**Phase:** 6\n"
+            "**Step:** 20\n"
             "**Status:** CONVERGED\n"
             "```\n\n"
-            "**Phase:** 4\n"
+            "**Step:** 10\n"
             "**Status:** IN PROGRESS"
         )
         self._make_status(tmp_path, content=fenced_content)
         event = {"cwd": str(tmp_path), "user_message": "go"}
         code, output, _ = run_hook("convergence_primer.py", event)
-        # Should inject context with Phase 4, not silently exit
-        assert_warned(code, output, "Phase 4")
+        # Should inject context with Step 10, not silently exit
+        assert_warned(code, output, "Step 10")
