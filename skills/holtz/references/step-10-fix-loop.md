@@ -1,6 +1,6 @@
-# Phase 4: Fix Loop (TDD) — Detailed Procedures
+# Step 10: TDD Fix Loop — Detailed Procedures
 
-Read this file at the start of Phase 4. This file is shared by Holtz and Justine — the fix process is disciplined regardless of how findings were discovered.
+Read this file at the start of Step 10. This file is shared by Holtz and Justine — the fix process is disciplined regardless of how findings were discovered.
 
 ## Triage Flowchart
 
@@ -50,7 +50,7 @@ For straightforward items where the root cause is obvious from the finding:
 
 ## Investigation Path
 
-Use extended thinking (ultrathink) for this phase — root cause analysis through six abstraction layers requires deep reasoning.
+Use extended thinking (ultrathink) for this step — root cause analysis through six abstraction layers requires deep reasoning.
 
 For `bug/*` items where the root cause is not obvious, the bug is intermittent or theoretical, or multiple hypotheses need testing. See [investigation-format.md](investigation-format.md) for the investigation file format.
 
@@ -96,7 +96,7 @@ After each fix passes the reproduction test and full suite:
 2. **Regression risk:** Could this specific fix regress? If the fix is in a path without existing test coverage, add a regression test beyond the reproduction test.
 3. Run full suite again after any hardening tests are added.
 
-This is per-fix robustness, not pattern analysis. Phase 5 looks across fixes for systemic issues.
+This is per-fix robustness, not pattern analysis. Step 11 looks across fixes for systemic issues.
 
 ## Blast Radius Analysis
 
