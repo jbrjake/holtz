@@ -10,24 +10,24 @@
 <!-- recover -->
 <g id="node1" class="node">
 <title>recover</title>
-<ellipse fill="#bee3f8" stroke="#3182ce" stroke-width="1.5" cx="523.31" cy="-740.9" rx="140.96" ry="37.23"/>
-<text xml:space="preserve" text-anchor="middle" x="523.31" y="-748.62" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">Read STATUS.md</text>
-<text xml:space="preserve" text-anchor="middle" x="523.31" y="-735.87" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">+ PUNCHLIST.md</text>
-<text xml:space="preserve" text-anchor="middle" x="523.31" y="-723.12" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">(recover position + priority queue)</text>
+<ellipse fill="#bee3f8" stroke="#3182ce" stroke-width="1.5" cx="529.31" cy="-740.9" rx="140.96" ry="37.23"/>
+<text xml:space="preserve" text-anchor="middle" x="529.31" y="-748.62" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">Read STATUS.md</text>
+<text xml:space="preserve" text-anchor="middle" x="529.31" y="-735.87" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">+ PUNCHLIST.md</text>
+<text xml:space="preserve" text-anchor="middle" x="529.31" y="-723.12" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">(recover position + priority queue)</text>
 </g>
 <!-- fix_loop -->
 <g id="node2" class="node">
 <title>fix_loop</title>
-<ellipse fill="#f0f4f8" stroke="#4a5568" stroke-width="1.5" cx="421.31" cy="-612.26" rx="99.6" ry="40.41"/>
-<text xml:space="preserve" text-anchor="middle" x="421.31" y="-622.23" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">Phase 4 (next batch)</text>
-<text xml:space="preserve" text-anchor="middle" x="421.31" y="-609.48" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">→ Phase 5 (every 3&#45;5)</text>
-<text xml:space="preserve" text-anchor="middle" x="421.31" y="-594.48" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">→ full suite + linters</text>
+<ellipse fill="#f0f4f8" stroke="#4a5568" stroke-width="1.5" cx="429.31" cy="-612.26" rx="88.99" ry="40.41"/>
+<text xml:space="preserve" text-anchor="middle" x="429.31" y="-622.23" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">J3 (next batch)</text>
+<text xml:space="preserve" text-anchor="middle" x="429.31" y="-609.48" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">→ J4 (every 3&#45;5)</text>
+<text xml:space="preserve" text-anchor="middle" x="429.31" y="-594.48" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">→ full suite + linters</text>
 </g>
 <!-- recover&#45;&gt;fix_loop -->
 <g id="edge1" class="edge">
 <title>recover&#45;&gt;fix_loop</title>
-<path fill="none" stroke="#718096" stroke-width="1.2" d="M494.35,-703.94C483.02,-689.87 469.88,-673.56 457.9,-658.69"/>
-<polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="460.1,-656.95 452.9,-652.48 455.74,-660.46 460.1,-656.95"/>
+<path fill="none" stroke="#718096" stroke-width="1.2" d="M500.92,-703.94C489.81,-689.87 476.93,-673.56 465.18,-658.69"/>
+<polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="467.44,-657.03 460.29,-652.49 463.05,-660.5 467.44,-657.03"/>
 </g>
 <!-- breaker -->
 <g id="node3" class="node">
@@ -39,8 +39,8 @@
 <!-- fix_loop&#45;&gt;breaker -->
 <g id="edge2" class="edge">
 <title>fix_loop&#45;&gt;breaker</title>
-<path fill="none" stroke="#718096" stroke-width="1.2" d="M402.84,-572.11C395.69,-556.94 387.48,-539.55 380.2,-524.12"/>
-<polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="382.75,-522.97 376.81,-516.93 377.69,-525.36 382.75,-522.97"/>
+<path fill="none" stroke="#718096" stroke-width="1.2" d="M408.6,-572.46C400.3,-556.89 390.71,-538.93 382.28,-523.13"/>
+<polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="384.83,-521.95 378.59,-516.21 379.89,-524.58 384.83,-521.95"/>
 </g>
 <!-- stop -->
 <g id="node4" class="node">
@@ -117,8 +117,8 @@
 <!-- add&#45;&gt;recover -->
 <g id="edge8" class="edge">
 <title>add&#45;&gt;recover</title>
-<path fill="none" stroke="#718096" stroke-width="1.2" stroke-dasharray="5,2" d="M604.02,-39.08C604.9,-64.31 606.31,-110.41 606.31,-149.8 606.31,-613.26 606.31,-613.26 606.31,-613.26 606.31,-644.8 588.07,-674.6 568.69,-697.36"/>
-<polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="566.78,-695.29 563.58,-703.14 570.98,-699 566.78,-695.29"/>
+<path fill="none" stroke="#718096" stroke-width="1.2" stroke-dasharray="5,2" d="M604.02,-39.08C604.9,-64.31 606.31,-110.41 606.31,-149.8 606.31,-613.26 606.31,-613.26 606.31,-613.26 606.31,-644.12 589.4,-673.86 571.44,-696.76"/>
+<polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="569.36,-694.87 566.47,-702.84 573.7,-698.41 569.36,-694.87"/>
 </g>
 </g>
 </svg>

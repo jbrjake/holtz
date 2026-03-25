@@ -31,7 +31,7 @@ digraph {
     color="#3182ce"
   ]
   fix_loop [
-    label="Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"
+    label="J3 (next batch)\n→ J4 (every 3-5)\n→ full suite + linters"
   ]
   breaker [
     label="Circuit breaker\ntriggered?"
