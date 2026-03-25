@@ -1,48 +1,45 @@
 # Step 0g: Recon Summary
 
-**Run 14 — Full Audit | 2026-03-24**
+**Date:** 2026-03-24
+**Run:** 15
 
-## Codebase State
+## Baseline
+- 604 tests collected, 595 passing, 9 failing, 0 skipped (6.92s)
+- Ruff: clean
+- Mypy: clean (13 source files)
+- Coverage: 63% overall
 
-- 21 Python files, 8,545 lines
-- 321 tests passing, 0 failing, 0 skipped (2.63s)
-- 67% coverage (hooks 0% due to subprocess testing)
-- Ruff clean, mypy clean
-- No source code changes since run 13 (5 docs/config commits only)
+## Critical Finding
+**9 test failures** in `test_commit_msg_hook.py`: commit b412c16 replaced `git-hooks/commit-msg` with `git-hooks/post-commit` but did not update the test file. Tests still reference the deleted `git-hooks/commit-msg`, creating a dangling symlink. All 9 version-bumping tests fail because the hook never fires.
 
-## Architecture
+## New Components Since Run 14
+- `hooks/convergence_gate.py` — Stop hook enforcing convergence loop (NEW, never audited)
+- `hooks/convergence_primer.py` — UserPromptSubmit hook injecting resume context (NEW, never audited)
+- `git-hooks/post-commit` — Conventional commit version bumper (NEW, tests broken)
+- `scripts/install-hooks.sh` — Git hook installer (NEW)
+- `CLAUDE.md` — Branch model and release workflow documentation (NEW)
+- `.github/workflows/release.yml` — Automated release workflow (NEW)
+- 5 community docs (CODE_OF_CONDUCT, CONTRIBUTING, GOVERNANCE, SECURITY, SUPPORT)
 
-Clean two-layer design. Dependencies match baseline exactly. One drift detected: `validate_punchlist::validate` shifted from line 360→374 (updated in graph). No new modules, no dependency reversals, no boundary erosion.
+## Architecture Drift
+- Baseline says "No CLAUDE.md or ARCHITECTURE.md exists" — CLAUDE.md now exists
+- Baseline Module Dependencies missing convergence_gate.py, convergence_primer.py
+- Pattern_brief_compact functions shifted 11 lines (graph updated)
 
-## Graph
+## Graph State
+52 nodes, 52 edges (added 2 new hook nodes + import edges).
 
-37 nodes, 35 edges (10 imports, 5 calls, 9 assumes, 1 diverges_from, 10 tests). All files exist. No pruned nodes.
-
-## Pattern Library Heuristic Results
-
-All 6 seed pattern heuristics ran. Results:
-
-1. **code-fence-unaware-parsing**: No raw content regex found (masking layer in use throughout)
-2. **regex-newline-leak**: 2 hits in `pattern_brief_compact.py`:
-   - Line 41: `\s*$` in header regex — may match trailing newline before `$`
-   - Line 53: `\s*` after field bold marker — could match newline, causing `(.*?)` to capture from next line
-3. **dual-parser-divergence**: 5 parse/load functions found but each handles a distinct format (punchlist, history, graph, brief, events) — no divergence
-4. **incomplete-layer-isolation**: No abstraction layers detected
-5. **missing-edge-case-handling**: Needs manual review per module (deferred to Phase 3)
-6. **doc-spec-drift**: Needs claim-by-claim comparison (deferred to Phase 1)
-
-## Churn
-
-High-churn: `validate_punchlist.py` (7), `pattern_brief_compact.py` (4), hooks (14 total). README (15) is documentation.
+## README Claims to Verify
+- "604 tests across 13,302 lines of code" — 604 tests correct; 13,302 lines appears stale (Python alone is 16,225 lines)
+- "nine analytical lenses" — confirmed (9 in registry)
+- "six enforcement hooks" — confirmed (6 hooks)
+- "six seed patterns" — confirmed (6 pattern files)
 
 ## Recommendation Escalation
+No recommendations at 2+ appearances remaining unaddressed. Run 14's "stall-vs-regress test" recommendation has 1 appearance (below threshold).
 
-2 recurring recommendations escalated to punchlist:
-1. **README metrics test incomplete** (runs 9, 10, 13, Justine): test checks test count only, not ref docs, line count, etc. (4 appearances)
-2. **\s convention check not in CI** (run 11, Justine run 11): no automated prevention of `\s` regression (2 appearances)
-
-## Key Observations
-
-- `pattern_brief_compact.py` is the newest module (4 changes) and the only one using `\s` in regex — a convention violation the rest of the codebase has eliminated
-- The codebase is mature: 13 prior runs, findings per run trending down, severity trending LOW
-- No new source code since run 13 means this run is primarily testing whether prior findings remain fixed + whether pattern heuristics catch things human review missed in `pattern_brief_compact.py`
+## High-Risk Areas
+1. **test_commit_msg_hook.py** — broken, needs immediate fix
+2. **convergence_gate.py + convergence_primer.py** — new hooks, no test coverage
+3. **git-hooks/post-commit** — renamed from commit-msg, tests not updated
+4. **README line count claim** — likely stale

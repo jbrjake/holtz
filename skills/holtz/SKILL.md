@@ -77,6 +77,7 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 | "Per-fix hardening is excessive for a simple fix" | Simple fixes in paths without coverage are where regressions hide. Harden every fix. |
 | "The impact graph is infrastructure, I'll do it later" | The graph was described in the skill for 10+ runs and never created once. "Later" means "never." Run the command NOW. |
 | "I don't need to verify artifact existence, I just created it" | You said that for 10 runs. `ls` the file. If it's not on disk, it doesn't exist. |
+| "All items are resolved, I can skip the convergence check" | Convergence is determined by convergence_check.py returning exit 0, not by your assessment. Fixes introduce new bugs. Run 15 proved this: the auditor declared convergence, wrote SUMMARY.md, and was wrong. |
 
 ## Context Survival Protocol
 
@@ -315,8 +316,13 @@ digraph {
 
 Each iteration gets fresh context. At the end of each iteration — regardless of remaining context:
 
-1. Run `convergence_check.py`. If **CONVERGED**, write `docs/holtz/SUMMARY.md` and stop.
-2. If not: update STATUS.md (position, next action, active lens, lens state). Tell the user: *"Not converged. `/clear` then any message to continue."* Stop.
+1. Run the convergence checker with the correct punchlist:
+   ```bash
+   python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/convergence_check.py docs/holtz/PUNCHLIST-MERGED.md
+   ```
+   If no merged punchlist exists, use `docs/holtz/PUNCHLIST.md`. If no argument is given, the script auto-detects (prefers PUNCHLIST-MERGED.md).
+2. **convergence_check.py MUST return exit 0 before SUMMARY.md is written.** If it returns non-zero, do NOT write SUMMARY.md — update STATUS.md and tell the user to `/clear`. Writing SUMMARY.md before convergence is verified is a process violation: the convergence gate trusts SUMMARY.md existence, so a premature write bypasses the enforcement loop.
+3. If not converged: update STATUS.md (position, next action, active lens, lens state). Tell the user: *"Not converged. `/clear` then any message to continue."* Stop.
 
 After `/clear`, the convergence primer hook injects resume context — the user types anything and the model resumes from STATUS.md. The convergence gate hook enforces this: blocks premature stops until the `/clear` instruction is delivered.
 

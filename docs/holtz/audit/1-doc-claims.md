@@ -1,47 +1,54 @@
 # Phase 1: Doc-to-Implementation Audit
 
-**Run 14 — 2026-03-24**
+**Date:** 2026-03-24
+**Run:** 15
 
-## README "What's inside" Verification (Prediction 4 — HIGH)
+## README.md "What's inside" Claims
 
-| Claim | README | Actual | Status |
-|-------|--------|--------|--------|
-| Skills | 1 | 1 | VERIFIED |
-| Agents | 3 | 3 | VERIFIED |
-| Reference docs | 17 | 17 | VERIFIED |
-| Examples | 1 | 1 | VERIFIED |
-| Python scripts | 5 | 5 | VERIFIED |
-| Seed patterns | 6 | 6 | VERIFIED |
-| Enforcement hooks | 4 | 4 | VERIFIED |
-| Tests | 321 | 321 | VERIFIED |
-| Lines | 8,500 | 8,545 | VERIFIED (rounded) |
+| Claim | Actual | Status |
+|-------|--------|--------|
+| 1 skill | 1 SKILL.md | VERIFIED |
+| 3 agents | 3 agent .md files | VERIFIED |
+| 17 reference docs | 17 files in references/ | VERIFIED |
+| 1 example | 1 sample-punchlist.md | VERIFIED |
+| 6 Python scripts | 6 scripts in scripts/ | VERIFIED |
+| 6 seed patterns | 6 pattern files | VERIFIED |
+| 6 enforcement hooks | 6 hook .py files (excl. _common.py) | VERIFIED |
+| 604 tests | 604 collected | VERIFIED |
+| 13,302 lines | 13,302 (tests/ + scripts/ + hooks/ .py) | VERIFIED |
+| Nine analytical lenses | 9 in lens-registry.md | VERIFIED |
+| Seven edge types | 7 listed in SKILL.md and impact-graph-operations.md | VERIFIED |
+| Twelve anti-patterns | 12 in anti-patterns.md | VERIFIED |
 
-**Result:** All counts match. Prediction 4 UNCONFIRMED — the README was updated in commit 30f4dfc and counts are currently correct. However, BH-001 remains valid: the test only validates test count (1 of 9 fields).
-
-## Architecture Baseline Invariants
-
-| Invariant | Status |
-|-----------|--------|
-| Field extraction uses masked boundaries, original extraction | VERIFIED |
-| mask_code_fences preserves line count | VERIFIED |
-| count_items and parse_punchlist split on B[HJ]-NNN headers in masked | VERIFIED (note: baseline says "BH-NNN" but code supports both BH and BJ namespaces) |
-| save_history and ImpactGraph.save use atomic writes | VERIFIED |
-| Test runner parsers return None for unparseable output | VERIFIED (14 return-None paths checked) |
-
-## Other README Claims
+## README.md Behavioral Claims
 
 | Claim | Status |
 |-------|--------|
-| 7 edge types: imports, calls, tests, assumes, diverges_from, shares_pattern, co_fixed | VERIFIED (graph currently has 5 of 7; shares_pattern and co_fixed are Phase 4/5 only) |
-| Risk score 0.0-1.0 | VERIFIED (clamped at line 236: `max(0.0, min(1.0, new_score))`) |
-| 9 analytical lenses | VERIFIED (lens-registry.md has 9) |
-| Drift detection at 10-line threshold | VERIFIED (DRIFT_LINE_THRESHOLD in impact_graph.py) |
+| "seven-phase audit" | VERIFIED (0-6 in SKILL.md) |
+| "nine analytical lenses" convergence | VERIFIED per Phase 6 spec |
+| "Circuit breakers: max 15, max 3 per item, 3 no-progress" | VERIFIED (SKILL.md lines 269-271) |
+| "Holtz dispatches Justine automatically" | VERIFIED (SKILL.md line 147) |
+| "She inherits his raw recon data" | VERIFIED (SKILL.md lines 149-150) |
+| "Six seed patterns ship with the plugin" | VERIFIED (6 pattern files with detection heuristics) |
 
-## New Findings
+## CLAUDE.md Claims
 
-No new punchlist items from Phase 1. Escalated items BH-001 (README metrics test) and BH-002 (\s convention check) cover the relevant doc drift.
+| Claim | Status |
+|-------|--------|
+| "post-commit git hook automatically bumps" | VERIFIED (git-hooks/post-commit exists and is correct) |
+| "scripts/install-hooks.sh" for setup | VERIFIED (file exists and works) |
+| "python -m pytest --tb=short -q" for testing | VERIFIED (but currently has 9 failures) |
+| "ruff check ." | VERIFIED (passes) |
+| "mypy skills/holtz/scripts/ hooks/" | VERIFIED (passes) |
 
-## Minor Observations (not punchlist-worthy)
+## Findings
 
-- Architecture baseline invariant #3 says "### BH-NNN:" but code uses "### B[HJ]-NNN:" — the baseline description is slightly stale but the invariant itself holds
-- Edge type validation in impact_graph.py is permissive (any string accepted) — design choice, not a bug
+### BH-001: test_commit_msg_hook.py references deleted file
+- Severity: HIGH
+- Category: test/bogus
+- See PUNCHLIST.md
+
+### Architecture baseline drift (minor)
+- CLAUDE.md exists but baseline says "No CLAUDE.md"
+- convergence_gate.py and convergence_primer.py not in baseline deps
+- Will update at post-convergence per protocol

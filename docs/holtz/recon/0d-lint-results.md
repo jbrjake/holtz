@@ -1,6 +1,10 @@
 # Step 0d: Lint Results
 
-**Ruff:** All checks passed (0 errors)
-**Mypy:** Success — no issues found in 10 source files
+**Date:** 2026-03-24
+**Run:** 15
 
-Both linters are clean.
+## Ruff
+All checks passed.
+
+## Mypy
+Success: no issues found in 13 source files.

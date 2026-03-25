@@ -1,30 +1,27 @@
 # Step 0e: Churn Analysis
 
-Top 20 most-changed files in last 50 commits:
+**Date:** 2026-03-24
+**Run:** 15
 
-| Rank | Changes | File |
-|------|---------|------|
-| 1 | 15 | README.md |
-| 2 | 9 | skills/holtz/SKILL.md |
-| 3 | 7 | skills/holtz/scripts/validate_punchlist.py |
-| 4 | 5 | tests/test_validate_punchlist.py |
-| 5 | 5 | skills/holtz/references/justine-skill.md |
-| 6 | 5 | hooks/status_staleness_gate.py |
-| 7 | 5 | hooks/impact_graph_gate.py |
-| 8 | 5 | .claude-plugin/plugin.json |
-| 9 | 4 | skills/holtz/scripts/pattern_brief_compact.py |
-| 10 | 4 | hooks/artifact_verification.py |
-| 11 | 4 | docs/holtz/SUMMARY.md |
-| 12 | 4 | docs/holtz/STATUS.md |
-| 13 | 4 | docs/holtz/PUNCHLIST.md |
-| 14 | 4 | docs/holtz/impact-graph.json |
-| 15 | 4 | docs/diagrams/justine-convergence.svg |
-| 16 | 4 | docs/diagrams/justine-convergence.dot |
-| 17 | 4 | docs/diagrams/impact-graph.svg |
-| 18 | 4 | docs/diagrams/impact-graph.dot |
-| 19 | 3 | tests/test_pattern_brief_compact.py |
-| 20 | 3 | tests/test_hooks.py |
+## Top 20 Most-Changed Files (last 50 commits)
+| Changes | File | Notes |
+|---------|------|-------|
+| 9 | README.md | Frequent doc updates |
+| 6 | docs/runs/run-14.cast | Asciinema recording |
+| 4 | skills/holtz/SKILL.md | Core skill definition |
+| 4 | docs/runs/extract-session-cast.py | Utility script |
+| 3 | docs/runs/run-14-walkthrough.md | Documentation |
+| 3 | docs/runs/generate-run14-cast.py | Removed utility |
+| 3 | .claude-plugin/plugin.json | Version bumps |
+| 2 | tests/test_token_profiler_*.py (8 files) | Token profiler tests |
+| 2 | tests/test_pattern_brief_compact.py | Pattern brief tests |
+| 2 | skills/holtz/scripts/profiler_plugin.py | Profiler plugin |
+| 2 | scripts/token_profiler/*.py (2 files) | Token profiler modules |
+| 2 | scripts/session-to-cast.py | Utility script |
 
-**High-churn source files:** validate_punchlist.py (7), pattern_brief_compact.py (4), hooks (5+5+4=14 total)
-
-**Note:** No source code changes since run 13 — all recent commits are docs/config only.
+## Analysis
+- README is highest churn — doc drift risk (verified in run 14, but claims may have drifted again)
+- SKILL.md at 4 changes — the core protocol. Inconsistencies between SKILL.md and references/tests should be checked
+- Token profiler modules are new (added then immediately refined)
+- No high-churn source files in scripts/ — code has stabilized
+- Hooks are all new (1 commit each) — high risk area for first-audit findings

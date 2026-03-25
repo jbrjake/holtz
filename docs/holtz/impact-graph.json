@@ -319,9 +319,9 @@
       "id": "pattern_brief_compact::format_compact",
       "type": "function",
       "file": "skills/holtz/scripts/pattern_brief_compact.py",
-      "line": 98,
-      "last_audited": "2026-03-23",
-      "audit_count": 1,
+      "line": 109,
+      "last_audited": "2026-03-24",
+      "audit_count": 2,
       "risk_score": 0.0
     },
     "merge-agent": {
@@ -346,9 +346,9 @@
       "id": "pattern_brief_compact::_extract",
       "type": "function",
       "file": "skills/holtz/scripts/pattern_brief_compact.py",
-      "line": 51,
+      "line": 62,
       "last_audited": "2026-03-24",
-      "audit_count": 1,
+      "audit_count": 2,
       "risk_score": 0.0
     },
     "markdown_utils.py": {
@@ -446,6 +446,24 @@
       "type": "test",
       "file": "tests/test_integration.py",
       "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "convergence_gate": {
+      "id": "convergence_gate",
+      "type": "module",
+      "file": "hooks/convergence_gate.py",
+      "line": 1,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "convergence_primer": {
+      "id": "convergence_primer",
+      "type": "module",
+      "file": "hooks/convergence_primer.py",
+      "line": 1,
       "last_audited": "2026-03-24",
       "audit_count": 1,
       "risk_score": 0.0
@@ -914,6 +932,24 @@
       "source": "test_integration.py",
       "target": "convergence_check.py",
       "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_gate",
+      "target": "hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_primer",
+      "target": "hooks/_common",
+      "type": "imports",
       "metadata": {
         "discovered": "2026-03-24",
         "confidence": "medium"

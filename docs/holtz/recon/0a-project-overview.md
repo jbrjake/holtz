@@ -1,56 +1,73 @@
 # Step 0a: Project Overview
 
-**Project:** holtz — Claude Code plugin for TDD-driven codebase auditing
-**Language:** Python 3.12
-**Run:** 14 (full audit)
 **Date:** 2026-03-24
+**Run:** 15
 
-## Structure
+## Project Structure
 
-- `skills/holtz/scripts/` — 5 Python CLI scripts (1,697 lines)
-  - `validate_punchlist.py` (584) — punchlist parsing, validation, filtering, rendering
-  - `convergence_check.py` (429) — convergence tracking, test runner detection, history
-  - `impact_graph.py` (435) — knowledge graph: nodes, edges, risk scores, blast radius
-  - `markdown_utils.py` (81) — CommonMark fence state machine
-  - `pattern_brief_compact.py` (168) — pattern brief parser and compact output
-- `hooks/` — 4 enforcement hooks + shared utilities (339 lines)
-  - `_common.py` (79) — shared hook helpers (read_event, exit_ok/warn/block)
-  - `impact_graph_gate.py` (57) — blocks audit writes without graph
-  - `status_staleness_gate.py` (86) — blocks writes if STATUS.md is stale
-  - `artifact_verification.py` (58) — verifies graph file exists after commands
-  - `subagent_findings_check.py` (59) — verifies subagent output files exist
-- `tests/` — 8 test files + fixtures (6,509 lines)
-  - `test_validate_punchlist.py` (2,578) — largest test file
-  - `test_convergence_check.py` (1,289)
-  - `test_impact_graph.py` (983)
-  - `test_hooks.py` (531)
-  - `test_integration.py` (252)
-  - `test_markdown_utils.py` (233)
-  - `test_pattern_brief_compact.py` (76)
-  - `test_pattern_brief_compact_structure.py` (83)
-- Total: 21 Python files, 8,545 lines
+Plugin for Claude Code: TDD-driven bug identification and resolution engine.
 
-## Recent Activity (since run 13)
+### Source Modules (skills/holtz/scripts/)
+| File | Role |
+|------|------|
+| `markdown_utils.py` | Shared leaf: fence masking, section extraction |
+| `validate_punchlist.py` | Punchlist parsing, validation, filtering |
+| `convergence_check.py` | Convergence tracking, test runner detection |
+| `impact_graph.py` | Knowledge graph operations (standalone) |
+| `pattern_brief_compact.py` | Pattern brief parsing for subagent consumption |
+| `profiler_plugin.py` | Token profiler integration for Holtz phase detection |
 
-5 commits since run 13 (all docs/config):
-- 828f7e1: docs: remove 9 orphan nodes from impact graph
-- ed3416b: docs: update impact graph for current codebase state
-- 30f4dfc: docs(readme): update for v0.4.0 — new lens descriptions, inherited recon, run 13
-- 7c63c65: chore: remove .claude/ from git tracking
-- a3e35e9: docs: add implementation plans for token context optimizations
+### Hooks (hooks/)
+| File | Role |
+|------|------|
+| `_common.py` | Shared hook utilities (leaf) |
+| `impact_graph_gate.py` | Blocks Phase 1+ writes without impact graph |
+| `status_staleness_gate.py` | Blocks findings writes if STATUS.md stale |
+| `artifact_verification.py` | Verifies graph file exists after script runs |
+| `subagent_findings_check.py` | Verifies Justine's claimed output files |
+| `convergence_gate.py` | Blocks premature stops before convergence |
+| `convergence_primer.py` | Injects resume context on user messages |
 
-No source code changes since run 13. All 5 commits are docs/config only.
+### Token Profiler (scripts/token_profiler/)
+9 modules: CLI, extraction, analysis, models, pricing, report, viewer, plugin protocol, __main__.
 
-## Architecture
+### Tests (tests/)
+15 test files covering all source modules, hooks, integration, and token profiler.
 
-Two-layer design:
-1. Markdown protocol layer (SKILL.md, references, patterns) — consumed by LLM
-2. Python tool layer (CLI scripts) — called by LLM for operations
+### Other
+- 3 agent definitions (agents/)
+- 17 reference docs (skills/holtz/references/)
+- 6 seed patterns (skills/holtz/patterns/)
+- 1 example (skills/holtz/examples/)
+- CI workflows (.github/workflows/ci.yml, release.yml)
+- Community docs (CODE_OF_CONDUCT, CONTRIBUTING, GOVERNANCE, SECURITY, SUPPORT)
+- Git hooks (scripts/install-hooks.sh, git-hooks/post-commit)
+- CLAUDE.md with branch model and release workflow
 
-Dependencies: `markdown_utils.py` is leaf, imported by `validate_punchlist.py` and `convergence_check.py`. `impact_graph.py` standalone. Hooks import `_common.py` only.
+## Changes Since Run 14
 
-## Configuration
+Recent commits on dev:
+1. `b412c16` fix: replace commit-msg hook with post-commit for reliable version bumping
+2. `5d0fd62` feat: add convergence gate and primer hooks to enforce loop-until-converged
+3. `74ba1e6` docs: add community docs and GitHub templates
+4. `76abb91` docs: update README test and line counts
+5. `d8e4064` docs: add CLAUDE.md with branch model and release workflow
+6. `8acacd1` ci: add release workflow for automatic tagging and GitHub Releases
+7. `25d3a86` ci: add dev branch to CI triggers
+8. `3d12cf3` chore: add install-hooks script for git hook setup
+9. `a4c77e8` feat: add commit-msg hook with automatic version bumping
+10. `7afc962` fix: resolve ruff lint errors in merge-session-cast.py
 
-- `pyproject.toml`: ruff + mypy configured for scripts and hooks
-- pytest: `--cov` for scripts + hooks, no coverage threshold enforced
-- Python 3.12 target (running 3.10.9)
+New components since run 14:
+- `hooks/convergence_gate.py` — NEW
+- `hooks/convergence_primer.py` — NEW
+- `scripts/install-hooks.sh` — NEW
+- `git-hooks/post-commit` — NEW (replaced commit-msg)
+- `CLAUDE.md` — NEW
+- `.github/workflows/release.yml` — NEW
+- Community docs (5 files) — NEW
+
+## Architecture Baseline Notes
+- Baseline says "No CLAUDE.md or ARCHITECTURE.md exists" — CLAUDE.md now exists (drift)
+- Baseline Module Dependencies table missing convergence_gate.py, convergence_primer.py
+- Baseline established 2026-03-22, not updated since

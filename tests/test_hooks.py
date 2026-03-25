@@ -724,6 +724,49 @@ class TestConvergenceGate:
         code, output, _ = run_hook("convergence_gate.py", event)
         assert_stop_blocked(code, output, "/clear")
 
+    def test_fence_does_not_bypass_gate(self, tmp_path):
+        """Code fence with **Status:** CONVERGED must not bypass the gate (PAT-001).
+
+        BH-003/BH-005 run 15: convergence hooks must mask code fences before
+        field extraction to follow the project convention from markdown_utils.py.
+        """
+        fenced_content = (
+            "```markdown\n"
+            "**Status:** CONVERGED\n"
+            "**Phase:** 6\n"
+            "```\n\n"
+            "**Phase:** 4\n"
+            "**Status:** IN PROGRESS"
+        )
+        self._make_status(tmp_path, content=fenced_content)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        assert_stop_blocked(code, output, "CONVERGENCE GATE")
+
+    def test_fence_does_not_inflate_open_count(self, tmp_path):
+        """Code fence with **Status:** OPEN must not inflate the open item count (PAT-001).
+
+        BH-006 run 15: _count_open_items should mask fences before counting.
+        """
+        self._make_status(tmp_path)
+        holtz = tmp_path / "docs" / "holtz"
+        punchlist = (
+            "# Punchlist\n\n"
+            "```markdown\n"
+            "**Status:** OPEN\n"
+            "**Status:** OPEN\n"
+            "```\n\n"
+            "### BH-001: Real item\n"
+            "**Status:** RESOLVED\n"
+        )
+        (holtz / "PUNCHLIST.md").write_text(punchlist)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_hook("convergence_gate.py", event)
+        # Gate blocks because STATUS.md says IN PROGRESS
+        assert_stop_blocked(code, output, "CONVERGENCE GATE")
+        # The open count in the message should be ~0, not ~2
+        assert "Open items: ~0" in output.get("reason", "")
+
 
 # --- convergence_primer.py (UserPromptSubmit) ---
 
@@ -825,3 +868,22 @@ class TestConvergencePrimer:
         code, output, _ = run_hook("convergence_primer.py", event)
         assert code == 0
         assert "hookSpecificOutput" not in output
+
+    def test_fence_does_not_mislead_primer(self, tmp_path):
+        """Code fence with **Phase:** 6 must not override real Phase 4 (PAT-001).
+
+        BH-004/BH-005 run 15: primer must mask code fences before field extraction.
+        """
+        fenced_content = (
+            "```markdown\n"
+            "**Phase:** 6\n"
+            "**Status:** CONVERGED\n"
+            "```\n\n"
+            "**Phase:** 4\n"
+            "**Status:** IN PROGRESS"
+        )
+        self._make_status(tmp_path, content=fenced_content)
+        event = {"cwd": str(tmp_path), "user_message": "go"}
+        code, output, _ = run_hook("convergence_primer.py", event)
+        # Should inject context with Phase 4, not silently exit
+        assert_warned(code, output, "Phase 4")
