@@ -47,13 +47,13 @@
 
 ## Determinism Values
 
-For `bug/*` categories, assess determinism during Phase 3 (adversarial audit):
+For `bug/*` categories, assess determinism during Step 8 (adversarial code audit):
 
 - **deterministic** — reliably triggered by a specific input or sequence
 - **intermittent** — occurs under some conditions but not all (timing, load, ordering)
 - **theoretical** — identified from code analysis, not yet observed in practice (race conditions, uncovered paths)
 
-This informs the reproduction strategy in Phase 4. Deterministic bugs get a standard reproduction test. Intermittent bugs get statistical reproduction (loop test N times). Theoretical bugs may require the can't-reproduce protocol.
+This informs the reproduction strategy in Step 10. Deterministic bugs get a standard reproduction test. Intermittent bugs get statistical reproduction (loop test N times). Theoretical bugs may require the can't-reproduce protocol.
 
 ## Discovery Chain
 

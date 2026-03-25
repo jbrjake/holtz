@@ -8,7 +8,7 @@ Users can add custom lenses by appending new sections following the same four-fi
 **Focus:** Individual functions, classes, modules in isolation
 **Audit priorities:** Correctness, edge cases, error handling, return values
 **Failure modes:** Logic errors, missing validation, unhandled edge cases
-**Entry point:** Standard Phases 1-3
+**Entry point:** Standard Steps 6-8
 
 ## integration
 **Focus:** Contracts and assumptions between modules
