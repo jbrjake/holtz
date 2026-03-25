@@ -115,3 +115,17 @@ CLAUDE.md defines branch model (main/dev/feature), conventional commit format, r
 - `ruff` and `mypy` are configured for `skills/holtz/scripts/` only
 - `hooks/` has 7 ruff errors, not covered by mypy
 - Convention violation: new code not under established linting
+
+### 2026-03-24 (Run 16)
+
+**1. Line drift in convergence_check.py** — Severity: LOW
+- `check_convergence` shifted from line 280 to 293 (+13 lines)
+- `save_history` shifted from line 247 to 260 (+13 lines)
+- Cause: Run 15 fixes added ~13 lines of validation logic upstream
+- No structural or behavioral change — function signatures and dependencies unchanged
+- Impact graph nodes updated via drift_check
+
+**2. No new dependency reversals, boundary erosions, convention violations, or layering breaches detected.**
+- All modules maintain established dependency directions
+- No cross-layer imports between hooks/ and scripts/
+- Linter and type checker gaps from Run 8 drift #3 remain addressed (mypy now covers hooks/)

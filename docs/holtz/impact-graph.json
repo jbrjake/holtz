@@ -954,6 +954,16 @@
         "discovered": "2026-03-24",
         "confidence": "medium"
       }
+    },
+    {
+      "source": "README.md",
+      "target": "convergence_check::check_convergence",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "README claims 100%/100%/0% prediction accuracy; actual data averages ~72%/~38%/0%"
+      }
     }
   ]
 }

@@ -1,73 +1,57 @@
 # Step 0a: Project Overview
 
+**Project:** holtz
+**Version:** 0.5.2
+**Language:** Python 3.12
+**Branch:** dev
 **Date:** 2026-03-24
-**Run:** 15
 
-## Project Structure
+## Description
 
-Plugin for Claude Code: TDD-driven bug identification and resolution engine.
+Claude Code plugin for TDD-driven codebase auditing. Dual-auditor system (Holtz depth-first, Justine breadth-first) with adversarial self-play, impact graph, pattern library, and convergence loop.
 
-### Source Modules (skills/holtz/scripts/)
-| File | Role |
-|------|------|
-| `markdown_utils.py` | Shared leaf: fence masking, section extraction |
-| `validate_punchlist.py` | Punchlist parsing, validation, filtering |
-| `convergence_check.py` | Convergence tracking, test runner detection |
-| `impact_graph.py` | Knowledge graph operations (standalone) |
-| `pattern_brief_compact.py` | Pattern brief parsing for subagent consumption |
-| `profiler_plugin.py` | Token profiler integration for Holtz phase detection |
+## Architecture
 
-### Hooks (hooks/)
-| File | Role |
-|------|------|
-| `_common.py` | Shared hook utilities (leaf) |
-| `impact_graph_gate.py` | Blocks Phase 1+ writes without impact graph |
-| `status_staleness_gate.py` | Blocks findings writes if STATUS.md stale |
-| `artifact_verification.py` | Verifies graph file exists after script runs |
-| `subagent_findings_check.py` | Verifies Justine's claimed output files |
-| `convergence_gate.py` | Blocks premature stops before convergence |
-| `convergence_primer.py` | Injects resume context on user messages |
+### Top-Level Structure
+- `.claude-plugin/plugin.json` — plugin manifest (v0.5.2)
+- `skills/holtz/SKILL.md` — main skill definition (rigid, 394 lines)
+- `skills/holtz/references/` — 17 reference docs (process specs, formats, protocols)
+- `skills/holtz/scripts/` — 6 Python scripts (convergence_check, impact_graph, markdown_utils, pattern_brief_compact, profiler_plugin, validate_punchlist)
+- `skills/holtz/patterns/` — 6 seed pattern files
+- `skills/holtz/examples/` — 1 sample punchlist
+- `agents/` — 3 agent defs (holtz.md, justine.md, merge-agent.md)
+- `hooks/` — 6 enforcement hooks + _common.py + hooks.json
+- `scripts/` — install-hooks.sh, session-to-cast.py, token_profiler/
+- `tests/` — 17 test files + conftest + fixtures
+- `docs/` — design docs, run walkthroughs, superpowers plans/specs, holtz runtime data
 
-### Token Profiler (scripts/token_profiler/)
-9 modules: CLI, extraction, analysis, models, pricing, report, viewer, plugin protocol, __main__.
+### Key Modules
+| Module | Purpose |
+|--------|---------|
+| `skills/holtz/scripts/validate_punchlist.py` | Parse and validate punchlist format, filtered reads |
+| `skills/holtz/scripts/convergence_check.py` | Track convergence (clean iterations, open items) |
+| `skills/holtz/scripts/impact_graph.py` | Knowledge graph (nodes, edges, risk scores, blast radius) |
+| `skills/holtz/scripts/markdown_utils.py` | Markdown parsing (mask code fences, section extraction) |
+| `skills/holtz/scripts/pattern_brief_compact.py` | Compact pattern brief for subagent consumption |
+| `hooks/_common.py` | Shared hook utilities (mask_fenced_blocks, etc.) |
+| `hooks/convergence_gate.py` | Block premature audit stops |
+| `hooks/convergence_primer.py` | Inject resume context after /clear |
+| `hooks/impact_graph_gate.py` | Block audit writes without impact graph |
+| `hooks/status_staleness_gate.py` | Block writes with stale STATUS.md |
+| `hooks/artifact_verification.py` | Verify claimed artifacts exist |
+| `hooks/subagent_findings_check.py` | Verify subagent output files exist |
 
-### Tests (tests/)
-15 test files covering all source modules, hooks, integration, and token profiler.
+### Documentation
+- `CLAUDE.md` — dev guide (branch model, conventional commits, test/lint commands)
+- `README.md` — comprehensive user-facing docs (~230 lines)
+- `CHANGELOG.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `GOVERNANCE.md`, `SECURITY.md`, `SUPPORT.md` — community docs
+- `docs/runs/run-14-walkthrough.md` — detailed run walkthrough
+- `docs/design/` — design docs for bug-fixer gap analysis, terminal output improvements
+- `docs/superpowers/` — implementation plans and specs
 
-### Other
-- 3 agent definitions (agents/)
-- 17 reference docs (skills/holtz/references/)
-- 6 seed patterns (skills/holtz/patterns/)
-- 1 example (skills/holtz/examples/)
-- CI workflows (.github/workflows/ci.yml, release.yml)
-- Community docs (CODE_OF_CONDUCT, CONTRIBUTING, GOVERNANCE, SECURITY, SUPPORT)
-- Git hooks (scripts/install-hooks.sh, git-hooks/post-commit)
-- CLAUDE.md with branch model and release workflow
-
-## Changes Since Run 14
-
-Recent commits on dev:
-1. `b412c16` fix: replace commit-msg hook with post-commit for reliable version bumping
-2. `5d0fd62` feat: add convergence gate and primer hooks to enforce loop-until-converged
-3. `74ba1e6` docs: add community docs and GitHub templates
-4. `76abb91` docs: update README test and line counts
-5. `d8e4064` docs: add CLAUDE.md with branch model and release workflow
-6. `8acacd1` ci: add release workflow for automatic tagging and GitHub Releases
-7. `25d3a86` ci: add dev branch to CI triggers
-8. `3d12cf3` chore: add install-hooks script for git hook setup
-9. `a4c77e8` feat: add commit-msg hook with automatic version bumping
-10. `7afc962` fix: resolve ruff lint errors in merge-session-cast.py
-
-New components since run 14:
-- `hooks/convergence_gate.py` — NEW
-- `hooks/convergence_primer.py` — NEW
-- `scripts/install-hooks.sh` — NEW
-- `git-hooks/post-commit` — NEW (replaced commit-msg)
-- `CLAUDE.md` — NEW
-- `.github/workflows/release.yml` — NEW
-- Community docs (5 files) — NEW
-
-## Architecture Baseline Notes
-- Baseline says "No CLAUDE.md or ARCHITECTURE.md exists" — CLAUDE.md now exists (drift)
-- Baseline Module Dependencies table missing convergence_gate.py, convergence_primer.py
-- Baseline established 2026-03-22, not updated since
+### Recent Changes (since last audit)
+- `a602d76` fix: resolve 9 defects found in Holtz run 15 audit
+- `b412c16` fix: replace commit-msg hook with post-commit for reliable version bumping
+- `5d0fd62` feat: add convergence gate and primer hooks to enforce loop-until-converged
+- `74ba1e6` docs: add community docs and GitHub templates
+- `76abb91` docs: update README test and line counts
