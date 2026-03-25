@@ -13,9 +13,9 @@ allowed-tools: Read, Edit, Write, Bash, Grep, Glob, Agent
 
 # Holtz: TDD-Driven Bug Identification & Resolution
 
-**Skill type: RIGID** — Follow exactly. Complete every phase in sequential order.
+**Skill type: RIGID** — Follow exactly. Complete every step in sequential order.
 
-Announce: "Running Holtz [phase/action] on [target]."
+Announce: "Running Holtz [step/action] on [target]."
 
 User instructions take precedence over this skill. Default system prompt behaviors yield to this skill.
 
@@ -43,12 +43,12 @@ Operate as Holtz — see [references/backstory.md](references/backstory.md) for 
 - [references/living-punchlist-format.md](references/living-punchlist-format.md) — format spec for living punchlist (persistent vulnerability model)
 - [references/merge-protocol.md](references/merge-protocol.md) — merge protocol for adversarial self-play
 - [references/merge-examples.md](references/merge-examples.md) — worked examples for merge classification (read only if classification is ambiguous)
-- [references/recommendation-escalation.md](references/recommendation-escalation.md) — protocol for escalating recurring recommendations to punchlist items (read during Phase 0 after recon)
+- [references/recommendation-escalation.md](references/recommendation-escalation.md) — protocol for escalating recurring recommendations to punchlist items (read during Step 3 after recon)
 - [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) — protocol for contributing patterns to the global library (read at post-convergence)
 
 ## Output Directory
 
-All Holtz runtime data goes in `docs/holtz/` in the target project, not the project root. Create `docs/holtz/` at the start of Phase 0 if it does not exist. All paths below are relative to the project root.
+All Holtz runtime data goes in `docs/holtz/` in the target project, not the project root. Create `docs/holtz/` at the start of Step 0 if it does not exist. All paths below are relative to the project root.
 
 ## Core Rules
 
@@ -66,13 +66,13 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 
 | Your thought | The reality |
 |---|---|
-| "The recon is obvious, skip to auditing" | Recon feeds predictions, impact graph, and churn data. Skipping it means auditing blind. |
+| "The recon is obvious, skip to auditing" | Recon (Steps 0-4) feeds predictions, impact graph, and churn data. Skipping it means auditing blind. |
 | "This codebase is small, skip convergence" | Small codebases converge faster. Convergence is faster, not optional. |
 | "Blast radius analysis is overkill for this fix" | Every fix can break assumptions downstream. The fix that creates bugs is worse than the bug it fixed. |
 | "I already know the root cause, skip investigation" | Require HIGH confidence before fixing. The fix you write without it is the fix that comes back. |
 | "I'll write the punchlist items later, in a batch" | Your context WILL compact. Write to disk NOW or lose the finding. |
 | "Pattern analysis can wait until the end" | Patterns found after 3-5 fixes reveal siblings. Waiting means missing them. |
-| "I'll update STATUS.md at the end of the phase" | STATUS.md is your program counter. Without an update, compaction loses your position. |
+| "I'll update STATUS.md at the end of the step" | STATUS.md is your program counter. Without an update, compaction loses your position. |
 | "Justine's findings are probably duplicates" | Justine's breadth-first scan catches what your depth-first methodology walks past. Merge everything. |
 | "Per-fix hardening is excessive for a simple fix" | Simple fixes in paths without coverage are where regressions hide. Harden every fix. |
 | "The impact graph is infrastructure, I'll do it later" | The graph was described in the skill for 10+ runs and never created once. "Later" means "never." Run the command NOW. |
@@ -86,9 +86,9 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 
 - **One step, one file.** Each recon step and audit batch writes to its own file IMMEDIATELY. Write first, think later.
 - **Subagents for heavy scanning.** Delegate grep/read-heavy work (test file audits, module scans) to Agent subagents. Their tool output stays in THEIR context, not yours. They return a short summary + write detailed findings to disk.
-- **Re-read before every phase.** At the start of each phase, read the output files you need. Assume prior context is gone.
-- **After compaction or `/clear`: STOP.** Re-read `docs/holtz/STATUS.md` and the latest phase output files before continuing. After `/clear`, the convergence primer hook injects resume context automatically.
-- **`docs/holtz/STATUS.md` is your program counter.** Update it after completing each step with: current phase, current step, what's done, what's next. This is the FIRST file you read after any compaction. After compaction, re-read STATUS.md to recover position *and strategy* — which lens is active, what patterns have been found, and what tactical approach is being used.
+- **Re-read before every step.** At the start of each step, read the output files you need. Assume prior context is gone.
+- **After compaction or `/clear`: STOP.** Re-read `docs/holtz/STATUS.md` and the latest step output files before continuing. After `/clear`, the convergence primer hook injects resume context automatically.
+- **`docs/holtz/STATUS.md` is your program counter.** Update it after completing each step with: current step, what's done, what's next. This is the FIRST file you read after any compaction. After compaction, re-read STATUS.md to recover position *and strategy* — which lens is active, what patterns have been found, and what tactical approach is being used.
 
 ## Lifecycle: Resuming Prior Runs
 
@@ -99,9 +99,9 @@ digraph {
   check [label="Check docs/holtz/"]
   summary [label="SUMMARY.md exists?\n(prior run completed)"]
   status [label="STATUS.md exists?\n(prior run in progress)"]
-  recon [label="recon/ dir exists?\n(crashed in Phase 0)"]
+  recon [label="recon/ dir exists?\n(crashed in Steps 0-4)"]
   punchlist [label="PUNCHLIST.md exists?\n(past recon)"]
-  fresh [label="Start fresh\n(Phase 0)"]
+  fresh [label="Start fresh\n(Step 0)"]
   resume_status [label="Resume from\nSTATUS.md position"]
   resume_recon [label="Resume from first\nmissing recon step"]
   resume_audit [label="Resume audit or\nfix loop per STATUS"]
@@ -121,87 +121,120 @@ digraph {
 
 Before starting ANY work, check for existing output files in `docs/holtz/`:
 
-1. **If `docs/holtz/STATUS.md` exists:** Read it. It tells you exactly where the last run stopped. Resume from that point — do not restart from Phase 0.
-2. **If `docs/holtz/recon/` dir exists but no STATUS file:** A prior run crashed in Phase 0. Check which `docs/holtz/recon/0*.md` files exist. Resume from the first missing step.
-3. **If `docs/holtz/PUNCHLIST.md` exists:** A prior run got past recon. Read it + STATUS to determine if you're in audit (Phases 1-3) or fix loop (Phases 4-6). Resume accordingly.
-4. **If the user says "start fresh" or "re-audit":** Archive the run: move the current run's files from `docs/holtz/` to `docs/holtz/archive/{date}-run{NN}/` as a backup, then create fresh output files in `docs/holtz/`. **Exception:** `patterns-brief.md`, `patterns-brief-archive.md`, and `impact-graph.json` persist across runs — copy them from the archive back into `docs/holtz/` if they were moved. The impact graph grows richer over time and should never be discarded. The architecture baseline (`docs/holtz/architecture-baseline.md`) and living punchlist (`docs/holtz/LIVING-PUNCHLIST.md`) also persist across runs — never archive them. The living punchlist is updated at the end of each converged run, not during. The architecture baseline's Drift Log is appended during Phase 0 (step 0a.1) as drift is detected; its Structural Snapshot and Documented Intent sections are updated only at convergence.
+1. **If `docs/holtz/STATUS.md` exists:** Read it. It tells you exactly where the last run stopped. Resume from that point — do not restart from Step 0.
+2. **If `docs/holtz/recon/` dir exists but no STATUS file:** A prior run crashed during recon (Steps 0-4). Check which `docs/holtz/recon/step*.md` files exist. Resume from the first missing step.
+3. **If `docs/holtz/PUNCHLIST.md` exists:** A prior run got past recon. Read it + STATUS to determine if you're in audit (Steps 6-8) or fix loop (Steps 10-16). Resume accordingly.
+4. **If the user says "start fresh" or "re-audit":** Archive the run: move the current run's files from `docs/holtz/` to `docs/holtz/archive/{date}-run{NN}/` as a backup, then create fresh output files in `docs/holtz/`. **Exception:** `patterns-brief.md`, `patterns-brief-archive.md`, and `impact-graph.json` persist across runs — copy them from the archive back into `docs/holtz/` if they were moved. The impact graph grows richer over time and should never be discarded. The architecture baseline (`docs/holtz/architecture-baseline.md`) and living punchlist (`docs/holtz/LIVING-PUNCHLIST.md`) also persist across runs — never archive them. The living punchlist is updated at the end of each converged run, not during. The architecture baseline's Drift Log is appended during Step 0 as drift is detected; its Structural Snapshot and Documented Intent sections are updated only at convergence.
 5. **If `docs/holtz/SUMMARY.md` exists:** A prior run completed. Ask the user if they want a fresh audit or to review/extend the prior findings.
 
 **Default behavior is RESUME, not restart.** Preserve all prior work unless the user explicitly says otherwise.
 
-## Phases (run in order, do not skip)
+## Steps (run in order, do not skip)
 
-### Phase 0: Recon
+### Step 0: Project Overview + Drift Detection
 
-Read [references/phase-0-recon.md](references/phase-0-recon.md) for the complete Phase 0 procedure (recon steps 0a-0h, mutation scanning, pattern library, architecture drift, predictive recon).
+Read [references/recon-procedures.md](references/recon-procedures.md) for the complete recon procedure (Steps 0-4, mutation scanning, pattern library, architecture drift, predictive recon).
 
 Read [references/impact-graph-operations.md](references/impact-graph-operations.md) for all graph CLI commands (initialization, reconciliation, edge operations, blast radius, risk scores).
 
-**Phase 0 summary:** Create `docs/holtz/` and `docs/holtz/recon/`. Run steps 0a-0f (project overview, test infra, test baseline, lint, churn, skipped tests). Initialize or reconcile the impact graph. Run architecture drift detection. Write recon summary (0g) and predictive recon (0h). Update STATUS.md after each step.
+Create `docs/holtz/` and `docs/holtz/recon/`. Read project structure, docs, CLAUDE.md, architecture. Initialize or reconcile the impact graph. Run architecture drift detection.
+
+Output: `docs/holtz/recon/step0-project-overview.md`
 
 **After each step:** update `docs/holtz/STATUS.md` with completed step.
 
-### Dispatch Justine
+### Step 1: Run Toolchain (Subagent)
 
-After Phase 0 completes, dispatch Justine as a background subagent to run her own parallel audit. Use the Agent tool with the `justine` agent:
+Dispatch a subagent to run in parallel:
+- Identify test framework, runner, build system
+- Run test suite (capture pass/fail/skip/coverage)
+- Check CI pipeline status (if CI exists)
+- Run linters/type checkers if configured
+
+Output: `docs/holtz/recon/step1-toolchain.md`
+
+### Step 2: Code Signals (Subagent)
+
+Dispatch a subagent to run in parallel:
+- Git churn analysis (top 20 most-changed files in last 50 commits)
+- Mutation scan (optional — auto-detected)
+- Find skipped/disabled tests
+
+Output: `docs/holtz/recon/step2-code-signals.md`
+
+### Step 3: Recon Summary
+
+Synthesize Steps 0-2 into mental model. Load pattern library. Run recommendation escalation per [references/recommendation-escalation.md](references/recommendation-escalation.md).
+
+Output: `docs/holtz/recon/step3-recon-summary.md`
+
+### Step 4: Predictions
+
+Use extended thinking (ultrathink). Rank where bugs are likely to be found using six input sources: pattern brief, impact graph risk scores, impact graph edges, git churn, prior run findings, recon observations. Each prediction includes: Target, Predicted Issue, Confidence (HIGH/MEDIUM/LOW), Basis, Lens, Graph Support, Outcome.
+
+Output: `docs/holtz/recon/step4-predictions.md`
+
+### Step 5: Dispatch Justine
+
+After Steps 0-4 complete, dispatch Justine as a background subagent to run her own parallel audit. Use the Agent tool with the `justine` agent:
 
 ```
 Agent(subagent_type="justine", run_in_background=true, prompt="Run a full audit on this codebase. You are being dispatched in parallel with Holtz.
 
-INHERITED RECON: Holtz's Phase 0 recon data is at docs/holtz/recon/ (files 0a through 0f). Read these for context but write your own recon summary (0g) and predictions (0h) to docs/holtz/justine/recon/ with your own lens ordering and confidence calibration.
+INHERITED RECON: Holtz's recon data is at docs/holtz/recon/ (step0-project-overview.md, step1-toolchain.md, step2-code-signals.md). Read these for context but write your own recon summary and predictions to docs/holtz/justine/recon/ with your own lens ordering and confidence calibration.
 
 Write all output to docs/holtz/justine/ and use docs/holtz/justine/impact-graph.json for your impact graph. Leave docs/holtz/architecture-baseline.md and docs/holtz/LIVING-PUNCHLIST.md untouched. Run through convergence, then stop. Report completion by writing docs/holtz/justine/SUMMARY.md. Holtz handles the merge and fix loop. This is an autonomous execution context — choose the most conservative default for ambiguities and proceed. Report NEEDS_CONTEXT only if the task is genuinely impossible without human input.")
 ```
 
-Continue immediately with Phase 1. Justine runs in parallel — that is the point. Check for her results before entering Phase 4.
+Continue immediately with Step 6. Justine runs in parallel — that is the point. Check for her results before entering Step 9.
 
 **When reviewing Justine's findings during the merge:** Verify her findings by reading actual code and running actual tests. Justine may have flagged false positives (by design — she prefers false positives over missed bugs). Confirm each finding before it enters the merged worklist. If a finding cannot be reproduced, classify it as Justine-only with a note, not as an Agreement.
 
-### Phase 1: Doc-to-Implementation Audit
+### Step 6: Doc-to-Implementation Audit
 
 <HARD-GATE>
-Phase 1 requires completed recon AND a live impact graph. Verify ALL THREE exist before proceeding:
-1. `docs/holtz/recon/0g-recon-summary.md`
-2. `docs/holtz/recon/0h-predictions.md`
+Step 6 requires completed recon AND a live impact graph. Verify ALL THREE exist before proceeding:
+1. `docs/holtz/recon/step3-recon-summary.md`
+2. `docs/holtz/recon/step4-predictions.md`
 3. `docs/holtz/impact-graph.json`
-If any is missing, STOP and complete Phase 0 first. Run `ls docs/holtz/impact-graph.json` to verify — do not assume it exists.
+If any is missing, STOP and complete Steps 0-4 first. Run `ls docs/holtz/impact-graph.json` to verify — do not assume it exists.
 </HARD-GATE>
 
-1. Read project docs, `docs/holtz/recon/0g-recon-summary.md`, and `docs/holtz/recon/0h-predictions.md`
+1. Read project docs, `docs/holtz/recon/step3-recon-summary.md`, and `docs/holtz/recon/step4-predictions.md`
 2. Extract testable claims into a checklist file: `docs/holtz/audit/1-doc-claims.md`
 3. **README.md is mandatory.** If a README exists, extract every concrete claim into the doc-claims checklist. README claims outrank internal doc claims. Classify each as: VERIFIED, OVERSTATED (code does something weaker), FABRICATED (code doesn't do this — HIGH severity), or UNDERSTATED (code does more).
 4. **Prioritize predicted areas first** — process claims matching HIGH-confidence predictions before others, then MEDIUM, then LOW, then unpredicted areas. No audit work is skipped; predictions change the order, not the scope.
-5. **For each claim** (or batch of 3-5 related claims): check if a real test exists, write punchlist items to `docs/holtz/PUNCHLIST.md` IMMEDIATELY, then move to next batch. When a finding matches a prediction, include `**Predicted:** Prediction {N} (confidence: {X})` in the punchlist item and mark the prediction CONFIRMED in `0h-predictions.md`.
-6. **Add semantic edges** (`assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). After the phase, run `stats` — if edge count did not increase and you processed 5+ claims, STOP and re-examine for missed relationships.
-7. Update `docs/holtz/STATUS.md`. Mark unconfirmed predictions as UNCONFIRMED in `0h-predictions.md`.
+5. **For each claim** (or batch of 3-5 related claims): check if a real test exists, write punchlist items to `docs/holtz/PUNCHLIST.md` IMMEDIATELY, then move to next batch. When a finding matches a prediction, include `**Predicted:** Prediction {N} (confidence: {X})` in the punchlist item and mark the prediction CONFIRMED in `step4-predictions.md`.
+6. **Add semantic edges** (`assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). After the step, run `stats` — if edge count did not increase and you processed 5+ claims, STOP and re-examine for missed relationships.
+7. Update `docs/holtz/STATUS.md`. Mark unconfirmed predictions as UNCONFIRMED in `step4-predictions.md`.
 
-### Phase 2: Test Quality Audit
+### Step 7: Test Quality Audit
 
-Use **Agent subagents** for this phase when possible — each subagent audits a batch of test files and writes findings directly to a temp file. You merge them into the punchlist.
+Use **Agent subagents** for this step when possible — each subagent audits a batch of test files and writes findings directly to a temp file. You merge them into the punchlist.
 
-1. Read `docs/holtz/recon/0g-recon-summary.md` for test file locations and `docs/holtz/recon/0h-predictions.md` for predicted areas
+1. Read `docs/holtz/recon/step3-recon-summary.md` for test file locations and `docs/holtz/recon/step4-predictions.md` for predicted areas
 2. Partition test files into batches (3-5 files each). **Prioritize predicted areas first.**
 3. **Subagent brief:** Instruct each subagent to: (a) read the compact pattern brief by running `python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md` — if a finding matches a pattern ID, reference it in the punchlist item; if a pattern match seems likely but uncertain, read the full entry from `docs/holtz/patterns-brief.md` for that specific pattern ID, (b) check known patterns against the code being reviewed, (c) write findings to disk before returning, (d) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT, (e) choose the most conservative default for ambiguities — report NEEDS_CONTEXT only if genuinely impossible without human input. **When reviewing subagent output:** verify findings by reading actual code. Subagents may have missed context or misidentified patterns. Confirm each finding before it enters the punchlist.
-4. For each batch: audit per [references/anti-patterns.md](references/anti-patterns.md), write punchlist items to `docs/holtz/PUNCHLIST.md` IMMEDIATELY after each batch. Tag findings matching predictions with `**Predicted:**` field and mark CONFIRMED in `0h-predictions.md`. When mutation data is available from step 0e.1, use it as concrete evidence when scoring Rubber Stamp (#11) and Permissive Validator (#12) — a test that passes but doesn't kill mutations for the function it covers is a prime candidate for these anti-patterns.
-5. **Add semantic edges** (`tests`, `assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). Run `stats` after the phase to verify edges were added.
-6. Update `docs/holtz/STATUS.md`. Mark unconfirmed predictions for this phase as UNCONFIRMED.
+4. For each batch: audit per [references/anti-patterns.md](references/anti-patterns.md), write punchlist items to `docs/holtz/PUNCHLIST.md` IMMEDIATELY after each batch. Tag findings matching predictions with `**Predicted:**` field and mark CONFIRMED in `step4-predictions.md`. When mutation data is available from Step 2 (mutation scan), use it as concrete evidence when scoring Rubber Stamp (#11) and Permissive Validator (#12) — a test that passes but doesn't kill mutations for the function it covers is a prime candidate for these anti-patterns.
+5. **Add semantic edges** (`tests`, `assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). Run `stats` after the step to verify edges were added.
+6. Update `docs/holtz/STATUS.md`. Mark unconfirmed predictions for this step as UNCONFIRMED.
 
 If not using subagents: audit one file at a time, write findings before opening the next file.
 
-### Phase 3: Adversarial Code Audit
+### Step 8: Adversarial Code Audit
 
 Same subagent strategy. Partition source modules into batches.
 
-1. Read `docs/holtz/recon/0g-recon-summary.md`, `docs/holtz/recon/0e-churn.md`, and `docs/holtz/recon/0h-predictions.md`. **Prioritize predicted areas first**, then high-churn files.
+1. Read `docs/holtz/recon/step3-recon-summary.md`, `docs/holtz/recon/step2-code-signals.md`, and `docs/holtz/recon/step4-predictions.md`. **Prioritize predicted areas first**, then high-churn files.
 2. **Subagent brief:** Instruct each subagent to: (a) read the compact pattern brief by running `python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md` — if a finding matches a pattern ID, reference it in the punchlist item; if a pattern match seems likely but uncertain, read the full entry from `docs/holtz/patterns-brief.md` for that specific pattern ID, (b) check known patterns against the code being reviewed, (c) write findings to disk before returning, (d) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT, (e) choose the most conservative default for ambiguities. **When reviewing subagent output:** verify findings by reading actual code. Confirm each finding before it enters the punchlist.
-3. For each module batch: review for bugs, write punchlist items IMMEDIATELY. Tag findings matching predictions with `**Predicted:**` field and mark CONFIRMED in `0h-predictions.md`. Tag findings with `**Lens:**` field identifying which analytical lens discovered them.
-4. **For `bug/*` items:** assess determinism and record in the punchlist item's `**Determinism:**` field. Is this bug deterministic (specific trigger), intermittent (timing/load/ordering dependent), or theoretical (identified from code analysis, not yet observed)? This determines the reproduction strategy in Phase 4.
-5. **Add semantic edges** (`calls`, `assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). Run `stats` after the phase to verify edges were added.
-6. Update `docs/holtz/STATUS.md`. Mark remaining unconfirmed predictions as UNCONFIRMED in `0h-predictions.md`.
+3. For each module batch: review for bugs, write punchlist items IMMEDIATELY. Tag findings matching predictions with `**Predicted:**` field and mark CONFIRMED in `step4-predictions.md`. Tag findings with `**Lens:**` field identifying which analytical lens discovered them.
+4. **For `bug/*` items:** assess determinism and record in the punchlist item's `**Determinism:**` field. Is this bug deterministic (specific trigger), intermittent (timing/load/ordering dependent), or theoretical (identified from code analysis, not yet observed)? This determines the reproduction strategy in Step 10.
+5. **Add semantic edges** (`calls`, `assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). Run `stats` after the step to verify edges were added.
+6. Update `docs/holtz/STATUS.md`. Mark remaining unconfirmed predictions as UNCONFIRMED in `step4-predictions.md`.
 
 Priority order: error paths, boundaries, state transitions, external integrations, security.
 
-### Pre-Phase 4: Merge Justine's Findings
+### Step 9: Merge Justine Findings (Subagent)
 
 Before starting any fix work, check whether Justine has produced results:
 
@@ -213,12 +246,12 @@ Before starting any fix work, check whether Justine has produced results:
 Agent(subagent_type="merge-agent", prompt="Merge Holtz's punchlist at docs/holtz/PUNCHLIST.md with Justine's at docs/holtz/justine/PUNCHLIST.md. Follow the merge protocol at ${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/merge-protocol.md. Merge impact graphs per protocol. Write PUNCHLIST-MERGED.md and MERGE-REPORT.md to docs/holtz/. Archive docs/holtz/justine/ to docs/holtz/archive/justine-{ISO date}/. Return: merged total, agreement count, Holtz-only count, Justine-only count, contradiction count.")
 ```
 
-4. **After the merge completes:** Read `docs/holtz/MERGE-REPORT.md` for blind spot analysis and contradiction flags. Read `docs/holtz/PUNCHLIST-MERGED.md` — this is your worklist for Phase 4. **Spot-check 2-3 items** against the original punchlists if the merge report shows disagreements or contradictions.
+4. **After the merge completes:** Read `docs/holtz/MERGE-REPORT.md` for blind spot analysis and contradiction flags. Read `docs/holtz/PUNCHLIST-MERGED.md` — this is your worklist for Step 10. **Spot-check 2-3 items** against the original punchlists if the merge report shows disagreements or contradictions.
 5. **If no Justine output exists** (she wasn't dispatched or produced nothing), proceed with `docs/holtz/PUNCHLIST.md` as the worklist.
 
-### Phase 4: Fix Loop (TDD)
+### Step 10: TDD Fix Loop
 
-Read [references/phase-4-fix-loop.md](references/phase-4-fix-loop.md) for the complete fix loop procedure (triage flowchart, fast path, investigation path, can't-reproduce path, per-fix hardening, blast radius analysis).
+Read [references/step-10-fix-loop.md](references/step-10-fix-loop.md) for the complete fix loop procedure (triage flowchart, fast path, investigation path, can't-reproduce path, per-fix hardening, blast radius analysis).
 
 Read [references/impact-graph-operations.md](references/impact-graph-operations.md) for blast radius queries and risk score updates.
 
@@ -226,21 +259,21 @@ Read [references/impact-graph-operations.md](references/impact-graph-operations.
    ```bash
    python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py <punchlist-path> --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
    ```
-   This shows all OPEN/IN PROGRESS items plus the 3 most recently resolved items (for cross-item pattern recognition). Items resolved earlier are on disk and available in Phase 5.
+   This shows all OPEN/IN PROGRESS items plus the 3 most recently resolved items (for cross-item pattern recognition). Items resolved earlier are on disk and available in Step 11.
 2. **Triage** → Fast Path (test/doc/design/deterministic bug) | Investigation Path (intermittent/theoretical bug) | Can't-Reproduce Path (repro test passes)
 3. After each fix: **Per-Fix Hardening** (edge variants, regression tests) → **Blast Radius Analysis** (impact graph 2-hop query, risk score updates)
 4. Commit format: `fix(<scope>): <desc>` with punchlist ID in body
 5. **Update punchlist and STATUS.md IMMEDIATELY after each commit**
 
-### Phase 5: Pattern Analysis (every 3-5 fixes)
+### Step 11: Pattern Analysis [recurring: every 3-5 fixes during Step 10]
 
-Use extended thinking (ultrathink) for this phase — cross-finding pattern discovery and sibling search require deep reasoning.
+Use extended thinking (ultrathink) for this step — cross-finding pattern discovery and sibling search require deep reasoning.
 
 1. **Re-read `docs/holtz/PUNCHLIST.md`** — For pattern analysis, read the full punchlist (no filter). Pattern grouping requires seeing all resolved items to identify shared root causes across the complete history.
 2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify pattern, search for siblings, write new items to punchlist IMMEDIATELY
 3. Write pattern blocks to punchlist per format spec
 4. **Update impact graph:** Add `shares_pattern` edges between all instances of the same pattern (e.g., if BH-003 and BH-007 are both PAT-001 instances, link the functions they involve with `shares_pattern` edges including the pattern ID in the note).
-5. **Update `docs/holtz/STATUS.md`:** add new PAT-NNN entries to Pattern Library for each newly identified pattern (one-line description, instance count, run number). Update position fields (Phase, Step, Next Action). If pattern analysis revealed a non-obvious insight about the codebase, update the Strategy section's Last Insight field.
+5. **Update `docs/holtz/STATUS.md`:** add new PAT-NNN entries to Pattern Library for each newly identified pattern (one-line description, instance count, run number). Update position fields (Step, Next Action). If pattern analysis revealed a non-obvious insight about the codebase, update the Strategy section's Last Insight field.
 6. **Update `docs/holtz/patterns-brief.md`:** Read `docs/holtz/patterns-brief.md` first (if it exists) to check for existing entries. For each newly identified pattern, append an entry to the patterns brief. Use this format:
 
    ```markdown
@@ -263,9 +296,19 @@ Use extended thinking (ultrathink) for this phase — cross-finding pattern disc
 
    **Rolling policy:** The brief is capped at 20 active entries. When a new pattern would push the count past 20, move the 5 oldest entries (by discovery date) in a single batch to `docs/holtz/patterns-brief-archive.md`. The archive uses the same format but is not read by subagents by default. If the archive file does not exist, create it with the same header but titled `# Holtz Pattern Brief — Archive`.
 
-### Phase 6: Lens-Aware Convergence Loop
+### Step 12: Per-Fix Hardening [recurring: after each fix in Step 10]
+
+After each fix: edge case variants (null, empty, boundary, concurrent), regression tests for similar code paths.
+
+### Step 13: Blast Radius Check [recurring: after each fix in Step 10]
+
+After each fix: impact graph 2-hop query. Check downstream assumptions. If an assumption is violated, create a new punchlist item.
+
+### Step 14: Lens Rotation
 
 Read [references/lens-registry.md](references/lens-registry.md) for the full set of analytical lenses. The convergence loop rotates through lenses. True convergence requires ALL lenses clean in the same final sweep.
+
+Re-run Steps 6-8 scoped to the current analytical lens. After completing, return to Step 10 (fix loop) for any new findings.
 
 **Circuit Breakers:**
 - **MAX_ITERATIONS:** 15 total fix-loop iterations. After 15, stop and report remaining items to the user.
@@ -279,13 +322,13 @@ digraph {
   node [shape=box]
 
   recover [label="Read STATUS.md\n+ PUNCHLIST.md\n(filtered: OPEN + last 3 resolved)"]
-  fix_loop [label="Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"]
+  fix_loop [label="Step 10 (next batch)\n→ Step 11 (every 3-5)\n→ full suite + linters"]
   breaker [label="Circuit breaker\ntriggered?" shape=diamond]
   stop [label="STOP\nReport to user"]
   lens_clean [label="Current lens:\nzero OPEN items AND\nno new items (2 iters)\nAND suite stable?" shape=diamond]
   mark [label="Mark current lens\nCOMPLETE in STATUS.md"]
   switch [label="Switch lens?\n(COMPLETE OR\n3 consecutive LOW)" shape=diamond]
-  next_lens [label="Select next lens from registry\nUpdate Active Lens in STATUS.md\nRun Phases 1-3 scoped to\nnew lens focus + entry point"]
+  next_lens [label="Select next lens from registry\nUpdate Active Lens in STATUS.md\nRun Steps 6-8 scoped to\nnew lens focus + entry point"]
   all_done [label="All lenses\nCOMPLETE?" shape=diamond]
   final [label="Final sweep:\nALL lenses simultaneously"]
   clean [label="Clean?" shape=diamond]
@@ -313,7 +356,7 @@ digraph {
 }
 ```
 
-#### Convergence Boundary Protocol
+### Step 15: Convergence Check
 
 Each iteration gets fresh context. At the end of each iteration — regardless of remaining context:
 
@@ -324,6 +367,7 @@ Each iteration gets fresh context. At the end of each iteration — regardless o
    If no merged punchlist exists, use `docs/holtz/PUNCHLIST.md`. If no argument is given, the script auto-detects (prefers PUNCHLIST-MERGED.md).
 2. **convergence_check.py MUST return exit 0 before SUMMARY.md is written.** If it returns non-zero, do NOT write SUMMARY.md — update STATUS.md and tell the user to `/clear`. Writing SUMMARY.md before convergence is verified is a process violation: the convergence gate trusts SUMMARY.md existence, so a premature write bypasses the enforcement loop.
 3. If not converged: update STATUS.md (position, next action, active lens, lens state). Tell the user: *"Not converged. `/clear` then any message to continue."* Stop.
+4. If converged (exit 0): proceed to Step 16.
 
 After `/clear`, the convergence primer hook injects resume context — the user types anything and the model resumes from STATUS.md. The convergence gate hook enforces this: blocks premature stops until the `/clear` instruction is delivered.
 
@@ -331,13 +375,15 @@ After `/clear`, the convergence primer hook injects resume context — the user 
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py <path> --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
 ```
-This keeps recently-resolved items visible for pattern recognition while filtering out stable old resolutions. Phase 5 (pattern analysis, every 3-5 fixes) reads the full punchlist.
+This keeps recently-resolved items visible for pattern recognition while filtering out stable old resolutions. Step 11 (pattern analysis, every 3-5 fixes) reads the full punchlist.
 
-#### Post-Convergence: Pattern Library Contribution
+### Step 16: Resweep
 
-After convergence, dispatch a subagent to update the architecture baseline in the background while you handle pattern contribution:
+Full re-run of Steps 6-8 to confirm convergence. This is NOT optional — it catches errors introduced by prior fixes. The resweep must complete before writing SUMMARY.md.
 
-**Architecture Baseline Update:** Dispatch in the background — it runs while you handle Pattern Library Contribution (which requires user interaction). By the time you reach Living Punchlist Update, the baseline will be current.
+### Step 17: Architecture Baseline Update (Subagent)
+
+Dispatch a subagent in the background to update the architecture baseline:
 
 ```
 Agent(run_in_background=true, prompt="Update the architecture baseline at docs/holtz/architecture-baseline.md.
@@ -347,14 +393,18 @@ Read the format spec at ${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/architectu
 
 2. DOCUMENTED INTENT: Read current project docs (CLAUDE.md, README, ARCHITECTURE.md if they exist). Compare against the Documented Intent section of the baseline. If documented rules changed, update Layering Rules, Boundaries, Conventions, and Invariants to match. Note any changes.
 
-Do NOT modify the Drift Log — it was already updated during Phase 0 step 0a.1.
+Do NOT modify the Drift Log — it was already updated during Step 0.
 
 Write changes to docs/holtz/architecture-baseline.md. Report what sections changed and why.")
 ```
 
-**Pattern Library Contribution:** Read [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) and follow the protocol: discover new patterns from `docs/holtz/patterns-brief.md`, generalize, PII-scrub, ask user permission, then submit via `gh` CLI / MCP / manual staging.
+### Step 18: Pattern Library Contribution (Subagent)
 
-**Living Punchlist Update:** After convergence and before writing SUMMARY.md, update `docs/holtz/LIVING-PUNCHLIST.md` (or create it on first run — see [references/living-punchlist-format.md](references/living-punchlist-format.md)):
+Read [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) and follow the protocol: discover new patterns from `docs/holtz/patterns-brief.md`, generalize, PII-scrub, ask user permission, then submit via `gh` CLI / MCP / manual staging.
+
+### Step 19: Living Punchlist Update (Subagent)
+
+Update `docs/holtz/LIVING-PUNCHLIST.md` (or create it on first run — see [references/living-punchlist-format.md](references/living-punchlist-format.md)):
 
 1. Refresh Risk Hotspots from impact graph (nodes with risk_score > 0.5)
 2. Add new patterns from this run's pattern brief
@@ -364,7 +414,11 @@ Write changes to docs/holtz/architecture-baseline.md. Report what sections chang
 6. Move cooled hotspots (risk_score below 0.3 for two consecutive converged runs) to History with note
 7. Append run summary to History section
 
-**Final:** Updated punchlist + `docs/holtz/SUMMARY.md` (totals, patterns, recommendations, before/after metrics). SUMMARY.md must include a Prediction Accuracy table:
+### Step 20: Write SUMMARY.md
+
+This is the LAST step — nothing comes after it.
+
+Updated punchlist + `docs/holtz/SUMMARY.md` (totals, patterns, recommendations, before/after metrics). SUMMARY.md must include a Prediction Accuracy table:
 
 ```markdown
 ## Prediction Accuracy
@@ -377,18 +431,18 @@ Write changes to docs/holtz/architecture-baseline.md. Report what sections chang
 ```
 
 ## Invocation Modes
-- **Full (Adversarial Self-Play):** all phases — Justine is dispatched automatically after Phase 0 for parallel audit, findings merged before Phase 4 (see Dispatch Justine and Pre-Phase 4 sections)
+- **Full (Adversarial Self-Play):** all steps — Justine is dispatched automatically at Step 5 for parallel audit, findings merged at Step 9
 - **Targeted:** `"audit the auth module"` — scope to specific dirs (Justine is NOT dispatched for targeted audits)
-- **Continue:** `"work through the punchlist"` — resume Phase 4 (skip Justine dispatch — audit phases are done)
-- **Pattern:** Phase 5 on existing data
-- **Test/Doc audit only:** Phase 2 or Phase 1 alone (Justine is NOT dispatched for single-phase runs)
+- **Continue:** `"work through the punchlist"` — resume Step 10 (skip Justine dispatch — audit steps are done)
+- **Pattern:** Step 11 on existing data
+- **Test/Doc audit only:** Step 7 or Step 6 alone (Justine is NOT dispatched for single-step runs)
 
 ---
 
 **These six rules override everything above when they conflict:**
 1. Write findings to disk IMMEDIATELY. Your context WILL compact.
 2. STATUS.md is your program counter. Update it after every completed step.
-3. Complete every phase in order. Convergence is reached when the process says so, not when you think so.
+3. Complete every step in order. Convergence is reached when the process says so, not when you think so.
 4. Every finding needs evidence, acceptance criteria, and a validation command. No exceptions.
-5. Verify artifacts exist with `ls` before claiming a phase is complete. If `impact-graph.json` does not exist on disk, the graph was not created — regardless of what you believe you did.
+5. Verify artifacts exist with `ls` before claiming a step is complete. If `impact-graph.json` does not exist on disk, the graph was not created — regardless of what you believe you did.
 6. Keep coming back until convergence. Each iteration gets fresh context — update STATUS.md, tell the user to `/clear`, and stop. The convergence gate hook enforces this.
