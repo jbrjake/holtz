@@ -32,11 +32,11 @@ Users can add custom lenses by appending new sections following the same four-fi
 **Focus:** How data transforms as it moves through the system
 **Audit priorities:** Serialization/deserialization boundaries, type coercion, lossy transformations, format assumptions
 **Failure modes:** Data corruption at boundaries, silent type coercion, schema drift
-**Entry point:** Follow data from ingestion to output, checking each transformation
+**Entry point:** Follow data from ingestion to output, checking each transformation. When data crosses a language boundary (host code to shader, application to SQL, code to template), trace BOTH sides. Check: (a) all fields written by sender are read by receiver, (b) all fields read by receiver are written by sender, (c) division/normalize/log operations on the receiving side are guarded for zero/negative/NaN inputs.
 
 ## contract
 **Focus:** Explicit and implicit contracts — API signatures, type interfaces, documented behavior guarantees
-**Audit priorities:** Functions that promise behavior their implementation doesn't deliver, version drift in interfaces
+**Audit priorities:** Functions that promise behavior their implementation doesn't deliver, version drift in interfaces. Thread-safety escape hatches: for each `@unchecked Sendable` (Swift), `unsafe impl Send` (Rust), or equivalent annotation that opts out of concurrency safety checks, verify all mutable stored properties are protected by synchronization. If not, the concurrency contract is violated.
 **Failure modes:** Contract violations that callers silently tolerate until they don't
 **Entry point:** Compare documented/typed interfaces against actual implementation behavior
 
@@ -60,15 +60,15 @@ Users can add custom lenses by appending new sections following the same four-fi
 
 ## concurrency
 **Focus:** Thread safety, race conditions, synchronization correctness, deadlock potential
-**Audit priorities:** Shared mutable state protection, lock ordering consistency, atomic operation correctness, timeout presence on blocking calls, absence of TOCTOU patterns at trust boundaries
+**Audit priorities:** Shared mutable state protection, lock ordering consistency, atomic operation correctness, timeout presence on blocking calls, absence of TOCTOU patterns at trust boundaries. Real-time thread safety: code on deadline threads (audio callbacks, render loops, interrupt handlers, game tick functions) must not perform heap allocation, lock acquisition, blocking waits, or operations with non-constant-time overhead — these are correctness issues under RT constraints even when properly synchronized.
 **Failure modes:** Data races, deadlocks, priority inversion, blocked-thread pool exhaustion, non-deterministic corruption that passes all tests and only manifests under production load
-**Entry point:** Identify all shared mutable state (globals, class-level mutables, caches, connection pools). For each: trace all access sites, check synchronization. Run `go test -race` or equivalent. Ask: "What happens if two requests hit this code path simultaneously?"
+**Entry point:** Identify all shared mutable state (globals, class-level mutables, caches, connection pools). For each: trace all access sites, check synchronization. Run `go test -race` or equivalent. Ask: "What happens if two requests hit this code path simultaneously?" Additionally, identify all real-time entry points (audio tap callbacks, render delegate methods, display link callbacks, interrupt handlers). Trace every code path reachable from each. Flag any operation that is not O(1)-with-bounded-constant.
 
 ## resource-lifecycle
 **Focus:** Acquisition, use, and release of system resources on all code paths
 **Audit priorities:** File handles, DB connections, sockets, locks, temp files, subprocesses — each must have a corresponding release on every path including exceptions and early returns. Language-idiomatic cleanup (Python `with`, Go `defer`, Java try-with-resources) should be the norm, not the exception.
-**Failure modes:** Gradual handle/connection exhaustion, "too many open files" after hours of runtime, connection pool depletion, orphaned temp files filling disk, leaked locks causing deadlocks
-**Entry point:** Grep for resource acquisition calls (`open`, `connect`, `socket`, `Lock.acquire`, `subprocess.Popen`). For each: verify cleanup on all paths. Check that cleanup itself handles errors. Ask: "If this function raises on line N, which resources are leaked?"
+**Failure modes:** Gradual handle/connection exhaustion, "too many open files" after hours of runtime, connection pool depletion, orphaned temp files filling disk, leaked locks causing deadlocks. For heterogeneous compute: two compute domains disagree about buffer format, size, ownership, or timing — data corruption that compiles and runs but produces garbage or races.
+**Entry point:** Grep for resource acquisition calls (`open`, `connect`, `socket`, `Lock.acquire`, `subprocess.Popen`). For each: verify cleanup on all paths. Check that cleanup itself handles errors. Ask: "If this function raises on line N, which resources are leaked?" For heterogeneous compute systems (CPU-GPU, CPU-FPGA, host-device): trace each shared buffer/texture from creation → format → host writes → device reads → device writes → host reads. Check format agreement between domains, synchronization between domains (fences, completion handlers, triple-buffering), and reset completeness.
 
 ## idempotency
 **Focus:** Whether operations are safe to execute more than once with the same input
