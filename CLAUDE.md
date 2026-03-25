@@ -17,7 +17,7 @@ All commits MUST use conventional commit format:
 - `feat!:` / `fix!:` / `BREAKING CHANGE` in body — breaking change (bumps major)
 - `docs:`, `chore:`, `refactor:`, `test:`, `ci:`, `style:` — no version bump
 
-A `commit-msg` git hook automatically bumps `.claude-plugin/plugin.json` version on feat/fix/perf commits. No manual version management needed.
+A `post-commit` git hook automatically bumps `.claude-plugin/plugin.json` version on feat/fix/perf commits and amends the commit to include the change. No manual version management needed.
 
 ## Setup
 
