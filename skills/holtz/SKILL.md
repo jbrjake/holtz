@@ -45,6 +45,11 @@ Operate as Holtz — see [references/backstory.md](references/backstory.md) for 
 - [references/merge-examples.md](references/merge-examples.md) — worked examples for merge classification (read only if classification is ambiguous)
 - [references/recommendation-escalation.md](references/recommendation-escalation.md) — protocol for escalating recurring recommendations to punchlist items (read during Step 3 after recon)
 - [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) — protocol for contributing patterns to the global library (read at post-convergence)
+- [references/output-format.md](references/output-format.md) — required terminal output format for phase banners, findings, merge summary, fix progress, and convergence verdict
+
+## Terminal Output
+
+Before emitting phase transitions, findings, or convergence results, read [references/output-format.md](references/output-format.md) for the required terminal output format. This includes phase banners, finding callouts, prediction scorecards, merge summaries, fix loop progress, and convergence verdicts.
 
 ## Output Directory
 
