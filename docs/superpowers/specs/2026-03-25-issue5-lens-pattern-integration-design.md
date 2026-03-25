@@ -57,11 +57,13 @@ Four existing lenses receive targeted additions (2-4 lines each). No structural 
 
 > Thread-safety escape hatches: for each `@unchecked Sendable` (Swift), `unsafe impl Send` (Rust), or equivalent annotation that opts out of the language's concurrency safety checks, verify all mutable stored properties are protected by synchronization. If not, the concurrency contract is violated.
 
-**Coverage:** Reinforces PAT-006 fold (below) and the concurrency lens RT extension.
+**Coverage:** Reinforces the lying escape hatch variant (Section 2.2) and the concurrency lens RT extension.
 
 ## Section 2: Pattern Folds into `concurrency-violation`
 
 The existing `concurrency-violation` pattern already documents a family of variants (data races, TOCTOU, priority inversion, ABA, blocked-thread exhaustion). Two new variants fit naturally.
+
+**Frontmatter change:** Add `swift` to the `languages` list in the YAML frontmatter (currently `[python, javascript, go, rust, java]`), since the new variant heuristics include Swift-specific patterns alongside the existing language coverage.
 
 ### 2.1 New Variant: Real-Time Constraint Violation
 
@@ -128,6 +130,17 @@ Two new standalone pattern files following the existing format.
 
 **File:** `skills/holtz/patterns/cross-language-dead-interface.md`
 
+**YAML frontmatter:**
+```yaml
+---
+name: cross-language-dead-interface
+version: "1.0.0"
+discovered: 2026-03-25
+languages: []  # Language-agnostic — inherently cross-language
+categories: [bug/logic, design/maintenance]
+---
+```
+
 **Description:** Fields, uniforms, bindings, or parameters written in one language and intended to be consumed in another (host code to shader, application to SQL/template, frontend to backend DTO) where the receiving side never reads them — or vice versa. The sending side computes and transmits data every cycle; the receiving side ignores it. A feature silently stops working, or compute is wasted indefinitely.
 
 Distinct from `dead-code-latent-path` (unreachable code behind toggles within one language) and `dual-parser-divergence` (two parsers for the same format). This pattern spans a language boundary where the compiler cannot see both sides.
@@ -157,6 +170,17 @@ grep -rnP '(setBytes|setBuffer|glUniform|bind|uniform\s+\w+)' .
 ### 3.2 `numeric-precision-exhaustion`
 
 **File:** `skills/holtz/patterns/numeric-precision-exhaustion.md`
+
+**YAML frontmatter:**
+```yaml
+---
+name: numeric-precision-exhaustion
+version: "1.0.0"
+discovered: 2026-03-25
+languages: [python, javascript, go, rust, java, swift, c, cpp]
+categories: [bug/logic, bug/numeric]
+---
+```
 
 **Description:** Counters, accumulators, or timestamps stored in types whose precision degrades over time or whose range is exhausted under sustained operation. The system works correctly for hours or days, then silently produces wrong results without any error.
 
@@ -201,7 +225,7 @@ No new phase. Coverage tracking integrates into existing recon and prediction ma
 Add a coverage scan substep after the existing churn analysis:
 
 1. List all source files in the project
-2. Read `docs/holtz/STATUS.md` for files audited in prior runs
+2. Determine which files have been audited in prior runs by scanning `docs/holtz/archive/*/PUNCHLIST.md` for file paths mentioned in findings, and `docs/holtz/LIVING-PUNCHLIST.md` if it exists. A file counts as "audited" if it appears in any prior punchlist finding. On first run (no archive exists), all files are cold — the ratio is 100%.
 3. Compute `cold_file_ratio = files_never_audited / total_source_files`
 4. Write cold file inventory to `docs/holtz/recon/step2-cold-files.md`: list of never-audited files sorted by proximity to composition root
 
@@ -219,7 +243,7 @@ Cold files enter the normal prediction-to-audit-priority pipeline. No special ph
 
 ### 4.3 Changes to STATUS.md Format
 
-Add a Cold File Coverage section:
+Add a Cold File Coverage section after the existing Metrics section in the STATUS.md template:
 
 ```markdown
 ## Cold File Coverage
@@ -246,7 +270,7 @@ Add a Cold File Coverage section:
 
 | Source | Delta |
 |--------|-------|
-| Lens extensions in `lens-registry.md` (read once per audit step) | ~100 tokens |
+| Lens extensions in `lens-registry.md` (read at each lens rotation and convergence boundary) | ~100 tokens per read |
 | Two new patterns in compact brief (read per subagent, ~3-5 dispatches) | ~450-750 tokens |
 | Cold file recon substep | ~200 tokens |
 | **Total** | **~750-1050 tokens/run (<1%)** |
@@ -274,16 +298,26 @@ Add a Cold File Coverage section:
 | contract extension | (reinforces escape hatch) |
 | **Total (after dedup)** | **~30 of 34 (88%)** |
 
+Note: Individual line items sum to 36 because some findings are detectable by multiple components (e.g., the concurrency lens extension and RT variant both cover delegate data races). The 30/34 dedup count assigns each finding to its primary detector. The dedup figure comes from the original Issue #5 cross-analysis.
+
 Remaining 4 findings are deep single-instance reasoning bugs — the irreducible residual for periodic manual adversarial reviews.
 
 ## Implementation Order
 
-Changes are independent and can be implemented in parallel:
+Changes are independent and can be implemented in parallel (items 1-5). Items 6-7 depend on 1-5 completing.
 
 1. **Lens extensions** — edit `references/lens-registry.md` (4 targeted additions)
-2. **Pattern fold** — edit `patterns/concurrency-violation.md` (2 new variant subsections)
+2. **Pattern fold** — edit `patterns/concurrency-violation.md` (2 new variant subsections + add `swift` to `languages` frontmatter)
 3. **New pattern: cross-language-dead-interface** — new file in `patterns/`
 4. **New pattern: numeric-precision-exhaustion** — new file in `patterns/`
-5. **Cold file sweep** — edit SKILL.md (Steps 2, 4) and `references/status-file-format.md`
-6. **Regenerate compact pattern brief** — run `pattern_brief_compact.py` to pick up new patterns
-7. **Update pattern contribution protocol** — add new pattern IDs to the registry
+5. **Cold file sweep** — edit SKILL.md (Steps 2, 4), `references/recon-procedures.md` (update six-source table to seven, add Cold file inventory row), and `references/status-file-format.md` (add Cold File Coverage section after Metrics)
+6. **Regenerate compact pattern brief** — run `pattern_brief_compact.py` to pick up new patterns (auto-discovers from `patterns/` directory)
+7. **Verify** — read regenerated brief to confirm new patterns appear; spot-check each edited file for internal consistency
+
+## Validation
+
+All changes are procedural text in markdown files — no executable code is added or modified. Validation is:
+
+- **Lens/pattern changes:** Manual review that the additions are internally consistent and follow existing format conventions
+- **Cold file sweep:** On next Holtz run against a project with `docs/holtz/archive/` from prior runs, verify cold files appear in `step2-cold-files.md` and (if ratio > 40%) in `step4-predictions.md`
+- **Pattern brief:** Run `pattern_brief_compact.py` and confirm both new pattern IDs appear in output
