@@ -188,7 +188,7 @@ The living punchlist is updated at specific points in the Holtz workflow — nev
 
 ## Persistence Rules
 
-The living punchlist and the architecture baseline are the two documents that persist across runs. All other Holtz artifacts (per-run punchlist, STATUS.md, investigation files, 0h-predictions.md, etc.) get archived to `docs/holtz/archive/` at the start of each new run.
+The living punchlist and the architecture baseline are the two documents that persist across runs. All other Holtz artifacts (per-run punchlist, STATUS.md, investigation files, step4-predictions.md, etc.) get archived to `docs/holtz/archive/` at the start of each new run.
 
 - **Living punchlist persists across runs.** It is never archived to `docs/holtz/archive/`.
 - **Architecture baseline persists across runs.** It is never archived.
