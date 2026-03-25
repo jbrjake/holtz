@@ -18,7 +18,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import exit_stop_allow, exit_stop_block, read_event
+from _common import exit_stop_allow, exit_stop_block, mask_fenced_blocks, read_event
 
 # If STATUS.md hasn't been touched in 30 minutes, the run is likely
 # from a previous session that crashed or was abandoned. Allow stop
@@ -29,10 +29,11 @@ STALENESS_THRESHOLD = 1800
 def _count_open_items(cwd: str) -> int:
     """Approximate count of open punchlist items.
 
-    NOTE: Counts Status fields via simple regex, not scoped to item
-    blocks. Acceptable here because the count is informational (for
-    the block reason message), not decisional. The gate decision is
-    based on STATUS.md and SUMMARY.md existence.
+    Masks code fences before counting to avoid false matches
+    from punchlist examples inside fenced blocks (PAT-001).
+    The count is informational (for the block reason message),
+    not decisional — the gate decision is based on STATUS.md
+    and SUMMARY.md existence.
     """
     for name in ("PUNCHLIST-MERGED.md", "PUNCHLIST.md"):
         path = os.path.join(cwd, "docs", "holtz", name)
@@ -42,8 +43,9 @@ def _count_open_items(cwd: str) -> int:
                     content = f.read()
             except OSError:
                 continue
-            open_count = len(re.findall(r'\*\*Status:\*\*[ \t]*OPEN', content))
-            in_progress = len(re.findall(r'\*\*Status:\*\*[ \t]*IN PROGRESS', content))
+            masked = mask_fenced_blocks(content)
+            open_count = len(re.findall(r'\*\*Status:\*\*[ \t]*OPEN', masked))
+            in_progress = len(re.findall(r'\*\*Status:\*\*[ \t]*IN PROGRESS', masked))
             return open_count + in_progress
     return 0
 
@@ -85,15 +87,18 @@ def main() -> None:
     if time.time() - mtime > STALENESS_THRESHOLD:
         exit_stop_allow()
 
+    # Mask code fences before field extraction (PAT-001 convention).
+    masked = mask_fenced_blocks(content)
+
     # Check if status indicates completion.
-    status_match = re.search(r'\*\*Status:\*\*[ \t]*(.*)', content)
+    status_match = re.search(r'\*\*Status:\*\*[ \t]*(.*)', masked)
     if status_match:
         status = status_match.group(1).strip().upper()
         if status in ("COMPLETE", "CONVERGED"):
             exit_stop_allow()
 
     # Active run, not converged — block.
-    phase_match = re.search(r'\*\*Phase:\*\*[ \t]*(.*)', content)
+    phase_match = re.search(r'\*\*Phase:\*\*[ \t]*(.*)', masked)
     phase = phase_match.group(1).strip() if phase_match else "unknown"
     open_items = _count_open_items(cwd)
 

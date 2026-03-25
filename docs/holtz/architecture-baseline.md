@@ -2,7 +2,7 @@
 
 **Project:** holtz
 **Established:** 2026-03-22
-**Last Updated:** 2026-03-22
+**Last Updated:** 2026-03-24
 
 ## Documented Intent
 
@@ -10,21 +10,25 @@ README describes a two-layer architecture:
 1. Markdown protocol layer (SKILL.md, references, patterns) consumed by the LLM
 2. Python tool layer (CLI scripts) called by the LLM for concrete operations
 
-No CLAUDE.md or ARCHITECTURE.md exists. Intent is inferred from README, SKILL.md, and pyproject.toml.
+CLAUDE.md defines branch model (main/dev/feature), conventional commit format, release workflow, and test commands. Intent is also inferred from README, SKILL.md, and pyproject.toml.
 
 ### Layering Rules
 
-- `markdown_utils.py` is the shared leaf module — imported by validators and convergence tracker but imports nothing from the project
+- `markdown_utils.py` is the shared leaf module for scripts — imported by validators and convergence tracker but imports nothing from the project
+- `hooks/_common.py` is the shared leaf module for hooks — imported by all hook scripts but imports nothing from the project (parallel to `markdown_utils.py` for the scripts layer)
 - `validate_punchlist.py` and `convergence_check.py` depend on `markdown_utils.py` but not on each other
 - `impact_graph.py` is standalone — no internal imports
 - Tests depend on source modules (one-way); source never imports from tests
 
 ### Boundaries
 
-- `markdown_utils.py` owns all CommonMark fence state tracking
+- `markdown_utils.py` owns all CommonMark fence state tracking for scripts
+- `hooks/_common.py` owns hook I/O protocol (JSON stdin/stdout), exit helpers, and fence masking for hooks (`mask_fenced_blocks` — parallel to `mask_code_fences` in `markdown_utils.py`, kept separate to avoid cross-layer imports)
 - `validate_punchlist.py` owns punchlist parsing and validation
-- `convergence_check.py` owns convergence tracking, test runner detection, and output parsing
+- `convergence_check.py` owns convergence tracking, test runner detection, output parsing, and punchlist path resolution (`_resolve_punchlist_path` with merged-file preference, argparse CLI)
 - `impact_graph.py` owns knowledge graph operations
+- `convergence_gate.py` owns stop-event blocking until audit converges (reads STATUS.md, checks staleness)
+- `convergence_primer.py` owns resume-context injection on UserPromptSubmit (reads STATUS.md fields, primes model to continue)
 - All JSON persistence uses atomic writes (tempfile + rename)
 
 ### Conventions
@@ -59,6 +63,8 @@ No CLAUDE.md or ARCHITECTURE.md exists. Intent is inferred from README, SKILL.md
 | `hooks/status_staleness_gate.py` | `hooks/_common.py` |
 | `hooks/artifact_verification.py` | `hooks/_common.py` |
 | `hooks/subagent_findings_check.py` | `hooks/_common.py` |
+| `hooks/convergence_gate.py` | `hooks/_common.py` |
+| `hooks/convergence_primer.py` | `hooks/_common.py` |
 
 ### Layering Direction
 
@@ -66,7 +72,7 @@ No CLAUDE.md or ARCHITECTURE.md exists. Intent is inferred from README, SKILL.md
 
 **Layers (top to bottom):**
 1. Application layer: `validate_punchlist.py`, `convergence_check.py`, `impact_graph.py`
-2. Hook layer: `impact_graph_gate.py`, `status_staleness_gate.py`, `artifact_verification.py`, `subagent_findings_check.py`
+2. Hook layer: `impact_graph_gate.py`, `status_staleness_gate.py`, `artifact_verification.py`, `subagent_findings_check.py`, `convergence_gate.py`, `convergence_primer.py`
 3. Utility layer: `markdown_utils.py`, `hooks/_common.py`
 
 **Exceptions:**

@@ -16,7 +16,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _common import exit_ok, exit_warn, read_event
+from _common import exit_ok, exit_warn, mask_fenced_blocks, read_event
 
 
 def _read_status_fields(cwd: str) -> dict[str, str]:
@@ -29,13 +29,16 @@ def _read_status_fields(cwd: str) -> dict[str, str]:
     except OSError:
         return fields
 
+    # Mask code fences before field extraction (PAT-001 convention).
+    masked = mask_fenced_blocks(content)
+
     for field in ("Phase", "Step", "Status"):
-        m = re.search(rf'\*\*{field}:\*\*[ \t]*(.*)', content)
+        m = re.search(rf'\*\*{field}:\*\*[ \t]*(.*)', masked)
         if m:
             fields[field.lower()] = m.group(1).strip()
 
     # Next Action is under a ## heading, not a **field** format
-    m = re.search(r'## Next Action\n(.+)', content)
+    m = re.search(r'## Next Action\n(.+)', masked)
     if m:
         fields["next_action"] = m.group(1).strip()
 

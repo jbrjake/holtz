@@ -3,59 +3,55 @@
 **Project:** holtz
 **Started:** 2026-03-24
 **Last Updated:** 2026-03-24
-**Run:** 14 (full audit with Justine)
+**Run:** 15 (full audit, dev mode — using local SKILL.md)
 
 ## Current Position
 **Phase:** 6
-**Step:** All 8 items resolved. 324 pass, ruff/mypy clean. Converged.
+**Step:** Post-convergence complete. SUMMARY.md, LIVING-PUNCHLIST.md written. Architecture baseline update dispatched.
 **Status:** COMPLETE
 
 ## Completed
-- [x] Phase 0a: Project overview (21 files, 8,545 lines, no source changes since run 13)
-- [x] Phase 0b: Test infrastructure (pytest, 8 test files)
-- [x] Phase 0c: Test baseline (321 pass, 0 fail, 0 skip, 2.63s, 67% coverage)
-- [x] Phase 0d: Lint results (ruff clean, mypy clean)
-- [x] Phase 0e: Churn analysis (validate_punchlist.py highest source at 7)
-- [x] Phase 0f: Skipped tests (none)
-- [x] Phase 0 graph reconciliation: 37 nodes, 35 edges, 1 drift (validate shifted 360→374, updated)
-- [x] Phase 0 architecture drift: no new drift — dependencies match baseline
-- [x] Phase 0 recommendation escalation: 2 items escalated (BH-001 README metrics, BH-002 \s convention)
-- [x] Phase 0g: Recon summary
-- [x] Phase 0h: Predictive recon (5 predictions: 2 HIGH, 2 MEDIUM, 1 LOW)
-- [x] Dispatch Justine (background, completed with 5 findings)
-- [x] Phase 1: Doc-to-Implementation Audit (0 new items, all claims verified)
-- [x] Phase 2: Test Quality Audit (1 new item: BH-003 parse_brief test gaps)
-- [x] Phase 3: Adversarial Code Audit (2 bugs: BH-004 regex leak, BH-005 fence-unaware)
-- [x] Pre-Phase 4: Merge Justine (2 agreements, 3 Holtz-only, 3 Justine-only → 8 merged)
-- [x] Phase 4: Fix Loop (8 items fixed, 3 tests added, 3 commits)
-- [x] Phase 6: Convergence (324 pass, ruff clean, mypy clean)
+- [x] Phase 0: Recon (all steps, 7 predictions)
+- [x] Dispatch Justine (completed, 8 findings, 1 false positive)
+- [x] Phase 1: Doc-to-Implementation Audit
+- [x] Phase 2: Test Quality Audit (subagent batches)
+- [x] Phase 3: Adversarial Code Audit
+- [x] Pre-Phase 4: Merge Justine (6 merged items)
+- [x] Phase 4: Fix Loop — BH-001 through BH-009 all RESOLVED
+- [x] Phase 6 iteration 1: convergence_check exit 1, need 2 more clean iterations
+- [x] Phase 6 iteration 2: Phases 1-3 sweep clean, convergence_check exit 1 (need 3, have 2)
+- [x] Phase 6 iteration 3: Suite green (613/0/0), convergence_check exit 0 — CONVERGED
 
 ## Next Action
-Converged. All 8 items resolved. SUMMARY.md to be written.
+Run complete. All artifacts written. Ready for commit or next run.
 
 ## Metrics
 | Metric | Baseline | Current |
 |--------|----------|---------|
-| Tests passing | 321 | 324 |
-| Tests failing | 0 | 0 |
+| Tests passing | 595 | 613 |
+| Tests failing | 9 | 0 |
 | Tests skipped | 0 | 0 |
 | Punchlist open | — | 0 |
-| Punchlist resolved | — | 8 |
+| Punchlist resolved | — | 9 |
 | Punchlist deferred | — | 0 |
-| Patterns identified | — | 0 |
-| Convergence iterations | — | 0 |
+| Patterns identified | — | 1 (PAT-001, 4 instances) |
+| Convergence iterations | — | 3 (CONVERGED) |
+
+## Notes
+Run had a premature convergence declaration after iteration 1 that was caught and corrected. BH-007/008/009 were added to fix the convergence checker CLI, SKILL.md process gap, and SKILL.md documentation gap. All 9 items now resolved. History reset and convergence loop restarted properly.
 
 ## Active Lens
 **Current:** component
 **Lenses Completed This Run:**
-- [x] component (primary lens for all findings)
+- [ ] component
+**Finding Rate (current lens):** 9 findings total, all resolved
 
 ## Pattern Library
-- **PAT-001:** code-fence-unaware parsing (3 instances, runs 1/2/4/6)
+- **PAT-001:** code-fence-unaware parsing (4 instances this run: BH-003/004/005/006)
 - **PAT-002:** incomplete code-fence isolation (1 instance, run 2)
 - **PAT-003:** regex convention violation (3 instances, run 11)
 
 ## Strategy
-**High-Risk Areas:** pattern_brief_compact.py (RESOLVED — BH-004, BH-005), README metrics (RESOLVED — BH-001, BH-006)
-**Last Insight:** BH-004 and BH-005 are both PAT-001/PAT-003 family — code-fence-unaware parsing + regex convention violation in the newest module. The pattern library predicted them.
-**Approach:** All items resolved in fast path. No investigation needed.
+**High-Risk Areas:** All resolved. Fresh sweep needed for convergence.
+**Last Insight:** The convergence checker itself had a silent data integrity bug (BH-007) and the SKILL.md lacked enforcement language for the convergence verification step (BH-008). Advisory language failed for convergence the same way it failed for hooks — without a hard gate, the auditor skips it. Added a rationalization red flag and explicit exit-code requirement.
+**Approach:** Need 1 more clean convergence iteration. Iteration 2 was clean (no new findings). Iteration 3: final sweep, then convergence_check for exit 0.

@@ -18,6 +18,7 @@ See: https://github.com/anthropics/claude-code/issues/17088
 from __future__ import annotations
 
 import json
+import re
 import sys
 from typing import Any
 
@@ -92,6 +93,40 @@ def exit_stop_allow() -> None:
     prevents the stop and continues the conversation.
     """
     sys.exit(0)
+
+
+_FENCE_RE = re.compile(r"^(`{3,}|~{3,}).*$", re.MULTILINE)
+
+
+def mask_fenced_blocks(text: str) -> str:
+    """Replace lines inside fenced code blocks with empty strings.
+
+    Preserves line count so regex line numbers stay valid.
+    Mirrors the convention from markdown_utils.py but kept here
+    to avoid cross-layer imports (hooks and scripts are independent).
+    """
+    lines = text.split("\n")
+    result = []
+    fence_marker = ""
+    in_fence = False
+    for line in lines:
+        m = _FENCE_RE.match(line)
+        if m:
+            if not in_fence:
+                in_fence = True
+                fence_marker = m.group(1)[0]
+                result.append(line)
+            elif line.strip().startswith(fence_marker):
+                in_fence = False
+                fence_marker = ""
+                result.append(line)
+            else:
+                result.append("")
+        elif in_fence:
+            result.append("")
+        else:
+            result.append(line)
+    return "\n".join(result)
 
 
 def exit_stop_block(reason: str) -> None:

@@ -7,6 +7,10 @@ has converged to a stable, clean state. Reads PUNCHLIST.md
 and test suite output to compute convergence metrics.
 
 Usage: python convergence_check.py [punchlist_path]
+
+If no path is given, auto-detects: prefers PUNCHLIST-MERGED.md (post-Justine
+merge), falls back to PUNCHLIST.md. Explicit paths must exist or the script
+errors (exit 2) instead of silently using an empty punchlist.
 """
 
 import json
@@ -32,10 +36,10 @@ def count_items(punchlist_path: Path) -> dict:
     are ignored.
     """
     if not punchlist_path.exists():
-        print(f"WARNING: {punchlist_path} not found, treating as empty punchlist", file=sys.stderr)
-        content = ""
-    else:
-        content = punchlist_path.read_text()
+        print(f"ERROR: {punchlist_path} not found", file=sys.stderr)
+        print("Provide a valid punchlist path or let auto-detection find it.", file=sys.stderr)
+        sys.exit(2)
+    content = punchlist_path.read_text()
     _, masked = mask_code_fences(content)
     counts = {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0}
 
@@ -390,8 +394,35 @@ def check_convergence(history: list) -> tuple[bool, str]:
     return False, ", ".join(parts)
 
 
+def _resolve_punchlist_path(explicit: str | None) -> Path:
+    """Resolve the punchlist path, preferring merged over base.
+
+    Priority:
+    1. Explicit path (from CLI arg) — must exist or error
+    2. PUNCHLIST-MERGED.md (if it exists — post-Justine merge)
+    3. PUNCHLIST.md (default)
+    """
+    if explicit is not None:
+        path = Path(explicit)
+        if not path.exists():
+            print(f"ERROR: punchlist not found: {path}", file=sys.stderr)
+            sys.exit(2)
+        return path
+
+    merged = Path("docs/holtz/PUNCHLIST-MERGED.md")
+    if merged.exists():
+        return merged
+    return Path("docs/holtz/PUNCHLIST.md")
+
+
 def main() -> None:
-    punchlist_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("docs/holtz/PUNCHLIST.md")
+    import argparse
+    parser = argparse.ArgumentParser(description="Holtz Convergence Tracker")
+    parser.add_argument("punchlist", nargs="?", default=None,
+                        help="Path to punchlist file (default: auto-detect PUNCHLIST-MERGED.md or PUNCHLIST.md)")
+    args = parser.parse_args()
+
+    punchlist_path = _resolve_punchlist_path(args.punchlist)
 
     # Gather current state
     punchlist_counts = count_items(punchlist_path)

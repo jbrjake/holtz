@@ -901,15 +901,17 @@ def test_detect_pyproject_bracket_in_comment(tmp_path, monkeypatch):
 
 # --- BH-006 (bug-hunter run 3): count_items warns on nonexistent file ---
 
-def test_count_items_nonexistent_file_warns(tmp_path, capsys):
-    """count_items on nonexistent file should warn and return zero counts."""
+def test_count_items_nonexistent_file_errors(tmp_path):
+    """count_items on nonexistent file must hard-error (exit 2), not silently return empty.
+
+    BH-007 run 15: the old behavior silently used empty punchlist, enabling
+    false convergence. Now it exits with code 2.
+    """
+    import pytest
     nonexistent = tmp_path / "does_not_exist.md"
-    counts = cc.count_items(nonexistent)
-    assert counts["total"] == 0, f"Expected total 0 for nonexistent file, got {counts}"
-    captured = capsys.readouterr()
-    assert "WARNING" in captured.err, (
-        f"Expected warning on stderr for nonexistent file, got: {captured.err!r}"
-    )
+    with pytest.raises(SystemExit) as exc_info:
+        cc.count_items(nonexistent)
+    assert exc_info.value.code == 2
 
 
 # --- BH-002 (bug-hunter run 3): Status regex greedy trailing capture ---
@@ -958,6 +960,36 @@ def test_stall_detection_triggers():
     )
     assert "3 items remain open" in message, (
         f"Stall message should mention the number of stuck items. Got: {message}"
+    )
+
+
+def test_regressing_detection_when_open_items_grow():
+    """4+ iterations where open items INCREASE should report REGRESSING, not STALLED.
+
+    BH-008 (run 14) distinguished flat (stalled) from growing (regressing).
+    BH-002 (run 15) adds this test for the REGRESSING path.
+    """
+    history = [
+        {"timestamp": "2026-03-21T01:00:00",
+         "punchlist": {"OPEN": 2, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0, "total": 2},
+         "tests": None},
+        {"timestamp": "2026-03-21T02:00:00",
+         "punchlist": {"OPEN": 3, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0, "total": 3},
+         "tests": None},
+        {"timestamp": "2026-03-21T03:00:00",
+         "punchlist": {"OPEN": 4, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0, "total": 4},
+         "tests": None},
+        {"timestamp": "2026-03-21T04:00:00",
+         "punchlist": {"OPEN": 5, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0, "total": 5},
+         "tests": None},
+    ]
+    converged, message = cc.check_convergence(history)
+    assert not converged, f"Should not converge when regressing. Got: {message}"
+    assert "REGRESSING" in message, (
+        f"Growing open items should report REGRESSING, not STALLED. Got: {message}"
+    )
+    assert "5 items remain open" in message, (
+        f"Regressing message should mention current open count. Got: {message}"
     )
 
 
@@ -1287,3 +1319,63 @@ Time:        1.234 s
     assert result["passed"] == 0
     assert result["failed"] == 3
     assert result["skipped"] == 2
+
+
+# --- BH-007 (run 15): convergence_check.py CLI argument parsing ---
+
+
+def test_cli_resolve_punchlist_explicit_missing():
+    """Explicit punchlist path that doesn't exist must error (exit 2), not silently use empty.
+
+    BH-007 run 15: the old CLI silently fell back to empty punchlist on bad paths,
+    enabling false convergence declarations.
+    """
+    import pytest
+    with pytest.raises(SystemExit) as exc_info:
+        cc._resolve_punchlist_path("/nonexistent/path/PUNCHLIST.md")
+    assert exc_info.value.code == 2
+
+
+def test_cli_resolve_punchlist_explicit_exists(tmp_path):
+    """Explicit punchlist path that exists should be returned."""
+    pl = tmp_path / "PUNCHLIST.md"
+    pl.write_text("# Punchlist\n")
+    result = cc._resolve_punchlist_path(str(pl))
+    assert result == pl
+
+
+def test_cli_resolve_punchlist_prefers_merged(tmp_path, monkeypatch):
+    """Auto-detection should prefer PUNCHLIST-MERGED.md over PUNCHLIST.md."""
+    holtz = tmp_path / "docs" / "holtz"
+    holtz.mkdir(parents=True)
+    (holtz / "PUNCHLIST.md").write_text("# Base\n")
+    (holtz / "PUNCHLIST-MERGED.md").write_text("# Merged\n")
+    monkeypatch.chdir(tmp_path)
+    result = cc._resolve_punchlist_path(None)
+    assert result.name == "PUNCHLIST-MERGED.md"
+
+
+def test_cli_resolve_punchlist_falls_back_to_base(tmp_path, monkeypatch):
+    """Auto-detection falls back to PUNCHLIST.md when no merged file exists."""
+    holtz = tmp_path / "docs" / "holtz"
+    holtz.mkdir(parents=True)
+    (holtz / "PUNCHLIST.md").write_text("# Base\n")
+    monkeypatch.chdir(tmp_path)
+    result = cc._resolve_punchlist_path(None)
+    assert result.name == "PUNCHLIST.md"
+
+
+def test_cli_rejects_flags_as_filenames():
+    """Argparse should reject --punchlist as an unknown flag, not treat it as a path.
+
+    BH-007 run 15: bare sys.argv[1] treated --punchlist as a filename.
+    """
+    import subprocess as sp
+    import sys
+    result = sp.run(
+        [sys.executable, "-m", "convergence_check", "--punchlist", "foo.md"],
+        capture_output=True, text=True, cwd="skills/holtz/scripts",
+    )
+    assert result.returncode != 0, (
+        f"--punchlist flag should be rejected by argparse. stdout: {result.stdout}"
+    )

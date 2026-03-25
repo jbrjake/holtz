@@ -1,10 +1,10 @@
-"""Tests for the commit-msg git hook version bumping logic."""
+"""Tests for the post-commit git hook version bumping logic."""
 
 import json
 import subprocess
 from pathlib import Path
 
-HOOK_PATH = Path(__file__).parent.parent / "git-hooks" / "commit-msg"
+HOOK_PATH = Path(__file__).parent.parent / "git-hooks" / "post-commit"
 
 
 def _setup_git_repo(tmp_path: Path, version: str = "0.4.0") -> Path:
@@ -22,7 +22,7 @@ def _setup_git_repo(tmp_path: Path, version: str = "0.4.0") -> Path:
     # Install our hook
     hooks_dir = tmp_path / ".git" / "hooks"
     hooks_dir.mkdir(exist_ok=True)
-    hook_dest = hooks_dir / "commit-msg"
+    hook_dest = hooks_dir / "post-commit"
     hook_dest.symlink_to(HOOK_PATH.resolve())
 
     # Initial commit (without hook — use a no-bump prefix)
@@ -169,14 +169,17 @@ class TestCumulativeBumping:
 
 
 class TestGuards:
-    def test_skips_if_plugin_json_already_modified(self, tmp_path: Path) -> None:
+    def test_bumps_from_disk_version_when_plugin_json_modified(self, tmp_path: Path) -> None:
         repo = _setup_git_repo(tmp_path, "0.4.0")
-        # Modify plugin.json without staging it
+        # Modify plugin.json without staging it — post-commit reads the disk version
         plugin_json = repo / ".claude-plugin" / "plugin.json"
         data = json.loads(plugin_json.read_text())
         data["version"] = "1.0.0"
         plugin_json.write_text(json.dumps(data, indent=2) + "\n")
-        # Now make a feat commit — hook should skip, version stays at manual edit
-        result = _make_commit(repo, "feat: should not auto-bump", "a.txt")
+        # post-commit reads 1.0.0 from disk and bumps to 1.1.0 (feat → minor)
+        # Note: the old commit-msg hook had an "already modified" guard that
+        # skipped bumping. post-commit hooks run after the commit is created
+        # and always bump from the disk version.
+        result = _make_commit(repo, "feat: bumps from disk version", "a.txt")
         assert result.returncode == 0
-        assert _get_version(repo) == "1.0.0"
+        assert _get_version(repo) == "1.1.0"
