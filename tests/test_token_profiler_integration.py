@@ -208,24 +208,24 @@ class TestHoltzPluginDetectsSession:
 
 
 # ---------------------------------------------------------------------------
-# Test 7: Holtz plugin labels phases
+# Test 7: Holtz plugin labels steps
 # ---------------------------------------------------------------------------
 
 
-class TestHoltzPluginLabelsPhases:
-    def test_holtz_plugin_labels_phases(self, main_turns, holtz_plugin):
-        """Plugin labels include 'recon' and at least 3 different phases."""
+class TestHoltzPluginLabelsSteps:
+    def test_holtz_plugin_labels_steps(self, main_turns, holtz_plugin):
+        """Plugin labels include 'step-0-4' and at least 3 different steps."""
         labels = holtz_plugin.label_phases(main_turns)
-        unique_phases = set(labels.values())
+        unique_steps = set(labels.values())
 
-        assert "recon" in unique_phases, (
-            f"Expected 'recon' in phases, got {sorted(unique_phases)}"
+        assert "step-0-4" in unique_steps, (
+            f"Expected 'step-0-4' in steps, got {sorted(unique_steps)}"
         )
 
-        # At least 3 distinct phases (excluding 'unknown')
-        non_unknown = {p for p in unique_phases if p != "unknown"}
+        # At least 3 distinct steps (excluding 'unknown')
+        non_unknown = {s for s in unique_steps if s != "unknown"}
         assert len(non_unknown) >= 3, (
-            f"Expected >= 3 non-unknown phases, got {sorted(non_unknown)}"
+            f"Expected >= 3 non-unknown steps, got {sorted(non_unknown)}"
         )
 
 
