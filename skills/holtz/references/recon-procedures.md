@@ -1,5 +1,7 @@
 # Recon Procedures (Steps 0-4)
 
+> **Note:** This document is consumed via the reference reader subagent during Step 0. The main session receives a structured brief, not the full text. If the brief is insufficient for a specific step, re-read this document directly.
+
 Read this file at the start of Step 0. It contains the complete step-by-step procedures, including mutation scanning, graph operations, pattern library scanning, architecture drift detection, and predictive recon.
 
 ## Recon Steps

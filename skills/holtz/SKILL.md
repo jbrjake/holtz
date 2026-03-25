@@ -29,23 +29,29 @@ Operate as Holtz — see [references/backstory.md](references/backstory.md) for 
 
 ## References
 
+**Main context** (read directly when needed — cross-referenced across phases):
 - [references/anti-patterns.md](references/anti-patterns.md) — test quality detection (17 anti-patterns with audit checklist)
-- [references/punchlist-format.md](references/punchlist-format.md) — required format for all punchlist output
-- [references/status-file-format.md](references/status-file-format.md) — required format for docs/holtz/STATUS.md
-- [references/investigation-format.md](references/investigation-format.md) — format for per-item investigation files (complex bugs only)
 - [references/lens-registry.md](references/lens-registry.md) — analytical lens definitions for multi-perspective auditing
-- [examples/sample-punchlist.md](examples/sample-punchlist.md) — example punchlist with filled-in items
-- `scripts/validate_punchlist.py` — validate punchlist structure
-- `scripts/convergence_check.py` — track fix loop progress
-- `scripts/impact_graph.py` — knowledge graph operations (add/query/update/prune) + CLI
-- `patterns/*.md` — global pattern library (language-tagged, reusable across projects)
-- [references/architecture-baseline-format.md](references/architecture-baseline-format.md) — format spec for architecture baseline (drift detection)
-- [references/living-punchlist-format.md](references/living-punchlist-format.md) — format spec for living punchlist (persistent vulnerability model)
 - [references/merge-protocol.md](references/merge-protocol.md) — merge protocol for adversarial self-play
-- [references/merge-examples.md](references/merge-examples.md) — worked examples for merge classification (read only if classification is ambiguous)
-- [references/recommendation-escalation.md](references/recommendation-escalation.md) — protocol for escalating recurring recommendations to punchlist items (read during Step 3 after recon)
-- [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) — protocol for contributing patterns to the global library (read at post-convergence)
-- [references/output-format.md](references/output-format.md) — required terminal output format for phase banners, findings, merge summary, fix progress, and convergence verdict
+- [references/impact-graph-operations.md](references/impact-graph-operations.md) — knowledge graph CLI
+- [references/output-format.md](references/output-format.md) — terminal output format for phase banners, findings, and verdicts
+- [references/step-10-fix-loop.md](references/step-10-fix-loop.md) — fix loop procedure (triage, hardening, blast radius)
+
+**Subagent-digested** (consumed via reference reader subagent during Step 0):
+- [references/punchlist-format.md](references/punchlist-format.md) — punchlist format
+- [references/status-file-format.md](references/status-file-format.md) — STATUS.md format
+- [references/recommendation-escalation.md](references/recommendation-escalation.md) — escalation protocol
+- [references/recon-procedures.md](references/recon-procedures.md) — recon procedure (Steps 0-4)
+- [references/architecture-baseline-format.md](references/architecture-baseline-format.md) — baseline format
+- [references/living-punchlist-format.md](references/living-punchlist-format.md) — living punchlist format
+- [references/investigation-format.md](references/investigation-format.md) — per-item investigation files (complex bugs only)
+- [references/merge-examples.md](references/merge-examples.md) — worked examples for merge classification
+- [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) — pattern library contribution protocol
+
+**Always in main context** (not reference docs):
+- [examples/sample-punchlist.md](examples/sample-punchlist.md) — example punchlist
+- Scripts: `validate_punchlist.py`, `convergence_check.py`, `impact_graph.py`, `pattern_brief_compact.py`
+- `patterns/*.md` — global pattern library (language-tagged, reusable across projects)
 
 ## Terminal Output
 
@@ -64,6 +70,7 @@ All Holtz runtime data goes in `docs/holtz/` in the target project, not the proj
 5. **Patterns reveal systemic issues.** Every 3-5 fixes, ask what they have in common. Then go find the siblings.
 6. **Write to disk first, think later.** Each finding, each recon step, each status update goes to its file IMMEDIATELY. Files are your durable memory. After any compaction, re-read your output files to recover state before continuing.
 7. **Every finding needs a Discovery Chain.** Each punchlist item must include a `**Discovery Chain:**` showing the reasoning from observation to conclusion (1-4 steps connected by `→`). Required for all items regardless of status.
+8. **Write once, don't echo.** After writing an artifact to disk (recon file, punchlist item, status update), do not summarize or restate its contents in your next response. Reference the file path instead. The artifact IS the record. Restating it in assistant text causes the information to be cached twice — once as the Write result and once as your text — on every subsequent API call.
 
 ## Rationalization Red Flags
 
@@ -84,12 +91,14 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 | "I don't need to verify artifact existence, I just created it" | You said that for 10 runs. `ls` the file. If it's not on disk, it doesn't exist. |
 | "All items are resolved, I can skip the convergence check" | Convergence is determined by convergence_check.py returning exit 0, not by your assessment. Fixes introduce new bugs. Run 15 proved this: the auditor declared convergence, wrote SUMMARY.md, and was wrong. |
 | "I'll just call convergence_check.py multiple times to build data points" | Each iteration = real audit cycle (sweep + suite), not a repeated script call. Calling the checker without doing work between calls is fraud. |
+| "Let me summarize what I just wrote..." | The file IS the summary. Restating it doubles the context cost. Reference the path. |
 
 ## Context Survival Protocol
 
 **Your context WILL compact. Files are your brain. Treat them that way.**
 
 - **One step, one file.** Each recon step and audit batch writes to its own file IMMEDIATELY. Write first, think later.
+- **Don't echo artifacts.** After writing to disk, say only: "Written to `<path>`." Do not restate contents. If you need to reference the contents later, re-read the file — it's cheaper than carrying the summary in context for 200+ turns.
 - **Subagents for heavy scanning.** Delegate grep/read-heavy work (test file audits, module scans) to Agent subagents. Their tool output stays in THEIR context, not yours. They return a short summary + write detailed findings to disk.
 - **Batch independent tool calls.** When multiple checks are independent (no data dependency between them), execute them as parallel tool calls in a single turn. Do not narrate between independent operations. Each eliminated turn saves its narration text from being cached on every subsequent API call.
 - **Terse within phases.** Between tool calls within a phase, do not explain what you are about to do. Execute, then report findings. Save narrative for phase boundaries and significant discoveries. Every sentence of narration enters context permanently.
@@ -97,6 +106,16 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 - **Re-read before every step.** At the start of each step, read the output files you need. Assume prior context is gone.
 - **After compaction or `/clear`: STOP.** Re-read `docs/holtz/STATUS.md` and the latest step output files before continuing. After `/clear`, the convergence primer hook injects resume context automatically.
 - **`docs/holtz/STATUS.md` is your program counter.** Update it after completing each step with: current step, what's done, what's next. This is the FIRST file you read after any compaction. After compaction, re-read STATUS.md to recover position *and strategy* — which lens is active, what patterns have been found, and what tactical approach is being used.
+
+## Session Splitting (Optional, for Token Efficiency)
+
+For maximum token efficiency, Holtz can be run in two sessions with a context reset between Step 4 and Step 5. This is orchestrated by `scripts/holtz_split_session.sh`.
+
+**Why:** After Step 4, context is ~103K tokens. All recon data is on disk. The remaining ~200 turns re-cache this 103K on every API call, costing ~15-20M session-cost tokens of dead weight. Splitting resets context to ~32K.
+
+**How:** Session 1 runs Steps 0-4 + dispatches Justine. Session 2 reads the recon artifacts from disk and runs Steps 5-20 with a clean context. Justine runs independently across both sessions.
+
+**When NOT to split:** If the codebase is small (<100 files) and the audit will be short (<100 turns), the overhead of session splitting exceeds the savings. Split only when the total session is expected to exceed 200 turns.
 
 ## Lifecycle: Resuming Prior Runs
 
@@ -141,7 +160,49 @@ Before starting ANY work, check for existing output files in `docs/holtz/`:
 
 ### Step 0: Project Overview + Drift Detection
 
-Read [references/recon-procedures.md](references/recon-procedures.md) for the complete recon procedure (Steps 0-4, mutation scanning, pattern library, architecture drift, predictive recon).
+#### Reference Reader Subagent
+
+Before starting recon steps, dispatch a reference reader subagent to pre-digest consumable reference docs. This keeps full doc content out of the main context.
+
+```
+Agent(subagent_type="general-purpose", model="sonnet", prompt="
+Read the following reference docs and return a structured brief for each.
+Return ONLY the brief — do not include the full doc text.
+
+For each doc, extract:
+1. The key rules/requirements (numbered list, 1-2 sentences each)
+2. Any format templates or required fields
+3. Any decision criteria or thresholds
+
+Docs to read:
+- skills/holtz/references/recommendation-escalation.md
+- skills/holtz/references/punchlist-format.md
+- skills/holtz/references/status-file-format.md
+- skills/holtz/references/recon-procedures.md
+- skills/holtz/references/architecture-baseline-format.md
+- skills/holtz/references/living-punchlist-format.md
+- skills/holtz/references/investigation-format.md
+- skills/holtz/references/merge-examples.md
+- skills/holtz/references/pattern-contribution-protocol.md
+
+Format your response as:
+## <doc-name>
+<extracted brief>
+(Full protocol: `<path>` — re-read only if the brief is insufficient.)
+")
+```
+
+Use the returned brief as your working reference for Step 0. Do NOT read the full docs in the main session unless the brief is insufficient for a specific decision.
+
+**Keep in main context** (do NOT move to the reader subagent):
+- `references/anti-patterns.md` — cross-referenced during Step 7
+- `references/lens-registry.md` — cross-referenced throughout
+- `references/merge-protocol.md` — cross-referenced during Step 9
+- `references/impact-graph-operations.md` — cross-referenced throughout for graph CLI commands
+- `references/output-format.md` — cross-referenced for terminal output throughout
+- `references/step-10-fix-loop.md` — cross-referenced during Step 10
+
+Use the reference reader brief for recon procedures (Steps 0-4, mutation scanning, pattern library, architecture drift, predictive recon). If the brief is insufficient for a specific step, re-read [references/recon-procedures.md](references/recon-procedures.md) directly.
 
 Read [references/impact-graph-operations.md](references/impact-graph-operations.md) for all graph CLI commands (initialization, reconciliation, edge operations, blast radius, risk scores).
 
