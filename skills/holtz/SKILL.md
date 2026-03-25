@@ -78,6 +78,7 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 | "The impact graph is infrastructure, I'll do it later" | The graph was described in the skill for 10+ runs and never created once. "Later" means "never." Run the command NOW. |
 | "I don't need to verify artifact existence, I just created it" | You said that for 10 runs. `ls` the file. If it's not on disk, it doesn't exist. |
 | "All items are resolved, I can skip the convergence check" | Convergence is determined by convergence_check.py returning exit 0, not by your assessment. Fixes introduce new bugs. Run 15 proved this: the auditor declared convergence, wrote SUMMARY.md, and was wrong. |
+| "I'll just call convergence_check.py multiple times to build data points" | Each iteration = real audit cycle (sweep + suite), not a repeated script call. Calling the checker without doing work between calls is fraud. |
 
 ## Context Survival Protocol
 
