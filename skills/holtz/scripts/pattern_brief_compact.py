@@ -54,10 +54,20 @@ def parse_brief(content: str) -> list[PatternEntry]:
     )
     matches = list(header_re.finditer(masked))
 
+    # Use line-based extraction to avoid masked/original character offset
+    # divergence (BH-003 run 16, PAT-001).  mask_code_fences preserves line
+    # count, so line numbers are safe to map between masked and original.
+    original_lines = content.split('\n')
+    masked_lines = masked.split('\n')
+
+    def _line_of(pos: int) -> int:
+        """Convert a character offset in masked to a line number."""
+        return masked[:pos].count('\n')
+
     for i, match in enumerate(matches):
-        start = match.end()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(masked)
-        block = content[start:end]
+        start_line = _line_of(match.end())
+        end_line = _line_of(matches[i + 1].start()) if i + 1 < len(matches) else len(original_lines)
+        block = '\n'.join(original_lines[start_line:end_line])
 
         def _extract(field: str, _block: str = block) -> str:
             m = re.search(

@@ -119,3 +119,49 @@ def test_parse_brief_ignores_code_fenced_headers():
     ids = [e.pattern_id for e in entries]
     assert "PAT-999" not in ids, "Code fence header should not be matched as a real entry"
     assert ids == ["PAT-001", "PAT-002"], f"Expected only real entries, got: {ids}"
+
+
+# --- BH-003 (run 16): Masked offsets index original content after code fence ---
+
+def test_parse_brief_fields_correct_after_code_fence():
+    """Fields for entries AFTER a code fence must extract from the correct position.
+
+    parse_brief uses finditer(masked) to locate headers but content[start:end]
+    to extract fields. mask_code_fences replaces fenced lines with empty strings,
+    so character offsets diverge. This test verifies field values are correct,
+    not just that the right IDs are found.
+    BH-003 run 16, PAT-001.
+    """
+    brief = (
+        "## PAT-001: first-pattern (Run 1, 2026-03-20)\n"
+        "**What to look for:** First description\n"
+        "**Detection heuristic:** `grep first`\n"
+        "**Example:** First example\n"
+        "\n"
+        "```python\n"
+        "## PAT-999: fake (Run 99, 2099-01-01)\n"
+        "**What to look for:** This is inside a code fence\n"
+        "**Detection heuristic:** fake detection\n"
+        "some more fenced content here that pads the offset\n"
+        "```\n"
+        "\n"
+        "## PAT-002: second-pattern (Run 2, 2026-03-21)\n"
+        "**What to look for:** Second description\n"
+        "**Detection heuristic:** `grep second`\n"
+        "**Example:** Second example\n"
+    )
+    entries = pbc.parse_brief(brief)
+    assert len(entries) == 2, f"Expected 2 entries, got {len(entries)}"
+
+    # PAT-002's fields must come from the REAL entry, not the fenced content
+    pat2 = entries[1]
+    assert pat2.pattern_id == "PAT-002"
+    assert "Second description" in pat2.what_to_look_for, (
+        f"PAT-002 what_to_look_for is wrong: {pat2.what_to_look_for!r}"
+    )
+    assert "grep second" in pat2.detection_heuristic, (
+        f"PAT-002 detection_heuristic is wrong: {pat2.detection_heuristic!r}"
+    )
+    assert "Second example" in pat2.example, (
+        f"PAT-002 example is wrong: {pat2.example!r}"
+    )
