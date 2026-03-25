@@ -580,11 +580,11 @@ git commit -m "feat(skill): add Cold File Coverage section to STATUS.md format"
 
 ---
 
-### Task 11: Regenerate Pattern Brief, Run Tests, and Verify
+### Task 11: Run Tests and Verify All Changes
 
 **Files:**
-- Run: `skills/holtz/scripts/pattern_brief_compact.py`
 - Verify: all modified files from Tasks 1-10
+- Note: new pattern files in `skills/holtz/patterns/` are auto-discovered at runtime via the Global Pattern Library Scan in `recon-procedures.md`. No dev-time regeneration needed.
 
 - [ ] **Step 1: Run existing tests**
 
