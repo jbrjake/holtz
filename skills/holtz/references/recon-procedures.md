@@ -6,6 +6,8 @@ Read this file at the start of Step 0. It contains the complete step-by-step pro
 
 Create `docs/holtz/` and `docs/holtz/recon/` if they do not exist. Each step is independent. Complete one, write its file, then start the next.
 
+**Batching:** Steps 0-2 involve many independent checks (line counts, test run, lint, churn, skipped tests). Execute independent checks as parallel tool calls in a single turn. For example: run pytest, ruff, and mypy in one batched turn rather than three sequential turns. The pattern heuristic greps (global pattern library scan) are already independent and should be a single batched call.
+
 | Step | Action | Output File |
 |------|--------|-------------|
 | 0 | Read project structure, docs, CLAUDE.md, architecture + drift detection | `docs/holtz/recon/step0-project-overview.md` |
