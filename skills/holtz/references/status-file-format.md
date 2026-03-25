@@ -54,6 +54,14 @@ This file is Holtz's program counter. Located at `docs/holtz/STATUS.md` in the t
 | Patterns identified | — | {N} |
 | Convergence iterations | — | {N} |
 
+## Cold File Coverage
+| Metric | Value |
+|--------|-------|
+| Total source files | {n} |
+| Files audited (any run) | {n} |
+| Cold file ratio | {n}% |
+| Cold files audited this run | {n} |
+
 ## Notes
 {Anything important for resumption: blocked items, user decisions, scope constraints.}
 
