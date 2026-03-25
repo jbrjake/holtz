@@ -17,6 +17,8 @@ All commits MUST use conventional commit format:
 - `feat!:` / `fix!:` / `BREAKING CHANGE` in body — breaking change (bumps major)
 - `docs:`, `chore:`, `refactor:`, `test:`, `ci:`, `style:` — no version bump
 
+**Note:** Plugin-vended markdown files (SKILL.md, references/, agents/, patterns/) are functional deliverables, not documentation. Changes to these files are `feat:` or `fix:`, not `docs:`. Reserve `docs:` for README, CHANGELOG, CONTRIBUTING, and other non-plugin files.
+
 A `post-commit` git hook automatically bumps `.claude-plugin/plugin.json` version on feat/fix/perf commits and amends the commit to include the change. No manual version management needed.
 
 ## Setup
@@ -32,15 +34,16 @@ scripts/install-hooks.sh
 1. Ensure dev is up to date and CI is green.
 2. Review commits since last release: `git log dev --not main --oneline`
 3. Read the version from `.claude-plugin/plugin.json` (already bumped by hook).
-4. Create a release PR:
+4. Generate changelog: `python scripts/generate-changelog.py --write` (preview without `--write` first). Review the output in CHANGELOG.md, commit it.
+5. Create a release PR:
    ```
    gh pr create --base main --head dev \
      --title "chore: release vX.Y.Z" \
      --body "<highlights and commit summary>"
    ```
-5. Wait for CI to pass on the PR.
-6. Merge: `gh pr merge <number> --merge --subject "chore: release vX.Y.Z" --body "<summary>"`
-7. The release GitHub Action automatically creates the git tag and GitHub Release.
+6. Wait for CI to pass on the PR.
+7. Merge: `gh pr merge <number> --merge --subject "chore: release vX.Y.Z" --body "<summary>"`
+8. The release GitHub Action automatically creates the git tag and GitHub Release.
 
 ## Running Tests
 
