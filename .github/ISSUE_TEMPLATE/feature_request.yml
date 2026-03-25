@@ -1,0 +1,63 @@
+name: Feature Request
+description: Suggest a new lens, pattern, edge type, or capability.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        New lenses, patterns, and edge types are the most impactful
+        contributions. Tell us what you're thinking.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - New lens
+        - New pattern
+        - New edge type
+        - Audit methodology improvement
+        - Hook / enforcement
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What should Holtz do?
+      description: |
+        Describe the capability. For lenses: what does it examine and what
+        does it catch? For patterns: what bug class does it detect? For edge
+        types: what relationship does it encode?
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why?
+      description: |
+        What bugs would this catch that the current nine lenses / six
+        patterns / seven edge types miss? Real examples are best.
+    validations:
+      required: true
+
+  - type: textarea
+    id: approach
+    attributes:
+      label: Possible approach
+      description: |
+        Optional. If you have ideas about implementation — detection
+        heuristics, graph traversal strategies, audit phase placement —
+        share them here.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and discussions for similar requests.
+          required: true
