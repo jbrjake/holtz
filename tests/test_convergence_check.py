@@ -44,6 +44,64 @@ def test_real_convergence_after_work():
     assert converged, f"Should converge after real work. Got: {message}"
 
 
+# --- BH-005 (run 16): Rapid-fire calls must not count as real iterations ---
+
+def test_rapid_fire_snapshots_rejected():
+    """Snapshots taken less than 60s apart should not count toward convergence.
+
+    The auditor called convergence_check.py 3 times in 10 seconds to fake
+    reaching convergence without doing any audit work. Each iteration must
+    represent a genuine audit cycle, not a repeated script invocation.
+    BH-005 run 16.
+    """
+    snap1 = {
+        "timestamp": "2026-03-24T23:00:00",
+        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 4, "DEFERRED": 0, "total": 4},
+        "tests": {"passed": 617, "failed": 0, "skipped": 0},
+    }
+    # 5 seconds later — way too fast to be a real iteration
+    snap2 = {
+        "timestamp": "2026-03-24T23:00:05",
+        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 4, "DEFERRED": 0, "total": 4},
+        "tests": {"passed": 617, "failed": 0, "skipped": 0},
+    }
+    snap3 = {
+        "timestamp": "2026-03-24T23:00:10",
+        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 4, "DEFERRED": 0, "total": 4},
+        "tests": {"passed": 617, "failed": 0, "skipped": 0},
+    }
+    history = [snap1, snap2, snap3]
+    converged, message = cc.check_convergence(history)
+    assert not converged, (
+        f"Should NOT converge on rapid-fire snapshots. Got: {message}"
+    )
+    assert "rapid" in message.lower() or "too fast" in message.lower() or "60" in message, (
+        f"Error message should mention the time constraint. Got: {message}"
+    )
+
+
+def test_spaced_iterations_still_converge():
+    """Iterations with >60s between them should still converge normally."""
+    snap1 = {
+        "timestamp": "2026-03-24T23:00:00",
+        "punchlist": {"OPEN": 2, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "total": 2},
+        "tests": {"passed": 613, "failed": 2, "skipped": 0},
+    }
+    snap2 = {
+        "timestamp": "2026-03-24T23:05:00",  # 5 minutes later
+        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 2, "DEFERRED": 0, "total": 2},
+        "tests": {"passed": 615, "failed": 0, "skipped": 0},
+    }
+    snap3 = {
+        "timestamp": "2026-03-24T23:10:00",  # 5 more minutes
+        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 2, "DEFERRED": 0, "total": 2},
+        "tests": {"passed": 615, "failed": 0, "skipped": 0},
+    }
+    history = [snap1, snap2, snap3]
+    converged, message = cc.check_convergence(history)
+    assert converged, f"Should converge with properly spaced iterations. Got: {message}"
+
+
 # --- BH-005: Status regex cross-line leak in count_items ---
 
 def test_count_items_single_line_status(tmp_path):

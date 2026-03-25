@@ -290,10 +290,35 @@ def _get_punchlist(entry: dict) -> dict:
     return {k: pl.get(k, 0) for k in default}
 
 
+MIN_ITERATION_SECONDS = 60
+
+
 def check_convergence(history: list) -> tuple[bool, str]:
     """Determine if the fix loop has converged."""
     if len(history) < 3:
         return False, f"Not enough data points (need at least 3 iterations, have {len(history)})"
+
+    # Reject rapid-fire calls: each iteration must represent genuine audit work.
+    # If any two consecutive snapshots in the convergence window are less than
+    # MIN_ITERATION_SECONDS apart, the auditor is gaming the checker (BH-005 run 16).
+    last_3 = history[-3:]
+    for j in range(len(last_3) - 1):
+        ts_a = last_3[j].get("timestamp", "")
+        ts_b = last_3[j + 1].get("timestamp", "")
+        if ts_a and ts_b:
+            try:
+                dt_a = datetime.fromisoformat(ts_a)
+                dt_b = datetime.fromisoformat(ts_b)
+                gap = (dt_b - dt_a).total_seconds()
+                if gap < MIN_ITERATION_SECONDS:
+                    return False, (
+                        f"RAPID-FIRE REJECTED: Iterations {j + 1}→{j + 2} are only {gap:.0f}s apart "
+                        f"(minimum {MIN_ITERATION_SECONDS}s). Each iteration must represent a genuine "
+                        "audit cycle — re-read punchlist, sweep phases, run full test suite. "
+                        "Do the work."
+                    )
+            except (ValueError, TypeError):
+                pass  # Unparseable timestamps — skip timing check
 
     curr_pl = _get_punchlist(history[-1])
     unknown_items = curr_pl.get("unknown", 0)
