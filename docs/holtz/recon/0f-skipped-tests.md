@@ -1,12 +1,11 @@
-# Step 0f: Skipped Tests
+# Step 0f: Skipped/Disabled Tests
 
 **Date:** 2026-03-24
-**Run:** 15
 
-## Results
-No tests use `@pytest.mark.skip`, `xfail`, or `xit`.
-
-One conditional skip: `tests/test_token_profiler_integration.py:39` — `skip_if_no_session` fixture skips integration tests when run-14 session JSONL is not available. This is expected (large binary not checked in).
+## Findings
+- **0 pytest.mark.skip decorators** found in test files
+- **0 xfail markers** found
+- **1 conditional skip:** `tests/test_token_profiler_integration.py` — `skip_if_no_session` fixture skips profiler integration tests when Run 14 session JSONL is not available. This is environment-conditional, not a test gap.
 
 ## Assessment
-Clean — no tech debt hidden behind skipped tests.
+No disabled or skipped tests. All 613 tests execute on every run.

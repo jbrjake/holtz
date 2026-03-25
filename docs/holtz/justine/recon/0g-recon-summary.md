@@ -1,55 +1,58 @@
-# Justine Recon Summary (0g)
+# Step 0g: Justine Recon Summary
 
+**Project:** holtz v0.5.2
 **Date:** 2026-03-24
-**Run:** 15
+**Run:** 16 (parallel dispatch, inherited recon)
+**Auditor:** Justine
 
-## Baseline
-- 604 tests collected, 595 passing, 9 failing, 0 skipped (6.70s)
-- Ruff: clean
-- Mypy: clean (13 source files)
-- Coverage: 63% overall
+## Baseline State
+- **Tests:** 613 passed, 0 failed, 0 skipped (9.27s)
+- **Lint:** ruff clean, mypy clean (13 files)
+- **Coverage:** 62% overall (hooks 0% due to subprocess testing)
+- **Skipped tests:** 0 (1 conditional skip for missing profiler data)
 
-## Integration Boundary Analysis
+## Integration Boundary Analysis (Justine's lens ordering)
 
-Justine's lens ordering is integration-first. Here are the seams.
+### Critical Seams
+1. **validate_punchlist.py <-> convergence_check.py** -- Both split on `### B[HJ]-\d+:` headers in masked content. Both use `mask_code_fences`. If either changes its header regex or masking approach, the other breaks silently. Integration test exists but only verifies count agreement.
+2. **hooks/_common.py <-> markdown_utils.py** -- Parallel masking implementations (mask_fenced_blocks vs mask_code_fences). Same concept, different code. Convention documented but not enforced.
+3. **hooks/ <-> STATUS.md format** -- Convergence gate and primer parse STATUS.md. Format changes break hooks. No schema; parsing is regex-based against free-form markdown.
+4. **SKILL.md / justine-skill.md <-> scripts/ CLI interfaces** -- Process docs reference script CLI commands. If argparse changes, process instructions become wrong.
+5. **README.md <-> actual project state** -- Highest churn file. Integration test checks some metrics but not all semantic claims.
 
-### Seam 1: test_commit_msg_hook.py <-> git-hooks/post-commit
-**Status:** BROKEN. Tests reference `git-hooks/commit-msg` (deleted in b412c16). The symlink target does not exist. All 9 version-bump tests fail silently — the commit succeeds without bumping because the hook simply is not there. The "NoBump" tests pass by coincidence (they assert no bump happened, which is trivially true when no hook fires).
+### Cross-Module Data Flow
+- Punchlist content flows: user writes markdown -> validate_punchlist.py parses -> convergence_check.py counts -> hooks gate writes
+- Impact graph: impact_graph.py manages -> hooks/impact_graph_gate.py gates -> SKILL.md references CLI
+- STATUS.md: auditor writes -> convergence_gate.py reads -> convergence_primer.py reads -> auditor sees
 
-### Seam 2: convergence_gate.py <-> STATUS.md format
-**Status:** VULNERABLE. `re.search(r'\*\*Status:\*\*[ \t]*(.*)', content)` matches the FIRST occurrence. If a code example containing `**Status:** CONVERGED` appears before the real `**Status:** IN PROGRESS` field, the gate reads CONVERGED and allows a premature stop. This is a gate bypass — the enforcement hook fails to enforce.
+## Recommendation Escalation
 
-### Seam 3: convergence_primer.py <-> STATUS.md format
-**Status:** VULNERABLE. Same pattern as Seam 2. The primer reads Phase, Step, and Status fields via bare regex on unmasked content. A code fence example before the real fields would inject wrong values into the resume context.
+**4 prior Justine runs scanned.** Recurring recommendations:
 
-### Seam 4: convergence_gate._count_open_items <-> PUNCHLIST.md format
-**Status:** VULNERABLE (informational). Counts `**Status:** OPEN` via bare regex. Code fence examples inflate the count. Docstring explicitly says "informational, not decisional." The gate decision is based on STATUS.md and SUMMARY.md existence. Severity is LOW because the count is advisory only.
+| Recommendation | Appearances | Status |
+|---------------|-------------|--------|
+| README metrics validation (complete all assertions) | 4/4 runs | RECURRING -- escalate |
+| `\s` to `[ \t]` convention enforcement | 3/4 runs | RECURRING -- escalate |
+| Hook enforcement scope widening | 2/4 runs | PARTIALLY ADDRESSED (run 15 fixes) |
+| Architecture baseline hooks integration | 1/4 runs | ADDRESSED |
 
-### Seam 5: CI pipeline <-> test suite
-**Status:** INCONSISTENT. CI is green on main but the test suite has 9 failures on dev. The 9 failures in test_commit_msg_hook.py were introduced on dev after the last CI-tested main merge. CI will catch this on the next PR to main.
+**README metrics validation has appeared in every Justine run.** This is a persistent gap. The test infrastructure extracts fields but does not assert on all of them.
 
-## Key Disagreement with Holtz Recon
+## Global Pattern Scan
 
-**Holtz Prediction 2** claims convergence hooks have "zero test coverage (not counted by pytest-cov, not tested in test_hooks.py)." This is factually wrong. `tests/test_hooks.py` contains:
-- `TestConvergenceGate`: 14 tests (lines 588-726) covering allow/block logic
-- `TestConvergencePrimer`: 10 tests (lines 731-827) covering inject/silent logic
+All 6 seed patterns checked against Python codebase:
+- **code-fence-unaware-parsing:** Previously mitigated (PAT-001 from living punchlist). Need to verify no new unmasked regex in recently added/changed code.
+- **regex-newline-leak:** `[ \t]` convention. Need to verify compliance in ALL files, especially new token_profiler module.
+- **doc-spec-drift:** README and SKILL.md are highest-risk. Check semantic claims.
+- **dual-parser-divergence:** validate_punchlist and convergence_check both parse punchlist headers -- known, tested.
+- **incomplete-layer-isolation:** hooks use sys.path.insert -- known, accepted.
+- **missing-edge-case-handling:** Check new token_profiler for defensive coding.
 
-Coverage is 0% in pytest-cov because hooks run via subprocess, which is expected and noted in Holtz's own 0c. The tests exist and they pass. What they DON'T test is the code-fence vulnerability — all fixtures use clean markdown without fenced blocks.
+## Key Risk Areas (Justine's ordering)
 
-## README Claims Verification
-- "604 tests across 13,302 lines of code" — 604 tests: VERIFIED. "13,302 lines": STALE. Python alone is 15,662 lines (excl .venv, docs/runs). All code+config is ~16,100 lines. All code+config+markdown is ~32,250 lines. No counting method yields 13,302.
-- "nine analytical lenses" — VERIFIED (9 in lens-registry.md)
-- "six enforcement hooks" — VERIFIED (6 hooks in hooks/)
-- "six seed patterns" — VERIFIED (6 pattern files)
-- "324 tests across 8,600 lines of code" — refers to the historical run 14 state, not current. Likely ACCURATE for its timeframe.
-
-## Graph State
-7 nodes, 4 edges in Justine's graph. Key semantic edge: convergence_gate assumes convergence_primer (shared bare-regex STATUS.md parsing).
-
-## High-Risk Areas (Justine's Ordering)
-1. **convergence_gate.py STATUS.md parsing** — gate bypass via code fence injection (CONFIRMED)
-2. **convergence_primer.py STATUS.md parsing** — context injection via code fence (CONFIRMED)
-3. **test_commit_msg_hook.py** — 9 broken tests, wrong symlink target (CONFIRMED)
-4. **README line count** — "13,302 lines" claim stale (CONFIRMED)
-5. **convergence_gate._count_open_items** — informational count inflation (CONFIRMED, LOW severity)
-6. **Architecture baseline drift** — CLAUDE.md exists, convergence hooks missing from baseline
+1. **Integration boundaries** -- seams between modules (above). This is where Mira's bug lived.
+2. **README semantic claims** -- recurring finding. Test checks format but not all values. Rubber stamp risk.
+3. **Token profiler** -- newest module, not previously audited by Justine. 8 source files, 8 test files.
+4. **SKILL.md / justine-skill.md process accuracy** -- 5 changes in 50 commits. References may be stale.
+5. **Impact graph CLI** -- 65% coverage, lowest among core scripts.
+6. **Hook enforcement completeness** -- prior runs found scope gaps. Run 15 claimed to fix them.

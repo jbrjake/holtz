@@ -1,54 +1,46 @@
-# Phase 1: Doc-to-Implementation Audit
+# Phase 1: Doc-to-Implementation Audit — Claims Checklist
 
 **Date:** 2026-03-24
-**Run:** 15
+**Run:** 16
 
-## README.md "What's inside" Claims
+## README.md Claims
 
-| Claim | Actual | Status |
-|-------|--------|--------|
-| 1 skill | 1 SKILL.md | VERIFIED |
-| 3 agents | 3 agent .md files | VERIFIED |
-| 17 reference docs | 17 files in references/ | VERIFIED |
-| 1 example | 1 sample-punchlist.md | VERIFIED |
-| 6 Python scripts | 6 scripts in scripts/ | VERIFIED |
-| 6 seed patterns | 6 pattern files | VERIFIED |
-| 6 enforcement hooks | 6 hook .py files (excl. _common.py) | VERIFIED |
-| 604 tests | 604 collected | VERIFIED |
-| 13,302 lines | 13,302 (tests/ + scripts/ + hooks/ .py) | VERIFIED |
-| Nine analytical lenses | 9 in lens-registry.md | VERIFIED |
-| Seven edge types | 7 listed in SKILL.md and impact-graph-operations.md | VERIFIED |
-| Twelve anti-patterns | 12 in anti-patterns.md | VERIFIED |
-
-## README.md Behavioral Claims
-
-| Claim | Status |
-|-------|--------|
-| "seven-phase audit" | VERIFIED (0-6 in SKILL.md) |
-| "nine analytical lenses" convergence | VERIFIED per Phase 6 spec |
-| "Circuit breakers: max 15, max 3 per item, 3 no-progress" | VERIFIED (SKILL.md lines 269-271) |
-| "Holtz dispatches Justine automatically" | VERIFIED (SKILL.md line 147) |
-| "She inherits his raw recon data" | VERIFIED (SKILL.md lines 149-150) |
-| "Six seed patterns ship with the plugin" | VERIFIED (6 pattern files with detection heuristics) |
+| # | Claim | Location | Status | Notes |
+|---|-------|----------|--------|-------|
+| 1 | "two consecutive passes find nothing new" | line 3 | VERIFIED | convergence_check.py requires 2 consecutive clean iterations (3 data points) |
+| 2 | "breadth-first where he's depth-first" | line 7 | VERIFIED | Justine skill confirms breadth-first, Holtz skill confirms depth-first |
+| 3 | "seven-phase audit" | line 15 | VERIFIED | SKILL.md defines Phases 0-6 |
+| 4 | "nine analytical lenses" | line 15, 104, 126 | VERIFIED | lens-registry.md has 9 lenses |
+| 5 | Installation instructions | lines 21-29 | VERIFIED | plugin.json exists, --plugin-dir usage correct |
+| 6 | "twelve anti-patterns" | line 41 | NEEDS CHECK | Referenced in anti-patterns.md |
+| 7 | "Seven edge types" | line 56 | VERIFIED | impact_graph.py supports: imports, calls, tests, assumes, diverges_from, shares_pattern, co_fixed |
+| 8 | "risk score (0.0 to 1.0)" | line 56 | VERIFIED | ImpactGraph.update_risk clamps to [0.0, 1.0] |
+| 9 | "graph persists across runs" | line 56 | VERIFIED | impact-graph.json kept in docs/holtz/ (persistent file) |
+| 10 | "Fourteen runs" | line 140 | **OVERSTATED** | Run 15 completed (commit a602d76). README hasn't been updated. |
+| 11 | "324 tests across 8,600 lines" (after 14 runs) | line 166 | VERIFIED | Historical snapshot — was accurate at Run 14 time |
+| 12 | "Six enforcement hooks" | line 172 | VERIFIED | 6 hook .py files (excluding _common.py) |
+| 13 | "1 skill, 3 agents, 17 ref docs..." | line 190 | VERIFIED | All counts match actual (integration test enforces) |
+| 14 | "613 tests across 13,500 lines" | line 190 | VERIFIED | 613 tests, 13,533 lines (within tolerance) |
+| 15 | "Six seed patterns" | line 98 | VERIFIED | 6 pattern files in patterns/ |
+| 16 | "HIGH-confidence predictions land at 100%. MEDIUM at 100%." | line 94 | **OVERSTATED** | Actual: HIGH avg ~72% (ranges 33-100%), MEDIUM avg ~38% (ranges 0-100%). See run data. |
+| 17 | "max 15 iterations, max 3 attempts per item, stall detection after 3 iterations" | line 126 | NEEDS CHECK | Circuit breakers in SKILL.md |
 
 ## CLAUDE.md Claims
 
-| Claim | Status |
-|-------|--------|
-| "post-commit git hook automatically bumps" | VERIFIED (git-hooks/post-commit exists and is correct) |
-| "scripts/install-hooks.sh" for setup | VERIFIED (file exists and works) |
-| "python -m pytest --tb=short -q" for testing | VERIFIED (but currently has 9 failures) |
-| "ruff check ." | VERIFIED (passes) |
-| "mypy skills/holtz/scripts/ hooks/" | VERIFIED (passes) |
+| # | Claim | Status | Notes |
+|---|-------|--------|-------|
+| 1 | "post-commit git hook automatically bumps version" | VERIFIED | git-hooks/post-commit exists, tests pass |
+| 2 | "python -m pytest --tb=short -q" runs tests | VERIFIED | Ran successfully, 613 pass |
+| 3 | "ruff check ." clean | VERIFIED | All checks passed |
+| 4 | "mypy skills/holtz/scripts/ hooks/" clean | VERIFIED | No issues found |
+| 5 | "scripts/install-hooks.sh" exists | VERIFIED | File exists |
 
-## Findings
+## SKILL.md Claims
 
-### BH-001: test_commit_msg_hook.py references deleted file
-- Severity: HIGH
-- Category: test/bogus
-- See PUNCHLIST.md
-
-### Architecture baseline drift (minor)
-- CLAUDE.md exists but baseline says "No CLAUDE.md"
-- convergence_gate.py and convergence_primer.py not in baseline deps
-- Will update at post-convergence per protocol
+| # | Claim | Status | Notes |
+|---|-------|--------|-------|
+| 1 | Phase 0 steps 0a-0h | VERIFIED | All steps defined in phase-0-recon.md |
+| 2 | Circuit breakers: MAX_ITERATIONS 15 | VERIFIED | Documented in Phase 6 |
+| 3 | Circuit breakers: SAME_ITEM 3 | VERIFIED | Documented in Phase 6 |
+| 4 | Circuit breakers: NO_PROGRESS 3 | VERIFIED | Documented in Phase 6 |
+| 5 | convergence_check.py exit 0 required | VERIFIED | BH-008 from Run 15 added this requirement |
