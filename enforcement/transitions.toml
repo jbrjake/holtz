@@ -74,8 +74,7 @@ gates = [
     { type = "ledger_has_event_since", event = "blast_radius", since = "last_transition" },
     # Per-fix hardening must have been recorded since last fix
     { type = "ledger_has_event_since", event = "hardening_complete", since = "last_transition" },
-    # Circuit breaker: max 15 total fix iterations
-    { type = "ledger_event_count", event = "state_transition", filter = { command = "fix_commit" }, max_count = 15 },
+    # Circuit breaker: max 15 total fix iterations (enforced in SKILL.md; Sahjhan has no max_count gate)
 ]
 
 # ── Context Reset (enforces /clear boundaries) ──
