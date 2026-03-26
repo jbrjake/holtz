@@ -53,20 +53,25 @@ def main() -> None:
             timeout=10,
             cwd=cwd,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         exit_ok()
 
     if result.returncode != 0:
         # Record protocol violation
         detail = result.stderr.strip() or result.stdout.strip() or "Manifest verification failed"
-        with contextlib.suppress(FileNotFoundError, subprocess.TimeoutExpired):
+        # Extract run number from ledger name (e.g. "run-31" -> "31")
+        run_number = (ledger or "").replace("run-", "") or "0"
+        with contextlib.suppress(OSError, subprocess.TimeoutExpired):
             violation_cmd = [binary, "--config-dir", config_dir]
             if ledger:
                 violation_cmd.extend(["--ledger", ledger])
             violation_cmd.extend([
                 "event", "protocol_violation",
-                "--file_path", "unknown",
-                "--detail", detail,
+                "--field", f"project=holtz",
+                "--field", f"run={run_number}",
+                "--field", "auditor=holtz",
+                "--field", f"file_path=unknown",
+                "--field", f"detail={detail}",
             ])
             subprocess.run(
                 violation_cmd,

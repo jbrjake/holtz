@@ -272,6 +272,38 @@ class TestBashGuard:
         assert code == 0
         assert output.get("continue") is True
 
+    def test_violation_cmd_uses_field_syntax(self):
+        """BH-007/BH-013: Violation command uses --field key=value, not bare args."""
+        source_path = os.path.join(ENFORCEMENT_HOOKS_DIR, "bash_guard.py")
+        with open(source_path) as f:
+            source = f.read()
+        # Must not use bare --file_path or --detail args
+        assert "--file_path" not in source.split("--field"), \
+            "bash_guard still uses bare --file_path arg"
+        assert '"--file_path"' not in source, \
+            "bash_guard still uses bare --file_path arg"
+        assert '"--detail"' not in source, \
+            "bash_guard still uses bare --detail arg"
+        # Must use --field syntax for all event fields
+        assert '"--field"' in source, "bash_guard should use --field syntax"
+        # Must include required fields
+        assert "project=holtz" in source, "bash_guard missing project field"
+        assert "auditor=holtz" in source, "bash_guard missing auditor field"
+
+    def test_exception_catches_oserror(self):
+        """BH-015: bash_guard catches OSError (includes PermissionError)."""
+        source_path = os.path.join(ENFORCEMENT_HOOKS_DIR, "bash_guard.py")
+        with open(source_path) as f:
+            source = f.read()
+        assert "OSError" in source, "bash_guard should catch OSError"
+        # Should not have bare FileNotFoundError without OSError
+        lines = source.split("\n")
+        for line in lines:
+            if "except" in line and "FileNotFoundError" in line and "OSError" not in line:
+                raise AssertionError(
+                    f"bash_guard catches FileNotFoundError without OSError: {line.strip()}"
+                )
+
 
 # --- stop_gate.py (Stop) ---
 
