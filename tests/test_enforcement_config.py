@@ -1,5 +1,6 @@
 """Tests for enforcement TOML configuration files."""
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -183,3 +184,61 @@ def test_mypy_uses_explicit_package_bases():
                 assert "--explicit-package-bases" in cmd, (
                     f"mypy gate in '{t['command']}' missing --explicit-package-bases: {cmd}"
                 )
+
+
+# ── Tasks 5 & 6: Hook registration ──
+
+
+def test_settings_local_registers_enforcement_hooks():
+    """Dev-mode settings must register commit_gate and protocol_tracker."""
+    settings_path = Path(__file__).parent.parent / ".claude" / "settings.local.json"
+    assert settings_path.exists(), ".claude/settings.local.json missing"
+    cfg = json.loads(settings_path.read_text())
+    hooks = cfg.get("hooks", {})
+
+    pre_tool = hooks.get("PreToolUse", [])
+    post_tool = hooks.get("PostToolUse", [])
+
+    pre_commands = []
+    for entry in pre_tool:
+        for h in entry.get("hooks", []):
+            pre_commands.append(h.get("command", ""))
+
+    post_commands = []
+    for entry in post_tool:
+        for h in entry.get("hooks", []):
+            post_commands.append(h.get("command", ""))
+
+    assert any("commit_gate" in c for c in pre_commands), (
+        "commit_gate.py not registered in settings.local.json PreToolUse"
+    )
+    assert any("protocol_tracker" in c for c in post_commands), (
+        "protocol_tracker.py not registered in settings.local.json PostToolUse"
+    )
+
+
+def test_hooks_json_registers_enforcement_hooks():
+    """Plugin-mode hooks.json must register commit_gate and protocol_tracker."""
+    hooks_path = Path(__file__).parent.parent / "hooks" / "hooks.json"
+    cfg = json.loads(hooks_path.read_text())
+    hooks = cfg.get("hooks", {})
+
+    pre_tool = hooks.get("PreToolUse", [])
+    post_tool = hooks.get("PostToolUse", [])
+
+    all_pre_commands = []
+    for entry in pre_tool:
+        for h in entry.get("hooks", []):
+            all_pre_commands.append(h.get("command", ""))
+
+    all_post_commands = []
+    for entry in post_tool:
+        for h in entry.get("hooks", []):
+            all_post_commands.append(h.get("command", ""))
+
+    assert any("commit_gate" in c for c in all_pre_commands), (
+        "commit_gate.py not registered in hooks.json PreToolUse"
+    )
+    assert any("protocol_tracker" in c for c in all_post_commands), (
+        "protocol_tracker.py not registered in hooks.json PostToolUse"
+    )

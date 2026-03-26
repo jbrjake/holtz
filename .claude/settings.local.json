@@ -1,0 +1,89 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python enforcement/hooks/commit_gate.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python enforcement/hooks/protocol_tracker.py"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(source .venv/bin/activate)",
+      "Bash(python skills/holtz/scripts/validate_punchlist.py skills/holtz/examples/sample-punchlist.md)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(python -m mypy skills/holtz/scripts/)",
+      "Bash(ls -lh ~/.claude/projects/-Users-jonr-Documents-non-nitro-repos-holtz/*.jsonl)",
+      "Bash(sort -k6,7)",
+      "Bash(python -m pytest tests/test_validate_punchlist.py -v)",
+      "Bash(PYTHONPATH=skills/holtz/scripts python skills/holtz/scripts/validate_punchlist.py skills/holtz/examples/sample-punchlist.md 2>&1)",
+      "Bash(python -m pytest tests/ -q --tb=short --no-header)",
+      "Bash(python scripts/validate_punchlist.py examples/sample-punchlist.md)",
+      "Bash(.venv/bin/python -m pytest --tb=short -q --no-header 2>&1)",
+      "Bash(.venv/bin/python -m pytest tests/test_validate_punchlist.py -k \"threshold\" -v --tb=short 2>&1)",
+      "Bash(.venv/bin/ruff check:*)",
+      "Bash(.venv/bin/python -m pytest tests/ -v --tb=short 2>&1)",
+      "Bash(.venv/bin/python -m pytest tests/test_integration.py -v --tb=short 2>&1)",
+      "Bash(.venv/bin/python -m pytest tests/ -q)",
+      "Bash(.venv/bin/python -m pytest --tb=short -q 2>&1)",
+      "Bash(.venv/bin/python -m pytest --tb=short -q)",
+      "Bash(git status:*)",
+      "Bash(python -m pytest tests/test_validate_punchlist.py -v --tb=short)",
+      "Bash(ruff check:*)",
+      "Bash(python -m pytest tests/ -q)",
+      "Bash(ls:*)",
+      "Bash(python -m pytest tests/)",
+      "Bash(python scripts/validate_punchlist.py --help)",
+      "Skill(humanizer)",
+      "Bash(head:*)",
+      "Bash(python -m pytest tests/ -q --tb=short)",
+      "Bash(python -m ruff check .)",
+      "Bash(grep -rnP \"\\(def|function|func\\)\\\\s+\\(parse|extract|decode|deserialize|read|load|from_\\)\\\\w*\" --include=*.py skills/holtz/scripts/)",
+      "Bash(grep -rnP \\\\s[*+?] --include=*.py skills/holtz/scripts/)",
+      "Bash(grep -rnP \"re\\\\.\\(search|findall|finditer|match\\)\\\\\\(.*\\\\b\\(content|body|text|document|source|raw|markdown|md_text\\)\\\\b\" --include=*.py skills/holtz/scripts/)",
+      "Bash(grep -rnP w+[[x27\"\"][^x27\"\"]+[x27\"\"]] --include=*.py skills/holtz/scripts/)",
+      "Bash(grep -rnP \"\\(class|def|function|func\\)\\\\s+\\\\w*\\(Manager|Service|Client|Facade|Gateway|Wrapper|Provider|Repository|Store|Cache|Adapter\\)\\\\b\" --include=*.py skills/holtz/scripts/)",
+      "Bash(python -m pytest tests/test_validate_punchlist.py -v --tb=short --no-cov)",
+      "WebSearch",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(python hooks/impact_graph_gate.py)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(python hooks/status_staleness_gate.py)",
+      "Bash(python hooks/artifact_verification.py)",
+      "Bash(python hooks/subagent_findings_check.py)",
+      "Bash(mypy skills/holtz/scripts/ hooks/)",
+      "Bash(python skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json prune_missing --project-root .)",
+      "Bash(python skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json drift_check --project-root .)",
+      "Bash(python skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats)",
+      "Bash(wc -l skills/holtz/scripts/*.py hooks/*.py tests/*.py skills/holtz/SKILL.md skills/justine/SKILL.md agents/*.md)",
+      "Bash(python -m pytest tests/test_validate_punchlist.py --tb=short -q)",
+      "Bash(python -m pytest --tb=short -q)",
+      "Bash(python -m pytest --co -q)",
+      "Skill(holtz:holtz)",
+      "Bash(python -m pytest tests/ -x -q)",
+      "Bash(wc:*)",
+      "Bash(find /Users/jonr/Documents/non-nitro-repos/holtz -type d -not -path */.* -not -path */node_modules)",
+      "Bash(find /Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz -name PUNCHLIST*.md -o -name SUMMARY.md)",
+      "Bash(find /Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz -name 0a*.md -o -name 0b*.md -o -name recon-summary.md -o -name predictions.md)",
+      "Bash(gh pr:*)"
+    ]
+  }
+}
