@@ -129,6 +129,15 @@ class TestBootstrapHook:
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_blocked(code, output, "protected enforcement infrastructure")
 
+    def test_allows_enforcement_prefix_collision(self):
+        """BH-014: Bootstrap allows enforcement_evil/ (prefix collision)."""
+        event = {
+            "tool_input": {"file_path": "enforcement_evil/bad.py"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_allowed(code, output)
+
 
 # --- write_guard.py (PreToolUse) ---
 
@@ -136,23 +145,23 @@ class TestBootstrapHook:
 class TestWriteGuard:
     """Tests for the managed-path write guard."""
 
-    def test_blocks_managed_path(self):
-        """Write guard blocks Write/Edit to docs/holtz/."""
+    def test_blocks_merge_report(self):
+        """Write guard blocks MERGE-REPORT.md (sahjhan-rendered)."""
+        event = {
+            "tool_input": {"file_path": "docs/holtz/MERGE-REPORT.md"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("write_guard.py", event)
+        assert_blocked(code, output, "managed by Sahjhan")
+
+    def test_blocks_punchlist_md(self):
+        """Write guard blocks PUNCHLIST.md (sahjhan-rendered)."""
         event = {
             "tool_input": {"file_path": "docs/holtz/PUNCHLIST.md"},
             "cwd": REPO_ROOT,
         }
         code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_blocked(code, output, "managed by sahjhan")
-
-    def test_blocks_managed_subdirectory(self):
-        """Write guard blocks writes to subdirectories of managed paths."""
-        event = {
-            "tool_input": {"file_path": "docs/holtz/recon/step0.md"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_blocked(code, output, "managed by sahjhan")
+        assert_blocked(code, output, "managed by Sahjhan")
 
     def test_allows_non_managed_path(self):
         """Write guard allows writes outside managed paths."""
@@ -166,6 +175,69 @@ class TestWriteGuard:
     def test_allows_empty_path(self):
         """Write guard allows when no file path is provided."""
         event = {"tool_input": {}, "cwd": REPO_ROOT}
+        code, output, _ = run_enforcement_hook("write_guard.py", event)
+        assert_allowed(code, output)
+
+    def test_allows_recon_subdirectory(self):
+        """BH-009: Write guard allows writes to docs/holtz/recon/ (not managed)."""
+        event = {
+            "tool_input": {"file_path": "docs/holtz/recon/step0.md"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("write_guard.py", event)
+        assert_allowed(code, output)
+
+    def test_allows_audit_subdirectory(self):
+        """BH-009: Write guard allows writes to docs/holtz/audit/ (not managed)."""
+        event = {
+            "tool_input": {"file_path": "docs/holtz/audit/1-doc-claims.md"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("write_guard.py", event)
+        assert_allowed(code, output)
+
+    def test_allows_impact_graph(self):
+        """BH-009: Write guard allows writes to docs/holtz/impact-graph.json."""
+        event = {
+            "tool_input": {"file_path": "docs/holtz/impact-graph.json"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("write_guard.py", event)
+        assert_allowed(code, output)
+
+    def test_allows_justine_directory(self):
+        """BH-009: Write guard allows writes to docs/holtz/justine/."""
+        event = {
+            "tool_input": {"file_path": "docs/holtz/justine/PUNCHLIST.md"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("write_guard.py", event)
+        assert_allowed(code, output)
+
+    def test_blocks_status_md(self):
+        """BH-009: Write guard blocks STATUS.md (sahjhan-rendered)."""
+        event = {
+            "tool_input": {"file_path": "docs/holtz/STATUS.md"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("write_guard.py", event)
+        assert_blocked(code, output, "managed by Sahjhan")
+
+    def test_blocks_summary_md(self):
+        """BH-009: Write guard blocks SUMMARY.md (sahjhan-rendered)."""
+        event = {
+            "tool_input": {"file_path": "docs/holtz/SUMMARY.md"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("write_guard.py", event)
+        assert_blocked(code, output, "managed by Sahjhan")
+
+    def test_allows_prefix_collision_path(self):
+        """BH-014: Write guard does not block docs/holtz2/ (prefix collision)."""
+        event = {
+            "tool_input": {"file_path": "docs/holtz2/test.md"},
+            "cwd": REPO_ROOT,
+        }
         code, output, _ = run_enforcement_hook("write_guard.py", event)
         assert_allowed(code, output)
 

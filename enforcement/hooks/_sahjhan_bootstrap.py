@@ -46,7 +46,7 @@ def main() -> None:
     # Protected paths are relative to plugin root, not cwd
     for p in PROTECTED:
         full = os.path.realpath(os.path.join(_PLUGIN_ROOT, p))
-        if resolved.startswith(full) or resolved == full:
+        if resolved == full or resolved.startswith(full + os.sep):
             _block(
                 f"BLOCKED: {path} is protected enforcement infrastructure. "
                 "This file cannot be modified during an audit session."

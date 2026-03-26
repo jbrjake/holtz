@@ -14,9 +14,15 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import exit_block, exit_ok, read_event  # noqa: E402
 
-# Paths managed by Sahjhan — direct writes are blocked
-MANAGED_PATHS = [
-    "docs/holtz",
+# Specific files rendered by Sahjhan — direct writes are blocked.
+# Only these files are managed; other docs/holtz/ paths (recon/, audit/,
+# impact-graph.json, justine/, etc.) are legitimate audit output.
+MANAGED_FILES = [
+    "docs/holtz/STATUS.md",
+    "docs/holtz/PUNCHLIST.md",
+    "docs/holtz/SUMMARY.md",
+    "docs/holtz/MERGE-REPORT.md",
+    "docs/holtz/PUNCHLIST-MERGED.md",
 ]
 
 
@@ -30,9 +36,9 @@ def main() -> None:
 
     resolved = os.path.realpath(path) if os.path.isabs(path) else os.path.realpath(os.path.join(cwd, path))
 
-    for managed in MANAGED_PATHS:
+    for managed in MANAGED_FILES:
         full = os.path.realpath(os.path.join(cwd, managed))
-        if resolved.startswith(full) or resolved == full:
+        if resolved == full:
             exit_block(
                 f"BLOCKED: {path} is managed by Sahjhan. "
                 "Use `sahjhan finding`, `sahjhan resolve`, or other CLI commands "
