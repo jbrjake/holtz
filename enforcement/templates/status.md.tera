@@ -1,10 +1,12 @@
-{# enforcement/templates/status.md.tera — uses sahjhan v0.1.1 render context #}
+{# enforcement/templates/status.md.tera — uses sahjhan v0.2.0 render context #}
 # Holtz Status
 
 **Project:** {{ protocol.name }} v{{ protocol.version }}
 **State:** {{ state.label }}
 **Ledger:** {{ ledger_len }} events
 **Violations:** {{ violations }}
+**Run:** {{ events | filter(attribute="event_type", value="state_transition") | first | get(key="fields") | get(key="run", default="?") }}
+**Auditor:** holtz
 
 ## State Transitions
 {% for e in events -%}

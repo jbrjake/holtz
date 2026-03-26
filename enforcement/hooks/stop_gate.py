@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _resolve import sahjhan_binary  # noqa: E402
 
-from _common import exit_stop_allow, exit_stop_block  # noqa: E402
+from _common import _active_ledger, exit_stop_allow, exit_stop_block  # noqa: E402
 
 
 def main() -> None:
@@ -32,9 +32,14 @@ def main() -> None:
     if not os.path.isdir(data_dir):
         exit_stop_allow()
 
+    ledger = _active_ledger(cwd)
     try:
+        cmd = [binary, "--config-dir", config_dir]
+        if ledger:
+            cmd.extend(["--ledger", ledger])
+        cmd.extend(["status", "--json"])
         result = subprocess.run(
-            [binary, "--config-dir", config_dir, "status", "--json"],
+            cmd,
             capture_output=True,
             text=True,
             timeout=5,

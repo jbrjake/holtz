@@ -30,6 +30,14 @@ values = [
     "observability",
 ]
 
+[ledgers.run]
+description = "Per-run audit ledger"
+path_template = "docs/holtz/runs/{run}/ledger.jsonl"
+
+[ledgers.project]
+description = "Cross-run project ledger"
+path = "docs/holtz/project.jsonl"
+
 [aliases]
 "run start" = "transition run_start"
 "recon complete" = "transition recon_complete"
@@ -44,3 +52,8 @@ values = [
 "finalize" = "transition finalize"
 "finding" = "event finding"
 "resolve" = "event finding_resolved"
+"recon finding" = "event recon_finding"
+"audit claim" = "event audit_claim"
+"test finding" = "event test_audit_finding"
+"code finding" = "event code_audit_finding"
+"graph delta" = "event graph_delta"

@@ -240,3 +240,38 @@ class TestPrimer:
         code, output, _ = run_enforcement_hook("primer.py", event)
         assert code == 0
         assert output.get("continue") is True
+
+
+# --- _active_ledger (enforcement/hooks/_common.py) ---
+
+
+class TestActiveLedger:
+    """Tests for active ledger detection in hooks."""
+
+    def test_active_ledger_returns_name(self, tmp_path):
+        """_active_ledger returns the ledger name from marker file."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "active-run").write_text("run-22\n")
+        # Import the function
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "_common_enforcement",
+            os.path.join(REPO_ROOT, "enforcement", "hooks", "_common.py"),
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        result = mod._active_ledger(str(tmp_path))
+        assert result == "run-22"
+
+    def test_active_ledger_returns_none_missing(self, tmp_path):
+        """_active_ledger returns None when no marker file exists."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "_common_enforcement",
+            os.path.join(REPO_ROOT, "enforcement", "hooks", "_common.py"),
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        result = mod._active_ledger(str(tmp_path))
+        assert result is None

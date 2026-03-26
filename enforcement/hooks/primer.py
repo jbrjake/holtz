@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _resolve import sahjhan_binary  # noqa: E402
 
-from _common import exit_ok, exit_warn, read_event  # noqa: E402
+from _common import _active_ledger, exit_ok, exit_warn, read_event  # noqa: E402
 
 
 def main() -> None:
@@ -40,9 +40,14 @@ def main() -> None:
         exit_ok()
 
     # Get current status
+    ledger = _active_ledger(cwd)
     try:
+        cmd = [binary, "--config-dir", config_dir]
+        if ledger:
+            cmd.extend(["--ledger", ledger])
+        cmd.extend(["status", "--json"])
         result = subprocess.run(
-            [binary, "--config-dir", config_dir, "status", "--json"],
+            cmd,
             capture_output=True,
             text=True,
             timeout=5,
@@ -67,12 +72,15 @@ def main() -> None:
 
     # Record context_reset event (gates awaiting_clear→fix_loop)
     with contextlib.suppress(FileNotFoundError, subprocess.TimeoutExpired):
+        reset_cmd = [binary, "--config-dir", config_dir]
+        if ledger:
+            reset_cmd.extend(["--ledger", ledger])
+        reset_cmd.extend([
+            "event", "context_reset",
+            "--trigger", "user_prompt_submit",
+        ])
         subprocess.run(
-            [
-                binary, "--config-dir", config_dir,
-                "event", "context_reset",
-                "--trigger", "user_prompt_submit",
-            ],
+            reset_cmd,
             capture_output=True,
             timeout=5,
             cwd=cwd,
