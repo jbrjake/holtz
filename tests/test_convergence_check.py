@@ -960,16 +960,16 @@ def test_detect_pyproject_bracket_in_comment(tmp_path, monkeypatch):
 # --- BH-006 (bug-hunter run 3): count_items warns on nonexistent file ---
 
 def test_count_items_nonexistent_file_errors(tmp_path):
-    """count_items on nonexistent file must hard-error (exit 2), not silently return empty.
+    """count_items on nonexistent file must raise FileNotFoundError, not silently return empty.
 
     BH-007 run 15: the old behavior silently used empty punchlist, enabling
-    false convergence. Now it exits with code 2.
+    false convergence. BH-027 run 20: changed from sys.exit(2) to
+    FileNotFoundError so programmatic callers get a catchable exception.
     """
     import pytest
     nonexistent = tmp_path / "does_not_exist.md"
-    with pytest.raises(SystemExit) as exc_info:
+    with pytest.raises(FileNotFoundError, match="not found"):
         cc.count_items(nonexistent)
-    assert exc_info.value.code == 2
 
 
 # --- BH-002 (bug-hunter run 3): Status regex greedy trailing capture ---

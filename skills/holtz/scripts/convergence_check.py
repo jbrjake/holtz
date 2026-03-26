@@ -36,9 +36,10 @@ def count_items(punchlist_path: Path) -> dict:
     are ignored.
     """
     if not punchlist_path.exists():
-        print(f"ERROR: {punchlist_path} not found", file=sys.stderr)
-        print("Provide a valid punchlist path or let auto-detection find it.", file=sys.stderr)
-        sys.exit(2)
+        raise FileNotFoundError(
+            f"{punchlist_path} not found. "
+            "Provide a valid punchlist path or let auto-detection find it."
+        )
     content = punchlist_path.read_text()
     _, masked = mask_code_fences(content)
     counts = {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0}
@@ -318,7 +319,11 @@ def check_convergence(history: list) -> tuple[bool, str]:
                         "Do the work."
                     )
             except (ValueError, TypeError):
-                pass  # Unparseable timestamps — skip timing check
+                print(
+                    f"WARNING: convergence_check: unparseable timestamps in iteration {j + 1} "
+                    f"(ts_a={ts_a!r}, ts_b={ts_b!r}) — timing check skipped",
+                    file=sys.stderr,
+                )
 
     curr_pl = _get_punchlist(history[-1])
     unknown_items = curr_pl.get("unknown", 0)
@@ -450,7 +455,11 @@ def main() -> None:
     punchlist_path = _resolve_punchlist_path(args.punchlist)
 
     # Gather current state
-    punchlist_counts = count_items(punchlist_path)
+    try:
+        punchlist_counts = count_items(punchlist_path)
+    except FileNotFoundError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(2)
     runner = detect_test_runner()
     test_counts = get_test_counts(runner) if runner else None
 
