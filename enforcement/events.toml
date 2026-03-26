@@ -1,0 +1,132 @@
+[events.recon_step]
+description = "A recon step completed"
+fields = [
+    { name = "step", type = "u8", range = [0, 4] },
+    { name = "artifact_path", type = "string" },
+]
+
+[events.finding]
+description = "A punchlist finding"
+fields = [
+    { name = "id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
+    { name = "severity", type = "enum", values = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] },
+    { name = "category", type = "string" },
+    { name = "location", type = "string" },
+    { name = "perspective", type = "set_member", set = "perspective" },
+    { name = "description", type = "string" },
+    { name = "predicted_by", type = "string", optional = true },
+]
+
+[events.finding_resolved]
+description = "A finding was resolved"
+fields = [
+    { name = "id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
+    { name = "commit_hash", type = "string", pattern = "^[0-9a-f]{7,40}$" },
+]
+gates = [
+    { type = "field_not_empty", field = "commit_hash" },
+]
+
+[events.blast_radius]
+description = "Blast radius query after a fix"
+fields = [
+    { name = "target_node", type = "string" },
+    { name = "depth", type = "u8" },
+    { name = "affected_count", type = "u32" },
+    { name = "finding_id", type = "string" },
+]
+
+[events.iteration_complete]
+description = "A fix-loop iteration completed"
+fields = [
+    { name = "perspective", type = "set_member", set = "perspective" },
+    { name = "items_resolved", type = "u32" },
+    { name = "items_remaining", type = "u32" },
+    { name = "test_count", type = "u32" },
+    { name = "tests_passed", type = "bool" },
+]
+
+[events.pattern_analysis_complete]
+description = "Pattern analysis cycle completed"
+fields = [
+    { name = "patterns_found", type = "u32" },
+    { name = "siblings_found", type = "u32" },
+]
+
+[events.set_member_complete]
+description = "A completion set member passed clean"
+fields = [
+    { name = "set", type = "string" },
+    { name = "member", type = "set_member", set_from_field = "set" },
+]
+
+[events.baseline_updated]
+description = "Architecture baseline updated post-convergence"
+fields = [
+    { name = "sections_changed", type = "string" },
+]
+
+[events.living_punchlist_updated]
+description = "Living punchlist updated post-convergence"
+fields = [
+    { name = "patterns_added", type = "u32" },
+    { name = "hotspots_updated", type = "u32" },
+]
+
+[events.prediction]
+description = "A predictive recon prediction"
+fields = [
+    { name = "id", type = "u32" },
+    { name = "target", type = "string" },
+    { name = "confidence", type = "enum", values = ["HIGH", "MEDIUM", "LOW"] },
+    { name = "basis", type = "string" },
+]
+
+[events.prediction_outcome]
+description = "Prediction result"
+fields = [
+    { name = "prediction_id", type = "u32" },
+    { name = "outcome", type = "enum", values = ["CONFIRMED", "UNCONFIRMED"] },
+    { name = "finding_id", type = "string", optional = true },
+]
+
+[events.protocol_violation]
+description = "Unauthorized modification of managed files (permanent — no resolution pathway)"
+fields = [
+    { name = "file_path", type = "string" },
+    { name = "detail", type = "string" },
+]
+
+[events.hardening_complete]
+description = "Per-fix edge case hardening completed"
+fields = [
+    { name = "finding_id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
+    { name = "edge_cases_tested", type = "u32" },
+    { name = "tests_added", type = "u32" },
+]
+
+[events.context_reset]
+description = "Context boundary — recorded by primer hook on UserPromptSubmit after /clear"
+fields = [
+    { name = "trigger", type = "enum", values = ["user_prompt_submit"] },
+]
+
+[events.justine_dispatched]
+description = "Justine subagent dispatched for parallel audit"
+fields = [
+    { name = "mode", type = "enum", values = ["full", "skipped"] },
+]
+
+[events.pattern_contribution_complete]
+description = "Pattern library contribution step completed"
+fields = [
+    { name = "patterns_submitted", type = "u32" },
+    { name = "outcome", type = "enum", values = ["submitted", "no_new_patterns", "declined_by_user"] },
+]
+
+[events.snapshot]
+description = "Point-in-time value snapshot for comparison gates"
+fields = [
+    { name = "key", type = "string" },
+    { name = "value", type = "string" },
+]

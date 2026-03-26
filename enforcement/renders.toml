@@ -1,0 +1,16 @@
+[[renders]]
+target = "STATUS.md"
+template = "templates/status.md.tera"
+trigger = "on_transition"
+
+[[renders]]
+target = "PUNCHLIST.md"
+template = "templates/punchlist.md.tera"
+trigger = "on_event"
+event_types = ["finding", "finding_resolved"]
+
+[[renders]]
+target = "SUMMARY.md"
+template = "templates/summary.md.tera"
+trigger = "on_state"
+state = "converged"

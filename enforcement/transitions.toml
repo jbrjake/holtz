@@ -1,0 +1,205 @@
+# ── Recon ──
+
+[[transitions]]
+from = "idle"
+to = "recon"
+command = "run_start"
+gates = []
+
+[[transitions]]
+from = "recon"
+to = "audit"
+command = "recon_complete"
+gates = [
+    { type = "files_exist", paths = ["docs/holtz/recon/step0-project-overview.md", "docs/holtz/recon/step1-toolchain.md", "docs/holtz/recon/step2-code-signals.md", "docs/holtz/recon/step3-recon-summary.md", "docs/holtz/recon/step4-predictions.md"] },
+    { type = "file_exists", path = "docs/holtz/impact-graph.json" },
+    { type = "ledger_has_event", event = "recon_step", min_count = 5 },
+    # Justine dispatch must be recorded (or explicitly skipped for targeted audits)
+    { type = "ledger_has_event", event = "justine_dispatched", min_count = 1 },
+    # Record edge count snapshot for audit comparison
+    { type = "command_succeeds", cmd = "sahjhan event snapshot --key pre_audit_edge_count --value $(python skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats | python -c \"import sys,json; print(json.load(sys.stdin)['edges'])\")" },
+]
+
+# ── Audit ──
+
+[[transitions]]
+from = "audit"
+to = "merge_ready"
+command = "audit_complete"
+gates = [
+    { type = "file_exists", path = "docs/holtz/audit/1-doc-claims.md" },
+    # Impact graph edges must have increased during audit
+    { type = "snapshot_compare", cmd = "python skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats", extract = "edges", compare = "gt", reference = "snapshot:pre_audit_edge_count" },
+]
+
+# ── Merge ──
+
+[[transitions]]
+from = "merge_ready"
+to = "merge_done"
+command = "merge_complete"
+gates = [
+    # Merged punchlist or original must exist
+    { type = "file_exists", path = "docs/holtz/PUNCHLIST-MERGED.md" },
+]
+
+# ── Fix Loop ──
+
+[[transitions]]
+from = "merge_done"
+to = "fix_loop"
+command = "fix_loop_start"
+gates = []
+
+# Direct audit -> fix_loop for lens rotations (no merge on subsequent passes)
+[[transitions]]
+from = "audit"
+to = "fix_loop"
+command = "fix_loop_start"
+gates = [
+    # Only valid after the first pass (merge_done must exist in ledger history)
+    { type = "ledger_has_event", event = "state_transition", filter = { to = "merge_done" }, min_count = 1 },
+]
+
+[[transitions]]
+from = "fix_loop"
+to = "fix_loop"
+command = "fix_commit"
+gates = [
+    # A git commit must exist with the punchlist item ID
+    { type = "command_succeeds", cmd = "git log -1 --format=%B | grep -q '{{item_id}}'" },
+    # Test suite must pass (Sahjhan runs this, not the agent)
+    { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120 },
+    # Blast radius query must have been recorded since last fix
+    { type = "ledger_has_event_since", event = "blast_radius", since = "last_transition" },
+    # Per-fix hardening must have been recorded since last fix
+    { type = "ledger_has_event_since", event = "hardening_complete", since = "last_transition" },
+    # Circuit breaker: max 15 total fix iterations
+    { type = "ledger_event_count", event = "state_transition", filter = { command = "fix_commit" }, max_count = 15 },
+]
+
+# ── Context Reset (enforces /clear boundaries) ──
+
+[[transitions]]
+from = "fix_loop"
+to = "awaiting_clear"
+command = "iteration_boundary"
+# Agent has finished an iteration's work and must /clear
+gates = []
+
+[[transitions]]
+from = "awaiting_clear"
+to = "fix_loop"
+command = "resume"
+gates = [
+    # Only the primer hook can record this event (fires on UserPromptSubmit after /clear)
+    { type = "ledger_has_event_since", event = "context_reset", since = "last_transition" },
+]
+
+# ── Pattern Analysis ──
+
+[[transitions]]
+from = "fix_loop"
+to = "pattern_analysis"
+command = "pattern_check"
+gates = [
+    # At least 3 findings resolved since last pattern analysis
+    { type = "ledger_has_event_since", event = "finding_resolved", since = "last_event_of_type:pattern_analysis_complete", min_count = 3 },
+]
+
+[[transitions]]
+from = "pattern_analysis"
+to = "fix_loop"
+command = "pattern_done"
+gates = [
+    { type = "ledger_has_event_since", event = "pattern_analysis_complete", since = "last_transition" },
+]
+
+# ── Perspective (Lens) Completion ──
+
+[[transitions]]
+from = "fix_loop"
+to = "perspective_clean"
+command = "set complete perspective"
+gates = [
+    # Zero open items
+    { type = "command_output", cmd = "python skills/holtz/scripts/validate_punchlist.py docs/holtz/PUNCHLIST-MERGED.md --filter-status OPEN --count", expect = "0" },
+    # At least 2 stable iterations for this perspective
+    { type = "ledger_has_event", event = "iteration_complete", filter = { perspective = "{{current_perspective}}" }, min_count = 2 },
+    # Minimum 120 seconds between iterations (raised from 60 per review)
+    { type = "min_elapsed", event = "iteration_complete", seconds = 120 },
+    # Suite passes (Sahjhan verifies)
+    { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120 },
+    # Linter passes
+    { type = "command_succeeds", cmd = "ruff check .", timeout = 30 },
+    # Type checker passes
+    { type = "command_succeeds", cmd = "mypy skills/holtz/scripts/ hooks/", timeout = 60 },
+    # No unresolved protocol violations
+    { type = "no_violations" },
+]
+
+[[transitions]]
+from = "perspective_clean"
+to = "audit"
+command = "lens_rotate"
+gates = [
+    { type = "ledger_has_event", event = "set_member_complete", filter = { member = "{{completed_perspective}}" } },
+]
+
+# ── Convergence ──
+
+[[transitions]]
+from = "perspective_clean"
+to = "all_perspectives_clean"
+command = "all_perspectives"
+gates = [
+    { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member" },
+]
+
+[[transitions]]
+from = "all_perspectives_clean"
+to = "final_sweep"
+command = "final_sweep_start"
+gates = []
+
+[[transitions]]
+from = "final_sweep"
+to = "final_sweep_clean"
+command = "converge"
+gates = [
+    # ALL perspectives must have set_member_complete events
+    { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member" },
+    # Suite passes
+    { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120 },
+    { type = "command_succeeds", cmd = "ruff check .", timeout = 30 },
+    { type = "command_succeeds", cmd = "mypy skills/holtz/scripts/ hooks/", timeout = 60 },
+    # Zero open items
+    { type = "command_output", cmd = "python skills/holtz/scripts/validate_punchlist.py docs/holtz/PUNCHLIST-MERGED.md --filter-status OPEN --count", expect = "0" },
+    # No unresolved protocol violations
+    { type = "no_violations" },
+]
+
+[[transitions]]
+from = "final_sweep"
+to = "fix_loop"
+command = "sweep_dirty"
+# No gates — if the sweep found issues, go back to fix loop
+
+[[transitions]]
+from = "final_sweep_clean"
+to = "converged"
+command = "confirm_convergence"
+gates = []
+
+[[transitions]]
+from = "converged"
+to = "finalized"
+command = "finalize"
+gates = [
+    # Architecture baseline updated
+    { type = "ledger_has_event", event = "baseline_updated" },
+    # Living punchlist updated
+    { type = "ledger_has_event", event = "living_punchlist_updated" },
+    # Pattern contribution completed (or explicitly skipped)
+    { type = "ledger_has_event", event = "pattern_contribution_complete" },
+]
