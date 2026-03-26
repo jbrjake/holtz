@@ -81,7 +81,8 @@ class ImpactGraph:
                 ]
             else:
                 self.edges = []
-        except (json.JSONDecodeError, AttributeError):
+        except (json.JSONDecodeError, AttributeError) as exc:
+            print(f"WARNING: corrupt graph file {self.path}, resetting to empty: {exc}", file=sys.stderr)
             self.nodes = {}
             self.edges = []
 
@@ -136,9 +137,9 @@ class ImpactGraph:
     ) -> dict:
         """Add or update an edge. Deduplicates on (source, target, type) tuple."""
         if source not in self.nodes:
-            return {"error": f"Source node '{source}' does not exist"}
+            raise KeyError(f"Source node '{source}' does not exist")
         if target not in self.nodes:
-            return {"error": f"Target node '{target}' does not exist"}
+            raise KeyError(f"Target node '{target}' does not exist")
 
         for edge in self.edges:
             if edge["source"] == source and edge["target"] == target and edge["type"] == edge_type:
@@ -228,9 +229,9 @@ class ImpactGraph:
     def update_risk(self, node_id: str, delta: float) -> dict:
         """Adjust risk_score, clamped to [0.0, 1.0]."""
         if not math.isfinite(delta):
-            return {"error": f"delta must be finite, got {delta}"}
+            raise ValueError(f"delta must be finite, got {delta}")
         if node_id not in self.nodes:
-            return {"error": f"Node '{node_id}' does not exist"}
+            raise KeyError(f"Node '{node_id}' does not exist")
         node = self.nodes[node_id]
         new_score = node.get("risk_score", 0.0) + delta
         node["risk_score"] = max(0.0, min(1.0, new_score))
@@ -251,7 +252,7 @@ class ImpactGraph:
     def prune_node(self, node_id: str) -> dict:
         """Remove node and all connected edges. Return removed edges."""
         if node_id not in self.nodes:
-            return {"error": f"Node '{node_id}' does not exist"}
+            raise KeyError(f"Node '{node_id}' does not exist")
         del self.nodes[node_id]
         removed = [e for e in self.edges if e["source"] == node_id or e["target"] == node_id]
         self.edges = [e for e in self.edges if e["source"] != node_id and e["target"] != node_id]
@@ -381,9 +382,10 @@ def main() -> None:
         print(json.dumps(result, indent=2))
 
     elif args.command == "add_edge":
-        result = g.add_edge(args.source, args.target, args.type, note=args.note, confidence=args.confidence)
-        if "error" in result:
-            print(json.dumps(result), file=sys.stderr)
+        try:
+            result = g.add_edge(args.source, args.target, args.type, note=args.note, confidence=args.confidence)
+        except KeyError as exc:
+            print(json.dumps({"error": str(exc)}), file=sys.stderr)
             sys.exit(1)
         g.save()
         print(json.dumps(result, indent=2))
@@ -403,9 +405,10 @@ def main() -> None:
         print(json.dumps(hotspots, indent=2))
 
     elif args.command == "update_risk":
-        result = g.update_risk(args.id, args.delta)
-        if "error" in result:
-            print(json.dumps(result), file=sys.stderr)
+        try:
+            result = g.update_risk(args.id, args.delta)
+        except (KeyError, ValueError) as exc:
+            print(json.dumps({"error": str(exc)}), file=sys.stderr)
             sys.exit(1)
         g.save()
         print(json.dumps(result, indent=2))
@@ -414,9 +417,10 @@ def main() -> None:
         print(json.dumps(g.stats(), indent=2))
 
     elif args.command == "prune_node":
-        result = g.prune_node(args.id)
-        if "error" in result:
-            print(json.dumps(result), file=sys.stderr)
+        try:
+            result = g.prune_node(args.id)
+        except KeyError as exc:
+            print(json.dumps({"error": str(exc)}), file=sys.stderr)
             sys.exit(1)
         g.save()
         print(json.dumps({"removed_edges": len(result["removed_edges"])}, indent=2))
