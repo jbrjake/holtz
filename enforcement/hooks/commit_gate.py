@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""Commit gate — blocks git commits when protocol obligations are pending.
+
+PreToolUse hook for Bash. Reads the enforcement cache and decides:
+- BLOCK git commit when prior commits are unregistered
+- BLOCK all non-sahjhan Bash when stall threshold exceeded
+- INJECT terse directive when soft obligations exist (pattern check due)
+- ALLOW everything else silently
+"""
+from __future__ import annotations
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(__file__))
+
+from _common import exit_block, exit_ok, exit_warn, read_event  # noqa: E402
+from _protocol_cache import (  # noqa: E402
+    compute_obligations,
+    format_injection,
+    is_git_commit,
+    is_sahjhan_cmd,
+    read_cache,
+)
+
+
+def _is_test_cmd(cmd: str) -> bool:
+    """Detect test/pytest commands that should always be allowed."""
+    return "pytest" in cmd or cmd.strip().startswith("python -m pytest")
+
+
+def main() -> None:
+    event = read_event()
+    cmd = event.get("tool_input", {}).get("command", "")
+    cwd = event.get("cwd", os.getcwd())
+
+    cache = read_cache(cwd)
+    obligations = compute_obligations(cache)
+
+    if not obligations:
+        exit_ok("PreToolUse")
+
+    # Sahjhan commands are always allowed
+    if is_sahjhan_cmd(cmd):
+        exit_ok("PreToolUse")
+
+    blocks_commit = any(o.get("blocks_commit") for o in obligations)
+    blocks_all = any(o.get("blocks_all") for o in obligations)
+    injection = format_injection(obligations, cache)
+
+    # Hard block: stall threshold exceeded (overrides test allowance)
+    if blocks_all:
+        exit_block(injection)
+
+    # Test commands are allowed unless stall threshold exceeded
+    if _is_test_cmd(cmd):
+        exit_ok("PreToolUse")
+
+    # Hard block: git commit with unregistered prior commits
+    if is_git_commit(cmd) and blocks_commit:
+        exit_block(injection)
+
+    # Soft injection: obligations exist but don't block this command
+    if injection:
+        exit_warn(injection)
+
+    exit_ok("PreToolUse")
+
+
+if __name__ == "__main__":
+    main()

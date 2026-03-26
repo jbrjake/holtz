@@ -188,3 +188,108 @@ class TestProtocolTracker:
         }
         code, output, _ = run_enforcement_hook("protocol_tracker.py", event)
         assert code == 0
+
+
+class TestCommitGate:
+    """Tests for commit_gate.py PreToolUse hook."""
+
+    def test_allows_when_no_cache(self):
+        """No enforcement when no cache file exists."""
+        event = {
+            "tool_input": {"command": "git commit -m 'feat: new'"},
+            "cwd": "/nonexistent/path",
+        }
+        code, output, _ = run_enforcement_hook("commit_gate.py", event)
+        assert code == 0
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "allow"
+
+    def test_blocks_commit_with_unregistered(self, tmp_path):
+        """Blocks git commit when prior commits unregistered."""
+        from _protocol_cache import write_cache, empty_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["unregistered_commits"] = ["abc1234"]
+        cache["perspective"] = "component"
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_input": {"command": "git commit -m 'fix: next'"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("commit_gate.py", event)
+        assert code == 0
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "block"
+        reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
+        assert "unregistered" in reason.lower() or "fix_commit" in reason.lower()
+
+    def test_allows_sahjhan_with_unregistered(self, tmp_path):
+        """Sahjhan commands always allowed, even with obligations."""
+        from _protocol_cache import write_cache, empty_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["unregistered_commits"] = ["abc1234"]
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_input": {"command": "./bin/sahjhan fix_commit --item-id BH-001"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("commit_gate.py", event)
+        assert code == 0
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "allow"
+
+    def test_allows_pytest_with_unregistered(self, tmp_path):
+        """Test commands allowed even with unregistered commits."""
+        from _protocol_cache import write_cache, empty_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["unregistered_commits"] = ["abc1234"]
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_input": {"command": "python -m pytest --tb=short -q"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("commit_gate.py", event)
+        assert code == 0
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "allow"
+
+    def test_blocks_on_stall(self, tmp_path):
+        """Blocks all non-sahjhan Bash after stall threshold."""
+        from _protocol_cache import write_cache, empty_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["stall"] = 16
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_input": {"command": "python -m pytest --tb=short -q"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("commit_gate.py", event)
+        assert code == 0
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "block"
+
+    def test_injects_soft_obligation(self, tmp_path):
+        """Pattern check due injects warning but doesn't block."""
+        from _protocol_cache import write_cache, empty_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["fixes_since_pattern"] = 4
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_input": {"command": "git commit -m 'fix: next'"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("commit_gate.py", event)
+        assert code == 0
+        # Should allow (continue=True) but with additionalContext
+        assert output.get("continue") is True
+        context = output.get("additionalContext", "")
+        assert "pattern_check" in context.lower()
