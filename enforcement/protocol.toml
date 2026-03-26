@@ -1,0 +1,46 @@
+[protocol]
+name = "holtz"
+version = "1.0.0"
+description = "TDD audit convergence protocol with adversarial self-play"
+
+[paths]
+managed = ["docs/holtz", "enforcement/"]
+data_dir = "docs/holtz/.sahjhan"
+render_dir = "docs/holtz"
+
+[namespaces]
+default = "holtz"
+allowed = ["holtz", "justine"]
+
+[sets.perspective]
+description = "Analytical lens for multi-perspective auditing"
+values = [
+    "component",
+    "integration",
+    "security",
+    "error-propagation",
+    "data-flow",
+    "contract",
+    "semantic-fidelity",
+    "temporal-protocol",
+    "public-contract",
+    "concurrency",
+    "resource-lifecycle",
+    "idempotency",
+    "observability",
+]
+
+[aliases]
+"run start" = "transition run_start"
+"recon complete" = "transition recon_complete"
+"audit complete" = "transition audit_complete"
+"merge complete" = "transition merge_complete"
+"fix commit" = "transition fix_commit"
+"lens complete" = "set complete perspective"
+"lens status" = "set status perspective"
+"lens rotate" = "transition lens_rotate"
+"sweep start" = "transition final_sweep_start"
+"converge" = "transition converge"
+"finalize" = "transition finalize"
+"finding" = "event finding"
+"resolve" = "event finding_resolved"
