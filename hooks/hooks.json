@@ -6,11 +6,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/impact_graph_gate.py\""
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/_sahjhan_bootstrap.py\""
           },
           {
             "type": "command",
-            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/status_staleness_gate.py\""
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/write_guard.py\""
           }
         ]
       }
@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/artifact_verification.py\""
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/bash_guard.py\""
           }
         ]
       }
@@ -43,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/convergence_gate.py\""
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/stop_gate.py\""
           }
         ]
       }
@@ -54,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"${CLAUDE_PLUGIN_ROOT}/hooks/convergence_primer.py\""
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/primer.py\""
           }
         ]
       }
