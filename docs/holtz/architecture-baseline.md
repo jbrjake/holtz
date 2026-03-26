@@ -67,12 +67,12 @@ CLAUDE.md defines branch model (main/dev/feature), conventional commit format, r
 | `impact_graph.py` | (none — standalone) |
 | `markdown_utils.py` | (none — leaf) |
 | `hooks/_common.py` | (none — hook leaf) |
-| `hooks/impact_graph_gate.py` | `hooks/_common.py` |
-| `hooks/status_staleness_gate.py` | `hooks/_common.py` |
-| `hooks/artifact_verification.py` | `hooks/_common.py` |
 | `hooks/subagent_findings_check.py` | `hooks/_common.py` |
-| `hooks/convergence_gate.py` | `hooks/_common.py` |
-| `hooks/convergence_primer.py` | `hooks/_common.py` |
+| `enforcement/hooks/write_guard.py` | `enforcement/hooks/_common.py` |
+| `enforcement/hooks/bash_guard.py` | `enforcement/hooks/_common.py`, `enforcement/hooks/_resolve.py` |
+| `enforcement/hooks/stop_gate.py` | `enforcement/hooks/_common.py`, `enforcement/hooks/_resolve.py` |
+| `enforcement/hooks/primer.py` | `enforcement/hooks/_common.py`, `enforcement/hooks/_resolve.py` |
+| `enforcement/hooks/_sahjhan_bootstrap.py` | (none — standalone) |
 | `token_profiler/models.py` | (none — leaf) |
 | `token_profiler/plugin_protocol.py` | `token_profiler/models.py` |
 | `token_profiler/extract.py` | `token_profiler/models.py` |

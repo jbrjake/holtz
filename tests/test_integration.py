@@ -274,7 +274,11 @@ def test_readme_metrics_match_actual():
     actual_examples = len(list((root / "skills" / "holtz" / "examples").glob("*.md")))
     actual_scripts = len(list((root / "skills" / "holtz" / "scripts").glob("*.py")))
     actual_patterns = len(list((root / "skills" / "holtz" / "patterns").glob("*.md")))
-    actual_hooks = len([f for f in (root / "hooks").glob("*.py") if f.name != "_common.py"])
+    actual_hooks = (
+        len([f for f in (root / "hooks").glob("*.py") if f.name != "_common.py"])
+        + len([f for f in (root / "enforcement" / "hooks").glob("*.py")
+               if not f.name.startswith("_")])
+    )
 
     result = subprocess.run(
         ["python", "-m", "pytest", "tests/", "--co", "-q"],
@@ -284,7 +288,8 @@ def test_readme_metrics_match_actual():
     actual_tests = int(re.search(r"(\d+) test", test_line).group(1))
 
     actual_lines = 0
-    for d in [root / "tests", root / "skills" / "holtz" / "scripts", root / "hooks"]:
+    for d in [root / "tests", root / "skills" / "holtz" / "scripts", root / "hooks",
+              root / "enforcement" / "hooks"]:
         for f in d.glob("*.py"):
             actual_lines += len(f.read_text().splitlines())
 

@@ -3,8 +3,8 @@
 [![CI](https://github.com/jbrjake/holtz/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/jbrjake/holtz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)
-![647 tests](https://img.shields.io/badge/tests-646_passed-brightgreen.svg)
-![65% coverage](https://img.shields.io/badge/coverage-65%25-yellow.svg)
+![662 tests](https://img.shields.io/badge/tests-662_passed-brightgreen.svg)
+![76% coverage](https://img.shields.io/badge/coverage-76%25-brightgreen.svg)
 
 **Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
 
@@ -157,7 +157,7 @@ Default behavior between runs is resume, not restart:
 
 ## What this looks like in practice
 
-Holtz has been auditing his own codebase since it was written. Nineteen runs. Here's what happened.
+Holtz has been auditing his own codebase since it was written. Thirty-one runs. Here's what happened.
 
 Here is run 14 — a full adversarial self-play audit. Holtz and Justine auditing in parallel, merging findings, then Holtz running the TDD fix loop through convergence. Every tool call, every finding, every fix. Token counts after each step.
 
@@ -187,7 +187,7 @@ For the complete trace with reasoning chains, code diffs, and prediction accurac
 
 **Run 16** found the run count stale again (same class as every run since 14) and the prediction accuracy overstated. Also PAT-001 for its eleventh and twelfth manifestations: `parse_brief()` applied regex without masking code fences (offset-divergence variant), and the hooks' fence masking tracked fence character but not fence count (grammar variant). Four items, all resolved.
 
-After 19 runs: 647 tests across 14,300 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+After 31 runs: 662 tests across 14,800 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
 
 The full dataset — prediction accuracy calibration, PAT-001 recurrence timeline, adversarial merge blind-spot analysis, convergence iteration counts, and test growth curves across all 16 runs — is published in [docs/research/convergence-data.md](docs/research/convergence-data.md). (Data through Run 16; Runs 17-18 are not yet included in the research dataset.)
 
@@ -195,25 +195,23 @@ The full dataset — prediction accuracy calibration, PAT-001 recurrence timelin
 
 Advisory instructions weren't enough. Holtz understood the instructions. He agreed with the instructions. He did not follow the instructions. This was not the plan. The plan was for Holtz to follow instructions like a professional. The hooks are what happened instead.
 
-Six enforcement hooks — deterministic gates that block operations when the process isn't followed.
+Five hooks backed by the Sahjhan enforcement engine — a state machine that replaced the original advisory hooks when advisory proved insufficient. The first generation of hooks checked files and timestamps. This generation checks protocol state. Every transition in the audit lifecycle is gated by the ledger. Holtz doesn't get to skip steps anymore. Neither does Justine.
 
-**Impact graph gate.** Before any write to a Step 6+ audit file, checks whether `impact-graph.json` exists. If it doesn't, the write is blocked. You cannot audit code you haven't mapped.
+**Write guard.** Sahjhan renders STATUS.md, PUNCHLIST.md, SUMMARY.md, and the merge reports from the ledger. The write guard blocks direct edits to those files. You don't write to them. The engine does. Everything else in `docs/holtz/` — recon notes, audit files, the impact graph — goes through fine. The guard knows the difference between protocol state and working files.
 
-**Status staleness gate.** Before any findings write, checks whether `STATUS.md` was updated in the last five minutes. STATUS.md is Holtz's program counter. If it's stale, he's lost track of where he is, and findings written without position tracking are findings that get lost on resume.
+**Bash guard.** After every shell command, verifies the manifest. If someone — Holtz, a subagent, a stray script — modified a managed file outside Sahjhan, the guard records a protocol violation. That violation is permanent. It blocks convergence for the entire run. You can't clean it up. You can't explain it away. You start over.
 
-**Artifact verification.** After running `impact_graph.py`, verifies the graph file actually exists on disk. Commands that claim to produce artifacts get fact-checked.
+**Stop gate.** When Holtz tries to stop, the gate checks whether the audit state is terminal. If it isn't — if convergence hasn't been reached and finalized — the stop is blocked. The convergence loop that the README promised for fourteen runs and the codebase never enforced. Now it has a gate backed by a state machine, and the state machine doesn't care that Holtz agreed to come back.
+
+**Primer.** On every user message, checks whether an active audit is in progress. If the state isn't terminal, records a context reset event and injects the current protocol state into the conversation. After `/clear`, the user types anything — even just "go" — and Holtz picks up where the ledger says he left off. This is what makes the convergence loop survive context resets. The ledger carries the state. The primer tells the model where to find it.
 
 **Subagent findings check.** When Justine finishes, scans her final message for file paths and verifies they exist. Subagents that claim to have written findings but didn't get flagged.
-
-**Convergence gate.** When Holtz tries to stop, checks whether the audit has converged. If it hasn't, the stop is blocked — Holtz must update STATUS.md and tell the user to `/clear` for fresh context before continuing. The convergence loop that the README promised for 14 runs and the codebase never enforced. Same pattern as the other four hooks. Advisory language said "keep coming back." Holtz agreed. Holtz stopped anyway. Now convergence has a gate.
-
-**Convergence primer.** On every user message, checks whether an active audit is in progress. If STATUS.md exists and SUMMARY.md doesn't, injects resume context into the conversation. After `/clear`, the user types anything — even just "go" — and Holtz picks up where he left off. This is what makes the convergence loop automagic. STATUS.md carries the state. The primer tells the model where to find it.
 
 Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-1 skill, 3 agents, 18 reference docs, 1 example, 6 Python scripts, 16 seed patterns, 6 enforcement hooks, 647 tests across 14,300 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+1 skill, 3 agents, 18 reference docs, 1 example, 6 Python scripts, 16 seed patterns, 5 enforcement hooks, 662 tests across 14,800 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Why the backstories
 
