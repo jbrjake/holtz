@@ -1,0 +1,19 @@
+{# enforcement/templates/punchlist.md.tera #}
+# Punchlist
+
+**Run:** {{ run_number }}
+**Last Updated:** {{ last_event.timestamp | date(format="%Y-%m-%d %H:%M") }}
+**Open:** {{ open_count }} | **Resolved:** {{ resolved_count }} | **Total:** {{ total_count }}
+
+{% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
+{% set items = findings | filter(attribute="severity", value=severity) -%}
+{% if items | length > 0 -%}
+## {{ severity }}
+
+| ID | Category | Location | Perspective | Description | Status | Commit |
+|----|----------|----------|-------------|-------------|--------|--------|
+{% for f in items -%}
+| {{ f.id }} | {{ f.category }} | {{ f.location }} | {{ f.perspective }} | {{ f.description }} | {% if f.resolved %}RESOLVED{% else %}OPEN{% endif %} | {{ f.commit_hash | default(value="—") }} |
+{% endfor %}
+{% endif -%}
+{% endfor %}
