@@ -1,0 +1,134 @@
+"""Shared protocol enforcement cache — read/write state, detect commands, compute obligations.
+
+Used by commit_gate.py (PreToolUse) and protocol_tracker.py (PostToolUse).
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+from datetime import datetime, timezone
+from typing import Any
+
+CACHE_FILENAME = "enforcement-cache.json"
+
+
+def _cache_path(cwd: str) -> str:
+    return os.path.join(cwd, "docs", "holtz", ".sahjhan", CACHE_FILENAME)
+
+
+def empty_cache() -> dict[str, Any]:
+    return {
+        "active": True,
+        "state": "",
+        "unregistered_commits": [],
+        "fixes_since_pattern": 0,
+        "perspective": "",
+        "perspectives_done": 0,
+        "perspectives_total": 13,
+        "stall": 0,
+        "last_refresh": "",
+    }
+
+
+def read_cache(cwd: str) -> dict[str, Any] | None:
+    path = _cache_path(cwd)
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def write_cache(cwd: str, cache: dict[str, Any]) -> None:
+    path = _cache_path(cwd)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    cache["last_refresh"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+    with open(path, "w") as f:
+        json.dump(cache, f, indent=2)
+
+
+def is_git_commit(cmd: str) -> bool:
+    """Detect git commit commands (not amend)."""
+    return bool(re.search(r"\bgit\s+commit\b", cmd)) and "--amend" not in cmd
+
+
+def is_sahjhan_cmd(cmd: str) -> bool:
+    """Detect sahjhan CLI invocations."""
+    stripped = cmd.strip()
+    for segment in re.split(r"[;&|]+", stripped):
+        seg = segment.strip()
+        if seg.startswith("./bin/sahjhan") or seg.startswith("sahjhan"):
+            return True
+    return False
+
+
+def compute_obligations(cache: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Compute current protocol obligations from cache state."""
+    if cache is None or not cache.get("active"):
+        return []
+
+    state = cache.get("state", "")
+    if state not in ("fix_loop", "pattern_analysis"):
+        return []
+
+    obligations: list[dict[str, Any]] = []
+    commits = cache.get("unregistered_commits", [])
+    stall = cache.get("stall", 0)
+    fixes = cache.get("fixes_since_pattern", 0)
+    perspective = cache.get("perspective", "?")
+    p_done = cache.get("perspectives_done", 0)
+    p_total = cache.get("perspectives_total", 13)
+
+    if commits:
+        obligations.append({
+            "msg": f"{len(commits)} unregistered commits. sahjhan fix_commit required. "
+                   f"{perspective} ({p_done}/{p_total})",
+            "blocks_commit": True,
+            "blocks_all": False,
+        })
+
+    if stall > 15:
+        obligations.append({
+            "msg": f"{stall} commands without protocol event. Run sahjhan status.",
+            "blocks_commit": True,
+            "blocks_all": True,
+        })
+
+    if fixes >= 3 and not commits:
+        obligations.append({
+            "msg": f"pattern_check due ({fixes} fixes). sahjhan transition pattern_check",
+            "blocks_commit": False,
+            "blocks_all": False,
+        })
+
+    return obligations
+
+
+def format_injection(obligations: list[dict[str, Any]], cache: dict[str, Any] | None) -> str:
+    """Format obligations into terse injection text. Max ~30 tokens."""
+    if not obligations:
+        return ""
+    ob = obligations[0]
+    blocks = "BLOCKED" if ob.get("blocks_commit") or ob.get("blocks_all") else "PROTOCOL"
+    return f"{blocks}: {ob['msg']}"
+
+
+def format_state_line(cache: dict[str, Any] | None) -> str:
+    """One-line state summary for primer injection. Max ~20 tokens."""
+    if cache is None or not cache.get("active"):
+        return ""
+    state = cache.get("state", "?")
+    perspective = cache.get("perspective", "?")
+    p_done = cache.get("perspectives_done", 0)
+    p_total = cache.get("perspectives_total", 13)
+    commits = len(cache.get("unregistered_commits", []))
+    parts = [f"Protocol: {state}", f"{perspective} {p_done}/{p_total}"]
+    if commits:
+        parts.append(f"{commits} pending commits")
+    fixes = cache.get("fixes_since_pattern", 0)
+    if fixes >= 3:
+        parts.append("pattern_check due")
+    return " | ".join(parts)
