@@ -45,7 +45,8 @@ esac
 SAHJHAN_BIN="$REPO_ROOT/bin/sahjhan-${TRIPLE}"
 if [[ -f "$SAHJHAN_BIN" ]]; then
     chmod +x "$SAHJHAN_BIN"
-    echo "sahjhan: binary ready at bin/sahjhan-${TRIPLE}"
+    ln -sf "sahjhan-${TRIPLE}" "$REPO_ROOT/bin/sahjhan"
+    echo "sahjhan: binary ready at bin/sahjhan-${TRIPLE} (symlinked to bin/sahjhan)"
 
     # Version pinning check
     PINNED_VERSION_FILE="$REPO_ROOT/bin/.sahjhan-version"
