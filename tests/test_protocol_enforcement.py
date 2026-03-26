@@ -6,6 +6,9 @@ import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
+sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))
+
+from test_sahjhan_integration import run_enforcement_hook, ENFORCEMENT_HOOKS_DIR  # noqa: E402
 
 
 class TestProtocolCache:
@@ -94,3 +97,94 @@ class TestProtocolCache:
         # Rough token estimate: words + punctuation
         token_estimate = len(text.split())
         assert token_estimate <= 35, f"Injection too verbose ({token_estimate} tokens): {text}"
+
+
+class TestProtocolTracker:
+    """Tests for protocol_tracker.py PostToolUse hook."""
+
+    def test_allows_all_commands(self):
+        """Tracker never blocks — it's observation only."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "ls -la"},
+            "tool_response": {"exit_code": 0, "output": ""},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("protocol_tracker.py", event)
+        assert code == 0
+        assert output.get("continue") is True
+
+    def test_detects_git_commit(self, tmp_path):
+        """Git commit updates cache with unregistered commit."""
+        from _protocol_cache import write_cache, read_cache, empty_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "git commit -m 'fix: stuff'"},
+            "tool_response": {"exit_code": 0, "output": "[dev abc1234] fix: stuff"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("protocol_tracker.py", event)
+        assert code == 0
+
+        updated = read_cache(str(tmp_path))
+        assert updated is not None
+        assert "abc1234" in updated["unregistered_commits"]
+
+    def test_increments_stall_counter(self, tmp_path):
+        """Non-git, non-sahjhan commands increment stall."""
+        from _protocol_cache import write_cache, read_cache, empty_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["stall"] = 5
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "python -m pytest --tb=short -q"},
+            "tool_response": {"exit_code": 0, "output": "10 passed"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert updated["stall"] == 6
+
+    def test_ignores_non_bash(self):
+        """Non-Bash tool calls are ignored."""
+        event = {"tool_name": "Read", "cwd": REPO_ROOT}
+        code, output, _ = run_enforcement_hook("protocol_tracker.py", event)
+        assert code == 0
+        assert output.get("continue") is True
+
+    def test_ignores_failed_git_commit(self, tmp_path):
+        """Failed git commit does not add to unregistered."""
+        from _protocol_cache import write_cache, read_cache, empty_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "git commit -m 'fix: stuff'"},
+            "tool_response": {"exit_code": 1, "output": "nothing to commit"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert updated["unregistered_commits"] == []
+
+    def test_no_cache_no_update(self):
+        """Without existing cache, non-sahjhan commands are no-ops."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "ls"},
+            "tool_response": {"exit_code": 0, "output": ""},
+            "cwd": "/tmp/nonexistent",
+        }
+        code, output, _ = run_enforcement_hook("protocol_tracker.py", event)
+        assert code == 0
