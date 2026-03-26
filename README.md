@@ -3,7 +3,7 @@
 [![CI](https://github.com/jbrjake/holtz/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/jbrjake/holtz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)
-![640 tests](https://img.shields.io/badge/tests-640_passed-brightgreen.svg)
+![647 tests](https://img.shields.io/badge/tests-646_passed-brightgreen.svg)
 ![65% coverage](https://img.shields.io/badge/coverage-65%25-yellow.svg)
 
 **Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
@@ -35,7 +35,7 @@ Code review happens once. The comments get addressed, the reviewer approves, eve
 
 Holtz goes back to check.
 
-He runs a twenty-one step audit and then starts over. Finds what the fixes uncovered. Fixes those too. Runs again. This continues until two consecutive passes produce zero new findings across nine analytical lenses. That's convergence. Everything before that is just progress.
+He runs a twenty-one step audit and then starts over. Finds what the fixes uncovered. Fixes those too. Runs again. This continues until two consecutive passes produce zero new findings across thirteen analytical lenses. That's convergence. Everything before that is just progress.
 
 The moment you stop looking is the moment something gets through.
 
@@ -47,7 +47,7 @@ Not just your code.
 
 **Your documentation.** Every testable claim gets checked against reality. README says it handles concurrent writes? Where's the test. API docs say the endpoint returns 404 on missing resources? Prove it. If the docs promise something the code doesn't deliver, that's a punchlist item. If the docs say nothing about something the code does, that's a different punchlist item.
 
-**Your tests.** Every test file scored against twelve anti-patterns across three tiers. Tautology tests that assert what the code does instead of what it should do. Green bar addicts that exist to make CI green. Mockingbirds so heavily mocked that no production code actually executes. Rubber stamps that check structure without checking values. Permissive validators with assertions so broad they'd accept a wrong answer and smile about it. 0-2 red flags per file is decent. 3-4 needs work. 5+ means the test file is technically fiction.
+**Your tests.** Every test file scored against seventeen anti-patterns across three tiers. Tautology tests that assert what the code does instead of what it should do. Green bar addicts that exist to make CI green. Mockingbirds so heavily mocked that no production code actually executes. Rubber stamps that check structure without checking values. Permissive validators with assertions so broad they'd accept a wrong answer and smile about it. 0-2 red flags per file is decent. 3-4 needs work. 5+ means the test file is technically fiction.
 
 **Your commit history.** Git churn from the last 50 commits. The 20 most-changed files get audited first, because code under pressure is code that breaks. Every `skip` and `xit` in the test suite is an admission of a gap. Holtz treats it as one.
 
@@ -105,7 +105,7 @@ Predictive recon synthesizes the graph's risk scores, git churn, known patterns,
 
 The living punchlist is the institutional memory. It records which bug classes your project is susceptible to, which code areas repeatedly produce bugs, what structural weaknesses exist, and what detection heuristics should run on every new change. Recommendations that go unaddressed in two or more runs stop being optional. They become punchlist items. Holtz tracks what he told you to fix. If you didn't fix it, it stops being a suggestion.
 
-Fourteen seed patterns ship with the plugin: regex newline leaks, code-fence-unaware parsing, incomplete layer isolation, dual-parser divergence, missing edge case handling, doc-spec drift, concurrency violation, resource leak, uncontrolled amplification, error destruction, cache coherence failure, silent semantic mismatch, implicit ordering dependency, dead code latent path. Each one has an executable detection heuristic that fires during recon. New patterns discovered during audits get generalized, scrubbed of project-specific details, and contributed back to the library. The pattern library grows with every codebase that gets audited.
+Sixteen seed patterns ship with the plugin: regex newline leaks, code-fence-unaware parsing, incomplete layer isolation, dual-parser divergence, missing edge case handling, doc-spec drift, concurrency violation, resource leak, uncontrolled amplification, error destruction, cache coherence failure, silent semantic mismatch, implicit ordering dependency, dead code latent path, numeric precision exhaustion, cross-language dead interface. Each one has an executable detection heuristic that fires during recon. New patterns discovered during audits get generalized, scrubbed of project-specific details, and contributed back to the library. The pattern library grows with every codebase that gets audited.
 
 ## Extending Holtz
 
@@ -135,7 +135,7 @@ Holtz is a Claude Code plugin, but the architecture is portable. The skill, patt
 
 **Step 6: Doc-to-implementation audit.** Every testable claim checked against reality. Every finding adds `assumes` and `diverges_from` edges to the graph.
 
-**Step 7: Test quality audit.** Every test file scored against twelve anti-patterns. If mutation data is available, tests that don't kill mutations get called what they are.
+**Step 7: Test quality audit.** Every test file scored against seventeen anti-patterns. If mutation data is available, tests that don't kill mutations get called what they are.
 
 **Step 8: Adversarial code audit.** Source modules in priority order: error paths, boundaries, state transitions, external integrations, security. High-churn files first.
 
@@ -143,7 +143,7 @@ Holtz is a Claude Code plugin, but the architecture is portable. The skill, patt
 
 **Step 11: Pattern analysis.** Group resolved items, find shared root causes, search for siblings.
 
-**Steps 14-16: Convergence.** Repeat Steps 10-11 until clean, then run a final sweep across all nine lenses — component, integration, security, error propagation, data flow, contract, semantic fidelity, temporal protocol, public contract. If any lens finds something, the loop continues. Circuit breakers prevent runaway: max 15 iterations, max 3 attempts per item, stall detection after 3 iterations with no progress. Without these, Holtz would audit forever. He would not consider this a problem.
+**Steps 14-16: Convergence.** Repeat Steps 10-11 until clean, then run a final sweep across all thirteen lenses — component, integration, security, error propagation, data flow, contract, semantic fidelity, temporal protocol, public contract, concurrency, resource lifecycle, idempotency, observability. If any lens finds something, the loop continues. Circuit breakers prevent runaway: max 15 iterations, max 3 attempts per item, stall detection after 3 iterations with no progress. Without these, Holtz would audit forever. He would not consider this a problem.
 
 <p align="center"><img src="docs/diagrams/holtz-convergence.svg" alt="Holtz convergence loop"></p>
 
@@ -157,7 +157,7 @@ Default behavior between runs is resume, not restart:
 
 ## What this looks like in practice
 
-Holtz has been auditing his own codebase since it was written. Sixteen runs. Here's what happened.
+Holtz has been auditing his own codebase since it was written. Nineteen runs. Here's what happened.
 
 Here is run 14 — a full adversarial self-play audit. Holtz and Justine auditing in parallel, merging findings, then Holtz running the TDD fix loop through convergence. Every tool call, every finding, every fix. Token counts after each step.
 
@@ -187,9 +187,9 @@ For the complete trace with reasoning chains, code diffs, and prediction accurac
 
 **Run 16** found the run count stale again (same class as every run since 14) and the prediction accuracy overstated. Also PAT-001 for its eleventh and twelfth manifestations: `parse_brief()` applied regex without masking code fences (offset-divergence variant), and the hooks' fence masking tracked fence character but not fence count (grammar variant). Four items, all resolved.
 
-After 16 runs: 619 tests across 13,800 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+After 19 runs: 647 tests across 14,300 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
 
-The full dataset — prediction accuracy calibration, PAT-001 recurrence timeline, adversarial merge blind-spot analysis, convergence iteration counts, and test growth curves across all 16 runs — is published in [docs/research/convergence-data.md](docs/research/convergence-data.md).
+The full dataset — prediction accuracy calibration, PAT-001 recurrence timeline, adversarial merge blind-spot analysis, convergence iteration counts, and test growth curves across all 16 runs — is published in [docs/research/convergence-data.md](docs/research/convergence-data.md). (Data through Run 16; Runs 17-18 are not yet included in the research dataset.)
 
 ## The hooks
 
@@ -213,7 +213,7 @@ Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-1 skill, 3 agents, 18 reference docs, 1 example, 6 Python scripts, 14 seed patterns, 6 enforcement hooks, 640 tests across 13,900 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+1 skill, 3 agents, 18 reference docs, 1 example, 6 Python scripts, 16 seed patterns, 6 enforcement hooks, 647 tests across 14,300 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Why the backstories
 
