@@ -61,36 +61,46 @@ All protocol state is managed by the Sahjhan enforcement engine. Use these CLI c
 
 ```
 # Record findings and resolution
-sahjhan finding --id BH-001 --severity HIGH --category doc/drift \
-  --location "README.md:108" --perspective public-contract \
-  --description "Pattern count stale"
-sahjhan resolve --id BH-001 --commit_hash abc1234
+sahjhan event finding --field id=BH-001 --field severity=HIGH \
+  --field category=doc/drift --field location="README.md:108" \
+  --field perspective=public-contract --field description="Pattern count stale"
+sahjhan event finding_resolved --field id=BH-001 --field commit_hash=abc1234
 
 # Advance protocol steps
-sahjhan run start               # begin a new audit run
-sahjhan recon complete          # after Steps 0-4
-sahjhan audit complete          # after Steps 6-8
-sahjhan merge complete          # after Step 9
-sahjhan fix commit --item-id BH-001   # after each fix commit
-sahjhan lens complete component       # when a perspective passes clean
-sahjhan lens rotate                   # switch to next perspective
-sahjhan converge                      # attempt convergence
-sahjhan finalize                      # after Steps 17-20
+sahjhan transition run_start           # begin a new audit run
+sahjhan transition recon_complete      # after Steps 0-4
+sahjhan transition audit_complete      # after Steps 6-8
+sahjhan transition merge_complete      # after Step 9
+sahjhan transition fix_commit          # after each fix commit
+sahjhan set complete perspective component  # when a perspective passes clean
+sahjhan transition lens_rotate         # switch to next perspective
+sahjhan transition converge            # attempt convergence
+sahjhan transition finalize            # after Steps 17-20
 
 # Check status and gates
-sahjhan status                  # current state, set progress
-sahjhan status --json           # machine-readable status
-sahjhan gate check converge     # see what's blocking convergence
-sahjhan lens status             # which perspectives are done
+sahjhan status                         # current state, set progress
+sahjhan gate check converge            # see what's blocking convergence
+sahjhan set status perspective         # which perspectives are done
 
-# Record events
-sahjhan event blast_radius --target_node "module.py" --depth 2 \
-  --affected_count 5 --finding_id BH-001
-sahjhan event hardening_complete --finding_id BH-001 \
-  --edge_cases_tested 3 --tests_added 2
-sahjhan event pattern_analysis_complete --patterns_found 2 --siblings_found 4
-sahjhan event iteration_complete --perspective component \
-  --items_resolved 3 --items_remaining 2 --test_count 50 --tests_passed true
+# Record events (all use --field key=value syntax)
+sahjhan event recon_step --field step=0 --field artifact_path=docs/holtz/recon/step0-project-overview.md
+sahjhan event blast_radius --field target_node=module.py --field depth=2 \
+  --field affected_count=5 --field finding_id=BH-001
+sahjhan event hardening_complete --field finding_id=BH-001 \
+  --field edge_cases_tested=3 --field tests_added=2
+sahjhan event pattern_analysis_complete --field patterns_found=2 --field siblings_found=4
+sahjhan event iteration_complete --field perspective=component \
+  --field items_resolved=3 --field items_remaining=2 \
+  --field test_count=50 --field tests_passed=true
+sahjhan event justine_dispatched --field mode=full
+
+# Aliases (defined in protocol.toml, resolve to full commands)
+sahjhan run start                      # = transition run_start
+sahjhan recon complete                 # = transition recon_complete
+sahjhan finding                        # = event finding
+sahjhan resolve                        # = event finding_resolved
+sahjhan lens complete                  # = set complete perspective
+sahjhan lens status                    # = set status perspective
 ```
 
 ## Terminal Output

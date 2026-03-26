@@ -26,7 +26,7 @@ jobs:
       - name: Type check
         run: |
           source .venv/bin/activate
-          mypy skills/holtz/scripts/ hooks/
+          mypy skills/holtz/scripts/ hooks/ enforcement/hooks/
       - name: Test
         run: |
           source .venv/bin/activate
