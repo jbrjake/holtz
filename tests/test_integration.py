@@ -12,7 +12,7 @@ SHARED_PUNCHLIST = """\
 | Severity | Open | Resolved | Deferred |
 |----------|------|----------|----------|
 | HIGH | 1 | 1 | 0 |
-| MEDIUM | 0 | 1 | 1 |
+| MEDIUM | 1 | 1 | 1 |
 
 ## Patterns
 
@@ -63,6 +63,28 @@ pytest -k sql_injection
 ```
 
 **Resolution:** Fixed in commit abc123. Parameterized query, validated by injection test.
+
+### BH-005: Rate limiter allows burst above threshold
+**Severity:** MEDIUM
+**Category:** bug/logic
+**Location:** `rate_limit.py:30`
+**Status:** IN PROGRESS
+**Determinism:** deterministic
+
+**Problem:** Rate limiter window resets on each request instead of sliding.
+
+**Evidence:** `rate_limit.py:30` resets counter on every call to `check_rate()`.
+
+**Discovery Chain:** load testing → burst allowed → traced to window reset logic
+
+**Acceptance Criteria:**
+- [ ] Sliding window implemented
+- [ ] Burst test fails correctly
+
+**Validation Command:**
+```bash
+pytest -k rate_limit
+```
 
 ### BH-003: Stale cache after delete
 **Severity:** MEDIUM
@@ -137,6 +159,39 @@ def test_status_distribution_agreement(tmp_path):
             f"Status '{status}': validate_punchlist says {vp_counts[status]}, "
             f"convergence_check says {cc_counts[status]}"
         )
+
+
+def test_gate_open_count_agreement(tmp_path):
+    """convergence_gate._count_open_items must agree with convergence_check.count_items
+    on the number of OPEN + IN PROGRESS items (BH-021)."""
+    import sys
+    import os
+    # Import _count_open_items from the hook
+    hooks_dir = os.path.join(os.path.dirname(__file__), "..", "hooks")
+    sys.path.insert(0, hooks_dir)
+    try:
+        from convergence_gate import _count_open_items
+    finally:
+        sys.path.pop(0)
+
+    # Write punchlist to the expected location
+    holtz_dir = tmp_path / "docs" / "holtz"
+    holtz_dir.mkdir(parents=True)
+    punchlist = holtz_dir / "PUNCHLIST.md"
+    punchlist.write_text(SHARED_PUNCHLIST)
+
+    # Gate count (OPEN + IN PROGRESS)
+    gate_count = _count_open_items(str(tmp_path))
+
+    # Canonical count
+    cc_counts = cc.count_items(punchlist)
+    canonical_open = cc_counts["OPEN"] + cc_counts["IN PROGRESS"]
+
+    assert gate_count == canonical_open, (
+        f"Gate says {gate_count} open items, "
+        f"convergence_check says {canonical_open} (OPEN={cc_counts['OPEN']}, "
+        f"IN PROGRESS={cc_counts['IN PROGRESS']})"
+    )
 
 
 def test_code_fence_immunity_agreement(tmp_path):
@@ -286,6 +341,61 @@ def test_readme_metrics_match_actual():
 
     assert not errors, (
         "README 'What's inside' counts are stale. Update README.md:\n  "
+        + "\n  ".join(errors)
+    )
+
+
+def test_readme_prose_counts_match_actual():
+    """README prose count claims match actual values.
+
+    Escalated from recommendation in Runs 13 and 16. Covers count claims
+    outside the 'What's inside' line: lens count, anti-pattern count.
+    """
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    readme = (root / "README.md").read_text()
+
+    errors = []
+
+    # Lens count: check all "N analytical lenses" references agree with registry
+    registry = (root / "skills" / "holtz" / "references" / "lens-registry.md").read_text()
+    actual_lenses = len(re.findall(r"^## \w", registry, re.MULTILINE))
+
+    # Find all "N analytical lenses" claims in README (word form or digit)
+    word_to_num = {
+        "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+        "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16,
+        "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
+    }
+    # Match both "N analytical lenses" and "all N lenses" patterns
+    for match in re.finditer(r"(\w+) analytical lenses|all (\w+) lenses", readme):
+        word = (match.group(1) or match.group(2)).lower()
+        claimed = word_to_num.get(word) or (int(word) if word.isdigit() else None)
+        if claimed is not None and claimed != actual_lenses:
+            errors.append(
+                f"lens count: README says '{match.group(0)}' (={claimed}), "
+                f"actual {actual_lenses} (near char {match.start()})"
+            )
+
+    # Anti-pattern count: check all "N anti-patterns" references
+    anti_patterns_md = (
+        root / "skills" / "holtz" / "references" / "anti-patterns.md"
+    ).read_text()
+    actual_anti_patterns = len(re.findall(r"^\*\*\d+\.", anti_patterns_md, re.MULTILINE))
+
+    for match in re.finditer(r"(\w+) anti-patterns", readme):
+        word = match.group(1).lower()
+        claimed = word_to_num.get(word) or (int(word) if word.isdigit() else None)
+        if claimed is not None and claimed != actual_anti_patterns:
+            errors.append(
+                f"anti-pattern count: README says '{match.group(0)}' (={claimed}), "
+                f"actual {actual_anti_patterns} (near char {match.start()})"
+            )
+
+    assert not errors, (
+        "README prose counts are stale. Update README.md:\n  "
         + "\n  ".join(errors)
     )
 
