@@ -121,7 +121,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--pricing",
         default=None,
         metavar="FILE",
-        help="Pricing override JSON file",
+        help="Pricing override JSON file (not yet integrated — accepted but ignored)",
     )
     analysis_group.add_argument(
         "--run-id",
@@ -137,17 +137,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 # Plugin loading
 # ---------------------------------------------------------------------------
 
-# Methods that a plugin class must have to qualify as a ProfilerPlugin
-_PLUGIN_METHODS = {"detect", "label_phases", "name_subagent", "enrich_profile", "optimization_patterns"}
-
-
 def load_plugins(paths: list[str], check_env: bool = False) -> list[ProfilerPlugin]:
     """Load plugin Python files and return instantiated plugin objects.
 
-    Scans each module for classes that have all ProfilerPlugin methods
-    plus a ``name`` attribute.  If *check_env* is True and *paths* is
-    empty, falls back to the ``TOKEN_PROFILER_PLUGINS`` environment
-    variable (colon-separated).
+    Scans each module for classes that satisfy the ProfilerPlugin Protocol
+    (runtime-checkable).  If *check_env* is True and *paths* is empty,
+    falls back to the ``TOKEN_PROFILER_PLUGINS`` environment variable
+    (colon-separated).
     """
     if not paths and check_env:
         env_val = os.environ.get("TOKEN_PROFILER_PLUGINS", "")
@@ -184,15 +180,23 @@ def _load_module_from_path(path: str) -> ModuleType | None:
 
 
 def _is_plugin_class(cls: type) -> bool:
-    """Check if a class has all ProfilerPlugin methods and a name attribute."""
-    if not hasattr(cls, "name"):
-        return False
-    for method_name in _PLUGIN_METHODS:
-        if not hasattr(cls, method_name):
+    """Check if an instance of cls would satisfy the ProfilerPlugin Protocol (BH-015).
+
+    Uses isinstance on a sentinel instance for @runtime_checkable Protocols,
+    with hasattr fallback for classes that can't be instantiated without args.
+    """
+    # Try Protocol-based check first (BH-015: use @runtime_checkable instead of manual set)
+    try:
+        sentinel = cls.__new__(cls)
+        return isinstance(sentinel, ProfilerPlugin)
+    except TypeError:
+        # Fallback: class can't be instantiated — check structural conformance
+        if not hasattr(cls, "name"):
             return False
-        if not callable(getattr(cls, method_name)):
-            return False
-    return True
+        for method in ("detect", "label_phases", "name_subagent", "enrich_profile", "optimization_patterns"):
+            if not callable(getattr(cls, method, None)):
+                return False
+        return True
 
 
 # ---------------------------------------------------------------------------
@@ -210,12 +214,15 @@ def list_sessions(project_dir: Path) -> list[dict]:
         size = f.stat().st_size
         first_ts = last_ts = ""
         turns = 0
-        with open(f) as fh:
+        with open(f, encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()
                 if not line:
                     continue
-                obj = json.loads(line)
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue  # Skip malformed lines (BH-010)
                 if obj.get("type") == "assistant":
                     turns += 1
                     ts = obj.get("timestamp", "")
@@ -323,9 +330,15 @@ def main(argv: list[str] | None = None) -> int:
         with open(args.milestones) as f:
             milestones = json.load(f)
 
-    # Load custom pricing (not yet integrated into full pipeline, but load it)
+    # Load custom pricing (not yet integrated — loaded but not passed to pipeline)
     custom_pricing: dict | None = None
     if args.pricing:
+        import warnings
+        warnings.warn(
+            f"--pricing flag accepted but not yet integrated into the analysis pipeline. "
+            f"Dollar costs will show $0.00. File loaded: {args.pricing}",
+            stacklevel=1,
+        )
         with open(args.pricing) as f:
             custom_pricing = json.load(f)
 
@@ -333,7 +346,11 @@ def main(argv: list[str] | None = None) -> int:
     run_id = args.run_id or session_path.stem
 
     # Pick the first detecting plugin (if any)
-    raw_turns_main = extract_session(session_path)
+    try:
+        raw_turns_main = extract_session(session_path)
+    except (ValueError, json.JSONDecodeError) as exc:
+        print(f"error: could not parse session file: {session_path}: {exc}", file=sys.stderr)
+        return 1
     active_plugin = None
     for plugin in plugins:
         if plugin.detect(raw_turns_main):
@@ -348,6 +365,8 @@ def main(argv: list[str] | None = None) -> int:
         milestones=milestones,
         plugin=active_plugin,
     )
+    if active_plugin:
+        active_plugin.enrich_profile(main_profile)
 
     all_sessions = [main_profile]
 
@@ -355,13 +374,21 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_subagents:
         subagent_paths = discover_subagents(session_path)
         for sub_path in subagent_paths:
-            sub_turns = extract_session(sub_path)
+            try:
+                sub_turns = extract_session(sub_path)
+            except (ValueError, json.JSONDecodeError) as exc:
+                print(f"warning: skipping malformed subagent session {sub_path}: {exc}", file=sys.stderr)
+                continue
             sub_profile = build_session_profile(
                 session_id=sub_path.stem,
                 raw_turns=sub_turns,
                 session_type="subagent",
+                milestones=milestones,
                 plugin=active_plugin,
             )
+            if active_plugin:
+                sub_profile.subagent_name = active_plugin.name_subagent(sub_turns)
+                active_plugin.enrich_profile(sub_profile)
             all_sessions.append(sub_profile)
 
     # Build run profile
@@ -408,8 +435,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.open:
                 webbrowser.open(str(html_path))
         except ImportError:
-            # Viewer module not yet implemented — skip HTML silently
+            # Viewer module not importable — skip HTML silently
             pass
+        except FileNotFoundError:
+            # Template file missing — warn but don't crash (BH-017)
+            print("warning: viewer template not found, skipping HTML output", file=sys.stderr)
 
     # Suppress unused variable warning for custom_pricing
     _ = custom_pricing
