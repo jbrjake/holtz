@@ -407,8 +407,12 @@ class TestEventSchemaValidation:
             cwd=tmp_path,
             check=False,
         )
-        if result.returncode != 0:
-            assert "id" in result.stderr.lower() or "pattern" in result.stderr.lower()
+        # BH-011: Assertion must be unconditional — if sahjhan accepts
+        # invalid IDs, that itself is a test failure worth knowing about
+        assert result.returncode != 0, (
+            "sahjhan accepted INVALID-ID — expected rejection for non-matching ID pattern"
+        )
+        assert "id" in result.stderr.lower() or "pattern" in result.stderr.lower()
 
     def test_ledger_verify_passes(self, tmp_path):
         """Verify that ledger verify confirms hash chain integrity."""
