@@ -1,19 +1,34 @@
-{# enforcement/templates/punchlist.md.tera #}
+{# enforcement/templates/punchlist.md.tera — uses sahjhan v0.1.1 render context #}
 # Punchlist
 
-**Run:** {{ run_number }}
-**Last Updated:** {{ last_event.timestamp | date(format="%Y-%m-%d %H:%M") }}
-**Open:** {{ open_count }} | **Resolved:** {{ resolved_count }} | **Total:** {{ total_count }}
+**Protocol:** {{ protocol.name }} v{{ protocol.version }}
+**State:** {{ state.label }}
+**Ledger:** {{ ledger_len }} events
+
+{% set resolved_ids = [] -%}
+{% for e in events -%}
+{% if e.event_type == "finding_resolved" -%}
+{% set_global resolved_ids = resolved_ids | concat(with=e.fields.id) -%}
+{% endif -%}
+{% endfor -%}
 
 {% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
-{% set items = findings | filter(attribute="severity", value=severity) -%}
-{% if items | length > 0 -%}
+{% set has_items = false -%}
+{% for e in events -%}
+{% if e.event_type == "finding" and e.fields.severity == severity -%}
+{% set_global has_items = true -%}
+{% endif -%}
+{% endfor -%}
+{% if has_items -%}
+
 ## {{ severity }}
 
-| ID | Category | Location | Perspective | Description | Status | Commit |
-|----|----------|----------|-------------|-------------|--------|--------|
-{% for f in items -%}
-| {{ f.id }} | {{ f.category }} | {{ f.location }} | {{ f.perspective }} | {{ f.description }} | {% if f.resolved %}RESOLVED{% else %}OPEN{% endif %} | {{ f.commit_hash | default(value="—") }} |
-{% endfor %}
+| ID | Category | Location | Perspective | Description | Status |
+|----|----------|----------|-------------|-------------|--------|
+{% for e in events -%}
+{% if e.event_type == "finding" and e.fields.severity == severity -%}
+| {{ e.fields.id }} | {{ e.fields.category }} | {{ e.fields.location }} | {{ e.fields.perspective }} | {{ e.fields.description }} | {% if resolved_ids is containing(e.fields.id) %}RESOLVED{% else %}OPEN{% endif %} |
+{% endif -%}
+{% endfor -%}
 {% endif -%}
 {% endfor %}

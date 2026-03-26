@@ -1,33 +1,32 @@
-{# enforcement/templates/status.md.tera #}
+{# enforcement/templates/status.md.tera — uses sahjhan v0.1.1 render context #}
 # Holtz Status
 
-**Project:** {{ protocol.name }}
-**Started:** {{ genesis.timestamp | date(format="%Y-%m-%d") }}
-**Last Updated:** {{ last_event.timestamp | date(format="%Y-%m-%d") }}
-**Run:** {{ run_number }}
+**Project:** {{ protocol.name }} v{{ protocol.version }}
+**State:** {{ state.label }}
+**Ledger:** {{ ledger_len }} events
+**Violations:** {{ violations }}
 
-## Current Position
-**Step:** {{ current_state.label }}
-**Status:** {{ current_state.status }}
-
-## Completed
-{% for t in transitions -%}
-- [x] {{ t.label }} — {{ t.summary }}
+## State Transitions
+{% for e in events -%}
+{% if e.event_type == "state_transition" -%}
+- [x] {{ e.fields.from }} → **{{ e.fields.to }}** ({{ e.fields.command }})
+{% endif -%}
 {% endfor %}
 
-## Next Action
-{{ next_action }}
-
-## Metrics
-| Metric | Baseline | Current |
-|--------|----------|---------|
-| Tests passing | {{ baseline_tests }} | {{ current_tests }} |
-| Punchlist open | — | {{ open_count }} |
-| Punchlist resolved | — | {{ resolved_count }} |
-
-## Active Perspective
-**Current:** {{ current_perspective | default(value="—") }}
-**Perspectives Completed:**
-{% for p in perspectives -%}
-- [{% if p.complete %}x{% else %} {% endif %}] {{ p.name }}
+## Perspectives ({{ sets.perspective.completed }}/{{ sets.perspective.total }})
+{% for m in sets.perspective.members -%}
+- [{% if m.done %}x{% else %} {% endif %}] {{ m.name }}
 {% endfor %}
+
+## Findings
+{% set finding_count = 0 -%}
+{% set resolved_count = 0 -%}
+{% for e in events -%}
+{% if e.event_type == "finding" -%}
+{% set_global finding_count = finding_count + 1 -%}
+{% endif -%}
+{% if e.event_type == "finding_resolved" -%}
+{% set_global resolved_count = resolved_count + 1 -%}
+{% endif -%}
+{% endfor -%}
+**Open:** {{ finding_count - resolved_count }} | **Resolved:** {{ resolved_count }} | **Total:** {{ finding_count }}
