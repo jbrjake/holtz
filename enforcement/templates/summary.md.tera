@@ -1,66 +1,130 @@
-{# enforcement/templates/summary.md.tera #}
+{# enforcement/templates/summary.md.tera — uses sahjhan v0.1.1 render context
+   Computes all derived values from the raw event list. #}
 # Holtz Convergence Summary
 
-**Project:** {{ protocol.name }}
-**Run:** {{ run_number }}
-**Started:** {{ genesis.timestamp | date(format="%Y-%m-%d") }}
-**Converged:** {{ convergence_timestamp | date(format="%Y-%m-%d") }}
+**Project:** {{ protocol.name }} v{{ protocol.version }}
+**State:** {{ state.label }}
+**Ledger:** {{ ledger_len }} events
+**Violations:** {{ violations }}
+
+{# ── Compute finding counts ── #}
+{% set finding_count = 0 -%}
+{% set resolved_count = 0 -%}
+{% set fix_iterations = 0 -%}
+{% for e in events -%}
+{% if e.event_type == "finding" %}{% set_global finding_count = finding_count + 1 %}{% endif -%}
+{% if e.event_type == "finding_resolved" %}{% set_global resolved_count = resolved_count + 1 %}{% endif -%}
+{% if e.event_type == "state_transition" and e.fields.command == "fix_commit" %}{% set_global fix_iterations = fix_iterations + 1 %}{% endif -%}
+{% endfor -%}
 
 ## Results
 
 | Metric | Value |
 |--------|-------|
-| Total findings | {{ total_count }} |
+| Total findings | {{ finding_count }} |
 | Resolved | {{ resolved_count }} |
-| Open at convergence | {{ open_count }} |
-| Perspectives completed | {{ perspectives_completed }} / {{ perspectives_total }} |
+| Open at convergence | {{ finding_count - resolved_count }} |
+| Perspectives completed | {{ sets.perspective.completed }} / {{ sets.perspective.total }} |
 | Fix iterations | {{ fix_iterations }} |
-| Protocol violations | {{ violation_count }} |
-| Tests at start | {{ baseline_tests }} |
-| Tests at end | {{ current_tests }} |
+| Protocol violations | {{ violations }} |
 
 ## Findings by Severity
 
+{# ── Count findings per severity ── #}
 | Severity | Found | Resolved |
 |----------|-------|----------|
-{% for s in severity_summary -%}
-| {{ s.severity }} | {{ s.found }} | {{ s.resolved }} |
+{% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
+{% set found = 0 -%}
+{% set resolved = 0 -%}
+{% set resolved_ids = [] -%}
+{% for e in events -%}
+{% if e.event_type == "finding_resolved" %}{% set_global resolved_ids = resolved_ids | concat(with=e.fields.id) %}{% endif -%}
+{% endfor -%}
+{% for e in events -%}
+{% if e.event_type == "finding" and e.fields.severity == severity -%}
+{% set_global found = found + 1 -%}
+{% if resolved_ids is containing(e.fields.id) %}{% set_global resolved = resolved + 1 %}{% endif -%}
+{% endif -%}
+{% endfor -%}
+{% if found > 0 -%}
+| {{ severity }} | {{ found }} | {{ resolved }} |
+{% endif -%}
 {% endfor %}
 
 ## Findings by Perspective
 
+{# ── Count findings per perspective ── #}
 | Perspective | Found | Resolved |
 |-------------|-------|----------|
-{% for p in perspective_summary -%}
-| {{ p.perspective }} | {{ p.found }} | {{ p.resolved }} |
+{% set resolved_ids = [] -%}
+{% for e in events -%}
+{% if e.event_type == "finding_resolved" %}{% set_global resolved_ids = resolved_ids | concat(with=e.fields.id) %}{% endif -%}
+{% endfor -%}
+{% for m in sets.perspective.members -%}
+{% set found = 0 -%}
+{% set resolved = 0 -%}
+{% for e in events -%}
+{% if e.event_type == "finding" and e.fields.perspective == m.name -%}
+{% set_global found = found + 1 -%}
+{% if resolved_ids is containing(e.fields.id) %}{% set_global resolved = resolved + 1 %}{% endif -%}
+{% endif -%}
+{% endfor -%}
+{% if found > 0 -%}
+| {{ m.name }} | {{ found }} | {{ resolved }} |
+{% endif -%}
 {% endfor %}
 
-## Adversarial Merge Analysis
+## State History
 
-{% if justine_findings | length > 0 -%}
-Justine identified **{{ justine_findings | length }}** independent findings.
-
-| ID | Severity | Overlap | Description |
-|----|----------|---------|-------------|
-{% for f in justine_findings -%}
-| {{ f.id }} | {{ f.severity }} | {{ f.overlap | default(value="unique") }} | {{ f.description }} |
+{% for e in events -%}
+{% if e.event_type == "state_transition" -%}
+- {{ e.fields.from }} → **{{ e.fields.to }}** ({{ e.fields.command }}) — {{ e.timestamp }}
+{% endif -%}
 {% endfor %}
+
+## Perspective Completion
+
+{% for m in sets.perspective.members -%}
+- [{% if m.done %}x{% else %} {% endif %}] {{ m.name }}
+{% endfor %}
+
+## Predictions
+
+{# ── Prediction tracking from events ── #}
+| ID | Target | Confidence | Outcome | Finding |
+|----|--------|------------|---------|---------|
+{% for e in events -%}
+{% if e.event_type == "prediction" -%}
+{% set outcome = "PENDING" -%}
+{% set finding_id = "—" -%}
+{% for o in events -%}
+{% if o.event_type == "prediction_outcome" and o.fields.prediction_id == e.fields.id -%}
+{% set_global outcome = o.fields.outcome -%}
+{% if o.fields.finding_id %}{% set_global finding_id = o.fields.finding_id %}{% endif -%}
+{% endif -%}
+{% endfor -%}
+| {{ e.fields.id }} | {{ e.fields.target }} | {{ e.fields.confidence }} | {{ outcome }} | {{ finding_id }} |
+{% endif -%}
+{% endfor %}
+
+## Justine Findings
+
+{% set justine_count = 0 -%}
+{% for e in events -%}
+{% if e.event_type == "finding" and e.fields.id is starting_with("BJ-") -%}
+{% set_global justine_count = justine_count + 1 -%}
+{% endif -%}
+{% endfor -%}
+{% if justine_count > 0 -%}
+Justine identified **{{ justine_count }}** independent findings.
+
+| ID | Severity | Perspective | Description |
+|----|----------|-------------|-------------|
+{% for e in events -%}
+{% if e.event_type == "finding" and e.fields.id is starting_with("BJ-") -%}
+| {{ e.fields.id }} | {{ e.fields.severity }} | {{ e.fields.perspective }} | {{ e.fields.description }} |
+{% endif -%}
+{% endfor -%}
 {% else -%}
 No Justine findings recorded for this run.
 {% endif %}
-
-## Prediction Accuracy
-
-| ID | Target | Confidence | Outcome | Finding |
-|----|--------|------------|---------|---------|
-{% for p in predictions -%}
-| {{ p.id }} | {{ p.target }} | {{ p.confidence }} | {{ p.outcome | default(value="PENDING") }} | {{ p.finding_id | default(value="—") }} |
-{% endfor %}
-
-**Accuracy:** {{ prediction_accuracy }}% ({{ predictions_confirmed }} / {{ predictions_total }} confirmed)
-
-## Recommendations
-
-{% for r in recommendations -%}
-- {{ r }}
-{% endfor %}
