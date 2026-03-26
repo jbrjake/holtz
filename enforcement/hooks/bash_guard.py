@@ -67,10 +67,10 @@ def main() -> None:
                 violation_cmd.extend(["--ledger", ledger])
             violation_cmd.extend([
                 "event", "protocol_violation",
-                "--field", f"project=holtz",
+                "--field", "project=holtz",
                 "--field", f"run={run_number}",
                 "--field", "auditor=holtz",
-                "--field", f"file_path=unknown",
+                "--field", "file_path=unknown",
                 "--field", f"detail={detail}",
             ])
             subprocess.run(
