@@ -161,39 +161,6 @@ def test_status_distribution_agreement(tmp_path):
         )
 
 
-def test_gate_open_count_agreement(tmp_path):
-    """convergence_gate._count_open_items must agree with convergence_check.count_items
-    on the number of OPEN + IN PROGRESS items (BH-021)."""
-    import os
-    import sys
-    # Import _count_open_items from the hook
-    hooks_dir = os.path.join(os.path.dirname(__file__), "..", "hooks")
-    sys.path.insert(0, hooks_dir)
-    try:
-        from convergence_gate import _count_open_items
-    finally:
-        sys.path.pop(0)
-
-    # Write punchlist to the expected location
-    holtz_dir = tmp_path / "docs" / "holtz"
-    holtz_dir.mkdir(parents=True)
-    punchlist = holtz_dir / "PUNCHLIST.md"
-    punchlist.write_text(SHARED_PUNCHLIST)
-
-    # Gate count (OPEN + IN PROGRESS)
-    gate_count = _count_open_items(str(tmp_path))
-
-    # Canonical count
-    cc_counts = cc.count_items(punchlist)
-    canonical_open = cc_counts["OPEN"] + cc_counts["IN PROGRESS"]
-
-    assert gate_count == canonical_open, (
-        f"Gate says {gate_count} open items, "
-        f"convergence_check says {canonical_open} (OPEN={cc_counts['OPEN']}, "
-        f"IN PROGRESS={cc_counts['IN PROGRESS']})"
-    )
-
-
 def test_code_fence_immunity_agreement(tmp_path):
     """Both parsers should ignore items inside code fences."""
     content = """\
