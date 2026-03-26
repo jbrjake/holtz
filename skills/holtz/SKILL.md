@@ -60,11 +60,25 @@ Operate as Holtz — see [references/backstory.md](references/backstory.md) for 
 All protocol state is managed by the Sahjhan enforcement engine. Use these CLI commands instead of writing to managed files directly.
 
 ```
+# Run ledger management (multi-ledger support)
+sahjhan ledger create --name run-N --path docs/holtz/runs/N/ledger.jsonl
+
 # Record findings and resolution
-sahjhan event finding --field id=BH-001 --field severity=HIGH \
-  --field category=doc/drift --field location="README.md:108" \
-  --field perspective=public-contract --field description="Pattern count stale"
-sahjhan event finding_resolved --field id=BH-001 --field commit_hash=abc1234
+sahjhan --ledger run-N event finding --field project=holtz --field run=N \
+  --field auditor=holtz --field phase=audit --field step=7 \
+  --field id=BH-001 --field severity=HIGH --field category=doc/drift \
+  --field location="README.md:108" --field perspective=public-contract \
+  --field description="Pattern count stale" --field predicted_by=1
+sahjhan --ledger run-N event finding_resolved --field id=BH-001 --field commit_hash=abc1234
+
+# Record recon and audit events
+sahjhan --ledger run-N event recon_finding --field project=holtz --field run=N \
+  --field auditor=holtz --field phase=recon --field step=0 \
+  --field topic=architecture --field content="Four layers..."
+sahjhan --ledger run-N event audit_claim --field project=holtz --field run=N \
+  --field auditor=holtz --field phase=audit --field step=6 \
+  --field source="README.md:15" --field claim="Supports 13 lenses" \
+  --field verdict=VERIFIED --field evidence="..."
 
 # Advance protocol steps
 sahjhan transition run_start           # begin a new audit run
@@ -79,8 +93,12 @@ sahjhan transition finalize            # after Steps 17-20
 
 # Check status and gates
 sahjhan status                         # current state, set progress
+sahjhan --ledger run-N status          # check specific run ledger
 sahjhan gate check converge            # see what's blocking convergence
 sahjhan set status perspective         # which perspectives are done
+
+# Checkpoint before /clear
+sahjhan --ledger run-N ledger checkpoint   # before /clear
 
 # Record events (all use --field key=value syntax)
 sahjhan event recon_step --field step=0 --field artifact_path=docs/holtz/recon/step0-project-overview.md
@@ -101,6 +119,11 @@ sahjhan finding                        # = event finding
 sahjhan resolve                        # = event finding_resolved
 sahjhan lens complete                  # = set complete perspective
 sahjhan lens status                    # = set status perspective
+sahjhan recon finding                  # = event recon_finding
+sahjhan audit claim                    # = event audit_claim
+sahjhan test finding                   # = event test_audit_finding
+sahjhan code finding                   # = event code_audit_finding
+sahjhan graph delta                    # = event graph_delta
 ```
 
 ## Terminal Output
@@ -157,7 +180,7 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 - **Terse within phases.** Between tool calls within a phase, do not explain what you are about to do. Execute, then report findings. Save narrative for phase boundaries and significant discoveries. Every sentence of narration enters context permanently.
 - **Tool search threshold.** In MCP-heavy environments, set `ENABLE_TOOL_SEARCH=auto:5` to defer tool definition loading until tools exceed 5% of context (default is 10%). This reduces early-session cache burden when many MCP servers are connected.
 - **Re-read before every step.** At the start of each step, read the output files you need. Assume prior context is gone.
-- **After compaction or `/clear`: STOP.** Run `sahjhan status` and re-read the latest step output files before continuing. After `/clear`, the primer hook injects resume context automatically and records a `context_reset` event in the ledger.
+- **After compaction or `/clear`: STOP.** Run `sahjhan status` (or `sahjhan --ledger run-N status` to check the active run ledger) and re-read the latest step output files before continuing. After `/clear`, the primer hook injects resume context automatically and records a `context_reset` event in the ledger.
 - **The Sahjhan ledger is your program counter.** Run `sahjhan status` after any compaction to recover your position — current state, active perspective, available transitions. The rendered STATUS.md is a read-only view of this same data.
 
 ## Session Splitting (Optional, for Token Efficiency)
@@ -263,7 +286,7 @@ Create `docs/holtz/` and `docs/holtz/recon/`. Read project structure, docs, CLAU
 
 Output: `docs/holtz/recon/step0-project-overview.md`
 
-**After each step:** record a `sahjhan event recon_step` with the step number and artifact path.
+**After each step:** record a `sahjhan event recon_step` with the step number and artifact path. Additionally, record significant findings as `recon_finding` events (e.g., `sahjhan recon finding --field topic=architecture --field content="..."`) so they are captured in the run ledger alongside the markdown artifacts.
 
 ### Step 1: Run Toolchain (Subagent)
 
@@ -492,7 +515,7 @@ Each iteration gets fresh context. At the end of each iteration — regardless o
 
 1. Run `sahjhan converge` to attempt convergence. Sahjhan checks all gates: all perspectives complete, suite passes, linters pass, zero open items, no protocol violations.
 2. **`sahjhan converge` MUST succeed before SUMMARY.md is rendered.** If gates fail, Sahjhan reports which gates are blocking. Run `sahjhan gate check converge` for details.
-3. If not converged: run `sahjhan transition iteration_boundary`. Tell the user: *"Not converged. `/clear` then any message to continue."* Stop. The stop gate hook enforces this: blocks premature stops until the protocol reaches a terminal state.
+3. If not converged: run `sahjhan --ledger run-N ledger checkpoint` then `sahjhan transition iteration_boundary`. Tell the user: *"Not converged. `/clear` then any message to continue."* Stop. The stop gate hook enforces this: blocks premature stops until the protocol reaches a terminal state.
 4. If converged: Sahjhan transitions to `final_sweep_clean` → `converged`. Proceed to Step 16.
 
 After `/clear`, the primer hook injects resume context and records a `context_reset` event — the user types anything and the model resumes from `sahjhan status`.

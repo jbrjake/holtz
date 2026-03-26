@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _resolve import sahjhan_binary  # noqa: E402
 
-from _common import exit_ok, exit_warn, read_event  # noqa: E402
+from _common import _active_ledger, exit_ok, exit_warn, read_event  # noqa: E402
 
 
 def main() -> None:
@@ -40,9 +40,14 @@ def main() -> None:
     if not os.path.isdir(data_dir):
         exit_ok()
 
+    ledger = _active_ledger(cwd)
     try:
+        cmd = [binary, "--config-dir", config_dir]
+        if ledger:
+            cmd.extend(["--ledger", ledger])
+        cmd.extend(["manifest", "verify"])
         result = subprocess.run(
-            [binary, "--config-dir", config_dir, "manifest", "verify"],
+            cmd,
             capture_output=True,
             text=True,
             timeout=10,
@@ -55,12 +60,16 @@ def main() -> None:
         # Record protocol violation
         detail = result.stderr.strip() or result.stdout.strip() or "Manifest verification failed"
         with contextlib.suppress(FileNotFoundError, subprocess.TimeoutExpired):
+            violation_cmd = [binary, "--config-dir", config_dir]
+            if ledger:
+                violation_cmd.extend(["--ledger", ledger])
+            violation_cmd.extend([
+                "event", "protocol_violation",
+                "--file_path", "unknown",
+                "--detail", detail,
+            ])
             subprocess.run(
-                [
-                    binary, "--config-dir", config_dir, "event", "protocol_violation",
-                    "--file_path", "unknown",
-                    "--detail", detail,
-                ],
+                violation_cmd,
                 capture_output=True,
                 timeout=5,
                 cwd=cwd,

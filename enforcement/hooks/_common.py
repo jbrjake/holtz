@@ -25,3 +25,12 @@ exit_block = _mod.exit_block
 exit_stop_allow = _mod.exit_stop_allow
 exit_stop_block = _mod.exit_stop_block
 mask_fenced_blocks = _mod.mask_fenced_blocks
+
+
+def _active_ledger(cwd: str) -> str | None:
+    """Detect the active run ledger name from .sahjhan/active-run marker."""
+    active_file = os.path.join(cwd, "docs", "holtz", ".sahjhan", "active-run")
+    if os.path.isfile(active_file):
+        with open(active_file) as f:
+            return f.read().strip()
+    return None

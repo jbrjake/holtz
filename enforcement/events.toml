@@ -1,13 +1,22 @@
 [events.recon_step]
 description = "A recon step completed"
 fields = [
-    { name = "step", type = "string", pattern = "^[0-4]$" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
+    { name = "step", type = "string", pattern = "^\\d+$" },
     { name = "artifact_path", type = "string" },
 ]
 
 [events.finding]
 description = "A punchlist finding"
 fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
+    { name = "step", type = "string", pattern = "^\\d+$" },
     { name = "id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
     { name = "severity", type = "string", pattern = "^(CRITICAL|HIGH|MEDIUM|LOW)$" },
     { name = "category", type = "string" },
@@ -20,6 +29,11 @@ fields = [
 [events.finding_resolved]
 description = "A finding was resolved"
 fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
+    { name = "step", type = "string", pattern = "^\\d+$" },
     { name = "id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
     { name = "commit_hash", type = "string", pattern = "^[0-9a-f]{7,40}$" },
 ]
@@ -27,6 +41,11 @@ fields = [
 [events.blast_radius]
 description = "Blast radius query after a fix"
 fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
+    { name = "step", type = "string", pattern = "^\\d+$" },
     { name = "target_node", type = "string" },
     { name = "depth", type = "string", pattern = "^\\d+$" },
     { name = "affected_count", type = "string", pattern = "^\\d+$" },
@@ -36,6 +55,11 @@ fields = [
 [events.iteration_complete]
 description = "A fix-loop iteration completed"
 fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
+    { name = "step", type = "string", pattern = "^\\d+$" },
     { name = "perspective", type = "string" },
     { name = "items_resolved", type = "string", pattern = "^\\d+$" },
     { name = "items_remaining", type = "string", pattern = "^\\d+$" },
@@ -46,6 +70,11 @@ fields = [
 [events.pattern_analysis_complete]
 description = "Pattern analysis cycle completed"
 fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
+    { name = "step", type = "string", pattern = "^\\d+$" },
     { name = "patterns_found", type = "string", pattern = "^\\d+$" },
     { name = "siblings_found", type = "string", pattern = "^\\d+$" },
 ]
@@ -53,19 +82,91 @@ fields = [
 [events.set_member_complete]
 description = "A completion set member passed clean"
 fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
+    { name = "step", type = "string", pattern = "^\\d+$" },
     { name = "set", type = "string" },
     { name = "member", type = "string" },
+]
+
+[events.hardening_complete]
+description = "Per-fix edge case hardening completed"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
+    { name = "step", type = "string", pattern = "^\\d+$" },
+    { name = "finding_id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
+    { name = "edge_cases_tested", type = "string", pattern = "^\\d+$" },
+    { name = "tests_added", type = "string", pattern = "^\\d+$" },
+]
+
+[events.protocol_violation]
+description = "Unauthorized modification of managed files (permanent — no resolution pathway)"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "file_path", type = "string" },
+    { name = "detail", type = "string" },
+]
+
+[events.context_reset]
+description = "Context boundary — recorded by primer hook on UserPromptSubmit after /clear"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "trigger", type = "string", pattern = "^user_prompt_submit$" },
+]
+
+[events.justine_dispatched]
+description = "Justine subagent dispatched for parallel audit"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "mode", type = "string", pattern = "^(full|skipped)$" },
+]
+
+[events.pattern_contribution_complete]
+description = "Pattern library contribution step completed"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "patterns_submitted", type = "string", pattern = "^\\d+$" },
+    { name = "outcome", type = "string", pattern = "^(submitted|no_new_patterns|declined_by_user)$" },
+]
+
+[events.snapshot]
+description = "Point-in-time value snapshot for comparison gates"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "key", type = "string" },
+    { name = "value", type = "string" },
 ]
 
 [events.baseline_updated]
 description = "Architecture baseline updated post-convergence"
 fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
     { name = "sections_changed", type = "string" },
 ]
 
 [events.living_punchlist_updated]
 description = "Living punchlist updated post-convergence"
 fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
     { name = "patterns_added", type = "string", pattern = "^\\d+$" },
     { name = "hotspots_updated", type = "string", pattern = "^\\d+$" },
 ]
@@ -73,6 +174,9 @@ fields = [
 [events.prediction]
 description = "A predictive recon prediction"
 fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
     { name = "id", type = "string", pattern = "^\\d+$" },
     { name = "target", type = "string" },
     { name = "confidence", type = "string", pattern = "^(HIGH|MEDIUM|LOW)$" },
@@ -82,48 +186,160 @@ fields = [
 [events.prediction_outcome]
 description = "Prediction result"
 fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
     { name = "prediction_id", type = "string", pattern = "^\\d+$" },
     { name = "outcome", type = "string", pattern = "^(CONFIRMED|UNCONFIRMED)$" },
     { name = "finding_id", type = "string" },
 ]
 
-[events.protocol_violation]
-description = "Unauthorized modification of managed files (permanent — no resolution pathway)"
+# ── New event types for JSONL migration ──
+
+[events.recon_finding]
+description = "A recon finding from reconnaissance phase"
 fields = [
-    { name = "file_path", type = "string" },
-    { name = "detail", type = "string" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string" },
+    { name = "step", type = "string", pattern = "^\\d+$" },
+    { name = "topic", type = "string" },
+    { name = "content", type = "string" },
 ]
 
-[events.hardening_complete]
-description = "Per-fix edge case hardening completed"
+[events.audit_claim]
+description = "A documentation claim verified during audit"
 fields = [
-    { name = "finding_id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
-    { name = "edge_cases_tested", type = "string", pattern = "^\\d+$" },
-    { name = "tests_added", type = "string", pattern = "^\\d+$" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string" },
+    { name = "step", type = "string" },
+    { name = "source", type = "string" },
+    { name = "claim", type = "string" },
+    { name = "verdict", type = "string", pattern = "^(VERIFIED|OVERSTATED|FALSE|MISSING)$" },
+    { name = "evidence", type = "string" },
 ]
 
-[events.context_reset]
-description = "Context boundary — recorded by primer hook on UserPromptSubmit after /clear"
+[events.test_audit_finding]
+description = "A test quality finding from test audit"
 fields = [
-    { name = "trigger", type = "string", pattern = "^user_prompt_submit$" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string" },
+    { name = "step", type = "string" },
+    { name = "test_file", type = "string" },
+    { name = "anti_pattern", type = "string" },
+    { name = "evidence", type = "string" },
 ]
 
-[events.justine_dispatched]
-description = "Justine subagent dispatched for parallel audit"
+[events.code_audit_finding]
+description = "A code audit finding from adversarial analysis"
 fields = [
-    { name = "mode", type = "string", pattern = "^(full|skipped)$" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string" },
+    { name = "step", type = "string" },
+    { name = "module", type = "string" },
+    { name = "concern", type = "string" },
+    { name = "evidence", type = "string" },
 ]
 
-[events.pattern_contribution_complete]
-description = "Pattern library contribution step completed"
+[events.merge_result]
+description = "Merge report from Holtz/Justine merge"
 fields = [
-    { name = "patterns_submitted", type = "string", pattern = "^\\d+$" },
-    { name = "outcome", type = "string", pattern = "^(submitted|no_new_patterns|declined_by_user)$" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string" },
+    { name = "step", type = "string" },
+    { name = "agreements", type = "string", pattern = "^\\d+$" },
+    { name = "holtz_only", type = "string", pattern = "^\\d+$" },
+    { name = "justine_only", type = "string", pattern = "^\\d+$" },
+    { name = "contradictions", type = "string", pattern = "^\\d+$" },
 ]
 
-[events.snapshot]
-description = "Point-in-time value snapshot for comparison gates"
+[events.convergence_iteration]
+description = "A convergence fix-loop iteration"
 fields = [
-    { name = "key", type = "string" },
-    { name = "value", type = "string" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string" },
+    { name = "step", type = "string" },
+    { name = "iteration", type = "string", pattern = "^\\d+$" },
+    { name = "open", type = "string", pattern = "^\\d+$" },
+    { name = "resolved", type = "string", pattern = "^\\d+$" },
+    { name = "test_count", type = "string", pattern = "^\\d+$" },
+    { name = "tests_passed", type = "string", pattern = "^(true|false)$" },
+]
+
+[events.run_summary]
+description = "End-of-run summary"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string" },
+    { name = "step", type = "string" },
+    { name = "total_findings", type = "string", pattern = "^\\d+$" },
+    { name = "resolved", type = "string", pattern = "^\\d+$" },
+    { name = "prediction_accuracy", type = "string" },
+    { name = "recommendations", type = "string" },
+]
+
+[events.graph_delta]
+description = "Impact graph mutation"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string" },
+    { name = "step", type = "string" },
+    { name = "operation", type = "string", pattern = "^(add_edge|remove_edge|snapshot)$" },
+    { name = "source", type = "string" },
+    { name = "target", type = "string" },
+    { name = "edge_type", type = "string" },
+    { name = "note", type = "string" },
+]
+
+[events.pattern_discovered]
+description = "A recurring pattern identified across findings"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string" },
+    { name = "step", type = "string" },
+    { name = "pattern_id", type = "string" },
+    { name = "name", type = "string" },
+    { name = "heuristic", type = "string" },
+    { name = "instance_count", type = "string", pattern = "^\\d+$" },
+]
+
+[events.baseline_delta]
+description = "Architecture baseline change"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string" },
+    { name = "step", type = "string" },
+    { name = "section", type = "string" },
+    { name = "change_type", type = "string", pattern = "^(added|modified|removed)$" },
+    { name = "content", type = "string" },
+]
+
+[events.run_postmortem]
+description = "Post-run reflection or postmortem"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string" },
+    { name = "step", type = "string" },
+    { name = "content", type = "string" },
 ]
