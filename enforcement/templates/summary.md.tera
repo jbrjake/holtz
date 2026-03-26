@@ -1,0 +1,66 @@
+{# enforcement/templates/summary.md.tera #}
+# Holtz Convergence Summary
+
+**Project:** {{ protocol.name }}
+**Run:** {{ run_number }}
+**Started:** {{ genesis.timestamp | date(format="%Y-%m-%d") }}
+**Converged:** {{ convergence_timestamp | date(format="%Y-%m-%d") }}
+
+## Results
+
+| Metric | Value |
+|--------|-------|
+| Total findings | {{ total_count }} |
+| Resolved | {{ resolved_count }} |
+| Open at convergence | {{ open_count }} |
+| Perspectives completed | {{ perspectives_completed }} / {{ perspectives_total }} |
+| Fix iterations | {{ fix_iterations }} |
+| Protocol violations | {{ violation_count }} |
+| Tests at start | {{ baseline_tests }} |
+| Tests at end | {{ current_tests }} |
+
+## Findings by Severity
+
+| Severity | Found | Resolved |
+|----------|-------|----------|
+{% for s in severity_summary -%}
+| {{ s.severity }} | {{ s.found }} | {{ s.resolved }} |
+{% endfor %}
+
+## Findings by Perspective
+
+| Perspective | Found | Resolved |
+|-------------|-------|----------|
+{% for p in perspective_summary -%}
+| {{ p.perspective }} | {{ p.found }} | {{ p.resolved }} |
+{% endfor %}
+
+## Adversarial Merge Analysis
+
+{% if justine_findings | length > 0 -%}
+Justine identified **{{ justine_findings | length }}** independent findings.
+
+| ID | Severity | Overlap | Description |
+|----|----------|---------|-------------|
+{% for f in justine_findings -%}
+| {{ f.id }} | {{ f.severity }} | {{ f.overlap | default(value="unique") }} | {{ f.description }} |
+{% endfor %}
+{% else -%}
+No Justine findings recorded for this run.
+{% endif %}
+
+## Prediction Accuracy
+
+| ID | Target | Confidence | Outcome | Finding |
+|----|--------|------------|---------|---------|
+{% for p in predictions -%}
+| {{ p.id }} | {{ p.target }} | {{ p.confidence }} | {{ p.outcome | default(value="PENDING") }} | {{ p.finding_id | default(value="—") }} |
+{% endfor %}
+
+**Accuracy:** {{ prediction_accuracy }}% ({{ predictions_confirmed }} / {{ predictions_total }} confirmed)
+
+## Recommendations
+
+{% for r in recommendations -%}
+- {{ r }}
+{% endfor %}

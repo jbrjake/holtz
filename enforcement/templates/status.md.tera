@@ -1,0 +1,33 @@
+{# enforcement/templates/status.md.tera #}
+# Holtz Status
+
+**Project:** {{ protocol.name }}
+**Started:** {{ genesis.timestamp | date(format="%Y-%m-%d") }}
+**Last Updated:** {{ last_event.timestamp | date(format="%Y-%m-%d") }}
+**Run:** {{ run_number }}
+
+## Current Position
+**Step:** {{ current_state.label }}
+**Status:** {{ current_state.status }}
+
+## Completed
+{% for t in transitions -%}
+- [x] {{ t.label }} — {{ t.summary }}
+{% endfor %}
+
+## Next Action
+{{ next_action }}
+
+## Metrics
+| Metric | Baseline | Current |
+|--------|----------|---------|
+| Tests passing | {{ baseline_tests }} | {{ current_tests }} |
+| Punchlist open | — | {{ open_count }} |
+| Punchlist resolved | — | {{ resolved_count }} |
+
+## Active Perspective
+**Current:** {{ current_perspective | default(value="—") }}
+**Perspectives Completed:**
+{% for p in perspectives -%}
+- [{% if p.complete %}x{% else %} {% endif %}] {{ p.name }}
+{% endfor %}
