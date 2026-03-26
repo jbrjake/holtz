@@ -20,6 +20,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# Import fence masking from holtz scripts
+_SCRIPTS_DIR = Path(__file__).parent.parent / "skills" / "holtz" / "scripts"
+sys.path.insert(0, str(_SCRIPTS_DIR))
+from markdown_utils import mask_code_fences  # noqa: E402
+
 ARCHIVE_MAP: dict[str, dict[str, Any]] = {
     "bug-hunter-2026-03-19": {"run": 1, "auditor": "holtz", "era": "proto"},
     "bug-hunter-2026-03-21": {"run": 2, "auditor": "holtz", "era": "proto"},
@@ -159,7 +164,8 @@ def parse_punchlist(
 
 def _is_table_format(content: str) -> bool:
     """Detect if punchlist uses table format (pipes in header)."""
-    for line in content.split("\n"):
+    _, masked = mask_code_fences(content)
+    for line in masked.split("\n"):
         stripped = line.strip()
         if stripped.startswith("|") and "ID" in stripped:
             return True
@@ -294,8 +300,13 @@ def _parse_block_punchlist(
 
 def _extract_field(block: str, field_name: str) -> str | None:
     """Extract **FieldName:** value from a markdown block."""
-    match = re.search(rf"\*\*{field_name}:\*\*\s*(.*)", block)
-    return match.group(1).strip() if match else None
+    _, masked = mask_code_fences(block)
+    match = re.search(rf"\*\*{field_name}:\*\*\s*(.*)", masked)
+    if not match:
+        return None
+    # Return the value from the original (unmasked) content at the same position
+    orig_match = re.search(rf"\*\*{field_name}:\*\*\s*(.*)", block[match.start():])
+    return orig_match.group(1).strip() if orig_match else match.group(1).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -415,11 +426,12 @@ def _parse_predictions(
 ) -> list[dict[str, Any]]:
     """Parse prediction tables from recon step 4 files."""
     events: list[dict[str, Any]] = []
+    _, masked = mask_code_fences(content)
 
     # Match table rows: | N | target | confidence | basis |
     for match in re.finditer(
         r"\|\s*(\d+)\s*\|\s*(.*?)\s*\|\s*(HIGH|MEDIUM|LOW)\s*\|\s*(.*?)\s*\|",
-        content,
+        masked,
     ):
         events.append(_make_event("prediction", {
             "id": match.group(1),
@@ -557,9 +569,9 @@ def parse_summary(
     """Parse SUMMARY.md into run_summary + prediction_outcome events."""
     events: list[dict[str, Any]] = []
 
-    # Extract totals
-    total_match = re.search(r"total.*?(\d+)", content, re.IGNORECASE)
-    resolved_match = re.search(r"resolved.*?(\d+)", content, re.IGNORECASE)
+    # Extract totals — use anchored patterns to avoid matching wrong fields
+    total_match = re.search(r"total\s+findings\s*:?\s*(\d+)", content, re.IGNORECASE)
+    resolved_match = re.search(r"(?:total\s+)?resolved\s*:?\s*(\d+)", content, re.IGNORECASE)
     accuracy_match = re.search(r"prediction.*?accuracy.*?(\d+[%.]?\d*)", content, re.IGNORECASE)
 
     total = total_match.group(1) if total_match else "0"

@@ -272,6 +272,55 @@ def test_migrate_nested_justine(tmp_path):
     assert len(justine_events) > 0
 
 
+def test_parse_summary_greedy_regex():
+    """BH-017: parse_summary must extract total findings, not total resolved."""
+    content = """# Summary
+
+Total Resolved: 7
+Total Findings: 10
+"""
+    events = parse_summary(content, run="20", auditor="holtz", source="SUMMARY.md")
+    summaries = [e for e in events if e["type"] == "run_summary"]
+    assert len(summaries) == 1
+    assert summaries[0]["fields"]["total_findings"] == "10", (
+        f"Greedy regex extracted {summaries[0]['fields']['total_findings']} "
+        "instead of 10 — matched 'Total Resolved' before 'Total Findings'"
+    )
+
+
+def test_extract_field_ignores_code_fences():
+    """BH-016: _extract_field must not match inside code fences."""
+    from migrate_legacy import _extract_field
+    block = """**Severity:** HIGH
+
+```
+**Severity:** LOW
+```
+
+**Status:** OPEN
+"""
+    assert _extract_field(block, "Severity") == "HIGH"
+    assert _extract_field(block, "Status") == "OPEN"
+
+
+def test_parse_predictions_ignores_code_fences():
+    """BH-016: _parse_predictions must not extract from fenced blocks."""
+    from migrate_legacy import _parse_predictions
+    content = """# Predictions
+
+| # | Target | Confidence | Basis |
+|---|--------|-----------|-------|
+| 1 | auth.py | HIGH | churn data |
+
+```
+| 2 | fake.py | MEDIUM | not real |
+```
+"""
+    events = _parse_predictions(content, run="20", auditor="holtz", source="step4.md", project="holtz")
+    assert len(events) == 1
+    assert events[0]["fields"]["target"] == "auth.py"
+
+
 def test_build_project_ledger():
     events = build_project_ledger(
         runs=[(1, "holtz"), (2, "holtz"), (3, "holtz")],
