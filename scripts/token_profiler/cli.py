@@ -293,6 +293,32 @@ def _json_default(obj: object) -> str:
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
+def _inject_computed_properties(data: dict) -> dict:
+    """Post-process asdict() output to include @property computed values.
+
+    dataclasses.asdict() skips @property methods. This injects them so
+    profile.json consumers see total/total_cost fields (BH-020).
+    """
+    # BucketBreakdown.total
+    for session in data.get("sessions", []):
+        summary = session.get("summary") or {}
+        for bucket_key in ("input", "cache_creation", "cache_read", "output"):
+            bucket = summary.get(bucket_key)
+            if isinstance(bucket, dict) and "total" not in bucket:
+                bucket["total"] = sum(bucket.get(k, 0) for k in
+                                      ("input_tokens", "cache_creation_tokens",
+                                       "cache_read_tokens", "output_tokens")
+                                      if k in bucket)
+        # DollarCost.total_cost
+        dollars = summary.get("dollar_cost")
+        if isinstance(dollars, dict) and "total_cost" not in dollars:
+            dollars["total_cost"] = sum(dollars.get(k, 0.0) for k in
+                                        ("input_cost", "cache_creation_cost",
+                                         "cache_read_cost", "output_cost")
+                                        if k in dollars)
+    return data
+
+
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
@@ -411,7 +437,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Write profile.json (Errata E9)
     if emit_json:
-        profile_data = asdict(run_profile)
+        profile_data = _inject_computed_properties(asdict(run_profile))
         json_path = out_dir / "profile.json"
         with open(json_path, "w") as f:
             json.dump(profile_data, f, indent=2, default=_json_default)
