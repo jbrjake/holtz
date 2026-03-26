@@ -28,10 +28,7 @@ def main() -> None:
     if not path:
         exit_ok("PreToolUse")
 
-    if os.path.isabs(path):
-        resolved = os.path.realpath(path)
-    else:
-        resolved = os.path.realpath(os.path.join(cwd, path))
+    resolved = os.path.realpath(path) if os.path.isabs(path) else os.path.realpath(os.path.join(cwd, path))
 
     for managed in MANAGED_PATHS:
         full = os.path.realpath(os.path.join(cwd, managed))

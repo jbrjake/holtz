@@ -14,8 +14,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import exit_stop_allow, exit_stop_block  # noqa: E402
 from _resolve import sahjhan_binary  # noqa: E402
+
+from _common import exit_stop_allow, exit_stop_block  # noqa: E402
 
 
 def main() -> None:

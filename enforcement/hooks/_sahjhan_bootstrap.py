@@ -41,10 +41,7 @@ def main() -> None:
         return
 
     # Resolve both absolute and relative paths
-    if os.path.isabs(path):
-        resolved = os.path.realpath(path)
-    else:
-        resolved = os.path.realpath(os.path.join(cwd, path))
+    resolved = os.path.realpath(path) if os.path.isabs(path) else os.path.realpath(os.path.join(cwd, path))
 
     # Protected paths are relative to plugin root, not cwd
     for p in PROTECTED:

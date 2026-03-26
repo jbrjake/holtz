@@ -11,6 +11,7 @@ ensuring /clear boundaries are actually observed.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -18,8 +19,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import exit_ok, exit_warn, read_event  # noqa: E402
 from _resolve import sahjhan_binary  # noqa: E402
+
+from _common import exit_ok, exit_warn, read_event  # noqa: E402
 
 
 def main() -> None:
@@ -64,7 +66,7 @@ def main() -> None:
         exit_ok()
 
     # Record context_reset event (gates awaiting_clear→fix_loop)
-    try:
+    with contextlib.suppress(FileNotFoundError, subprocess.TimeoutExpired):
         subprocess.run(
             [
                 binary, "--config-dir", config_dir,
@@ -75,8 +77,6 @@ def main() -> None:
             timeout=5,
             cwd=cwd,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
 
     # Build resume context
     run_number = status.get("run_number", "?")

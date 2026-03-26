@@ -7,14 +7,16 @@ verification fails, records a protocol_violation event.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import exit_ok, exit_warn, read_event  # noqa: E402
 from _resolve import sahjhan_binary  # noqa: E402
+
+from _common import exit_ok, exit_warn, read_event  # noqa: E402
 
 
 def main() -> None:
@@ -52,7 +54,7 @@ def main() -> None:
     if result.returncode != 0:
         # Record protocol violation
         detail = result.stderr.strip() or result.stdout.strip() or "Manifest verification failed"
-        try:
+        with contextlib.suppress(FileNotFoundError, subprocess.TimeoutExpired):
             subprocess.run(
                 [
                     binary, "--config-dir", config_dir, "event", "protocol_violation",
@@ -63,8 +65,6 @@ def main() -> None:
                 timeout=5,
                 cwd=cwd,
             )
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
 
         exit_warn(
             f"PROTOCOL VIOLATION: Managed file integrity check failed. "

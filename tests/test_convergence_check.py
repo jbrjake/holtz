@@ -2,7 +2,6 @@
 
 import convergence_check as cc
 
-
 # --- BH-005: Status regex cross-line leak in count_items ---
 
 def test_count_items_single_line_status(tmp_path):
