@@ -162,3 +162,24 @@ def test_protocol_has_content_event_aliases():
     ]
     for alias in expected:
         assert alias in aliases, f"Missing alias: '{alias}'"
+
+
+def test_transitions_no_plugin_root_references():
+    """BH-002: Gate commands must not reference ${CLAUDE_PLUGIN_ROOT}."""
+    content = TRANSITIONS_TOML.read_text()
+    assert "${CLAUDE_PLUGIN_ROOT}" not in content, (
+        "transitions.toml still references ${CLAUDE_PLUGIN_ROOT} — "
+        "use relative paths (e.g. skills/holtz/scripts/) instead"
+    )
+
+
+def test_mypy_uses_explicit_package_bases():
+    """BH-002: mypy commands must use --explicit-package-bases to avoid _common collision."""
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    for t in cfg["transitions"]:
+        for gate in t.get("gates", []):
+            cmd = gate.get("cmd", "")
+            if "mypy" in cmd:
+                assert "--explicit-package-bases" in cmd, (
+                    f"mypy gate in '{t['command']}' missing --explicit-package-bases: {cmd}"
+                )

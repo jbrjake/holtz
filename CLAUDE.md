@@ -50,5 +50,5 @@ scripts/install-hooks.sh
 ```bash
 python -m pytest --tb=short -q
 ruff check .
-mypy skills/holtz/scripts/ hooks/ enforcement/hooks/
+mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/
 ```
