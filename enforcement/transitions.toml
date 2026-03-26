@@ -17,7 +17,7 @@ gates = [
     # Justine dispatch must be recorded (or explicitly skipped for targeted audits)
     { type = "ledger_has_event", event = "justine_dispatched", min_count = 1 },
     # Record edge count snapshot for audit comparison
-    { type = "command_succeeds", cmd = "sahjhan event snapshot --key pre_audit_edge_count --value $(python skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats | python -c \"import sys,json; print(json.load(sys.stdin)['edges'])\")" },
+    { type = "command_succeeds", cmd = "sahjhan --config-dir enforcement event snapshot --field key=pre_audit_edge_count --field value=$(python skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats | python -c \"import sys,json; print(json.load(sys.stdin)['edges'])\")" },
 ]
 
 # ── Audit ──
