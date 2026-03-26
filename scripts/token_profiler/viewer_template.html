@@ -755,11 +755,17 @@ function formatCompact(n) {
     return String(n);
 }
 
+// ---- HTML escaping for data-derived values (BH-022) ----
+function esc(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 // ---- Tooltip ----
 const tooltipEl = document.getElementById('tooltip');
 
-function showTooltip(e, html) {
-    tooltipEl.innerHTML = html;
+function showTooltip(e, text) {
+    tooltipEl.textContent = text;
     tooltipEl.style.display = 'block';
     const x = e.clientX + 12;
     const y = e.clientY + 12;
@@ -840,7 +846,7 @@ function renderHeatStrip() {
 
         const wrap = document.createElement('div');
         wrap.className = 'heatstrip-container';
-        wrap.innerHTML = `<div class="heatstrip-label">${label} (${turns.length} turns)</div>`;
+        wrap.innerHTML = `<div class="heatstrip-label">${esc(label)} (${turns.length} turns)</div>`;
 
         const strip = document.createElement('div');
         strip.className = 'heatstrip';
@@ -880,12 +886,12 @@ function renderHeatStrip() {
                 showTooltip(e,
                     `Turn #${raw.index != null ? raw.index : i}\n` +
                     `Time: ${formatTimestamp(raw.timestamp)}\n` +
-                    `Phase: ${t.phase || 'unknown'}\n` +
+                    `Phase: ${esc(t.phase || 'unknown')}\n` +
                     `Context: ${formatNumber(t.context_window)}\n` +
                     `Delta: ${formatNumber(t.delta)}\n` +
                     `Session Cost: ${formatNumber(t.session_cost_tokens)}\n` +
                     `Output: ${formatNumber(usage.output_tokens)}\n` +
-                    (tools ? `Tools:\n  ${tools}` : '')
+                    (tools ? `Tools:\n  ${esc(tools)}` : '')
                 );
             });
             slice.addEventListener('mousemove', (e) => {
@@ -1001,7 +1007,7 @@ function renderTurnTable() {
                 <th data-col="time">Time</th>
                 <th data-col="phase">Phase</th>
                 <th data-col="delta">Delta <span class="sort-arrow">&#9650;</span></th>
-                <th data-col="context">Remaining <span class="sort-arrow">&#9650;</span></th>
+                <th data-col="context">Context <span class="sort-arrow">&#9650;</span></th>
                 <th data-col="session_cost">Session Cost <span class="sort-arrow active">&#9660;</span></th>
                 <th>Tools</th>
                 <th data-col="output">Output</th>
@@ -1030,11 +1036,11 @@ function renderTurnTable() {
             tr.innerHTML = `
                 <td>${raw.index != null ? raw.index : '-'}</td>
                 <td>${formatTimestamp(raw.timestamp)}</td>
-                <td><span class="phase-badge" style="border-color:${phColor};color:${phColor}">${t.phase || '?'}</span></td>
+                <td><span class="phase-badge" style="border-color:${phColor};color:${phColor}">${esc(t.phase || '?')}</span></td>
                 <td style="color:${t.delta > 0 ? 'var(--neon-amber)' : t.delta < 0 ? 'var(--neon-green)' : 'var(--text-dim)'}">${formatNumber(t.delta)}</td>
                 <td>${formatNumber(t.context_window)}</td>
                 <td><span class="heat-cell" style="color:${color};text-shadow:0 0 8px ${color}">${formatNumber(t.session_cost_tokens)}</span></td>
-                <td title="${tools.map(a => a.tool_name + ': ' + a.description).join(', ')}">${toolNames}</td>
+                <td title="${esc(tools.map(a => a.tool_name + ': ' + a.description).join(', '))}">${esc(toolNames)}</td>
                 <td>${formatNumber(usage.output_tokens)}</td>
             `;
 
@@ -1052,8 +1058,8 @@ function renderTurnTable() {
                         sub.className = `sub-row sub-row-${raw.index}`;
                         sub.innerHTML = `
                             <td></td>
-                            <td colspan="2" style="color:var(--neon-cyan)">${attr.tool_name}</td>
-                            <td>${attr.description || ''}</td>
+                            <td colspan="2" style="color:var(--neon-cyan)">${esc(attr.tool_name)}</td>
+                            <td>${esc(attr.description || '')}</td>
                             <td>${formatNumber(attr.result_size_tokens_est)} tok est</td>
                             <td style="color:${heatColor(attr.attributed_session_cost / maxCost)}">${formatNumber(attr.attributed_session_cost)}</td>
                             <td>${(attr.fraction_of_delta * 100).toFixed(0)}%</td>
@@ -1201,7 +1207,7 @@ function renderSunburst() {
         path.setAttribute('stroke-width', '1');
         path.classList.add('sunburst-segment');
         path.addEventListener('mouseenter', (e) => {
-            showTooltip(e, `Phase: ${name}\nCost: ${formatNumber(phaseMap[name].cost)}\n${(pct * 100).toFixed(1)}% of total`);
+            showTooltip(e, `Phase: ${esc(name)}\nCost: ${formatNumber(phaseMap[name].cost)}\n${(pct * 100).toFixed(1)}% of total`);
         });
         path.addEventListener('mousemove', (e) => {
             tooltipEl.style.left = Math.min(e.clientX + 12, window.innerWidth - 420) + 'px';
@@ -1252,7 +1258,7 @@ function renderSunburst() {
             path.setAttribute('stroke-width', '1');
             path.classList.add('sunburst-segment');
             path.addEventListener('mouseenter', (e) => {
-                showTooltip(e, `Tool: ${toolName}\nPhase: ${arc.name}\nCost: ${formatNumber(toolCost)}\n${(tPct * 100).toFixed(1)}% of phase`);
+                showTooltip(e, `Tool: ${esc(toolName)}\nPhase: ${esc(arc.name)}\nCost: ${formatNumber(toolCost)}\n${(tPct * 100).toFixed(1)}% of phase`);
             });
             path.addEventListener('mousemove', (e) => {
                 tooltipEl.style.left = Math.min(e.clientX + 12, window.innerWidth - 420) + 'px';
@@ -1309,7 +1315,7 @@ function renderSunburst() {
     legend.className = 'sunburst-legend';
     for (const name of phaseNames) {
         const color = getPhaseColor(name);
-        legend.innerHTML += `<div class="legend-item"><div class="legend-swatch" style="background:${color}"></div>${name} (${formatCompact(phaseMap[name].cost)})</div>`;
+        legend.innerHTML += `<div class="legend-item"><div class="legend-swatch" style="background:${color}"></div>${esc(name)} (${formatCompact(phaseMap[name].cost)})</div>`;
     }
     container.appendChild(legend);
 }
@@ -1437,7 +1443,7 @@ function renderSankey() {
             path.classList.add('sankey-band');
             path.addEventListener('mouseenter', (e) => {
                 path.setAttribute('fill-opacity', '0.5');
-                showTooltip(e, `${pNode.name} -> ${bNode.label}\n${formatNumber(val)} tokens`);
+                showTooltip(e, `${esc(pNode.name)} -> ${esc(bNode.label)}\n${formatNumber(val)} tokens`);
             });
             path.addEventListener('mousemove', (e) => {
                 tooltipEl.style.left = Math.min(e.clientX + 12, window.innerWidth - 420) + 'px';
@@ -1551,8 +1557,8 @@ function renderSessions() {
 
         card.innerHTML = `
             <div class="session-card-header">
-                <span class="session-card-name">${name}</span>
-                <span class="session-card-type">${typeBadge}</span>
+                <span class="session-card-name">${esc(name)}</span>
+                <span class="session-card-type">${esc(typeBadge)}</span>
             </div>
             <div class="session-card-stats">
                 <div class="session-card-stat">
@@ -1596,8 +1602,8 @@ function renderSessions() {
         const meta = document.createElement('div');
         meta.className = 'session-card-meta';
         meta.innerHTML = `
-            <span>Model: ${s.model || 'unknown'}</span>
-            <span>Session ID: ${(s.session_id || '').substring(0, 16)}...</span>
+            <span>Model: ${esc(s.model || 'unknown')}</span>
+            <span>Session ID: ${esc((s.session_id || '').substring(0, 16))}...</span>
             ${s.dispatched_at_turn != null ? `<span>Dispatched at turn: ${s.dispatched_at_turn}</span>` : ''}
             ${s.returned_at_turn != null ? `<span>Returned at turn: ${s.returned_at_turn}</span>` : ''}
         `;
@@ -1611,7 +1617,7 @@ function renderSessions() {
             const ul = document.createElement('div');
             ul.style.cssText = 'margin-top:4px;display:flex;flex-direction:column;gap:2px;';
             for (const [tool, cost] of summary.hottest_tools.slice(0, 5)) {
-                ul.innerHTML += `<span><span style="color:var(--neon-cyan)">${tool}</span> ${formatCompact(cost)}</span>`;
+                ul.innerHTML += `<span><span style="color:var(--neon-cyan)">${esc(tool)}</span> ${formatCompact(cost)}</span>`;
             }
             toolsList.appendChild(ul);
             card.appendChild(toolsList);
