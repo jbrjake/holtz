@@ -324,6 +324,19 @@ class TestStopGate:
         assert code == 0
         assert output == {}
 
+    def test_exception_catches_oserror(self):
+        """BH-015: stop_gate catches OSError (includes PermissionError)."""
+        source_path = os.path.join(ENFORCEMENT_HOOKS_DIR, "stop_gate.py")
+        with open(source_path) as f:
+            source = f.read()
+        assert "OSError" in source, "stop_gate should catch OSError"
+        lines = source.split("\n")
+        for line in lines:
+            if "except" in line and "FileNotFoundError" in line and "OSError" not in line:
+                raise AssertionError(
+                    f"stop_gate catches FileNotFoundError without OSError: {line.strip()}"
+                )
+
 
 # --- primer.py (UserPromptSubmit) ---
 
@@ -344,6 +357,32 @@ class TestPrimer:
         code, output, _ = run_enforcement_hook("primer.py", event)
         assert code == 0
         assert output.get("continue") is True
+
+    def test_reset_cmd_uses_field_syntax(self):
+        """BH-008: Reset command uses --field key=value, not bare --trigger."""
+        source_path = os.path.join(ENFORCEMENT_HOOKS_DIR, "primer.py")
+        with open(source_path) as f:
+            source = f.read()
+        assert '"--trigger"' not in source, \
+            "primer still uses bare --trigger arg"
+        assert '"--field"' in source, "primer should use --field syntax"
+        assert "trigger=user_prompt_submit" in source, \
+            "primer missing trigger field"
+        assert "project=holtz" in source, "primer missing project field"
+        assert "auditor=holtz" in source, "primer missing auditor field"
+
+    def test_exception_catches_oserror(self):
+        """BH-015: primer catches OSError (includes PermissionError)."""
+        source_path = os.path.join(ENFORCEMENT_HOOKS_DIR, "primer.py")
+        with open(source_path) as f:
+            source = f.read()
+        assert "OSError" in source, "primer should catch OSError"
+        lines = source.split("\n")
+        for line in lines:
+            if "except" in line and "FileNotFoundError" in line and "OSError" not in line:
+                raise AssertionError(
+                    f"primer catches FileNotFoundError without OSError: {line.strip()}"
+                )
 
 
 # --- _active_ledger (enforcement/hooks/_common.py) ---

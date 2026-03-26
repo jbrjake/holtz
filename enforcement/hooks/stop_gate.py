@@ -45,7 +45,7 @@ def main() -> None:
             timeout=5,
             cwd=cwd,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         exit_stop_allow()
 
     if result.returncode != 0:

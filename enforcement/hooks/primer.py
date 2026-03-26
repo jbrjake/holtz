@@ -53,7 +53,7 @@ def main() -> None:
             timeout=5,
             cwd=cwd,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         exit_ok()
 
     if result.returncode != 0:
@@ -71,13 +71,17 @@ def main() -> None:
         exit_ok()
 
     # Record context_reset event (gates awaiting_clear→fix_loop)
-    with contextlib.suppress(FileNotFoundError, subprocess.TimeoutExpired):
+    run_number = (ledger or "").replace("run-", "") or "0"
+    with contextlib.suppress(OSError, subprocess.TimeoutExpired):
         reset_cmd = [binary, "--config-dir", config_dir]
         if ledger:
             reset_cmd.extend(["--ledger", ledger])
         reset_cmd.extend([
             "event", "context_reset",
-            "--trigger", "user_prompt_submit",
+            "--field", "project=holtz",
+            "--field", f"run={run_number}",
+            "--field", "auditor=holtz",
+            "--field", "trigger=user_prompt_submit",
         ])
         subprocess.run(
             reset_cmd,
