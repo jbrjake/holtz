@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from _resolve import sahjhan_binary  # noqa: E402
 
 from _common import _active_ledger, exit_ok, exit_warn, read_event  # noqa: E402
+from _protocol_cache import format_state_line, read_cache as read_enforcement_cache  # noqa: E402
 
 
 def main() -> None:
@@ -107,6 +108,11 @@ def main() -> None:
         "\nRun `sahjhan status` for full state. "
         "Run `sahjhan gate check <transition>` to see what gates are blocking."
     )
+
+    # Append enforcement state line if cache exists
+    state_line = format_state_line(read_enforcement_cache(cwd))
+    if state_line:
+        context += "\n" + state_line
 
     exit_warn(context)
 

@@ -293,3 +293,37 @@ class TestCommitGate:
         assert output.get("continue") is True
         context = output.get("additionalContext", "")
         assert "pattern_check" in context.lower()
+
+
+class TestPrimerStateLine:
+    """Tests for primer.py enforcement cache integration."""
+
+    def test_primer_source_reads_cache(self):
+        """primer.py imports and calls format_state_line from cache module."""
+        source_path = os.path.join(REPO_ROOT, "enforcement", "hooks", "primer.py")
+        with open(source_path) as f:
+            source = f.read()
+        assert "format_state_line" in source, (
+            "primer.py should import format_state_line from _protocol_cache"
+        )
+
+    def test_format_state_line_output(self):
+        """State line is terse and under 25 words."""
+        from _protocol_cache import format_state_line, empty_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["perspective"] = "component"
+        cache["perspectives_done"] = 2
+        cache["perspectives_total"] = 13
+        cache["unregistered_commits"] = ["abc"]
+        cache["fixes_since_pattern"] = 4
+        line = format_state_line(cache)
+        assert line
+        assert len(line.split()) <= 25, f"State line too long: {line}"
+        assert "fix_loop" in line
+        assert "component" in line
+
+    def test_format_state_line_inactive(self):
+        """No output when no active cache."""
+        from _protocol_cache import format_state_line
+        assert format_state_line(None) == ""
