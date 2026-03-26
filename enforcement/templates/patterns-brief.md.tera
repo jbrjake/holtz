@@ -1,0 +1,11 @@
+{# enforcement/templates/patterns-brief.md.tera — reads from project ledger #}
+# Patterns Brief
+
+{% set checkpoints = events | filter(attribute="event_type", value="_checkpoint") -%}
+{% set latest = checkpoints | last -%}
+
+{% if latest -%}
+{{ latest.fields.patterns_brief_content | default(value="No patterns recorded yet.") }}
+{% else -%}
+No checkpoint data available yet.
+{% endif %}

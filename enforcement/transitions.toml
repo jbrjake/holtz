@@ -11,13 +11,11 @@ from = "recon"
 to = "audit"
 command = "recon_complete"
 gates = [
-    { type = "files_exist", paths = ["docs/holtz/recon/step0-project-overview.md", "docs/holtz/recon/step1-toolchain.md", "docs/holtz/recon/step2-code-signals.md", "docs/holtz/recon/step3-recon-summary.md", "docs/holtz/recon/step4-predictions.md"] },
+    { type = "query", sql = "SELECT count(DISTINCT fields->>'step') >= 5 FROM events WHERE type='recon_finding'", expect = "true" },
     { type = "file_exists", path = "docs/holtz/impact-graph.json" },
     { type = "ledger_has_event", event = "recon_step", min_count = 5 },
-    # Justine dispatch must be recorded (or explicitly skipped for targeted audits)
     { type = "ledger_has_event", event = "justine_dispatched", min_count = 1 },
-    # Record edge count snapshot for audit comparison
-    { type = "command_succeeds", cmd = "sahjhan --config-dir enforcement event snapshot --field key=pre_audit_edge_count --field value=$(python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats | python -c \"import sys,json; print(json.load(sys.stdin)['edges'])\")" },
+    { type = "command_succeeds", cmd = "sahjhan --ledger {{run_ledger}} event snapshot --field key=pre_audit_edge_count --field value=$(python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats | python -c \"import sys,json; print(json.load(sys.stdin)['edges'])\")" },
 ]
 
 # ── Audit ──
@@ -27,8 +25,7 @@ from = "audit"
 to = "merge_ready"
 command = "audit_complete"
 gates = [
-    { type = "file_exists", path = "docs/holtz/audit/1-doc-claims.md" },
-    # Impact graph edges must have increased during audit
+    { type = "ledger_has_event", event = "audit_claim", min_count = 1 },
     { type = "snapshot_compare", cmd = "python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats", extract = "edges", compare = "gt", reference = "snapshot:pre_audit_edge_count" },
 ]
 
@@ -74,7 +71,8 @@ gates = [
     { type = "ledger_has_event_since", event = "blast_radius", since = "last_transition" },
     # Per-fix hardening must have been recorded since last fix
     { type = "ledger_has_event_since", event = "hardening_complete", since = "last_transition" },
-    # Circuit breaker: max 15 total fix iterations (enforced in SKILL.md; Sahjhan has no max_count gate)
+    # Circuit breaker: max 15 total fix iterations
+    { type = "query", sql = "SELECT count(*) < 15 FROM events WHERE type='state_transition' AND fields->>'command'='fix_commit'", expect = "true" },
 ]
 
 # ── Context Reset (enforces /clear boundaries) ──
