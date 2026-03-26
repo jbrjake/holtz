@@ -17,7 +17,7 @@ gates = [
     # Justine dispatch must be recorded (or explicitly skipped for targeted audits)
     { type = "ledger_has_event", event = "justine_dispatched", min_count = 1 },
     # Record edge count snapshot for audit comparison
-    { type = "command_succeeds", cmd = "sahjhan --config-dir enforcement event snapshot --field key=pre_audit_edge_count --field value=$(python skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats | python -c \"import sys,json; print(json.load(sys.stdin)['edges'])\")" },
+    { type = "command_succeeds", cmd = "sahjhan --config-dir enforcement event snapshot --field key=pre_audit_edge_count --field value=$(python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats | python -c \"import sys,json; print(json.load(sys.stdin)['edges'])\")" },
 ]
 
 # ── Audit ──
@@ -29,7 +29,7 @@ command = "audit_complete"
 gates = [
     { type = "file_exists", path = "docs/holtz/audit/1-doc-claims.md" },
     # Impact graph edges must have increased during audit
-    { type = "snapshot_compare", cmd = "python skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats", extract = "edges", compare = "gt", reference = "snapshot:pre_audit_edge_count" },
+    { type = "snapshot_compare", cmd = "python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats", extract = "edges", compare = "gt", reference = "snapshot:pre_audit_edge_count" },
 ]
 
 # ── Merge ──
@@ -122,7 +122,7 @@ to = "perspective_clean"
 command = "set complete perspective"
 gates = [
     # Zero open items
-    { type = "command_output", cmd = "python skills/holtz/scripts/validate_punchlist.py docs/holtz/PUNCHLIST-MERGED.md --filter-status OPEN --count", expect = "0" },
+    { type = "command_output", cmd = "python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py docs/holtz/PUNCHLIST-MERGED.md --filter-status OPEN --count", expect = "0" },
     # At least 2 stable iterations for this perspective
     { type = "ledger_has_event", event = "iteration_complete", filter = { perspective = "{{current_perspective}}" }, min_count = 2 },
     # Minimum 120 seconds between iterations (raised from 60 per review)
@@ -132,7 +132,7 @@ gates = [
     # Linter passes
     { type = "command_succeeds", cmd = "ruff check .", timeout = 30 },
     # Type checker passes
-    { type = "command_succeeds", cmd = "mypy skills/holtz/scripts/ hooks/", timeout = 60 },
+    { type = "command_succeeds", cmd = "mypy skills/holtz/scripts/ hooks/ enforcement/hooks/", timeout = 60 },
     # No unresolved protocol violations
     { type = "no_violations" },
 ]
@@ -171,9 +171,9 @@ gates = [
     # Suite passes
     { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120 },
     { type = "command_succeeds", cmd = "ruff check .", timeout = 30 },
-    { type = "command_succeeds", cmd = "mypy skills/holtz/scripts/ hooks/", timeout = 60 },
+    { type = "command_succeeds", cmd = "mypy skills/holtz/scripts/ hooks/ enforcement/hooks/", timeout = 60 },
     # Zero open items
-    { type = "command_output", cmd = "python skills/holtz/scripts/validate_punchlist.py docs/holtz/PUNCHLIST-MERGED.md --filter-status OPEN --count", expect = "0" },
+    { type = "command_output", cmd = "python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py docs/holtz/PUNCHLIST-MERGED.md --filter-status OPEN --count", expect = "0" },
     # No unresolved protocol violations
     { type = "no_violations" },
 ]
