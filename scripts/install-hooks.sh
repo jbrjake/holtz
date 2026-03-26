@@ -29,3 +29,34 @@ for hook in "$SRC_DIR"/*; do
     ln -sf "$hook" "$dest"
     echo "$hook_name: installed"
 done
+
+# ── Sahjhan binary setup ──
+
+ARCH=$(uname -m)
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+case "$ARCH" in arm64) ARCH="aarch64" ;; esac
+
+case "$OS" in
+    darwin) TRIPLE="${ARCH}-apple-darwin" ;;
+    linux)  TRIPLE="${ARCH}-unknown-linux-gnu" ;;
+    *)      TRIPLE="${ARCH}-${OS}" ;;
+esac
+
+SAHJHAN_BIN="$REPO_ROOT/bin/sahjhan-${TRIPLE}"
+if [[ -f "$SAHJHAN_BIN" ]]; then
+    chmod +x "$SAHJHAN_BIN"
+    echo "sahjhan: binary ready at bin/sahjhan-${TRIPLE}"
+
+    # Version pinning check
+    PINNED_VERSION_FILE="$REPO_ROOT/bin/.sahjhan-version"
+    if [[ -f "$PINNED_VERSION_FILE" ]]; then
+        PINNED_VERSION=$(cat "$PINNED_VERSION_FILE")
+        ACTUAL_VERSION=$("$SAHJHAN_BIN" --version 2>/dev/null || echo "unknown")
+        if [[ "$ACTUAL_VERSION" != *"$PINNED_VERSION"* ]] && [[ "$ACTUAL_VERSION" != "unknown" ]]; then
+            echo "WARNING: Sahjhan binary version ($ACTUAL_VERSION) does not match pinned version ($PINNED_VERSION)." >&2
+            echo "         Run scripts/vendor-sahjhan.sh $PINNED_VERSION to fix." >&2
+        fi
+    fi
+else
+    echo "sahjhan: no binary for ${TRIPLE}. Run scripts/vendor-sahjhan.sh <version> first."
+fi
