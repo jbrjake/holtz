@@ -327,3 +327,118 @@ class TestPrimerStateLine:
         """No output when no active cache."""
         from _protocol_cache import format_state_line
         assert format_state_line(None) == ""
+
+
+class TestEnforcementIntegration:
+    """End-to-end: simulate a fix loop and verify enforcement."""
+
+    def test_commit_blocked_after_unregistered(self, tmp_path):
+        """Full flow: tracker detects commit, gate blocks next commit."""
+        from _protocol_cache import write_cache, empty_cache
+
+        # Seed cache as if we're in an active fix loop
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["perspective"] = "component"
+        write_cache(str(tmp_path), cache)
+
+        # Simulate: git commit succeeds (tracker fires)
+        tracker_event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "git commit -m 'fix(x): first'"},
+            "tool_response": {"exit_code": 0, "output": "[dev aaa1111] fix(x): first"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", tracker_event)
+
+        # Now: git commit attempted (gate fires)
+        gate_event = {
+            "tool_input": {"command": "git commit -m 'fix(y): second'"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("commit_gate.py", gate_event)
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "block", "Gate should block second commit"
+
+        # But: sahjhan command is allowed
+        sahjhan_event = {
+            "tool_input": {"command": "./bin/sahjhan transition fix_commit --item-id BH-001"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("commit_gate.py", sahjhan_event)
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "allow", "Gate should allow sahjhan commands"
+
+    def test_stall_blocks_all(self, tmp_path):
+        """Stall counter blocks everything except sahjhan."""
+        from _protocol_cache import write_cache, empty_cache
+
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["stall"] = 16
+        write_cache(str(tmp_path), cache)
+
+        # Regular command blocked
+        event = {
+            "tool_input": {"command": "ls -la"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("commit_gate.py", event)
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "block"
+
+        # Sahjhan allowed
+        event["tool_input"]["command"] = "./bin/sahjhan status"
+        code, output, _ = run_enforcement_hook("commit_gate.py", event)
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "allow"
+
+    def test_tracker_then_gate_full_cycle(self, tmp_path):
+        """Full cycle: commit -> blocked -> sahjhan fix_commit -> tracker clears -> allowed."""
+        from _protocol_cache import write_cache, read_cache, empty_cache
+
+        # Start with active fix loop
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["perspective"] = "component"
+        write_cache(str(tmp_path), cache)
+
+        # 1. Git commit (tracker records it)
+        run_enforcement_hook("protocol_tracker.py", {
+            "tool_name": "Bash",
+            "tool_input": {"command": "git commit -m 'fix: first'"},
+            "tool_response": {"exit_code": 0, "output": "[dev bbb2222] fix: first"},
+            "cwd": str(tmp_path),
+        })
+
+        # 2. Verify cache has unregistered commit
+        c = read_cache(str(tmp_path))
+        assert len(c["unregistered_commits"]) == 1
+
+        # 3. Gate blocks next commit
+        _, out, _ = run_enforcement_hook("commit_gate.py", {
+            "tool_input": {"command": "git commit -m 'fix: second'"},
+            "cwd": str(tmp_path),
+        })
+        assert out.get("hookSpecificOutput", {}).get("permissionDecision") == "block"
+
+        # 4. Simulate sahjhan fix_commit (tracker clears unregistered)
+        run_enforcement_hook("protocol_tracker.py", {
+            "tool_name": "Bash",
+            "tool_input": {"command": "./bin/sahjhan transition fix_commit --item-id BH-001"},
+            "tool_response": {"exit_code": 0, "output": "Transition: fix_loop -> fix_loop"},
+            "cwd": str(tmp_path),
+        })
+
+        # 5. Verify unregistered commits cleared
+        c = read_cache(str(tmp_path))
+        assert c["unregistered_commits"] == []
+        assert c["fixes_since_pattern"] == 1
+
+        # 6. Gate allows next commit
+        _, out, _ = run_enforcement_hook("commit_gate.py", {
+            "tool_input": {"command": "git commit -m 'fix: second'"},
+            "cwd": str(tmp_path),
+        })
+        perm = out.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "allow", f"Expected allow after fix_commit, got {perm}"

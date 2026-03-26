@@ -14,7 +14,6 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import exit_block, exit_ok, exit_warn, read_event  # noqa: E402
 from _protocol_cache import (  # noqa: E402
     compute_obligations,
     format_injection,
@@ -22,6 +21,8 @@ from _protocol_cache import (  # noqa: E402
     is_sahjhan_cmd,
     read_cache,
 )
+
+from _common import exit_block, exit_ok, exit_warn, read_event  # noqa: E402
 
 
 def _is_test_cmd(cmd: str) -> bool:
