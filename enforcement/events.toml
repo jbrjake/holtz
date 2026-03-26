@@ -1,7 +1,7 @@
 [events.recon_step]
 description = "A recon step completed"
 fields = [
-    { name = "step", type = "u8", range = [0, 4] },
+    { name = "step", type = "string", pattern = "^[0-4]$" },
     { name = "artifact_path", type = "string" },
 ]
 
@@ -9,12 +9,12 @@ fields = [
 description = "A punchlist finding"
 fields = [
     { name = "id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
-    { name = "severity", type = "enum", values = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] },
+    { name = "severity", type = "string", pattern = "^(CRITICAL|HIGH|MEDIUM|LOW)$" },
     { name = "category", type = "string" },
     { name = "location", type = "string" },
-    { name = "perspective", type = "set_member", set = "perspective" },
+    { name = "perspective", type = "string" },
     { name = "description", type = "string" },
-    { name = "predicted_by", type = "string", optional = true },
+    { name = "predicted_by", type = "string" },
 ]
 
 [events.finding_resolved]
@@ -23,41 +23,38 @@ fields = [
     { name = "id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
     { name = "commit_hash", type = "string", pattern = "^[0-9a-f]{7,40}$" },
 ]
-gates = [
-    { type = "field_not_empty", field = "commit_hash" },
-]
 
 [events.blast_radius]
 description = "Blast radius query after a fix"
 fields = [
     { name = "target_node", type = "string" },
-    { name = "depth", type = "u8" },
-    { name = "affected_count", type = "u32" },
+    { name = "depth", type = "string", pattern = "^\\d+$" },
+    { name = "affected_count", type = "string", pattern = "^\\d+$" },
     { name = "finding_id", type = "string" },
 ]
 
 [events.iteration_complete]
 description = "A fix-loop iteration completed"
 fields = [
-    { name = "perspective", type = "set_member", set = "perspective" },
-    { name = "items_resolved", type = "u32" },
-    { name = "items_remaining", type = "u32" },
-    { name = "test_count", type = "u32" },
-    { name = "tests_passed", type = "bool" },
+    { name = "perspective", type = "string" },
+    { name = "items_resolved", type = "string", pattern = "^\\d+$" },
+    { name = "items_remaining", type = "string", pattern = "^\\d+$" },
+    { name = "test_count", type = "string", pattern = "^\\d+$" },
+    { name = "tests_passed", type = "string", pattern = "^(true|false)$" },
 ]
 
 [events.pattern_analysis_complete]
 description = "Pattern analysis cycle completed"
 fields = [
-    { name = "patterns_found", type = "u32" },
-    { name = "siblings_found", type = "u32" },
+    { name = "patterns_found", type = "string", pattern = "^\\d+$" },
+    { name = "siblings_found", type = "string", pattern = "^\\d+$" },
 ]
 
 [events.set_member_complete]
 description = "A completion set member passed clean"
 fields = [
     { name = "set", type = "string" },
-    { name = "member", type = "set_member", set_from_field = "set" },
+    { name = "member", type = "string" },
 ]
 
 [events.baseline_updated]
@@ -69,25 +66,25 @@ fields = [
 [events.living_punchlist_updated]
 description = "Living punchlist updated post-convergence"
 fields = [
-    { name = "patterns_added", type = "u32" },
-    { name = "hotspots_updated", type = "u32" },
+    { name = "patterns_added", type = "string", pattern = "^\\d+$" },
+    { name = "hotspots_updated", type = "string", pattern = "^\\d+$" },
 ]
 
 [events.prediction]
 description = "A predictive recon prediction"
 fields = [
-    { name = "id", type = "u32" },
+    { name = "id", type = "string", pattern = "^\\d+$" },
     { name = "target", type = "string" },
-    { name = "confidence", type = "enum", values = ["HIGH", "MEDIUM", "LOW"] },
+    { name = "confidence", type = "string", pattern = "^(HIGH|MEDIUM|LOW)$" },
     { name = "basis", type = "string" },
 ]
 
 [events.prediction_outcome]
 description = "Prediction result"
 fields = [
-    { name = "prediction_id", type = "u32" },
-    { name = "outcome", type = "enum", values = ["CONFIRMED", "UNCONFIRMED"] },
-    { name = "finding_id", type = "string", optional = true },
+    { name = "prediction_id", type = "string", pattern = "^\\d+$" },
+    { name = "outcome", type = "string", pattern = "^(CONFIRMED|UNCONFIRMED)$" },
+    { name = "finding_id", type = "string" },
 ]
 
 [events.protocol_violation]
@@ -101,27 +98,27 @@ fields = [
 description = "Per-fix edge case hardening completed"
 fields = [
     { name = "finding_id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
-    { name = "edge_cases_tested", type = "u32" },
-    { name = "tests_added", type = "u32" },
+    { name = "edge_cases_tested", type = "string", pattern = "^\\d+$" },
+    { name = "tests_added", type = "string", pattern = "^\\d+$" },
 ]
 
 [events.context_reset]
 description = "Context boundary — recorded by primer hook on UserPromptSubmit after /clear"
 fields = [
-    { name = "trigger", type = "enum", values = ["user_prompt_submit"] },
+    { name = "trigger", type = "string", pattern = "^user_prompt_submit$" },
 ]
 
 [events.justine_dispatched]
 description = "Justine subagent dispatched for parallel audit"
 fields = [
-    { name = "mode", type = "enum", values = ["full", "skipped"] },
+    { name = "mode", type = "string", pattern = "^(full|skipped)$" },
 ]
 
 [events.pattern_contribution_complete]
 description = "Pattern library contribution step completed"
 fields = [
-    { name = "patterns_submitted", type = "u32" },
-    { name = "outcome", type = "enum", values = ["submitted", "no_new_patterns", "declined_by_user"] },
+    { name = "patterns_submitted", type = "string", pattern = "^\\d+$" },
+    { name = "outcome", type = "string", pattern = "^(submitted|no_new_patterns|declined_by_user)$" },
 ]
 
 [events.snapshot]

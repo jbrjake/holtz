@@ -17,10 +17,7 @@ label = "Merge Done"
 
 [states.fix_loop]
 label = "Fix Loop (Step 10)"
-params = [
-    { name = "current_perspective", set = "perspective" },
-    { name = "iteration", type = "u32" },
-]
+params = [{ name = "current_perspective", set = "perspective" }]
 
 [states.awaiting_clear]
 label = "Awaiting Context Reset"
