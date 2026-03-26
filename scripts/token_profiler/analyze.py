@@ -24,6 +24,7 @@ from token_profiler.models import (
     SessionProfile,
     SessionSummary,
     ToolAttribution,
+    Usage,
 )
 
 # ---------------------------------------------------------------------------
@@ -253,20 +254,27 @@ def apply_phase_labels(
 
             elif "start_time" in ms and "end_time" in ms:
                 # Timestamp-based
-                start_dt = _parse_iso(ms["start_time"])
-                end_dt = _parse_iso(ms["end_time"])
+                try:
+                    start_dt = _parse_iso(ms["start_time"])
+                    end_dt = _parse_iso(ms["end_time"])
+                except (ValueError, TypeError) as e:
+                    raise ValueError(
+                        f"Malformed timestamp in milestone '{label}': {e}"
+                    ) from e
                 for turn in turns:
                     if turn.timestamp:
-                        turn_dt = _parse_iso(turn.timestamp)
+                        try:
+                            turn_dt = _parse_iso(turn.timestamp)
+                        except (ValueError, TypeError):
+                            continue  # skip turns with unparseable timestamps
                         if start_dt <= turn_dt <= end_dt:
                             labels[turn.index] = label
 
-    # Plugin overrides everything
+    # Plugin overrides milestone labels where specified (BH-021: preserve
+    # milestone labels for turns the plugin doesn't cover)
     if plugin is not None and hasattr(plugin, "label_phases"):
         plugin_labels = plugin.label_phases(turns)
         if plugin_labels:
-            # Start with unknown, then apply plugin labels
-            labels = {turn.index: "unknown" for turn in turns}
             for idx, lbl in plugin_labels.items():
                 if idx in labels:
                     labels[idx] = lbl
@@ -355,7 +363,7 @@ def build_session_profile(
         )
 
     # Build PhaseProfile list (Errata E7)
-    phases = _build_phase_profiles(profiled_turns)
+    phases = _build_phase_profiles(profiled_turns, resolved_model, pricing_fn)
 
     # Build SessionSummary (Errata E6, E7)
     summary = _build_session_summary(profiled_turns, phases)
@@ -371,7 +379,11 @@ def build_session_profile(
     )
 
 
-def _build_phase_profiles(turns: list[ProfiledTurn]) -> list[PhaseProfile]:
+def _build_phase_profiles(
+    turns: list[ProfiledTurn],
+    model: str = "unknown",
+    pricing_fn: PricingFn | None = None,
+) -> list[PhaseProfile]:
     """Aggregate turns into PhaseProfile list, one per unique phase label."""
     # Group turns by phase, preserving order of first appearance
     phase_order: list[str] = []
@@ -414,7 +426,15 @@ def _build_phase_profiles(turns: list[ProfiledTurn]) -> list[PhaseProfile]:
                     cache_read_tokens=cache_read_sum,
                     output_tokens=output_sum,
                 ),
-                dollar_cost=DollarCost(
+                dollar_cost=pricing_fn(
+                    Usage(
+                        input_tokens=input_sum,
+                        output_tokens=output_sum,
+                        cache_creation_input_tokens=cache_creation_sum,
+                        cache_read_input_tokens=cache_read_sum,
+                    ),
+                    model,
+                ) if pricing_fn else DollarCost(
                     input_cost=0.0,
                     cache_creation_cost=0.0,
                     cache_read_cost=0.0,
@@ -460,7 +480,7 @@ def _build_session_summary(
         peak_context_window=peak_cw,
         total_output_tokens=total_output,
         total_session_cost=total_sc,
-        total_dollars=0.0,  # Errata E5: placeholder until pricing module exists
+        total_dollars=sum(p.dollar_cost.total_cost for p in phases),
         hottest_turns=hottest_turns,
         hottest_tools=tool_costs.most_common(10),
     )

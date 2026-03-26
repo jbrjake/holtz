@@ -54,8 +54,8 @@ def get_pricing(model: str) -> dict[str, float]:
     Falls back to the ``"unknown"`` key (zero pricing) with a warning to
     stderr if no prefix matches.
     """
-    # Exact match — fast path
-    if model in PRICING and model != "unknown":
+    # Exact match — fast path (including "unknown" sentinel)
+    if model in PRICING:
         return PRICING[model]
 
     # Longest-prefix match among non-"unknown" keys

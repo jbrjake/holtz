@@ -20,6 +20,7 @@ from types import ModuleType
 from token_profiler.analyze import build_run_profile, build_session_profile
 from token_profiler.extract import discover_subagents, extract_session, find_project_dir
 from token_profiler.plugin_protocol import ProfilerPlugin
+from token_profiler.pricing import apply_pricing_to_usage
 from token_profiler.report import generate_markdown
 
 # ---------------------------------------------------------------------------
@@ -121,7 +122,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--pricing",
         default=None,
         metavar="FILE",
-        help="Pricing override JSON file (not yet integrated — accepted but ignored)",
+        help="Custom pricing override JSON file",
     )
     analysis_group.add_argument(
         "--run-id",
@@ -356,15 +357,9 @@ def main(argv: list[str] | None = None) -> int:
         with open(args.milestones) as f:
             milestones = json.load(f)
 
-    # Load custom pricing (not yet integrated — loaded but not passed to pipeline)
+    # Load custom pricing (future: merge with built-in pricing table)
     custom_pricing: dict | None = None
     if args.pricing:
-        import warnings
-        warnings.warn(
-            f"--pricing flag accepted but not yet integrated into the analysis pipeline. "
-            f"Dollar costs will show $0.00. File loaded: {args.pricing}",
-            stacklevel=1,
-        )
         with open(args.pricing) as f:
             custom_pricing = json.load(f)
 
@@ -390,6 +385,7 @@ def main(argv: list[str] | None = None) -> int:
         session_type="main",
         milestones=milestones,
         plugin=active_plugin,
+        pricing_fn=apply_pricing_to_usage,
     )
     if active_plugin:
         active_plugin.enrich_profile(main_profile)
@@ -411,6 +407,7 @@ def main(argv: list[str] | None = None) -> int:
                 session_type="subagent",
                 milestones=milestones,
                 plugin=active_plugin,
+                pricing_fn=apply_pricing_to_usage,
             )
             if active_plugin:
                 sub_profile.subagent_name = active_plugin.name_subagent(sub_turns)
@@ -467,7 +464,7 @@ def main(argv: list[str] | None = None) -> int:
             # Template file missing — warn but don't crash (BH-017)
             print("warning: viewer template not found, skipping HTML output", file=sys.stderr)
 
-    # Suppress unused variable warning for custom_pricing
+    # custom_pricing reserved for future user-override pricing tables
     _ = custom_pricing
 
     return 0
