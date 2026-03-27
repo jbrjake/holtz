@@ -14,7 +14,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENFORCEMENT_HOOKS_DIR = os.path.join(REPO_ROOT, "enforcement", "hooks")
 
 
-def run_enforcement_hook(hook_name, event, cwd=None):
+def run_enforcement_hook(hook_name, event, cwd=None, env=None):
     """Run an enforcement hook script with the given event JSON on stdin."""
     script = os.path.join(ENFORCEMENT_HOOKS_DIR, hook_name)
     result = subprocess.run(
@@ -24,6 +24,7 @@ def run_enforcement_hook(hook_name, event, cwd=None):
         text=True,
         timeout=10,
         cwd=cwd or REPO_ROOT,
+        env=env,
     )
     try:
         output = json.loads(result.stdout) if result.stdout.strip() else {}
@@ -386,6 +387,147 @@ class TestPrimer:
 
 
 # --- _active_ledger (enforcement/hooks/_common.py) ---
+
+
+def _mock_env(tmp_path):
+    """Return env dict with CLAUDE_PLUGIN_ROOT pointing to tmp_path."""
+    env = os.environ.copy()
+    env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+    return env
+
+
+def _create_mock_binary(tmp_path, script_body):
+    """Create a mock sahjhan binary at the expected platform path."""
+    import platform
+    arch = platform.machine()
+    if arch == "arm64":
+        arch = "aarch64"
+    system = platform.system().lower()
+    triple = {"darwin": f"{arch}-apple-darwin", "linux": f"{arch}-unknown-linux-gnu"}.get(
+        system, f"{arch}-{system}"
+    )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    mock_binary = bin_dir / f"sahjhan-{triple}"
+    mock_binary.write_text(f"#!/bin/sh\n{script_body}\n")
+    mock_binary.chmod(0o755)
+
+
+class TestBashGuardWithMockBinary:
+    """BH-010: Tests that exercise actual bash_guard logic with a mock binary."""
+
+    def _setup(self, tmp_path, verify_exit=0, verify_stderr=""):
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "enforcement").mkdir(parents=True)
+        _create_mock_binary(tmp_path, (
+            f'if echo "$@" | grep -q "verify"; then\n'
+            f'  echo "{verify_stderr}" >&2\n'
+            f'  exit {verify_exit}\n'
+            f'fi\n'
+            f'exit 0'
+        ))
+
+    def test_allows_clean_manifest(self, tmp_path):
+        """Bash guard allows when manifest verify passes."""
+        self._setup(tmp_path, verify_exit=0)
+        event = {"tool_name": "Bash", "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "bash_guard.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output.get("continue") is True
+
+    def test_warns_on_manifest_violation(self, tmp_path):
+        """Bash guard warns when manifest verify fails."""
+        self._setup(tmp_path, verify_exit=1, verify_stderr="tampered")
+        event = {"tool_name": "Bash", "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "bash_guard.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        # exit_warn puts the message in additionalContext
+        assert "PROTOCOL VIOLATION" in output.get("additionalContext", "")
+
+
+class TestStopGateWithMockBinary:
+    """BH-010: Tests that exercise actual stop_gate logic with a mock binary."""
+
+    def _setup(self, tmp_path, status_json):
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "enforcement").mkdir(parents=True)
+        status_escaped = json.dumps(status_json).replace("'", "'\\''")
+        _create_mock_binary(tmp_path, f"echo '{status_escaped}'")
+
+    def test_allows_terminal_state(self, tmp_path):
+        """Stop gate allows when state is terminal."""
+        self._setup(tmp_path, {"current_state": "finalized", "terminal": True})
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        # Terminal = no output (exit_stop_allow)
+        assert output == {} or output.get("continue") is True
+
+    def test_blocks_non_terminal_state(self, tmp_path):
+        """Stop gate blocks when state is not terminal."""
+        self._setup(tmp_path, {"current_state": "fix_loop", "terminal": False})
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        # exit_stop_block outputs {"decision": "block", "reason": "..."}
+        assert output.get("decision") == "block"
+        assert "fix_loop" in output.get("reason", "")
+
+
+class TestPrimerWithMockBinary:
+    """BH-010: Tests that exercise actual primer logic with a mock binary."""
+
+    def _setup(self, tmp_path, status_json):
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "enforcement").mkdir(parents=True)
+        status_escaped = json.dumps(status_json).replace("'", "'\\''")
+        _create_mock_binary(tmp_path, (
+            f'if echo "$@" | grep -q "status"; then\n'
+            f"  echo '{status_escaped}'\n"
+            f'  exit 0\n'
+            f'fi\n'
+            f'exit 0'
+        ))
+
+    def test_injects_context_for_active_run(self, tmp_path):
+        """Primer injects resume context when an active run exists."""
+        self._setup(tmp_path, {
+            "current_state": "fix_loop",
+            "terminal": False,
+            "run_number": 31,
+            "current_perspective": "component",
+            "available_transitions": ["fix_commit", "pattern_check"],
+        })
+        event = {"user_message": "continue", "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output.get("continue") is True
+        # exit_warn puts resume context in additionalContext
+        context = output.get("additionalContext", "")
+        assert "fix_loop" in context
+        assert "Run 31" in context
+
+    def test_silent_for_terminal_state(self, tmp_path):
+        """Primer does nothing when run is in terminal state."""
+        self._setup(tmp_path, {"current_state": "finalized", "terminal": True})
+        event = {"user_message": "hello", "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        # Terminal state = exit_ok, no additionalContext
+        assert output.get("continue") is True
+        assert "additionalContext" not in output
 
 
 class TestActiveLedger:
