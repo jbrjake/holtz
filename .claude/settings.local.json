@@ -2,6 +2,19 @@
   "hooks": {
     "PreToolUse": [
       {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python enforcement/hooks/_sahjhan_bootstrap.py"
+          },
+          {
+            "type": "command",
+            "command": "python enforcement/hooks/write_guard.py"
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -17,7 +30,44 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python enforcement/hooks/bash_guard.py"
+          },
+          {
+            "type": "command",
             "command": "python enforcement/hooks/protocol_tracker.py"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python hooks/subagent_findings_check.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python enforcement/hooks/stop_gate.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python enforcement/hooks/primer.py"
           }
         ]
       }

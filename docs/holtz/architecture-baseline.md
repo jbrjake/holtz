@@ -89,7 +89,7 @@ CLAUDE.md defines branch model (main/dev/feature), conventional commit format, r
 
 **Layers (top to bottom):**
 1. Application layer: `validate_punchlist.py`, `convergence_check.py`, `impact_graph.py`, `pattern_brief_compact.py`, `profiler_plugin.py`
-2. Hook layer: `impact_graph_gate.py`, `status_staleness_gate.py`, `artifact_verification.py`, `subagent_findings_check.py`, `convergence_gate.py`, `convergence_primer.py`
+2. Hook layer: `hooks/subagent_findings_check.py`; Enforcement hooks: `_sahjhan_bootstrap.py`, `bash_guard.py`, `commit_gate.py`, `primer.py`, `protocol_tracker.py`, `stop_gate.py`, `write_guard.py`
 3. Utility layer: `markdown_utils.py`, `hooks/_common.py`
 
 **Independent package (separate tree):**
