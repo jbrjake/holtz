@@ -139,6 +139,26 @@ class TestBootstrapHook:
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_allowed(code, output)
 
+    def test_blocks_read_enforcement_directory(self):
+        """Bootstrap hook blocks Read of enforcement/quiz-bank.json."""
+        event = {
+            "tool_name": "Read",
+            "tool_input": {"file_path": "enforcement/quiz-bank.json"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "protected enforcement infrastructure")
+
+    def test_allows_read_non_enforcement(self):
+        """Bootstrap hook allows Read of non-enforcement paths."""
+        event = {
+            "tool_name": "Read",
+            "tool_input": {"file_path": "docs/holtz/audit/test.md"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_allowed(code, output)
+
 
 # --- write_guard.py (PreToolUse) ---
 
