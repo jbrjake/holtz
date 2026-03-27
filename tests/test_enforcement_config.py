@@ -58,6 +58,15 @@ def test_new_event_types_exist():
         assert evt in events, f"Missing new event type: {evt}"
 
 
+def test_quiz_event_types_exist():
+    """All quiz-related event types are defined in events.toml."""
+    cfg = tomllib.loads(EVENTS_TOML.read_text())
+    events = cfg["events"]
+    required = ["quiz_bank_generated", "quiz_posed", "quiz_answered", "quiz_failed", "quiz_exhausted", "quiz_exhausted_resolved"]
+    for name in required:
+        assert name in events, f"Missing event type: {name}"
+
+
 def test_field_patterns_are_valid_regexes():
     """Every field with a 'pattern' key must compile as a valid regex."""
     cfg = tomllib.loads(EVENTS_TOML.read_text())

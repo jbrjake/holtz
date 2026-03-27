@@ -343,3 +343,65 @@ fields = [
     { name = "step", type = "string" },
     { name = "content", type = "string" },
 ]
+
+# ── Quiz enforcement events ──
+
+[events.quiz_bank_generated]
+description = "Quiz bank generated during recon"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "question_count", type = "string", pattern = "^\\d+$" },
+    { name = "lens_count", type = "string", pattern = "^\\d+$" },
+]
+
+[events.quiz_posed]
+description = "Quiz questions posed to lens subagent"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "perspective", type = "string" },
+    { name = "questions_hash", type = "string", pattern = "^[0-9a-f]{64}$" },
+]
+
+[events.quiz_answered]
+description = "Lens subagent answered quiz"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "perspective", type = "string" },
+    { name = "score", type = "string", pattern = "^[0-5]/[0-5]$" },
+    { name = "pass", type = "string", pattern = "^(true|false)$" },
+]
+
+[events.quiz_failed]
+description = "Lens subagent failed quiz"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "perspective", type = "string" },
+    { name = "score", type = "string", pattern = "^[0-5]/[0-5]$" },
+]
+
+[events.quiz_exhausted]
+description = "Lens subagent exhausted quiz attempts"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "perspective", type = "string" },
+]
+
+[events.quiz_exhausted_resolved]
+description = "Human reviewed an exhausted quiz"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "perspective", type = "string" },
+    { name = "resolution", type = "string", pattern = "^human_reviewed$" },
+]
