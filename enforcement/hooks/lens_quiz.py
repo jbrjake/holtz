@@ -250,6 +250,7 @@ def main() -> None:
     lens = parse_lens_name(message)
     if not lens:
         exit_stop_allow()
+    assert lens is not None  # for mypy: exit_stop_allow calls sys.exit
 
     # Setup
     cwd = event.get("cwd", os.getcwd())
@@ -329,7 +330,7 @@ def main() -> None:
         exit_stop_block(
             f"Could not parse answers. Format: LENS: {lens} ANSWERS: A,B,C,D,A"
         )
-
+    assert parsed is not None  # for mypy: exit_stop_block calls sys.exit
     _, given_answers = parsed
     correct, total = score_answers(questions, given_answers, cwd)
 
