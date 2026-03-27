@@ -183,6 +183,30 @@ def test_transitions_no_plugin_root_references():
     )
 
 
+def test_perspective_clean_has_quiz_gate():
+    """set complete perspective transition requires quiz_answered."""
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    for t in cfg["transitions"]:
+        if t.get("command") == "set complete perspective":
+            gate_strs = [json.dumps(g) for g in t.get("gates", [])]
+            assert any("quiz_answered" in g for g in gate_strs), \
+                "set complete perspective missing quiz_answered gate"
+            return
+    raise AssertionError("set complete perspective transition not found")
+
+
+def test_converge_has_quiz_exhaustion_gate():
+    """converge transition checks for unresolved quiz_exhausted."""
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    for t in cfg["transitions"]:
+        if t.get("command") == "converge":
+            gate_strs = [json.dumps(g) for g in t.get("gates", [])]
+            assert any("quiz_exhausted" in g for g in gate_strs), \
+                "converge missing quiz_exhausted gate"
+            return
+    raise AssertionError("converge transition not found")
+
+
 def test_mypy_uses_explicit_package_bases():
     """BH-002: mypy commands must use --explicit-package-bases to avoid _common collision."""
     cfg = tomllib.loads(TRANSITIONS_TOML.read_text())

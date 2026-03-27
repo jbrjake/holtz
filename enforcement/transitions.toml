@@ -134,6 +134,8 @@ gates = [
     { type = "command_succeeds", cmd = "mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/", timeout = 60 },
     # No unresolved protocol violations
     { type = "no_violations" },
+    # Lens quiz must pass before perspective can be marked clean
+    { type = "command_succeeds", cmd = "sahjhan query \"SELECT count(*) >= 1 FROM events WHERE type='quiz_answered' AND pass='true' AND perspective={{current_perspective}}\" | grep -q true" },
 ]
 
 [[transitions]]
@@ -176,6 +178,8 @@ gates = [
     { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')", expect = "0" },
     # No unresolved protocol violations
     { type = "no_violations" },
+    # No unresolved quiz exhaustions
+    { type = "query", sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')", expect = "true" },
 ]
 
 [[transitions]]
