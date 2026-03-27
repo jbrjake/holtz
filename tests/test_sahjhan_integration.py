@@ -551,7 +551,7 @@ class TestPrimerWithMockBinary:
 
     def test_injects_lens_priming_in_audit(self, tmp_path):
         """Primer injects lens priming when in audit state with active perspective."""
-        cwd = self._setup(tmp_path, {
+        self._setup(tmp_path, {
             "current_state": "audit",
             "terminal": False,
             "run_number": 1,

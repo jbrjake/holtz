@@ -2,20 +2,65 @@
 
 Does NOT test full hook invocation (requires real sahjhan binary).
 Tests the parsing, formatting, scoring, and routing logic.
+
+Uses importlib to avoid _common module name collision between
+hooks/_common.py and enforcement/hooks/_common.py during pytest
+collection (both define _common but with different exports).
 """
-import sys
+import importlib.util
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "enforcement" / "hooks"))
+_HOOK_DIR = Path(__file__).parent.parent / "enforcement" / "hooks"
 
-from lens_quiz import (  # noqa: E402
-    format_quiz_questions,
-    parse_answers,
-    parse_lens_name,
-    score_answers,
-    select_questions,
-    verify_answer_freshness,
-)
+
+def _load_lens_quiz():
+    """Load lens_quiz module using importlib to avoid _common collision."""
+    # First ensure enforcement/hooks/_common.py is loaded as the right _common
+    common_path = str(_HOOK_DIR / "_common.py")
+    common_spec = importlib.util.spec_from_file_location("enforcement_hooks._common", common_path)
+    common_mod = importlib.util.module_from_spec(common_spec)
+    # Temporarily inject it as '_common' so lens_quiz's import resolves correctly
+    import sys
+    old_common = sys.modules.get("_common")
+    sys.modules["_common"] = common_mod
+    common_spec.loader.exec_module(common_mod)
+
+    # Also load _resolve
+    resolve_path = str(_HOOK_DIR / "_resolve.py")
+    resolve_spec = importlib.util.spec_from_file_location("enforcement_hooks._resolve", resolve_path)
+    resolve_mod = importlib.util.module_from_spec(resolve_spec)
+    sys.modules["_resolve"] = resolve_mod
+    resolve_spec.loader.exec_module(resolve_mod)
+
+    # Also load lens_evidence
+    evidence_path = str(_HOOK_DIR / "lens_evidence.py")
+    evidence_spec = importlib.util.spec_from_file_location("enforcement_hooks.lens_evidence", evidence_path)
+    evidence_mod = importlib.util.module_from_spec(evidence_spec)
+    sys.modules["lens_evidence"] = evidence_mod
+    evidence_spec.loader.exec_module(evidence_mod)
+
+    # Now load lens_quiz
+    quiz_path = str(_HOOK_DIR / "lens_quiz.py")
+    spec = importlib.util.spec_from_file_location("enforcement_hooks.lens_quiz", quiz_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    # Restore old _common
+    if old_common is not None:
+        sys.modules["_common"] = old_common
+    else:
+        sys.modules.pop("_common", None)
+
+    return mod
+
+
+_quiz = _load_lens_quiz()
+format_quiz_questions = _quiz.format_quiz_questions
+parse_answers = _quiz.parse_answers
+parse_lens_name = _quiz.parse_lens_name
+score_answers = _quiz.score_answers
+select_questions = _quiz.select_questions
+verify_answer_freshness = _quiz.verify_answer_freshness
 
 # ── Sample quiz bank for tests ──
 
