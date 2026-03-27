@@ -549,6 +549,23 @@ class TestPrimerWithMockBinary:
         assert output.get("continue") is True
         assert "additionalContext" not in output
 
+    def test_injects_lens_priming_in_audit(self, tmp_path):
+        """Primer injects lens priming when in audit state with active perspective."""
+        cwd = self._setup(tmp_path, {
+            "current_state": "audit",
+            "terminal": False,
+            "run_number": 1,
+            "current_perspective": "error-propagation",
+            "available_transitions": ["audit_complete"],
+        })
+        event = {"user_message": "continue", "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        context = output.get("additionalContext", "")
+        assert "error-propagation" in context
+        assert "Quiz on exit" in context
+
 
 class TestActiveLedger:
     """Tests for active ledger detection in hooks."""

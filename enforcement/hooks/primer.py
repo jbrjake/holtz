@@ -105,6 +105,10 @@ def main() -> None:
     if available:
         context += f"Available transitions: {', '.join(available)}\n"
 
+    # Add lens priming if in audit/fix_loop with active perspective
+    if current_state in ("audit", "fix_loop") and perspective != "unknown":
+        context += f"\nLens: {perspective}. Quiz on exit. Failures restart."
+
     context += (
         "\nRun `sahjhan status` for full state. "
         "Run `sahjhan gate check <transition>` to see what gates are blocking."
