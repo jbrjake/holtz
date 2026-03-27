@@ -122,9 +122,9 @@ command = "set complete perspective"
 gates = [
     # Zero open findings (ledger-authoritative: count findings without a matching resolution)
     { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')", expect = "0" },
-    # At least 2 stable iterations for this perspective
-    { type = "ledger_has_event", event = "iteration_complete", filter = { perspective = "{{current_perspective}}" }, min_count = 2 },
-    # Minimum 120 seconds between iterations (raised from 60 per review)
+    # At least 2 stable iterations for this perspective (cmd interpolation workaround for filter/sql template gaps)
+    { type = "command_succeeds", cmd = "sahjhan query \"SELECT count(*) >= 2 FROM events WHERE type='iteration_complete' AND perspective={{current_perspective}}\" | grep -q true" },
+    # Minimum 120 seconds between iteration_complete events
     { type = "min_elapsed", event = "iteration_complete", seconds = 120 },
     # Suite passes (Sahjhan verifies)
     { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120 },
