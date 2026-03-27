@@ -120,8 +120,8 @@ from = "fix_loop"
 to = "perspective_clean"
 command = "set complete perspective"
 gates = [
-    # Zero open items
-    { type = "command_output", cmd = "python skills/holtz/scripts/validate_punchlist.py docs/holtz/PUNCHLIST-MERGED.md --filter-status OPEN --count", expect = "0" },
+    # Zero open findings (ledger-authoritative: count findings without a matching resolution)
+    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')", expect = "0" },
     # At least 2 stable iterations for this perspective
     { type = "ledger_has_event", event = "iteration_complete", filter = { perspective = "{{current_perspective}}" }, min_count = 2 },
     # Minimum 120 seconds between iterations (raised from 60 per review)
@@ -171,8 +171,8 @@ gates = [
     { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120 },
     { type = "command_succeeds", cmd = "ruff check .", timeout = 30 },
     { type = "command_succeeds", cmd = "mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/", timeout = 60 },
-    # Zero open items
-    { type = "command_output", cmd = "python skills/holtz/scripts/validate_punchlist.py docs/holtz/PUNCHLIST-MERGED.md --filter-status OPEN --count", expect = "0" },
+    # Zero open findings (ledger-authoritative: count findings without a matching resolution)
+    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')", expect = "0" },
     # No unresolved protocol violations
     { type = "no_violations" },
 ]
