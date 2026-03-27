@@ -141,7 +141,8 @@ from = "perspective_clean"
 to = "audit"
 command = "lens_rotate"
 gates = [
-    { type = "ledger_has_event", event = "set_member_complete", filter = { member = "{{completed_perspective}}" } },
+    # Workaround: ledger_has_event filter doesn't interpolate templates; use cmd pipe to sahjhan query
+    { type = "command_succeeds", cmd = "sahjhan query \"SELECT count(*) >= 1 FROM events WHERE type='set_member_complete' AND member={{completed_perspective}}\" | grep -q true" },
 ]
 
 # ── Convergence ──
