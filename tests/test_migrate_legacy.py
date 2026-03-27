@@ -11,18 +11,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from migrate_legacy import (  # noqa: E402
     ARCHIVE_MAP,
     JUSTINE_MAP,
+    build_project_ledger,
+    migrate_directory,
+    parse_audit_file,
+    parse_history_json,
+    parse_merge_report,
+    parse_postmortem,
     parse_punchlist,
     parse_recon_dir,
-    parse_audit_file,
-    parse_summary,
-    parse_merge_report,
     parse_status,
-    parse_history_json,
-    parse_postmortem,
-    migrate_directory,
-    build_project_ledger,
+    parse_summary,
 )
-
 
 # ---------------------------------------------------------------------------
 # Task 3.1: Archive mapping tests

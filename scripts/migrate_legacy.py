@@ -108,7 +108,7 @@ PROTO_FILENAMES = {
 
 
 def _migrated_at() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(timezone.utc).isoformat()  # noqa: UP017
 
 
 def _make_event(

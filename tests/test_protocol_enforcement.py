@@ -8,7 +8,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
 sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))
 
-from test_sahjhan_integration import run_enforcement_hook, ENFORCEMENT_HOOKS_DIR  # noqa: E402
+from test_sahjhan_integration import run_enforcement_hook  # noqa: E402
 
 
 class TestProtocolCache:
@@ -116,7 +116,7 @@ class TestProtocolTracker:
 
     def test_detects_git_commit(self, tmp_path):
         """Git commit updates cache with unregistered commit."""
-        from _protocol_cache import write_cache, read_cache, empty_cache
+        from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         write_cache(str(tmp_path), cache)
@@ -136,7 +136,7 @@ class TestProtocolTracker:
 
     def test_increments_stall_counter(self, tmp_path):
         """Non-git, non-sahjhan commands increment stall."""
-        from _protocol_cache import write_cache, read_cache, empty_cache
+        from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["stall"] = 5
@@ -162,7 +162,7 @@ class TestProtocolTracker:
 
     def test_ignores_failed_git_commit(self, tmp_path):
         """Failed git commit does not add to unregistered."""
-        from _protocol_cache import write_cache, read_cache, empty_cache
+        from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         write_cache(str(tmp_path), cache)
@@ -206,7 +206,7 @@ class TestCommitGate:
 
     def test_blocks_commit_with_unregistered(self, tmp_path):
         """Blocks git commit when prior commits unregistered."""
-        from _protocol_cache import write_cache, empty_cache
+        from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["unregistered_commits"] = ["abc1234"]
@@ -226,7 +226,7 @@ class TestCommitGate:
 
     def test_allows_sahjhan_with_unregistered(self, tmp_path):
         """Sahjhan commands always allowed, even with obligations."""
-        from _protocol_cache import write_cache, empty_cache
+        from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["unregistered_commits"] = ["abc1234"]
@@ -243,7 +243,7 @@ class TestCommitGate:
 
     def test_allows_pytest_with_unregistered(self, tmp_path):
         """Test commands allowed even with unregistered commits."""
-        from _protocol_cache import write_cache, empty_cache
+        from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["unregistered_commits"] = ["abc1234"]
@@ -260,7 +260,7 @@ class TestCommitGate:
 
     def test_blocks_on_stall(self, tmp_path):
         """Blocks all non-sahjhan Bash after stall threshold."""
-        from _protocol_cache import write_cache, empty_cache
+        from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["stall"] = 16
@@ -277,7 +277,7 @@ class TestCommitGate:
 
     def test_injects_soft_obligation(self, tmp_path):
         """Pattern check due injects warning but doesn't block."""
-        from _protocol_cache import write_cache, empty_cache
+        from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["fixes_since_pattern"] = 4
@@ -309,7 +309,7 @@ class TestPrimerStateLine:
 
     def test_format_state_line_output(self):
         """State line is terse and under 25 words."""
-        from _protocol_cache import format_state_line, empty_cache
+        from _protocol_cache import empty_cache, format_state_line
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["perspective"] = "component"
@@ -334,7 +334,7 @@ class TestEnforcementIntegration:
 
     def test_commit_blocked_after_unregistered(self, tmp_path):
         """Full flow: tracker detects commit, gate blocks next commit."""
-        from _protocol_cache import write_cache, empty_cache
+        from _protocol_cache import empty_cache, write_cache
 
         # Seed cache as if we're in an active fix loop
         cache = empty_cache()
@@ -371,7 +371,7 @@ class TestEnforcementIntegration:
 
     def test_stall_blocks_all(self, tmp_path):
         """Stall counter blocks everything except sahjhan."""
-        from _protocol_cache import write_cache, empty_cache
+        from _protocol_cache import empty_cache, write_cache
 
         cache = empty_cache()
         cache["state"] = "fix_loop"
@@ -395,7 +395,7 @@ class TestEnforcementIntegration:
 
     def test_tracker_then_gate_full_cycle(self, tmp_path):
         """Full cycle: commit -> blocked -> sahjhan fix_commit -> tracker clears -> allowed."""
-        from _protocol_cache import write_cache, read_cache, empty_cache
+        from _protocol_cache import empty_cache, read_cache, write_cache
 
         # Start with active fix loop
         cache = empty_cache()

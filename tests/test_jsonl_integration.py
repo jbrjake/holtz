@@ -12,7 +12,6 @@ Covers:
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -457,7 +456,7 @@ class TestMigrationImportPipeline:
             capture_output=True, text=True, cwd=str(REPO_ROOT),
         )
         assert result.returncode == 0, f"migrate_legacy.py failed: {result.stderr}"
-        lines = [l for l in result.stdout.strip().split("\n") if l.strip()]
+        lines = [ln for ln in result.stdout.strip().split("\n") if ln.strip()]
         assert len(lines) > 0
 
         # Validate JSONL structure
@@ -470,7 +469,7 @@ class TestMigrationImportPipeline:
             assert event["fields"]["project"] == "holtz"
 
         # Should have both a finding and a finding_resolved (for RESOLVED item)
-        types = [json.loads(l)["type"] for l in lines]
+        types = [json.loads(ln)["type"] for ln in lines]
         assert "finding" in types
         assert "finding_resolved" in types
 
@@ -591,7 +590,7 @@ class TestMigrationImportPipeline:
             capture_output=True, text=True, cwd=str(REPO_ROOT),
         )
         assert result.returncode == 0
-        lines = [l for l in result.stdout.strip().split("\n") if l.strip()]
+        lines = [ln for ln in result.stdout.strip().split("\n") if ln.strip()]
         assert len(lines) > 0
 
         for line in lines:

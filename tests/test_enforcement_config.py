@@ -5,7 +5,7 @@ import re
 import sys
 from pathlib import Path
 
-if sys.version_info >= (3, 11):
+if sys.version_info >= (3, 11):  # noqa: UP036
     import tomllib
 else:
     import tomli as tomllib
@@ -71,7 +71,7 @@ def test_field_patterns_are_valid_regexes():
                     raise AssertionError(
                         f"Event '{name}', field '{field['name']}': "
                         f"invalid regex pattern '{field['pattern']}': {exc}"
-                    )
+                    ) from exc
 
 
 # ── Task 1.2: transitions.toml ──
