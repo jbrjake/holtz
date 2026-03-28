@@ -54,10 +54,9 @@ def write_cache(cwd: str, cache: dict[str, Any]) -> None:
             json.dump(cache, f, indent=2)
         os.replace(tmp, path)
     except BaseException:
-        try:
+        import contextlib
+        with contextlib.suppress(OSError):
             os.unlink(tmp)
-        except OSError:
-            pass
         raise
 
 
