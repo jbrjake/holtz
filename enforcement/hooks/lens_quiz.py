@@ -346,11 +346,16 @@ def main() -> None:
     threshold = PASS_THRESHOLD.get(total, max(1, total - 1))
 
     if correct >= threshold:
-        _record_event(binary, config_dir, cwd, ledger, "quiz_answered", {
-            **base_fields,
-            "score": f"{correct}/{total}",
-            "pass": "true",
-        })
+        # IDP-001: Guard against duplicate quiz_answered on hook retry
+        already_answered = _query_events(
+            binary, config_dir, cwd, ledger, "quiz_answered", lens
+        )
+        if not already_answered:
+            _record_event(binary, config_dir, cwd, ledger, "quiz_answered", {
+                **base_fields,
+                "score": f"{correct}/{total}",
+                "pass": "true",
+            })
         exit_stop_allow()
 
     # Failed — check attempt count

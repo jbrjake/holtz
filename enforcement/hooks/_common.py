@@ -31,7 +31,8 @@ mask_fenced_blocks = _mod.mask_fenced_blocks
 def _active_ledger(cwd: str) -> str | None:
     """Detect the active run ledger name from .sahjhan/active-run marker."""
     active_file = os.path.join(cwd, "docs", "holtz", ".sahjhan", "active-run")
-    if os.path.isfile(active_file):
+    try:
         with open(active_file, encoding="utf-8") as f:
             return f.read().strip()
-    return None
+    except OSError:
+        return None

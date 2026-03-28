@@ -176,7 +176,11 @@ def _load_module_from_path(path: str) -> ModuleType | None:
         print(f"warning: could not load plugin: {path}", file=sys.stderr)
         return None
     mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception as exc:
+        print(f"warning: plugin {path} failed to load: {exc}", file=sys.stderr)
+        return None
     return mod
 
 
@@ -354,7 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     # Load milestones
     milestones: list[dict] | None = None
     if args.milestones:
-        with open(args.milestones) as f:
+        with open(args.milestones, encoding="utf-8") as f:
             milestones = json.load(f)
 
     # Load custom pricing and build pricing function
