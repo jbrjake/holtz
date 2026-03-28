@@ -278,10 +278,21 @@ def main() -> None:
     # ── Phase 1: Evidence check ──
 
     transcript_path = event.get("agent_transcript_path")
-    if transcript_path and os.path.isfile(transcript_path):
+    transcript_available = bool(transcript_path and os.path.isfile(transcript_path))
+    if transcript_available:
         events_list = parse_transcript_jsonl(transcript_path)
+        # SEC-007: If the transcript contains no flat tool_name events, it is in
+        # session-JSONL format (tool calls nested inside message.content blocks)
+        # rather than the expected hook-event format. Treat as unavailable so the
+        # min_reads=0 degradation path fires rather than permanently blocking.
+        has_tool_name_events = any("tool_name" in e for e in events_list)
+        if not has_tool_name_events:
+            transcript_available = False
+            events_list = [{"type": "assistant", "content": message}]
     else:
-        # Degrade: synthesize minimal events from last_assistant_message
+        # Degrade: synthesize minimal events from last_assistant_message.
+        # In this mode we cannot verify file reads, so min_reads is set to 0
+        # to avoid permanently blocking subagents whose transcript is unavailable.
         events_list = [{"type": "assistant", "content": message}]
 
     # Load quiz bank for keywords (or use empty list)
@@ -296,7 +307,10 @@ def main() -> None:
         keywords.extend(q.get("keywords", []))
     keywords = list(set(keywords)) if keywords else [lens]
 
-    evidence = check_transcript(events_list, keywords=keywords, lens=lens)
+    # When transcript is unavailable, skip the read_count gate — we cannot
+    # observe tool calls, so penalising for them inverts graceful degradation.
+    min_reads = 5 if transcript_available else 0
+    evidence = check_transcript(events_list, keywords=keywords, lens=lens, min_reads=min_reads)
     if not evidence["pass"]:
         exit_stop_block(evidence["reason"])
 
@@ -336,8 +350,8 @@ def main() -> None:
     _, given_answers = parsed
     correct, total = score_answers(questions, given_answers, cwd)
 
-    # Check staleness
-    if total < len(questions) - MAX_STALE_QUESTIONS:
+    # Check staleness — also handle total=0 (all questions stale)
+    if total == 0 or total < len(questions) - MAX_STALE_QUESTIONS:
         exit_stop_block(
             f"Too many stale questions ({len(questions) - total}/{len(questions)}). "
             "Quiz bank must be regenerated."

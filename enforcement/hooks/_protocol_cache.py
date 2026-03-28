@@ -139,7 +139,7 @@ def compute_obligations(cache: dict[str, Any] | None) -> list[dict[str, Any]]:
             "blocks_all": True,
         })
 
-    if fixes >= 3 and not commits:
+    if fixes >= 3 and not commits and state == "fix_loop":
         obligations.append({
             "msg": f"pattern_check due ({fixes} fixes). sahjhan transition pattern_check",
             "blocks_commit": False,
