@@ -17,6 +17,29 @@ def _cache_path(cwd: str) -> str:
     return os.path.join(cwd, "docs", "holtz", ".sahjhan", CACHE_FILENAME)
 
 
+def _read_perspectives_total() -> int:
+    """Read perspective count from protocol.toml, falling back to 13."""
+    toml_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "protocol.toml")
+    try:
+        with open(toml_path, encoding="utf-8") as f:
+            content = f.read()
+        # Simple parse: count items in the values array under [sets.perspective]
+        in_values = False
+        count = 0
+        for line in content.splitlines():
+            if line.strip().startswith("values"):
+                in_values = True
+                continue
+            if in_values:
+                if line.strip() == "]":
+                    break
+                if line.strip().startswith('"'):
+                    count += 1
+        return count if count > 0 else 13
+    except OSError:
+        return 13
+
+
 def empty_cache() -> dict[str, Any]:
     return {
         "active": True,
@@ -25,7 +48,7 @@ def empty_cache() -> dict[str, Any]:
         "fixes_since_pattern": 0,
         "perspective": "",
         "perspectives_done": 0,
-        "perspectives_total": 13,
+        "perspectives_total": _read_perspectives_total(),
         "stall": 0,
         "last_refresh": "",
     }
