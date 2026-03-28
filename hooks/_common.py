@@ -117,6 +117,7 @@ def mask_fenced_blocks(text: str) -> str:
     - Backtick info strings must not contain backtick characters (BH-004 run 18)
     - Closing fence must use same character type and at least as many chars (BH-004 run 16)
     """
+    text = text.replace("\r\n", "\n")
     lines = text.split("\n")
     result = []
     fence_count = 0
