@@ -72,12 +72,19 @@ def parse_answers(message: str) -> tuple[str, list[str]] | None:
 
 
 def select_questions(bank: list[dict], lens: str) -> list[dict]:
-    """Select up to 5 random questions for a given lens from the bank."""
+    """Select up to 5 deterministic questions for a given lens from the bank.
+
+    Uses a seeded RNG so the same questions are selected on both the pose
+    and score invocations within a single session (same bank + lens).
+    """
     import random
     matching = [q for q in bank if q.get("lens") == lens]
     if len(matching) <= 5:
         return matching
-    return random.sample(matching, 5)
+    # Sort by question text for stable ordering before sampling
+    matching.sort(key=lambda q: q.get("q", ""))
+    rng = random.Random(f"{lens}:{len(matching)}")
+    return rng.sample(matching, 5)
 
 
 def format_quiz_questions(questions: list[dict], lens: str) -> str:

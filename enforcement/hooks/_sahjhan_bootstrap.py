@@ -39,14 +39,23 @@ def main() -> None:
     cwd = event.get("cwd", os.getcwd())
 
     # BH-016: Check Bash commands for shell redirections to protected paths
+    # BH-011: Also block cp/mv/install targeting protected paths
     if command and not path:
         for p in PROTECTED:
-            if p in command and any(op in command for op in (">", ">>", "tee ")):
-                _block(
-                    f"BLOCKED: Bash command writes to protected path '{p}'. "
-                    "This path cannot be modified during an audit session."
-                )
-                return
+            if p in command:
+                if any(op in command for op in (">", ">>", "tee ")):
+                    _block(
+                        f"BLOCKED: Bash command writes to protected path '{p}'. "
+                        "This path cannot be modified during an audit session."
+                    )
+                    return
+                cmd_stripped = command.lstrip()
+                if any(cmd_stripped.startswith(c) for c in ("cp ", "mv ", "install ")):
+                    _block(
+                        f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
+                        "This path cannot be modified during an audit session."
+                    )
+                    return
         _allow()
         return
 
