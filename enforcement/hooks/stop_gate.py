@@ -16,15 +16,17 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _resolve import sahjhan_binary  # noqa: E402
 
-from _common import _active_ledger, exit_stop_allow, exit_stop_block  # noqa: E402
+from _common import _active_ledger, exit_stop_allow, exit_stop_block, read_event  # noqa: E402
 
 
 def main() -> None:
+    event = read_event()
+
     binary = sahjhan_binary()
     if not os.path.isfile(binary):
         exit_stop_allow()
 
-    cwd = os.getcwd()
+    cwd = event.get("cwd", os.getcwd())
     config_dir = os.path.join(cwd, "enforcement")
 
     # No active run — allow stop
