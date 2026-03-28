@@ -33,8 +33,22 @@ def main() -> None:
     except (json.JSONDecodeError, OSError):
         event = {}
 
-    path = event.get("tool_input", {}).get("file_path", "")
+    tool_input = event.get("tool_input", {})
+    path = tool_input.get("file_path", "")
+    command = tool_input.get("command", "")
     cwd = event.get("cwd", os.getcwd())
+
+    # BH-016: Check Bash commands for shell redirections to protected paths
+    if command and not path:
+        for p in PROTECTED:
+            if p in command and any(op in command for op in (">", ">>", "tee ")):
+                _block(
+                    f"BLOCKED: Bash command writes to protected path '{p}'. "
+                    "This path cannot be modified during an audit session."
+                )
+                return
+        _allow()
+        return
 
     if not path:
         _allow()
