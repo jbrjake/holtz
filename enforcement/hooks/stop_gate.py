@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """Sahjhan stop gate — blocks stop unless state is terminal.
 
-Stop hook that queries `sahjhan status --json`. If the current state
+Stop hook that queries `sahjhan status` (text output). If the current state
 is not terminal (i.e., the audit hasn't converged and finalized),
 blocks the stop with a convergence message.
 """
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from _protocol_cache import parse_status_text  # noqa: E402
 from _resolve import sahjhan_binary  # noqa: E402
 
 from _common import _active_ledger, exit_stop_allow, exit_stop_block, read_event  # noqa: E402
@@ -39,7 +39,7 @@ def main() -> None:
         cmd = [binary, "--config-dir", config_dir]
         if ledger:
             cmd.extend(["--ledger", ledger])
-        cmd.extend(["status", "--json"])
+        cmd.append("status")
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -53,15 +53,15 @@ def main() -> None:
     if result.returncode != 0:
         exit_stop_allow()
 
-    try:
-        status = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        exit_stop_allow()
+    status = parse_status_text(result.stdout)
 
     current_state = status.get("current_state", "")
     is_terminal = status.get("terminal", False)
 
-    if is_terminal:
+    # Allow stop in terminal states and awaiting_clear (iteration boundary —
+    # the protocol requires /clear before resuming, so the model must be
+    # allowed to stop).
+    if is_terminal or current_state == "awaiting_clear":
         exit_stop_allow()
 
     # Build a helpful message about what's needed

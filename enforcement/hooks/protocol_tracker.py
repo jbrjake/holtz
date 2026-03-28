@@ -6,7 +6,6 @@ updates the enforcement cache file. Never blocks. Pure bookkeeping.
 """
 from __future__ import annotations
 
-import json
 import os
 import re
 import subprocess
@@ -18,6 +17,7 @@ from _protocol_cache import (  # noqa: E402
     empty_cache,
     is_git_commit,
     is_sahjhan_cmd,
+    parse_status_text,
     read_cache,
     write_cache,
 )
@@ -45,7 +45,7 @@ def _parse_commit_hash(output: str) -> str:
 
 
 def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
-    """Query sahjhan status --json and update cache fields."""
+    """Query sahjhan status (text) and update cache fields."""
     binary = sahjhan_binary()
     if not os.path.isfile(binary):
         return cache
@@ -55,7 +55,7 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
         cmd = [binary, "--config-dir", config_dir]
         if ledger:
             cmd.extend(["--ledger", ledger])
-        cmd.extend(["status", "--json"])
+        cmd.append("status")
         result = subprocess.run(
             cmd,
             capture_output=True, text=True, timeout=5, cwd=cwd,
@@ -66,16 +66,12 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     if result.returncode != 0:
         return cache
 
-    try:
-        status = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return cache
+    status = parse_status_text(result.stdout)
 
     cache["state"] = status.get("current_state", "")
-    sets = status.get("sets", {})
-    perspective = sets.get("perspective", {})
+    perspective = status.get("sets", {}).get("perspective", {})
     cache["perspectives_done"] = perspective.get("complete", 0)
-    cache["perspectives_total"] = perspective.get("total", 0)
+    cache["perspectives_total"] = perspective.get("total", 0) or cache.get("perspectives_total", 13)
     cache["stall"] = 0
     cache["active"] = cache.get("state", "") not in ("", "idle", "finalized")
     return cache
