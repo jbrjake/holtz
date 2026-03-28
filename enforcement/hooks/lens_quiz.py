@@ -136,8 +136,11 @@ def verify_answer_freshness(
         return True  # can't read — assume fresh
 
     # Check if any keyword from the correct answer option appears near the line
-    answer_idx = ord(question["a"]) - ord("A")
-    if answer_idx < 0 or answer_idx >= len(question["opts"]):
+    answer_key = question.get("a", "")
+    if not answer_key or len(answer_key) != 1:
+        return False  # missing or malformed answer key — treat as stale
+    answer_idx = ord(answer_key) - ord("A")
+    if answer_idx < 0 or answer_idx >= len(question.get("opts", [])):
         return True
 
     answer_text = question["opts"][answer_idx].lower()
@@ -201,12 +204,11 @@ def _run_sahjhan(
 
 
 def _get_run_number(binary: str, config_dir: str, cwd: str, ledger: str | None) -> str:
-    """Get current run number from sahjhan status."""
-    result = _run_sahjhan(binary, config_dir, cwd, ledger, ["status", "--json"])
-    if result and result.returncode == 0:
-        with contextlib.suppress(json.JSONDecodeError):
-            status = json.loads(result.stdout)
-            return str(status.get("run", "0"))
+    """Get current run number from ledger name."""
+    # Derive from ledger name (e.g., "run-31" -> "31") since sahjhan status
+    # does not include run_number in its output.
+    if ledger:
+        return ledger.replace("run-", "") or "0"
     return "0"
 
 

@@ -26,6 +26,8 @@ def validate_quiz_bank(entries: list[dict]) -> list[str]:
             continue
         if len(entry["opts"]) != 4:
             errors.append(f"Entry {i}: need 4 options, got {len(entry['opts'])}")
+        elif not all(opt.strip() for opt in entry["opts"]):
+            errors.append(f"Entry {i}: options must be non-empty strings")
         if entry["a"] not in VALID_ANSWERS:
             errors.append(f"Entry {i}: answer '{entry['a']}' not in A-D")
         if ":" not in entry["source"]:

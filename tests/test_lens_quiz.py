@@ -363,3 +363,12 @@ def test_verify_freshness_content_changed(tmp_path):
     q = {"source": "test.py:10", "a": "A", "opts": ["OSError", "ValueError", "TypeError", "KeyError"]}
     # "OSError" (option A) is NOT near line 10 — stale
     assert verify_answer_freshness(q, str(tmp_path)) is False
+
+
+def test_verify_freshness_missing_answer_key(tmp_path):
+    """BH-006: Missing 'a' key does not raise KeyError."""
+    src = tmp_path / "test.py"
+    src.write_text("pass\n" * 20)
+    q = {"source": "test.py:10", "opts": ["a", "b", "c", "d"]}
+    # Should return False (stale), not raise KeyError
+    assert verify_answer_freshness(q, str(tmp_path)) is False

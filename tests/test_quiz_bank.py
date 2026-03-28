@@ -55,6 +55,16 @@ def test_rejects_missing_fields():
     assert len(validate_quiz_bank(bad)) > 0
 
 
+def test_empty_option_string_rejected():
+    """BH-009: Empty option strings must be rejected by validator."""
+    from generate_quiz_bank import validate_quiz_bank
+    bad = [{"lens": "x", "q": "q", "a": "A", "opts": ["", "b", "c", "d"],
+            "source": "f.py:1", "keywords": ["a", "b", "c"]}]
+    errors = validate_quiz_bank(bad)
+    assert len(errors) > 0
+    assert "non-empty" in errors[0]
+
+
 def test_live_quiz_bank_valid():
     """BH-017: Live quiz bank file passes all validation rules."""
     import json
