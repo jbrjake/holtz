@@ -18,19 +18,35 @@ def check_transcript(
     """Check a parsed transcript for evidence of real lens work.
 
     Returns {"pass": bool, "read_count": int, "keyword_hits": int, "reason": str}
+
+    Supports the Claude Code JSONL transcript format where tool calls are stored
+    as ``tool_use`` blocks inside ``assistant`` message content, not as top-level
+    events with a ``tool_name`` field.
     """
     read_count = 0
     keyword_hits = 0
     assistant_text = ""
 
     for event in events:
-        if event.get("tool_name") == "Read":
-            path = event.get("tool_input", {}).get("file_path", "")
-            parts = path.replace("\\", "/").split("/")
-            if not any(p == "docs" or "quiz-bank" in p for p in parts):
-                read_count += 1
         if event.get("type") == "assistant":
-            assistant_text += " " + event.get("content", "")
+            # Tool calls are tool_use blocks inside message.content
+            for block in event.get("message", {}).get("content", []):
+                if (
+                    isinstance(block, dict)
+                    and block.get("type") == "tool_use"
+                    and block.get("name") == "Read"
+                ):
+                    path = block.get("input", {}).get("file_path", "")
+                    parts = path.replace("\\", "/").split("/")
+                    if not any(p == "docs" or "quiz-bank" in p for p in parts):
+                        read_count += 1
+            # Collect assistant text from text blocks
+            for block in event.get("message", {}).get("content", []):
+                if isinstance(block, dict) and block.get("type") == "text":
+                    assistant_text += " " + block.get("text", "")
+            # Also handle synthesized events (degraded mode: content is a plain string)
+            if isinstance(event.get("content"), str):
+                assistant_text += " " + event["content"]
 
     lower_text = assistant_text.lower()
     for kw in keywords:
