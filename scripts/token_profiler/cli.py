@@ -20,7 +20,7 @@ from types import ModuleType
 from token_profiler.analyze import build_run_profile, build_session_profile
 from token_profiler.extract import discover_subagents, extract_session, find_project_dir
 from token_profiler.plugin_protocol import ProfilerPlugin
-from token_profiler.pricing import apply_pricing_to_usage, make_pricing_fn
+from token_profiler.pricing import make_pricing_fn
 from token_profiler.report import generate_markdown
 
 # ---------------------------------------------------------------------------
