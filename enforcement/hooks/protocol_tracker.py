@@ -25,6 +25,16 @@ from _resolve import sahjhan_binary  # noqa: E402
 from _common import exit_ok, read_event  # noqa: E402
 
 
+def _is_tdd_cmd(cmd: str) -> bool:
+    """Detect test, lint, and type-check commands (TDD workflow)."""
+    cmd_stripped = cmd.strip()
+    return any(keyword in cmd_stripped for keyword in (
+        "pytest", "python -m pytest",
+        "ruff check", "ruff format",
+        "mypy",
+    ))
+
+
 def _parse_commit_hash(output: str) -> str:
     """Extract short commit hash from git commit output."""
     m = re.search(r"\[[\w/.-]+\s+([0-9a-f]{7,})\]", output)
@@ -101,7 +111,9 @@ def main() -> None:
         write_cache(cwd, cache)
         exit_ok()
 
-    cache["stall"] = cache.get("stall", 0) + 1
+    # Test/lint/type-check commands are legitimate TDD activity — don't count as stalling
+    if not _is_tdd_cmd(cmd):
+        cache["stall"] = cache.get("stall", 0) + 1
     write_cache(cwd, cache)
     exit_ok()
 

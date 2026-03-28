@@ -135,7 +135,7 @@ class TestProtocolTracker:
         assert "abc1234" in updated["unregistered_commits"]
 
     def test_increments_stall_counter(self, tmp_path):
-        """Non-git, non-sahjhan commands increment stall."""
+        """Non-git, non-sahjhan, non-TDD commands increment stall."""
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
@@ -144,14 +144,34 @@ class TestProtocolTracker:
 
         event = {
             "tool_name": "Bash",
-            "tool_input": {"command": "python -m pytest --tb=short -q"},
-            "tool_response": {"exit_code": 0, "output": "10 passed"},
+            "tool_input": {"command": "cat some_file.py"},
+            "tool_response": {"exit_code": 0, "output": "contents"},
             "cwd": str(tmp_path),
         }
         run_enforcement_hook("protocol_tracker.py", event)
 
         updated = read_cache(str(tmp_path))
         assert updated["stall"] == 6
+
+    def test_tdd_commands_skip_stall(self, tmp_path):
+        """Test/lint/type-check commands do not increment stall (BH-012)."""
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["stall"] = 3
+        write_cache(str(tmp_path), cache)
+
+        for cmd in ["python -m pytest --tb=short -q", "ruff check .", "mypy src/"]:
+            event = {
+                "tool_name": "Bash",
+                "tool_input": {"command": cmd},
+                "tool_response": {"exit_code": 0, "output": "ok"},
+                "cwd": str(tmp_path),
+            }
+            run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert updated["stall"] == 3, "TDD commands should not increment stall"
 
     def test_ignores_non_bash(self):
         """Non-Bash tool calls are ignored."""
