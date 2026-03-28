@@ -304,23 +304,22 @@ def _inject_computed_properties(data: dict) -> dict:
     dataclasses.asdict() skips @property methods. This injects them so
     profile.json consumers see total/total_cost fields (BH-020).
     """
-    # BucketBreakdown.total
     for session in data.get("sessions", []):
-        summary = session.get("summary") or {}
-        for bucket_key in ("input", "cache_creation", "cache_read", "output"):
-            bucket = summary.get(bucket_key)
+        for phase in session.get("phases", []):
+            # BucketBreakdown.total
+            bucket = phase.get("bucket_breakdown")
             if isinstance(bucket, dict) and "total" not in bucket:
                 bucket["total"] = sum(bucket.get(k, 0) for k in
                                       ("input_tokens", "cache_creation_tokens",
                                        "cache_read_tokens", "output_tokens")
                                       if k in bucket)
-        # DollarCost.total_cost
-        dollars = summary.get("dollar_cost")
-        if isinstance(dollars, dict) and "total_cost" not in dollars:
-            dollars["total_cost"] = sum(dollars.get(k, 0.0) for k in
-                                        ("input_cost", "cache_creation_cost",
-                                         "cache_read_cost", "output_cost")
-                                        if k in dollars)
+            # DollarCost.total_cost
+            dollars = phase.get("dollar_cost")
+            if isinstance(dollars, dict) and "total_cost" not in dollars:
+                dollars["total_cost"] = sum(dollars.get(k, 0.0) for k in
+                                            ("input_cost", "cache_creation_cost",
+                                             "cache_read_cost", "output_cost")
+                                            if k in dollars)
     return data
 
 
@@ -441,14 +440,14 @@ def main(argv: list[str] | None = None) -> int:
     if emit_json:
         profile_data = _inject_computed_properties(asdict(run_profile))
         json_path = out_dir / "profile.json"
-        with open(json_path, "w") as f:
+        with open(json_path, "w", encoding="utf-8") as f:
             json.dump(profile_data, f, indent=2, default=_json_default)
 
     # Write profile.md
     if emit_md:
         md_content = generate_markdown(run_profile)
         md_path = out_dir / "profile.md"
-        with open(md_path, "w") as f:
+        with open(md_path, "w", encoding="utf-8") as f:
             f.write(md_content)
 
     # Write profile.html (stub — skip if viewer module not importable)
@@ -457,7 +456,7 @@ def main(argv: list[str] | None = None) -> int:
             from token_profiler.viewer import generate_html
             html_content = generate_html(run_profile)
             html_path = out_dir / "profile.html"
-            with open(html_path, "w") as f:
+            with open(html_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
 
             if args.open:
