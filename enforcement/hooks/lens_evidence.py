@@ -26,7 +26,8 @@ def check_transcript(
     for event in events:
         if event.get("tool_name") == "Read":
             path = event.get("tool_input", {}).get("file_path", "")
-            if not any(skip in path for skip in ["docs/", "enforcement/", "quiz-bank"]):
+            parts = path.replace("\\", "/").split("/")
+            if not any(p in ("docs", "enforcement") or "quiz-bank" in p for p in parts):
                 read_count += 1
         if event.get("type") == "assistant":
             assistant_text += " " + event.get("content", "")
