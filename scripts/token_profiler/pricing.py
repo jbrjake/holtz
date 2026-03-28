@@ -7,6 +7,7 @@ Provides longest-prefix model matching so version-suffixed model names
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 
 from token_profiler.models import DollarCost, Usage
 
@@ -93,3 +94,45 @@ def apply_pricing_to_usage(usage: Usage, model: str) -> DollarCost:
         cache_read_cost=usage.cache_read_input_tokens * rates["cache_read"],
         output_cost=usage.output_tokens * rates["output"],
     )
+
+
+def make_pricing_fn(
+    custom_table: dict[str, dict[str, float]] | None,
+) -> Callable[[Usage, str], DollarCost]:
+    """Return a pricing function, optionally using a custom pricing table.
+
+    If *custom_table* is ``None``, returns :func:`apply_pricing_to_usage`
+    (the default pricing function).  Otherwise, returns a function that
+    looks up rates in *custom_table* first, falling back to the built-in
+    ``PRICING`` table for models not present in the override.
+    """
+    if custom_table is None:
+        return apply_pricing_to_usage
+
+    merged = dict(PRICING)
+    merged.update(custom_table)
+
+    def _custom_pricing(usage: Usage, model: str) -> DollarCost:
+        # Exact match in merged table
+        if model in merged:
+            rates = merged[model]
+        else:
+            # Longest-prefix match (same logic as get_pricing)
+            best_key: str | None = None
+            best_len = 0
+            for key in merged:
+                if key == "unknown":
+                    continue
+                if model.startswith(key) and len(key) > best_len:
+                    best_key = key
+                    best_len = len(key)
+            rates = merged[best_key] if best_key is not None else merged.get("unknown", PRICING["unknown"])
+
+        return DollarCost(
+            input_cost=usage.input_tokens * rates["input"],
+            cache_creation_cost=usage.cache_creation_input_tokens * rates["cache_creation"],
+            cache_read_cost=usage.cache_read_input_tokens * rates["cache_read"],
+            output_cost=usage.output_tokens * rates["output"],
+        )
+
+    return _custom_pricing

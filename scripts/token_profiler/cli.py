@@ -20,7 +20,7 @@ from types import ModuleType
 from token_profiler.analyze import build_run_profile, build_session_profile
 from token_profiler.extract import discover_subagents, extract_session, find_project_dir
 from token_profiler.plugin_protocol import ProfilerPlugin
-from token_profiler.pricing import apply_pricing_to_usage
+from token_profiler.pricing import apply_pricing_to_usage, make_pricing_fn
 from token_profiler.report import generate_markdown
 
 # ---------------------------------------------------------------------------
@@ -357,11 +357,12 @@ def main(argv: list[str] | None = None) -> int:
         with open(args.milestones) as f:
             milestones = json.load(f)
 
-    # Load custom pricing (future: merge with built-in pricing table)
+    # Load custom pricing and build pricing function
     custom_pricing: dict | None = None
     if args.pricing:
-        with open(args.pricing) as f:
+        with open(args.pricing, encoding="utf-8") as f:
             custom_pricing = json.load(f)
+    pricing_fn = make_pricing_fn(custom_pricing)
 
     # Determine run ID
     run_id = args.run_id or session_path.stem
@@ -385,7 +386,7 @@ def main(argv: list[str] | None = None) -> int:
         session_type="main",
         milestones=milestones,
         plugin=active_plugin,
-        pricing_fn=apply_pricing_to_usage,
+        pricing_fn=pricing_fn,
     )
     if active_plugin:
         active_plugin.enrich_profile(main_profile)
@@ -407,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
                 session_type="subagent",
                 milestones=milestones,
                 plugin=active_plugin,
-                pricing_fn=apply_pricing_to_usage,
+                pricing_fn=pricing_fn,
             )
             if active_plugin:
                 sub_profile.subagent_name = active_plugin.name_subagent(sub_turns)
@@ -463,8 +464,5 @@ def main(argv: list[str] | None = None) -> int:
         except FileNotFoundError:
             # Template file missing — warn but don't crash (BH-017)
             print("warning: viewer template not found, skipping HTML output", file=sys.stderr)
-
-    # custom_pricing reserved for future user-override pricing tables
-    _ = custom_pricing
 
     return 0
