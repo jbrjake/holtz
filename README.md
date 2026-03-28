@@ -3,7 +3,7 @@
 [![CI](https://github.com/jbrjake/holtz/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/jbrjake/holtz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)
-![749 tests](https://img.shields.io/badge/tests-749_passed-brightgreen.svg)
+![752 tests](https://img.shields.io/badge/tests-752_passed-brightgreen.svg)
 ![76% coverage](https://img.shields.io/badge/coverage-76%25-brightgreen.svg)
 
 **Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
@@ -187,7 +187,7 @@ For the complete trace with reasoning chains, code diffs, and prediction accurac
 
 **Run 16** found the run count stale again (same class as every run since 14) and the prediction accuracy overstated. Also PAT-001 for its eleventh and twelfth manifestations: `parse_brief()` applied regex without masking code fences (offset-divergence variant), and the hooks' fence masking tracked fence character but not fence count (grammar variant). Four items, all resolved.
 
-After 31 runs: 749 tests across 17,202 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+After 31 runs: 752 tests across 20,817 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
 
 The full dataset — prediction accuracy calibration, PAT-001 recurrence timeline, adversarial merge blind-spot analysis, convergence iteration counts, and test growth curves across all 16 runs — is published in [docs/research/convergence-data.md](docs/research/convergence-data.md). (Data through Run 16; Runs 17-18 are not yet included in the research dataset.)
 
@@ -195,7 +195,7 @@ The full dataset — prediction accuracy calibration, PAT-001 recurrence timelin
 
 Advisory instructions weren't enough. Holtz understood the instructions. He agreed with the instructions. He did not follow the instructions. This was not the plan. The plan was for Holtz to follow instructions like a professional. The hooks are what happened instead.
 
-Five hooks backed by the Sahjhan enforcement engine — a state machine that replaced the original advisory hooks when advisory proved insufficient. The first generation of hooks checked files and timestamps. This generation checks protocol state. Every transition in the audit lifecycle is gated by the ledger. Holtz doesn't get to skip steps anymore. Neither does Justine.
+Ten hooks backed by the Sahjhan enforcement engine — a state machine that replaced the original advisory hooks when advisory proved insufficient. The first generation of hooks checked files and timestamps. This generation checks protocol state. Every transition in the audit lifecycle is gated by the ledger. Holtz doesn't get to skip steps anymore. Neither does Justine.
 
 **Write guard.** Sahjhan renders STATUS.md, PUNCHLIST.md, SUMMARY.md, and the merge reports from the ledger. The write guard blocks direct edits to those files. You don't write to them. The engine does. Everything else in `docs/holtz/` — recon notes, audit files, the impact graph — goes through fine. The guard knows the difference between protocol state and working files.
 
@@ -211,7 +211,7 @@ Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-1 skill, 3 agents, 18 reference docs, 1 example, 6 Python scripts, 16 seed patterns, 10 enforcement hooks, 749 tests across 17,202 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+1 skill, 3 agents, 18 reference docs, 1 example, 6 Python scripts, 16 seed patterns, 10 enforcement hooks, 752 tests across 17,247 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Why the backstories
 
