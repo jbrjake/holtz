@@ -91,8 +91,9 @@ def is_git_commit(cmd: str) -> bool:
     """
     if not re.search(r"\bgit\s+commit\b(?!-)", cmd):
         return False
-    # Check for --amend as a flag, not inside a quoted message
-    return not re.search(r"(?<!\w)--amend\b", cmd.split("-m")[0] if "-m" in cmd else cmd)
+    # Strip -m argument and its quoted/unquoted value, then check for --amend
+    stripped = re.sub(r'-m\s+(?:"[^"]*"|\'[^\']*\'|\S+)', '', cmd)
+    return not re.search(r"(?<!\w)--amend\b", stripped)
 
 
 def is_sahjhan_cmd(cmd: str) -> bool:

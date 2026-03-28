@@ -40,7 +40,7 @@ def main() -> None:
     parser.add_argument("--input", required=True, help="Path to quiz-bank.json")
     args = parser.parse_args()
 
-    with open(args.input) as f:
+    with open(args.input, encoding="utf-8") as f:
         bank = json.load(f)
 
     errors = validate_quiz_bank(bank)

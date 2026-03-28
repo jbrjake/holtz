@@ -3,7 +3,7 @@
 [![CI](https://github.com/jbrjake/holtz/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/jbrjake/holtz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)
-![757 tests](https://img.shields.io/badge/tests-755_passed-brightgreen.svg)
+![759 tests](https://img.shields.io/badge/tests-759_passed-brightgreen.svg)
 ![76% coverage](https://img.shields.io/badge/coverage-76%25-brightgreen.svg)
 
 **Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
@@ -101,7 +101,7 @@ Every 3-5 fixes, he groups resolved items and looks for shared root causes. When
 
 On the next run, that heuristic fires during recon before Holtz reads a line of code. PAT-001 in his own codebase — code-fence-unaware parsing — showed up twelve times across six runs. Same root cause, different disguise each time. By run 4 he was predicting it before finding it.
 
-Predictive recon synthesizes the graph's risk scores, git churn, known patterns, mutation survival rates, and prior findings to rank where bugs are most likely hiding. He writes predictions to disk with confidence levels and checks them against actual findings at the end of every run. On his own codebase across 11 runs with prediction tracking, HIGH-confidence predictions confirm 65% of the time (range 0-100%). MEDIUM at 38% (range 0-100%). LOW at 0%. HIGH performs best when converging on a known pattern family — when Holtz has seen the bug class before, he predicts where it will appear next. MEDIUM predictions are directionally correct more often than the numbers suggest: they point to the right code but overestimate severity. The model calibrates to your specific project's failure modes. Not generic advice. A vulnerability profile that gets sharper every time he comes back.
+Predictive recon synthesizes the graph's risk scores, git churn, known patterns, mutation survival rates, and prior findings to rank where bugs are most likely hiding. He writes predictions to disk with confidence levels and checks them against actual findings at the end of every run. On his own codebase across seven runs with prediction tracking, HIGH-confidence predictions confirm 82% of the time. MEDIUM at 59%. LOW at 67%. HIGH performs best when converging on a known pattern family — when Holtz has seen the bug class before, he predicts where it will appear next. MEDIUM predictions are directionally correct more often than the numbers suggest: they point to the right code but overestimate severity. The model calibrates to your specific project's failure modes. Not generic advice. A vulnerability profile that gets sharper every time he comes back.
 
 The living punchlist is the institutional memory. It records which bug classes your project is susceptible to, which code areas repeatedly produce bugs, what structural weaknesses exist, and what detection heuristics should run on every new change. Recommendations that go unaddressed in two or more runs stop being optional. They become punchlist items. Holtz tracks what he told you to fix. If you didn't fix it, it stops being a suggestion.
 
@@ -157,7 +157,7 @@ Default behavior between runs is resume, not restart:
 
 ## What this looks like in practice
 
-Holtz has been auditing his own codebase since it was written. Twenty-three runs and counting. Here's what happened.
+Holtz has been auditing his own codebase since it was written. Twenty-four runs and counting. Here's what happened.
 
 Here is run 14 — a full adversarial self-play audit. Holtz and Justine auditing in parallel, merging findings, then Holtz running the TDD fix loop through convergence. Every tool call, every finding, every fix. Token counts after each step.
 
@@ -187,7 +187,7 @@ For the complete trace with reasoning chains, code diffs, and prediction accurac
 
 **Run 16** found the run count stale again (same class as every run since 14) and the prediction accuracy overstated. Also PAT-001 for its eleventh and twelfth manifestations: `parse_brief()` applied regex without masking code fences (offset-divergence variant), and the hooks' fence masking tracked fence character but not fence count (grammar variant). Four items, all resolved.
 
-After 23 runs: 757 tests across 17,339 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+After 24 runs: 759 tests across 17,469 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
 
 The full dataset — prediction accuracy calibration, PAT-001 recurrence timeline, adversarial merge blind-spot analysis, convergence iteration counts, and test growth curves across all 16 runs — is published in [docs/research/convergence-data.md](docs/research/convergence-data.md). (Data through Run 16; Runs 17-18 are not yet included in the research dataset.)
 
@@ -211,7 +211,7 @@ Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-1 skill, 3 agents, 18 reference docs, 1 example, 6 Python scripts, 16 seed patterns, 10 enforcement hooks, 759 tests across 17,410 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+1 skill, 3 agents, 18 reference docs, 1 example, 6 Python scripts, 16 seed patterns, 10 enforcement hooks, 759 tests across 17,469 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Why the backstories
 

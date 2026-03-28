@@ -6,6 +6,7 @@ updates the enforcement cache file. Never blocks. Pure bookkeeping.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -13,6 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from _common import _active_ledger  # noqa: E402
 from _protocol_cache import (  # noqa: E402
     empty_cache,
     is_git_commit,
@@ -28,11 +30,13 @@ from _common import exit_ok, read_event  # noqa: E402
 def _is_tdd_cmd(cmd: str) -> bool:
     """Detect test, lint, and type-check commands (TDD workflow)."""
     cmd_stripped = cmd.strip()
-    return any(keyword in cmd_stripped for keyword in (
-        "pytest", "python -m pytest",
-        "ruff check", "ruff format",
-        "mypy",
-    ))
+    return (
+        cmd_stripped.startswith("pytest")
+        or cmd_stripped.startswith("python -m pytest")
+        or cmd_stripped.startswith("ruff check")
+        or cmd_stripped.startswith("ruff format")
+        or cmd_stripped.startswith("mypy")
+    )
 
 
 def _parse_commit_hash(output: str) -> str:
@@ -42,14 +46,19 @@ def _parse_commit_hash(output: str) -> str:
 
 
 def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
-    """Query sahjhan status and update cache fields."""
+    """Query sahjhan status --json and update cache fields."""
     binary = sahjhan_binary()
     if not os.path.isfile(binary):
         return cache
     config_dir = os.path.join(cwd, "enforcement")
+    ledger = _active_ledger(cwd)
     try:
+        cmd = [binary, "--config-dir", config_dir]
+        if ledger:
+            cmd.extend(["--ledger", ledger])
+        cmd.extend(["status", "--json"])
         result = subprocess.run(
-            [binary, "--config-dir", config_dir, "status"],
+            cmd,
             capture_output=True, text=True, timeout=5, cwd=cwd,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -58,19 +67,16 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     if result.returncode != 0:
         return cache
 
-    output = result.stdout
-    for line in output.split("\n"):
-        line = line.strip()
-        if line.startswith("State:"):
-            m = re.search(r"\((\w+)\)\s*$", line)
-            if m:
-                cache["state"] = m.group(1)
-        if "perspective" in line and "/" in line and "complete" in line:
-            m = re.search(r"\((\d+)/(\d+)\s+complete\)", line)
-            if m:
-                cache["perspectives_done"] = int(m.group(1))
-                cache["perspectives_total"] = int(m.group(2))
+    try:
+        status = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return cache
 
+    cache["state"] = status.get("current_state", "")
+    sets = status.get("sets", {})
+    perspective = sets.get("perspective", {})
+    cache["perspectives_done"] = perspective.get("complete", 0)
+    cache["perspectives_total"] = perspective.get("total", 0)
     cache["stall"] = 0
     cache["active"] = cache.get("state", "") not in ("", "idle", "finalized")
     return cache

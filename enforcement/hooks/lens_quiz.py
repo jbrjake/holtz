@@ -72,9 +72,12 @@ def parse_answers(message: str) -> tuple[str, list[str]] | None:
 
 
 def select_questions(bank: list[dict], lens: str) -> list[dict]:
-    """Select up to 5 questions for a given lens from the bank."""
+    """Select up to 5 random questions for a given lens from the bank."""
+    import random
     matching = [q for q in bank if q.get("lens") == lens]
-    return matching[:5]
+    if len(matching) <= 5:
+        return matching
+    return random.sample(matching, 5)
 
 
 def format_quiz_questions(questions: list[dict], lens: str) -> str:
@@ -161,7 +164,7 @@ def score_answers(
     correct = 0
     total = 0
     if len(questions) != len(answers):
-        return 0, len(questions)
+        return 0, 0  # unevaluable: count mismatch
     for q, given in zip(questions, answers, strict=True):
         if not verify_answer_freshness(q, cwd):
             continue  # drop stale question

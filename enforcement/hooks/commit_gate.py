@@ -27,7 +27,11 @@ from _common import exit_block, exit_ok, exit_warn, read_event  # noqa: E402
 
 def _is_test_cmd(cmd: str) -> bool:
     """Detect test/pytest commands that should always be allowed."""
-    return "pytest" in cmd or cmd.strip().startswith("python -m pytest")
+    cmd_stripped = cmd.strip()
+    return (
+        cmd_stripped.startswith("pytest")
+        or cmd_stripped.startswith("python -m pytest")
+    )
 
 
 def main() -> None:
