@@ -14,7 +14,6 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import _active_ledger  # noqa: E402
 from _protocol_cache import (  # noqa: E402
     empty_cache,
     is_git_commit,
@@ -24,7 +23,7 @@ from _protocol_cache import (  # noqa: E402
 )
 from _resolve import sahjhan_binary  # noqa: E402
 
-from _common import exit_ok, read_event  # noqa: E402
+from _common import _active_ledger, exit_ok, read_event  # noqa: E402
 
 
 def _is_tdd_cmd(cmd: str) -> bool:
