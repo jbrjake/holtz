@@ -53,3 +53,19 @@ def test_rejects_missing_fields():
     from generate_quiz_bank import validate_quiz_bank
     bad = [{"lens": "component", "q": "test?"}]
     assert len(validate_quiz_bank(bad)) > 0
+
+
+def test_live_quiz_bank_valid():
+    """BH-017: Live quiz bank file passes all validation rules."""
+    import json
+
+    from generate_quiz_bank import validate_quiz_bank
+
+    quiz_bank_path = REPO_ROOT / "enforcement" / "quiz-bank.json"
+    if not quiz_bank_path.exists():
+        import pytest
+        pytest.skip("No live quiz-bank.json present")
+    with open(quiz_bank_path, encoding="utf-8") as f:
+        bank = json.load(f)
+    errors = validate_quiz_bank(bank)
+    assert errors == [], f"Live quiz bank has validation errors: {errors}"
