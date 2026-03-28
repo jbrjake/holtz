@@ -1,11 +1,11 @@
-{# enforcement/templates/status.md.tera — uses sahjhan v0.2.0 render context #}
+{# enforcement/templates/status.md.tera — uses sahjhan v0.5.0 render context #}
 # Holtz Status
 
 **Project:** {{ protocol.name }} v{{ protocol.version }}
 **State:** {{ state.label }}
 **Ledger:** {{ ledger_len }} events
 **Violations:** {{ violations }}
-**Run:** {{ events | filter(attribute="event_type", value="state_transition") | first | get(key="fields") | get(key="run", default="?") }}
+**Run:** {{ template_instance_id | default(value="?") }}
 **Auditor:** holtz
 
 ## State Transitions
@@ -21,8 +21,8 @@
 {% endfor %}
 
 ## Findings
-{% set finding_count = 0 -%}
-{% set resolved_count = 0 -%}
+{% set_global finding_count = 0 -%}
+{% set_global resolved_count = 0 -%}
 {% for e in events -%}
 {% if e.event_type == "finding" -%}
 {% set_global finding_count = finding_count + 1 -%}

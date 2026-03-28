@@ -2,21 +2,21 @@
 target = "STATUS.md"
 template = "templates/status.md.tera"
 trigger = "on_transition"
-ledger = "run"
+ledger_template = "run"
 
 [[renders]]
 target = "PUNCHLIST.md"
 template = "templates/punchlist.md.tera"
 trigger = "on_event"
 event_types = ["finding", "finding_resolved"]
-ledger = "run"
+ledger_template = "run"
 
 [[renders]]
 target = "SUMMARY.md"
 template = "templates/summary.md.tera"
 trigger = "on_state"
 state = "converged"
-ledger = "run"
+ledger_template = "run"
 
 [[renders]]
 target = "LIVING-PUNCHLIST.md"

@@ -45,33 +45,6 @@
       "audit_count": 2,
       "risk_score": 0.0
     },
-    "hooks.artifact_verification": {
-      "id": "hooks.artifact_verification",
-      "type": "module",
-      "file": "hooks/artifact_verification.py",
-      "line": 1,
-      "last_audited": "2026-03-22",
-      "audit_count": 2,
-      "risk_score": 0.0
-    },
-    "hooks.impact_graph_gate": {
-      "id": "hooks.impact_graph_gate",
-      "type": "module",
-      "file": "hooks/impact_graph_gate.py",
-      "line": 1,
-      "last_audited": "2026-03-22",
-      "audit_count": 2,
-      "risk_score": 0.0
-    },
-    "hooks.status_staleness_gate": {
-      "id": "hooks.status_staleness_gate",
-      "type": "module",
-      "file": "hooks/status_staleness_gate.py",
-      "line": 1,
-      "last_audited": "2026-03-22",
-      "audit_count": 2,
-      "risk_score": 0.0
-    },
     "hooks.subagent_findings_check": {
       "id": "hooks.subagent_findings_check",
       "type": "module",
@@ -193,33 +166,6 @@
       "id": "hooks/_common",
       "type": "module",
       "file": "hooks/_common.py",
-      "line": null,
-      "last_audited": "2026-03-23",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "hooks/impact_graph_gate": {
-      "id": "hooks/impact_graph_gate",
-      "type": "module",
-      "file": "hooks/impact_graph_gate.py",
-      "line": null,
-      "last_audited": "2026-03-23",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "hooks/status_staleness_gate": {
-      "id": "hooks/status_staleness_gate",
-      "type": "module",
-      "file": "hooks/status_staleness_gate.py",
-      "line": null,
-      "last_audited": "2026-03-23",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "hooks/artifact_verification": {
-      "id": "hooks/artifact_verification",
-      "type": "module",
-      "file": "hooks/artifact_verification.py",
       "line": null,
       "last_audited": "2026-03-23",
       "audit_count": 1,
@@ -405,33 +351,6 @@
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "impact_graph_gate.py": {
-      "id": "impact_graph_gate.py",
-      "type": "module",
-      "file": "hooks/impact_graph_gate.py",
-      "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "status_staleness_gate.py": {
-      "id": "status_staleness_gate.py",
-      "type": "module",
-      "file": "hooks/status_staleness_gate.py",
-      "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "artifact_verification.py": {
-      "id": "artifact_verification.py",
-      "type": "module",
-      "file": "hooks/artifact_verification.py",
-      "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
     "subagent_findings_check.py": {
       "id": "subagent_findings_check.py",
       "type": "module",
@@ -449,24 +368,6 @@
       "last_audited": "2026-03-24",
       "audit_count": 1,
       "risk_score": 0.0
-    },
-    "convergence_gate": {
-      "id": "convergence_gate",
-      "type": "module",
-      "file": "hooks/convergence_gate.py",
-      "line": 1,
-      "last_audited": "2026-03-25",
-      "audit_count": 2,
-      "risk_score": 0.3
-    },
-    "convergence_primer": {
-      "id": "convergence_primer",
-      "type": "module",
-      "file": "hooks/convergence_primer.py",
-      "line": 1,
-      "last_audited": "2026-03-25",
-      "audit_count": 2,
-      "risk_score": 0.1
     },
     "SKILL.md": {
       "id": "SKILL.md",
@@ -494,15 +395,6 @@
       "last_audited": "2026-03-25",
       "audit_count": 1,
       "risk_score": 0.7
-    },
-    "_count_open_items": {
-      "id": "_count_open_items",
-      "type": "function",
-      "file": "hooks/convergence_gate.py",
-      "line": 35,
-      "last_audited": "2026-03-25",
-      "audit_count": 1,
-      "risk_score": 0.4
     },
     "count_items": {
       "id": "count_items",
@@ -552,33 +444,6 @@
       }
     },
     {
-      "source": "hooks.artifact_verification",
-      "target": "hooks._common",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "hooks.impact_graph_gate",
-      "target": "hooks._common",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "hooks.status_staleness_gate",
-      "target": "hooks._common",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium"
-      }
-    },
-    {
       "source": "hooks.subagent_findings_check",
       "target": "hooks._common",
       "type": "imports",
@@ -616,16 +481,6 @@
       }
     },
     {
-      "source": "hooks.artifact_verification",
-      "target": "impact_graph::ImpactGraph",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium",
-        "note": "Hook assumes impact_graph.py creates file at --graph path"
-      }
-    },
-    {
       "source": "README.md",
       "target": "validate_punchlist",
       "type": "assumes",
@@ -656,16 +511,6 @@
       }
     },
     {
-      "source": "hooks.status_staleness_gate",
-      "target": "hooks.impact_graph_gate",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium",
-        "note": "Both share the same cwd resolution and path normalization pattern"
-      }
-    },
-    {
       "source": "README.md",
       "target": "skills/holtz/references",
       "type": "diverges_from",
@@ -686,63 +531,9 @@
       }
     },
     {
-      "source": "hooks/impact_graph_gate",
-      "target": "hooks/_common",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-23",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "hooks/status_staleness_gate",
-      "target": "hooks/_common",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-23",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "hooks/artifact_verification",
-      "target": "hooks/_common",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-23",
-        "confidence": "medium"
-      }
-    },
-    {
       "source": "hooks/subagent_findings_check",
       "target": "hooks/_common",
       "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-23",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "test_hooks",
-      "target": "hooks/impact_graph_gate",
-      "type": "tests",
-      "metadata": {
-        "discovered": "2026-03-23",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "test_hooks",
-      "target": "hooks/status_staleness_gate",
-      "type": "tests",
-      "metadata": {
-        "discovered": "2026-03-23",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "test_hooks",
-      "target": "hooks/artifact_verification",
-      "type": "tests",
       "metadata": {
         "discovered": "2026-03-23",
         "confidence": "medium"
@@ -809,16 +600,6 @@
       "metadata": {
         "discovered": "2026-03-23",
         "confidence": "medium"
-      }
-    },
-    {
-      "source": "hooks/impact_graph_gate",
-      "target": "impact_graph",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-23",
-        "confidence": "medium",
-        "note": "Gate checks for impact-graph.json existence -- assumes impact_graph.py creates it at that path"
       }
     },
     {
@@ -907,33 +688,6 @@
       }
     },
     {
-      "source": "impact_graph_gate.py",
-      "target": "_common.py",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-24",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "status_staleness_gate.py",
-      "target": "_common.py",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-24",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "artifact_verification.py",
-      "target": "_common.py",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-24",
-        "confidence": "medium"
-      }
-    },
-    {
       "source": "subagent_findings_check.py",
       "target": "_common.py",
       "type": "imports",
@@ -963,16 +717,6 @@
       }
     },
     {
-      "source": "impact_graph_gate.py",
-      "target": "status_staleness_gate.py",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-24",
-        "confidence": "medium",
-        "note": "Both use substring containment for path matching \u2014 same pattern, same limitations"
-      }
-    },
-    {
       "source": "test_integration.py",
       "target": "README.md",
       "type": "assumes",
@@ -995,24 +739,6 @@
       "source": "test_integration.py",
       "target": "convergence_check.py",
       "type": "tests",
-      "metadata": {
-        "discovered": "2026-03-24",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "convergence_gate",
-      "target": "hooks/_common",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-24",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "convergence_primer",
-      "target": "hooks/_common",
-      "type": "imports",
       "metadata": {
         "discovered": "2026-03-24",
         "confidence": "medium"
@@ -1046,34 +772,6 @@
         "note": "Both must produce identical output on identical inputs \u2014 same logical operation, different implementations",
         "confidence": "high",
         "discovered": "2026-03-25"
-      }
-    },
-    {
-      "source": "_count_open_items",
-      "target": "count_items",
-      "type": "diverges_from",
-      "metadata": {
-        "note": "_count_open_items uses grep, count_items scopes to item blocks \u2014 counts can differ on non-item Status fields",
-        "confidence": "high",
-        "discovered": "2026-03-25"
-      }
-    },
-    {
-      "source": "convergence_gate",
-      "target": "mask_fenced_blocks",
-      "type": "calls",
-      "metadata": {
-        "discovered": "2026-03-25",
-        "confidence": "high"
-      }
-    },
-    {
-      "source": "convergence_primer",
-      "target": "mask_fenced_blocks",
-      "type": "calls",
-      "metadata": {
-        "discovered": "2026-03-25",
-        "confidence": "high"
       }
     },
     {

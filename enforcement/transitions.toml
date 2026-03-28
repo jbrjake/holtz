@@ -11,12 +11,11 @@ from = "recon"
 to = "audit"
 command = "recon_complete"
 gates = [
-    { type = "query", sql = "SELECT count(DISTINCT step) >= 5 FROM events WHERE type='recon_finding'", expect = "true" },
-    { type = "file_exists", path = "docs/holtz/impact-graph.json" },
-    { type = "ledger_has_event", event = "recon_step", min_count = 5 },
-    { type = "ledger_has_event", event = "justine_dispatched", min_count = 1 },
-    # Snapshot pre_audit_edge_count must exist (recorded manually before transition)
-    { type = "ledger_has_event", event = "snapshot", min_count = 1 },
+    { type = "query", sql = "SELECT count(DISTINCT step) >= 5 FROM events WHERE type='recon_finding'", expect = "true", intent = "recon must cover all 5 steps" },
+    { type = "file_exists", path = "docs/holtz/impact-graph.json", intent = "impact graph must exist before auditing" },
+    { type = "ledger_has_event", event = "recon_step", min_count = 5, intent = "each recon step must be recorded" },
+    { type = "ledger_has_event", event = "justine_dispatched", min_count = 1, intent = "Justine must be dispatched for parallel audit" },
+    { type = "ledger_has_event", event = "snapshot", min_count = 1, intent = "pre-audit edge count snapshot needed for comparison" },
 ]
 
 # ── Audit ──
@@ -26,8 +25,8 @@ from = "audit"
 to = "merge_ready"
 command = "audit_complete"
 gates = [
-    { type = "ledger_has_event", event = "audit_claim", min_count = 1 },
-    { type = "snapshot_compare", cmd = "python skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats", extract = "edges", compare = "gt", reference = "snapshot:pre_audit_edge_count" },
+    { type = "ledger_has_event", event = "audit_claim", min_count = 1, intent = "at least one doc claim must be verified" },
+    { type = "snapshot_compare", cmd = "python skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats", extract = "edges", compare = "gt", reference = "snapshot:pre_audit_edge_count", intent = "audit must add edges to the impact graph" },
 ]
 
 # ── Merge ──
@@ -37,8 +36,7 @@ from = "merge_ready"
 to = "merge_done"
 command = "merge_complete"
 gates = [
-    # Merged punchlist or original must exist
-    { type = "file_exists", path = "docs/holtz/PUNCHLIST-MERGED.md" },
+    { type = "file_exists", path = "docs/holtz/PUNCHLIST-MERGED.md", intent = "merged punchlist must exist" },
 ]
 
 # ── Fix Loop ──
@@ -55,8 +53,7 @@ from = "audit"
 to = "fix_loop"
 command = "fix_loop_start"
 gates = [
-    # Only valid after the first pass (merge_done must exist in ledger history)
-    { type = "ledger_has_event", event = "state_transition", filter = { to = "merge_done" }, min_count = 1 },
+    { type = "ledger_has_event", event = "state_transition", filter = { to = "merge_done" }, min_count = 1, intent = "first pass must go through merge before fix loop" },
 ]
 
 [[transitions]]
@@ -65,16 +62,11 @@ to = "fix_loop"
 command = "fix_commit"
 args = ["item_id"]
 gates = [
-    # A git commit must exist with the punchlist item ID
-    { type = "command_succeeds", cmd = "git log -1 --format=%B | grep -q '{{item_id}}'" },
-    # Test suite must pass (Sahjhan runs this, not the agent)
-    { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120 },
-    # Blast radius query must have been recorded since last fix
-    { type = "ledger_has_event_since", event = "blast_radius", since = "last_transition" },
-    # Per-fix hardening must have been recorded since last fix
-    { type = "ledger_has_event_since", event = "hardening_complete", since = "last_transition" },
-    # Circuit breaker: max 15 total fix iterations
-    { type = "query", sql = "SELECT count(*) < 15 FROM events WHERE type='state_transition' AND command='fix_commit'", expect = "true" },
+    { type = "command_succeeds", cmd = "git log -1 --format=%B | grep -q '{{item_id}}'", intent = "commit must reference the punchlist item" },
+    { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120, intent = "test suite must pass after fix" },
+    { type = "ledger_has_event_since", event = "blast_radius", since = "last_transition", intent = "blast radius must be checked after each fix" },
+    { type = "ledger_has_event_since", event = "hardening_complete", since = "last_transition", intent = "edge cases must be hardened after each fix" },
+    { type = "query", sql = "SELECT count(*) < 15 FROM events WHERE type='state_transition' AND command='fix_commit'", expect = "true", intent = "circuit breaker: max 15 fix iterations" },
 ]
 
 # ── Context Reset (enforces /clear boundaries) ──
@@ -83,7 +75,6 @@ gates = [
 from = "fix_loop"
 to = "awaiting_clear"
 command = "iteration_boundary"
-# Agent has finished an iteration's work and must /clear
 gates = []
 
 [[transitions]]
@@ -91,8 +82,7 @@ from = "awaiting_clear"
 to = "fix_loop"
 command = "resume"
 gates = [
-    # Only the primer hook can record this event (fires on UserPromptSubmit after /clear)
-    { type = "ledger_has_event_since", event = "context_reset", since = "last_transition" },
+    { type = "ledger_has_event_since", event = "context_reset", since = "last_transition", intent = "context must be reset via /clear before resuming" },
 ]
 
 # ── Pattern Analysis ──
@@ -102,8 +92,7 @@ from = "fix_loop"
 to = "pattern_analysis"
 command = "pattern_check"
 gates = [
-    # At least 3 findings resolved since last pattern analysis
-    { type = "ledger_has_event_since", event = "finding_resolved", since = "last_event_of_type:pattern_analysis_complete", min_count = 3 },
+    { type = "ledger_has_event_since", event = "finding_resolved", since = "last_event_of_type:pattern_analysis_complete", min_count = 3, intent = "pattern analysis needs 3+ resolved findings to be meaningful" },
 ]
 
 [[transitions]]
@@ -111,7 +100,7 @@ from = "pattern_analysis"
 to = "fix_loop"
 command = "pattern_done"
 gates = [
-    { type = "ledger_has_event_since", event = "pattern_analysis_complete", since = "last_transition" },
+    { type = "ledger_has_event_since", event = "pattern_analysis_complete", since = "last_transition", intent = "pattern analysis must be recorded before returning to fixes" },
 ]
 
 # ── Perspective (Lens) Completion ──
@@ -122,22 +111,14 @@ to = "perspective_clean"
 command = "set complete perspective"
 args = ["current_perspective"]
 gates = [
-    # Zero open findings (ledger-authoritative: count findings without a matching resolution)
-    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')", expect = "0" },
-    # At least 2 stable iterations for this perspective
-    { type = "query", sql = "SELECT count(*) >= 2 FROM events WHERE type='iteration_complete' AND perspective='{{current_perspective}}'", expect = "true" },
-    # Minimum 120 seconds between iteration_complete events
-    { type = "min_elapsed", event = "iteration_complete", seconds = 120 },
-    # Suite passes (Sahjhan verifies)
-    { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120 },
-    # Linter passes
-    { type = "command_succeeds", cmd = "ruff check .", timeout = 30 },
-    # Type checker passes
-    { type = "command_succeeds", cmd = "mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/", timeout = 60 },
-    # No unresolved protocol violations
-    { type = "no_violations" },
-    # Lens quiz must pass before perspective can be marked clean
-    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='quiz_answered' AND pass='true' AND perspective='{{current_perspective}}'", expect = "true" },
+    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')", expect = "0", intent = "all findings must be resolved" },
+    { type = "query", sql = "SELECT count(*) >= 2 FROM events WHERE type='iteration_complete' AND perspective='{{current_perspective}}'", expect = "true", intent = "two clean iterations required for stability" },
+    { type = "min_elapsed", event = "iteration_complete", seconds = 120, intent = "prevent rapid-fire gaming of iteration count" },
+    { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120, intent = "tests must pass" },
+    { type = "command_succeeds", cmd = "ruff check .", timeout = 30, intent = "no lint violations" },
+    { type = "command_succeeds", cmd = "mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/", timeout = 60, intent = "no type errors" },
+    { type = "no_violations", intent = "no unresolved protocol violations" },
+    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='quiz_answered' AND pass='true' AND perspective='{{current_perspective}}'", expect = "true", intent = "lens quiz must be passed" },
 ]
 
 [[transitions]]
@@ -146,8 +127,7 @@ to = "audit"
 command = "lens_rotate"
 args = ["completed_perspective"]
 gates = [
-    # Verify set member was completed
-    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='set_member_complete' AND member='{{completed_perspective}}'", expect = "true" },
+    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='set_member_complete' AND member='{{completed_perspective}}'", expect = "true", intent = "perspective must be marked complete before rotating" },
 ]
 
 # ── Convergence ──
@@ -157,7 +137,7 @@ from = "perspective_clean"
 to = "all_perspectives_clean"
 command = "all_perspectives"
 gates = [
-    { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member" },
+    { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member", intent = "all 13 lenses must pass clean" },
 ]
 
 [[transitions]]
@@ -171,18 +151,13 @@ from = "final_sweep"
 to = "final_sweep_clean"
 command = "converge"
 gates = [
-    # ALL perspectives must have set_member_complete events
-    { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member" },
-    # Suite passes
-    { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120 },
-    { type = "command_succeeds", cmd = "ruff check .", timeout = 30 },
-    { type = "command_succeeds", cmd = "mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/", timeout = 60 },
-    # Zero open findings (ledger-authoritative: count findings without a matching resolution)
-    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')", expect = "0" },
-    # No unresolved protocol violations
-    { type = "no_violations" },
-    # No unresolved quiz exhaustions
-    { type = "query", sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')", expect = "true" },
+    { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member", intent = "all lenses must be complete" },
+    { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120, intent = "tests must pass" },
+    { type = "command_succeeds", cmd = "ruff check .", timeout = 30, intent = "no lint violations" },
+    { type = "command_succeeds", cmd = "mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/", timeout = 60, intent = "no type errors" },
+    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')", expect = "0", intent = "all findings must be resolved" },
+    { type = "no_violations", intent = "no unresolved protocol violations" },
+    { type = "query", sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')", expect = "true", intent = "no unresolved quiz exhaustions" },
 ]
 
 [[transitions]]
@@ -202,10 +177,7 @@ from = "converged"
 to = "finalized"
 command = "finalize"
 gates = [
-    # Architecture baseline updated
-    { type = "ledger_has_event", event = "baseline_updated" },
-    # Living punchlist updated
-    { type = "ledger_has_event", event = "living_punchlist_updated" },
-    # Pattern contribution completed (or explicitly skipped)
-    { type = "ledger_has_event", event = "pattern_contribution_complete" },
+    { type = "ledger_has_event", event = "baseline_updated", intent = "architecture baseline must be updated" },
+    { type = "ledger_has_event", event = "living_punchlist_updated", intent = "living punchlist must be updated" },
+    { type = "ledger_has_event", event = "pattern_contribution_complete", intent = "pattern contribution must be completed or skipped" },
 ]

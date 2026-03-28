@@ -1,11 +1,15 @@
-{# enforcement/templates/punchlist.md.tera — uses sahjhan v0.2.0 render context #}
+{# enforcement/templates/punchlist.md.tera — uses sahjhan v0.5.0 render context
+   NOTE: Tera scoping rules require set_global for variables modified inside
+   nested loops/ifs. Tera does not short-circuit `and` so field access must
+   be guarded by event_type checks in separate if blocks. #}
 # Punchlist
 
 **Protocol:** {{ protocol.name }} v{{ protocol.version }}
+**Run:** {{ template_instance_id | default(value="?") }}
 **State:** {{ state.label }}
 **Ledger:** {{ ledger_len }} events
 
-{% set resolved_ids = [] -%}
+{% set_global resolved_ids = [] -%}
 {% for e in events -%}
 {% if e.event_type == "finding_resolved" -%}
 {% set_global resolved_ids = resolved_ids | concat(with=e.fields.id) -%}
@@ -13,10 +17,12 @@
 {% endfor -%}
 
 {% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
-{% set has_items = false -%}
+{% set_global has_items = false -%}
 {% for e in events -%}
-{% if e.event_type == "finding" and e.fields.severity == severity -%}
+{% if e.event_type == "finding" -%}
+{% if e.fields.severity == severity -%}
 {% set_global has_items = true -%}
+{% endif -%}
 {% endif -%}
 {% endfor -%}
 {% if has_items -%}
@@ -26,8 +32,10 @@
 | ID | Category | Location | Perspective | Description | Status |
 |----|----------|----------|-------------|-------------|--------|
 {% for e in events -%}
-{% if e.event_type == "finding" and e.fields.severity == severity -%}
+{% if e.event_type == "finding" -%}
+{% if e.fields.severity == severity -%}
 | {{ e.fields.id }} | {{ e.fields.category }} | {{ e.fields.location }} | {{ e.fields.perspective }} | {{ e.fields.description }} | {% if resolved_ids is containing(e.fields.id) %}RESOLVED{% else %}OPEN{% endif %} |
+{% endif -%}
 {% endif -%}
 {% endfor -%}
 {% endif -%}

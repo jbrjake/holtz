@@ -1,20 +1,25 @@
-{# enforcement/templates/summary.md.tera — uses sahjhan v0.2.0 render context
-   Computes all derived values from the raw event list. #}
+{# enforcement/templates/summary.md.tera — uses sahjhan v0.5.0 render context
+   Computes all derived values from the raw event list.
+   NOTE: Tera does not short-circuit `and` — nested `if` blocks are used
+   to guard field access on events that lack the field (e.g., genesis). #}
 # Holtz Convergence Summary
 
 **Project:** {{ protocol.name }} v{{ protocol.version }}
+**Run:** {{ template_instance_id | default(value="?") }}
 **State:** {{ state.label }}
 **Ledger:** {{ ledger_len }} events
 **Violations:** {{ violations }}
 
 {# ── Compute finding counts ── #}
-{% set finding_count = 0 -%}
-{% set resolved_count = 0 -%}
-{% set fix_iterations = 0 -%}
+{% set_global finding_count = 0 -%}
+{% set_global resolved_count = 0 -%}
+{% set_global fix_iterations = 0 -%}
 {% for e in events -%}
 {% if e.event_type == "finding" %}{% set_global finding_count = finding_count + 1 %}{% endif -%}
 {% if e.event_type == "finding_resolved" %}{% set_global resolved_count = resolved_count + 1 %}{% endif -%}
-{% if e.event_type == "state_transition" and e.fields.command == "fix_commit" %}{% set_global fix_iterations = fix_iterations + 1 %}{% endif -%}
+{% if e.event_type == "state_transition" -%}
+{% if e.fields.command == "fix_commit" %}{% set_global fix_iterations = fix_iterations + 1 %}{% endif -%}
+{% endif -%}
 {% endfor -%}
 
 ## Results
@@ -34,16 +39,18 @@
 | Severity | Found | Resolved |
 |----------|-------|----------|
 {% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
-{% set found = 0 -%}
-{% set resolved = 0 -%}
-{% set resolved_ids = [] -%}
+{% set_global found = 0 -%}
+{% set_global resolved = 0 -%}
+{% set_global resolved_ids = [] -%}
 {% for e in events -%}
 {% if e.event_type == "finding_resolved" %}{% set_global resolved_ids = resolved_ids | concat(with=e.fields.id) %}{% endif -%}
 {% endfor -%}
 {% for e in events -%}
-{% if e.event_type == "finding" and e.fields.severity == severity -%}
+{% if e.event_type == "finding" -%}
+{% if e.fields.severity == severity -%}
 {% set_global found = found + 1 -%}
 {% if resolved_ids is containing(e.fields.id) %}{% set_global resolved = resolved + 1 %}{% endif -%}
+{% endif -%}
 {% endif -%}
 {% endfor -%}
 {% if found > 0 -%}
@@ -56,17 +63,19 @@
 {# ── Count findings per perspective ── #}
 | Perspective | Found | Resolved |
 |-------------|-------|----------|
-{% set resolved_ids = [] -%}
+{% set_global resolved_ids = [] -%}
 {% for e in events -%}
 {% if e.event_type == "finding_resolved" %}{% set_global resolved_ids = resolved_ids | concat(with=e.fields.id) %}{% endif -%}
 {% endfor -%}
 {% for m in sets.perspective.members -%}
-{% set found = 0 -%}
-{% set resolved = 0 -%}
+{% set_global found = 0 -%}
+{% set_global resolved = 0 -%}
 {% for e in events -%}
-{% if e.event_type == "finding" and e.fields.perspective == m.name -%}
+{% if e.event_type == "finding" -%}
+{% if e.fields.perspective == m.name -%}
 {% set_global found = found + 1 -%}
 {% if resolved_ids is containing(e.fields.id) %}{% set_global resolved = resolved + 1 %}{% endif -%}
+{% endif -%}
 {% endif -%}
 {% endfor -%}
 {% if found > 0 -%}
@@ -95,12 +104,14 @@
 |----|--------|------------|---------|---------|
 {% for e in events -%}
 {% if e.event_type == "prediction" -%}
-{% set outcome = "PENDING" -%}
-{% set finding_id = "—" -%}
+{% set_global outcome = "PENDING" -%}
+{% set_global finding_id = "—" -%}
 {% for o in events -%}
-{% if o.event_type == "prediction_outcome" and o.fields.prediction_id == e.fields.id -%}
+{% if o.event_type == "prediction_outcome" -%}
+{% if o.fields.prediction_id == e.fields.id -%}
 {% set_global outcome = o.fields.outcome -%}
 {% if o.fields.finding_id %}{% set_global finding_id = o.fields.finding_id %}{% endif -%}
+{% endif -%}
 {% endif -%}
 {% endfor -%}
 | {{ e.fields.id }} | {{ e.fields.target }} | {{ e.fields.confidence }} | {{ outcome }} | {{ finding_id }} |
@@ -109,10 +120,12 @@
 
 ## Justine Findings
 
-{% set justine_count = 0 -%}
+{% set_global justine_count = 0 -%}
 {% for e in events -%}
-{% if e.event_type == "finding" and e.fields.id is starting_with("BJ-") -%}
+{% if e.event_type == "finding" -%}
+{% if e.fields.id is starting_with("BJ-") -%}
 {% set_global justine_count = justine_count + 1 -%}
+{% endif -%}
 {% endif -%}
 {% endfor -%}
 {% if justine_count > 0 -%}
@@ -121,8 +134,10 @@ Justine identified **{{ justine_count }}** independent findings.
 | ID | Severity | Perspective | Description |
 |----|----------|-------------|-------------|
 {% for e in events -%}
-{% if e.event_type == "finding" and e.fields.id is starting_with("BJ-") -%}
+{% if e.event_type == "finding" -%}
+{% if e.fields.id is starting_with("BJ-") -%}
 | {{ e.fields.id }} | {{ e.fields.severity }} | {{ e.fields.perspective }} | {{ e.fields.description }} |
+{% endif -%}
 {% endif -%}
 {% endfor -%}
 {% else -%}

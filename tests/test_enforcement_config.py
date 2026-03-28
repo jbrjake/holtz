@@ -140,11 +140,11 @@ def test_fix_commit_has_circuit_breaker():
 
 
 def test_renders_have_ledger_field():
-    """Every render entry must have a 'ledger' field."""
+    """Every render entry must have a 'ledger' or 'ledger_template' field."""
     cfg = tomllib.loads(RENDERS_TOML.read_text())
     for i, render in enumerate(cfg["renders"]):
-        assert "ledger" in render, (
-            f"Render entry {i} (target={render.get('target', '?')}) missing 'ledger' field"
+        assert "ledger" in render or "ledger_template" in render, (
+            f"Render entry {i} (target={render.get('target', '?')}) missing 'ledger' or 'ledger_template' field"
         )
 
 

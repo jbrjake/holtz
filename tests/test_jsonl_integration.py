@@ -689,10 +689,15 @@ class TestTemplateRendering:
         """Render either produces PUNCHLIST.md or fails with known error.
 
         The render system requires all referenced ledger names to be resolvable.
-        When renders.toml references ledger='run' and ledger='project', both
-        must exist. This test verifies the behavior is predictable.
+        When renders.toml references ledger_template='run' and ledger='project',
+        both must exist. This test verifies the behavior is predictable.
         """
-        _init_and_create_ledger(tmp_path, "run")
+        # Create run ledger from template (v0.5.0: ledger_template resolution)
+        _run_sahjhan("init", cwd=tmp_path)
+        _run_sahjhan(
+            "ledger", "create", "--from", "run", "1",
+            cwd=tmp_path,
+        )
         # Also create a 'project' ledger since renders.toml references it
         project_path = tmp_path / "project.jsonl"
         _run_sahjhan(
@@ -700,7 +705,7 @@ class TestTemplateRendering:
             cwd=tmp_path,
         )
 
-        _record_event(tmp_path, "run", "finding", {
+        _record_event(tmp_path, "run-1", "finding", {
             **BREADCRUMBS,
             "phase": "audit", "step": "7",
             "id": "BH-001", "severity": "HIGH",
@@ -710,7 +715,7 @@ class TestTemplateRendering:
         })
 
         result = _run_sahjhan(
-            "--ledger", "run", "render",
+            "--ledger", "run-1", "render",
             cwd=tmp_path,
             check=False,
         )
