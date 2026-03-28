@@ -58,14 +58,27 @@ def test_check_transcript_skips_docs():
     assert result["read_count"] == 0
 
 
-def test_check_transcript_skips_enforcement():
-    """Reads of enforcement/ paths are not counted (anti-cheat)."""
+def test_check_transcript_skips_quiz_bank():
+    """Reads of quiz-bank paths are not counted (anti-cheat)."""
     transcript = [
         {"type": "tool_use", "tool_name": "Read", "tool_input": {"file_path": "enforcement/quiz-bank.json"}},
         {"type": "assistant", "content": "except OSError raise"},
     ]
     result = check_transcript(transcript, keywords=["except"], lens="error-propagation")
     assert result["read_count"] == 0
+
+
+def test_check_transcript_counts_enforcement_source():
+    """Reads of enforcement source code ARE counted (BH-007)."""
+    transcript = [
+        {"type": "tool_use", "tool_name": "Read", "tool_input": {"file_path": f"enforcement/hooks/hook{i}.py"}}
+        for i in range(6)
+    ] + [
+        {"type": "assistant", "content": "The except clause catches OSError"}
+    ]
+    result = check_transcript(transcript, keywords=["except"], lens="error-propagation")
+    assert result["pass"]
+    assert result["read_count"] == 6
 
 
 def test_check_artifact_exists(tmp_path):
