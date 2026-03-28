@@ -229,11 +229,16 @@ def find_project_dir(project_root: str | None = None) -> Path | None:
 def _read_jsonl(path: Path) -> list[dict]:
     """Read all lines from a JSONL file, skipping blank lines."""
     records: list[dict] = []
-    with open(path) as f:
-        for line in f:
+    with open(path, encoding="utf-8") as f:
+        for line_num, line in enumerate(f, 1):
             line = line.strip()
             if line:
-                records.append(json.loads(line))
+                try:
+                    records.append(json.loads(line))
+                except json.JSONDecodeError as e:
+                    raise ValueError(
+                        f"Malformed JSON at {path}:{line_num}: {e}"
+                    ) from e
     return records
 
 
