@@ -24,14 +24,14 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    with open(MANIFEST) as f:
+    with open(MANIFEST, encoding="utf-8") as f:
         manifest = json.load(f)
 
     if not os.path.isfile(args.settings):
         print("ERROR: No settings file found", file=sys.stderr)
         sys.exit(1)
 
-    with open(args.settings) as f:
+    with open(args.settings, encoding="utf-8") as f:
         settings = json.load(f)
 
     hooks = settings.get("hooks", {})

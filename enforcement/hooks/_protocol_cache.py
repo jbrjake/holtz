@@ -36,7 +36,7 @@ def read_cache(cwd: str) -> dict[str, Any] | None:
     if not os.path.isfile(path):
         return None
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError):
         return None
@@ -50,7 +50,7 @@ def write_cache(cwd: str, cache: dict[str, Any]) -> None:
     import tempfile
     fd, tmp = tempfile.mkstemp(dir=parent, suffix=".tmp")
     try:
-        with os.fdopen(fd, "w") as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(cache, f, indent=2)
         os.replace(tmp, path)
     except BaseException:

@@ -60,7 +60,7 @@ def check_artifact(artifact_path: str, min_bytes: int = 50) -> dict:
 def parse_transcript_jsonl(path: str) -> list[dict]:
     """Parse a JSONL transcript file into a list of events."""
     events = []
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:

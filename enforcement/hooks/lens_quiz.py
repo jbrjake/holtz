@@ -127,7 +127,7 @@ def verify_answer_freshness(
         return True  # can't parse line number
 
     try:
-        with open(filepath) as f:
+        with open(filepath, encoding="utf-8") as f:
             file_lines = f.readlines()
     except OSError:
         return True  # can't read — assume fresh
@@ -287,7 +287,7 @@ def main() -> None:
     # Load quiz bank for keywords (or use empty list)
     bank: list[dict] = []
     if os.path.isfile(quiz_bank_path):
-        with contextlib.suppress(json.JSONDecodeError, OSError), open(quiz_bank_path) as f:
+        with contextlib.suppress(json.JSONDecodeError, OSError), open(quiz_bank_path, encoding="utf-8") as f:
             bank = json.load(f)
 
     questions = select_questions(bank, lens)
