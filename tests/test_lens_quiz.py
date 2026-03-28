@@ -179,14 +179,39 @@ def test_parse_answers_malformed_no_prefix():
     assert parse_answers("ANSWERS: A,B,C,D,A") is None
 
 
-def test_parse_answers_malformed_wrong_count():
-    """Returns None when answer count != 5."""
-    assert parse_answers("LENS: foo ANSWERS: A,B,C") is None
+def test_parse_answers_fewer_than_five():
+    """Accepts answer counts between 1 and 5 — quiz bank may have fewer than 5 questions."""
+    result = parse_answers("LENS: foo ANSWERS: A,B,C")
+    assert result is not None
+    lens, answers = result
+    assert lens == "foo"
+    assert answers == ["A", "B", "C"]
 
 
-def test_parse_answers_malformed_invalid_letters():
-    """Returns None when answers contain invalid letters."""
-    assert parse_answers("LENS: foo ANSWERS: A,B,C,D,E") is None
+def test_parse_answers_single_answer():
+    """Accepts a single answer for a single-question quiz."""
+    result = parse_answers("LENS: bar ANSWERS: D")
+    assert result is not None
+    _, answers = result
+    assert answers == ["D"]
+
+
+def test_parse_answers_empty_rejected():
+    """Rejects empty answer list."""
+    assert parse_answers("LENS: foo ANSWERS: ") is None
+
+
+def test_parse_answers_six_plus_rejected():
+    """Rejects more than 5 answers."""
+    assert parse_answers("LENS: foo ANSWERS: A,B,C,D,A,B") is None
+
+
+def test_parse_answers_invalid_letters_truncated():
+    """Regex stops at invalid letters — only valid A-D captured."""
+    result = parse_answers("LENS: foo ANSWERS: A,B,C,D,E")
+    assert result is not None
+    _, answers = result
+    assert answers == ["A", "B", "C", "D"]  # E not in [A-D], regex stops at D
 
 
 def test_parse_answers_malformed_no_answers():

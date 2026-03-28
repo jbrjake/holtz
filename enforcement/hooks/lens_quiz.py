@@ -65,8 +65,8 @@ def parse_answers(message: str) -> tuple[str, list[str]] | None:
         return None
     lens = m.group(1)
     raw = m.group(2)
-    answers = [a.strip().upper() for a in raw.split(",")]
-    if len(answers) != 5:
+    answers = [a.strip().upper() for a in raw.split(",") if a.strip()]
+    if not answers or len(answers) > 5:
         return None
     return (lens, answers)
 
@@ -160,7 +160,9 @@ def score_answers(
     """
     correct = 0
     total = 0
-    for q, given in zip(questions, answers, strict=False):
+    if len(questions) != len(answers):
+        return 0, len(questions)
+    for q, given in zip(questions, answers, strict=True):
         if not verify_answer_freshness(q, cwd):
             continue  # drop stale question
         total += 1
