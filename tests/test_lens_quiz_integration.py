@@ -76,12 +76,16 @@ def test_full_quiz_flow_pass(tmp_path):
     errors = validate_quiz_bank(bank_for_validation)
     assert errors == [], f"Quiz bank validation failed: {errors}"
 
-    # Step 2: Check evidence (simulated transcript)
+    # Step 2: Check evidence (simulated transcript in JSONL format)
     transcript = [
-        {"type": "tool_use", "tool_name": "Read", "tool_input": {"file_path": f"src/mod{i}.py"}}
+        {"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "name": "Read", "input": {"file_path": f"src/mod{i}.py"}}
+        ]}}
         for i in range(6)
     ] + [
-        {"type": "assistant", "content": "The except clause in primer.py catches OSError and TimeoutExpired at line 56"}
+        {"type": "assistant", "message": {"content": [
+            {"type": "text", "text": "The except clause in primer.py catches OSError and TimeoutExpired at line 56"}
+        ]}}
     ]
     evidence = evidence_mod.check_transcript(transcript, keywords=["except", "OSError"], lens="error-propagation")
     assert evidence["pass"], f"Evidence check failed: {evidence['reason']}"
