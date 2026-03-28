@@ -122,8 +122,8 @@ command = "set complete perspective"
 gates = [
     # Zero open findings (ledger-authoritative: count findings without a matching resolution)
     { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')", expect = "0" },
-    # At least 2 stable iterations for this perspective (cmd interpolation workaround for filter/sql template gaps)
-    { type = "command_succeeds", cmd = "sahjhan query \"SELECT count(*) >= 2 FROM events WHERE type='iteration_complete' AND perspective={{current_perspective}}\" | grep -q true" },
+    # At least 2 stable iterations for this perspective
+    { type = "query", sql = "SELECT count(*) >= 2 FROM events WHERE type='iteration_complete' AND perspective='{{current_perspective}}'", expect = "true" },
     # Minimum 120 seconds between iteration_complete events
     { type = "min_elapsed", event = "iteration_complete", seconds = 120 },
     # Suite passes (Sahjhan verifies)
@@ -135,7 +135,7 @@ gates = [
     # No unresolved protocol violations
     { type = "no_violations" },
     # Lens quiz must pass before perspective can be marked clean
-    { type = "command_succeeds", cmd = "sahjhan query \"SELECT count(*) >= 1 FROM events WHERE type='quiz_answered' AND pass='true' AND perspective={{current_perspective}}\" | grep -q true" },
+    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='quiz_answered' AND pass='true' AND perspective='{{current_perspective}}'", expect = "true" },
 ]
 
 [[transitions]]
@@ -143,8 +143,8 @@ from = "perspective_clean"
 to = "audit"
 command = "lens_rotate"
 gates = [
-    # Workaround: ledger_has_event filter doesn't interpolate templates; use cmd pipe to sahjhan query
-    { type = "command_succeeds", cmd = "sahjhan query \"SELECT count(*) >= 1 FROM events WHERE type='set_member_complete' AND member={{completed_perspective}}\" | grep -q true" },
+    # Verify set member was completed
+    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='set_member_complete' AND member='{{completed_perspective}}'", expect = "true" },
 ]
 
 # ── Convergence ──

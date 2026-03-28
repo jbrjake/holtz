@@ -7,7 +7,7 @@ label = "Recon (Steps 0-4)"
 
 [states.audit]
 label = "Audit Active (Steps 6-8)"
-params = [{ name = "current_perspective", set = "perspective" }]
+params = [{ name = "current_perspective", set = "perspective", source = "current" }]
 
 [states.merge_ready]
 label = "Merge Ready (Step 9)"
@@ -17,7 +17,7 @@ label = "Merge Done"
 
 [states.fix_loop]
 label = "Fix Loop (Step 10)"
-params = [{ name = "current_perspective", set = "perspective" }]
+params = [{ name = "current_perspective", set = "perspective", source = "current" }]
 
 [states.awaiting_clear]
 label = "Awaiting Context Reset"
@@ -28,7 +28,7 @@ label = "Pattern Analysis (Step 11)"
 
 [states.perspective_clean]
 label = "Perspective Clean"
-params = [{ name = "completed_perspective", set = "perspective" }]
+params = [{ name = "completed_perspective", set = "perspective", source = "last_completed" }]
 
 [states.all_perspectives_clean]
 label = "All Perspectives Clean"
