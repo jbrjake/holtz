@@ -143,9 +143,9 @@ def verify_answer_freshness(
     end = min(len(file_lines), line_no + 3)
     window = "".join(file_lines[start:end]).lower()
 
-    # If the answer text has commas, check each part
-    answer_parts = [p.strip() for p in answer_text.split(",")]
-    return any(part in window for part in answer_parts)
+    # If the answer text has commas, check each part (filter empty strings)
+    answer_parts = [p.strip() for p in answer_text.split(",") if p.strip()]
+    return bool(answer_parts) and any(part in window for part in answer_parts)
 
 
 def score_answers(

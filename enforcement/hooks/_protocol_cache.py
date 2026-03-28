@@ -61,8 +61,15 @@ def write_cache(cwd: str, cache: dict[str, Any]) -> None:
 
 
 def is_git_commit(cmd: str) -> bool:
-    """Detect git commit commands (not amend)."""
-    return bool(re.search(r"\bgit\s+commit\b(?!-)", cmd)) and "--amend" not in cmd
+    """Detect git commit commands (not amend).
+
+    Checks for ``--amend`` as a CLI flag (word boundary), not as a
+    substring of the commit message.
+    """
+    if not re.search(r"\bgit\s+commit\b(?!-)", cmd):
+        return False
+    # Check for --amend as a flag, not inside a quoted message
+    return not re.search(r"(?<!\w)--amend\b", cmd.split("-m")[0] if "-m" in cmd else cmd)
 
 
 def is_sahjhan_cmd(cmd: str) -> bool:
