@@ -63,6 +63,7 @@ gates = [
 from = "fix_loop"
 to = "fix_loop"
 command = "fix_commit"
+args = ["item_id"]
 gates = [
     # A git commit must exist with the punchlist item ID
     { type = "command_succeeds", cmd = "git log -1 --format=%B | grep -q '{{item_id}}'" },
@@ -119,6 +120,7 @@ gates = [
 from = "fix_loop"
 to = "perspective_clean"
 command = "set complete perspective"
+args = ["current_perspective"]
 gates = [
     # Zero open findings (ledger-authoritative: count findings without a matching resolution)
     { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')", expect = "0" },
@@ -142,6 +144,7 @@ gates = [
 from = "perspective_clean"
 to = "audit"
 command = "lens_rotate"
+args = ["completed_perspective"]
 gates = [
     # Verify set member was completed
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='set_member_complete' AND member='{{completed_perspective}}'", expect = "true" },
