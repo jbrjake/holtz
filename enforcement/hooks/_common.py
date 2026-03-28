@@ -13,7 +13,8 @@ _HOOKS_COMMON = os.path.join(
     os.path.dirname(__file__), '..', '..', 'hooks', '_common.py'
 )
 _spec = importlib.util.spec_from_file_location("hooks._common", _HOOKS_COMMON)
-assert _spec is not None and _spec.loader is not None
+if _spec is None or _spec.loader is None:
+    raise RuntimeError(f"Cannot load hooks/_common.py from {_HOOKS_COMMON}")
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 

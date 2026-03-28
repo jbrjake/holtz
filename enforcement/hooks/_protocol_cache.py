@@ -44,15 +44,26 @@ def read_cache(cwd: str) -> dict[str, Any] | None:
 
 def write_cache(cwd: str, cache: dict[str, Any]) -> None:
     path = _cache_path(cwd)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    parent = os.path.dirname(path)
+    os.makedirs(parent, exist_ok=True)
     cache["last_refresh"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
-    with open(path, "w") as f:
-        json.dump(cache, f, indent=2)
+    import tempfile
+    fd, tmp = tempfile.mkstemp(dir=parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(cache, f, indent=2)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def is_git_commit(cmd: str) -> bool:
     """Detect git commit commands (not amend)."""
-    return bool(re.search(r"\bgit\s+commit\b", cmd)) and "--amend" not in cmd
+    return bool(re.search(r"\bgit\s+commit\b(?!-)", cmd)) and "--amend" not in cmd
 
 
 def is_sahjhan_cmd(cmd: str) -> bool:
@@ -60,7 +71,9 @@ def is_sahjhan_cmd(cmd: str) -> bool:
     stripped = cmd.strip()
     for segment in re.split(r"[;&|]+", stripped):
         seg = segment.strip()
-        if seg.startswith("./bin/sahjhan") or seg.startswith("sahjhan"):
+        # Match: sahjhan, ./bin/sahjhan, bin/sahjhan, /abs/path/to/sahjhan
+        parts = seg.split()
+        if parts and (parts[0] == "sahjhan" or parts[0].endswith("/sahjhan") or "/sahjhan-" in parts[0]):
             return True
     return False
 
