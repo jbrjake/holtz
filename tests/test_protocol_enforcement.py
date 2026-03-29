@@ -19,6 +19,21 @@ class TestProtocolCache:
         from _protocol_cache import read_cache
         assert read_cache(str(tmp_path)) is None
 
+    def test_read_perspectives_total_narrow_exception(self, monkeypatch):
+        """BH-009: Only OSError and TOML decode errors caught, not programming bugs."""
+        import _protocol_cache
+        try:
+            import tomllib
+        except ModuleNotFoundError:
+            import tomli as tomllib  # type: ignore[no-redef]
+        # Patch tomllib.load to raise AttributeError (simulates a programming bug)
+        original_load = tomllib.load
+        monkeypatch.setattr(tomllib, "load", lambda f: (_ for _ in ()).throw(AttributeError("bug")))
+        import pytest
+        with pytest.raises(AttributeError, match="bug"):
+            _protocol_cache._read_perspectives_total()
+        monkeypatch.setattr(tomllib, "load", original_load)
+
     def test_write_and_read_cache(self, tmp_path):
         """Round-trip write then read."""
         from _protocol_cache import empty_cache, read_cache, write_cache

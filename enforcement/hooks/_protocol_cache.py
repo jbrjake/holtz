@@ -32,7 +32,7 @@ def _read_perspectives_total() -> int:
             cfg = tomllib.load(f)
         values = cfg.get("sets", {}).get("perspective", {}).get("values", [])
         return len(values) if values else 13
-    except (OSError, Exception):
+    except (OSError, KeyError, ValueError):
         return 13
 
 
