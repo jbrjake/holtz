@@ -158,7 +158,15 @@ def verify_answer_freshness(
 
     # If the answer text has commas, check each part (filter empty strings)
     answer_parts = [p.strip() for p in answer_text.split(",") if p.strip()]
-    return bool(answer_parts) and any(part in window for part in answer_parts)
+    if not answer_parts:
+        return False
+    # BH-009: If all parts are very short (< 3 chars), require ALL to match
+    # to avoid spurious single-character matches. Otherwise, any part suffices.
+    if all(len(p) < 3 for p in answer_parts):
+        return all(part in window for part in answer_parts)
+    # Normal case: filter out short parts and require at least one match
+    long_parts = [p for p in answer_parts if len(p) >= 3]
+    return bool(long_parts) and any(part in window for part in long_parts)
 
 
 def score_answers(

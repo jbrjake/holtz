@@ -478,6 +478,45 @@ class TestPrimer:
         assert output.get("continue") is True
 
 
+# --- BH-010: Bridge API sync test ---
+
+
+def test_enforcement_common_bridge_exports_all_public():
+    """BH-010: enforcement/_common.py must re-export all public names from hooks/_common.py.
+
+    The bridge uses importlib to re-export specific names. This test catches
+    future additions to hooks/_common.py that aren't added to the bridge.
+    """
+    import importlib.util
+
+    hooks_common = os.path.join(REPO_ROOT, "hooks", "_common.py")
+    spec = importlib.util.spec_from_file_location("hooks._common_test", hooks_common)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    import types
+    source_public = {
+        n for n in dir(mod)
+        if not n.startswith("_") and isinstance(getattr(mod, n), types.FunctionType)
+    }
+    enforcement_common = os.path.join(ENFORCEMENT_HOOKS_DIR, "_common.py")
+    spec2 = importlib.util.spec_from_file_location("enf._common_test", enforcement_common)
+    assert spec2 is not None and spec2.loader is not None
+    mod2 = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(mod2)
+
+    bridge_public = {
+        n for n in dir(mod2)
+        if not n.startswith("_") and callable(getattr(mod2, n))
+    }
+    missing = source_public - bridge_public
+    assert not missing, (
+        f"enforcement/_common.py bridge is missing re-exports: {missing}. "
+        f"Add them to the bridge's re-export list."
+    )
+
+
 # --- _active_ledger (enforcement/hooks/_common.py) ---
 
 
