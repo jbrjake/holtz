@@ -231,3 +231,21 @@ def test_has_closed_tilde_fence():
 def test_has_unclosed_fence_crlf():
     """CRLF content with unclosed fence should be detected."""
     assert has_unclosed_fence("before\r\n```\r\nfenced\r\n") is True
+
+
+# --- BH-012: has_unclosed_fence false positive when last line is closing fence ---
+
+def test_has_unclosed_fence_closing_fence_as_last_line():
+    """Closing fence on the last line (no trailing newline) must return False.
+
+    BH-012: _iterate_fences yields (i, True) for the closing fence line
+    before resetting in_fence=False. has_unclosed_fence stored the last
+    yielded value, causing a false positive when the document ends on
+    a closing fence with no trailing newline or blank line after it.
+    """
+    assert has_unclosed_fence("```\ncode\n```") is False
+
+
+def test_has_unclosed_fence_closing_tilde_as_last_line():
+    """Tilde closing fence as last line (no trailing newline) must return False."""
+    assert has_unclosed_fence("~~~\ncode\n~~~") is False
