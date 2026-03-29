@@ -165,3 +165,29 @@ def test_parse_brief_fields_correct_after_code_fence():
     assert "Second example" in pat2.example, (
         f"PAT-002 example is wrong: {pat2.example!r}"
     )
+
+
+# --- BH-017 (run 26): _truncate output must not exceed max_len ---
+
+class TestTruncate:
+    """BH-017: _truncate must respect max_len including the '...' suffix."""
+
+    def test_short_text_unchanged(self):
+        assert pbc._truncate("short", 10) == "short"
+
+    def test_long_word_respects_limit(self):
+        result = pbc._truncate("verylongword", 5)
+        assert len(result) <= 5
+
+    def test_word_boundary_respects_limit(self):
+        result = pbc._truncate("abc def ghi jkl", 8)
+        assert len(result) <= 8
+        assert result.endswith("...")
+
+    def test_exact_length_unchanged(self):
+        assert pbc._truncate("exact", 5) == "exact"
+
+    def test_ellipsis_present_on_truncation(self):
+        result = pbc._truncate("a long sentence here", 10)
+        assert result.endswith("...")
+        assert len(result) <= 10

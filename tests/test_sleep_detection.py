@@ -69,6 +69,26 @@ def _load_tracker_module() -> ModuleType:
 
 _tracker = _load_tracker_module()
 _is_sleep_cmd = _tracker._is_sleep_cmd
+_parse_commit_hash = _tracker._parse_commit_hash
+
+
+class TestParseCommitHash:
+    """BH-016: _parse_commit_hash must handle root-commit and detached HEAD."""
+
+    def test_normal_commit(self):
+        assert _parse_commit_hash("[dev 628c9be] fix: something") == "628c9be"
+
+    def test_root_commit(self):
+        assert _parse_commit_hash("[main (root-commit) 7d97832] initial") == "7d97832"
+
+    def test_detached_head(self):
+        assert _parse_commit_hash("[(HEAD detached) abc1234] fix") == "abc1234"
+
+    def test_no_match(self):
+        assert _parse_commit_hash("no commit output here") == "unknown"
+
+    def test_branch_with_slash(self):
+        assert _parse_commit_hash("[feat/foo 9fb6e9a] feat: bar") == "9fb6e9a"
 
 
 class TestSleepDetection:

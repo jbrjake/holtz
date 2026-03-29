@@ -153,8 +153,8 @@ def verify_answer_freshness(
 
     answer_text = question["opts"][answer_idx].lower()
     # Check a window of lines around the source line
-    start = max(0, line_no - 3)
-    end = min(len(file_lines), line_no + 3)
+    start = max(0, (line_no - 1) - 3)
+    end = min(len(file_lines), (line_no - 1) + 4)
     window = "".join(file_lines[start:end]).lower()
 
     # If the answer text has commas, check each part (filter empty strings)

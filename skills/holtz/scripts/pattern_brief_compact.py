@@ -90,10 +90,11 @@ def parse_brief(content: str) -> list[PatternEntry]:
 
 
 def _truncate(text: str, max_len: int) -> str:
-    """Truncate text to max_len, preserving whole words."""
+    """Truncate text to max_len (including '...' suffix), preserving whole words."""
     if len(text) <= max_len:
         return text
-    truncated = text[:max_len].rsplit(' ', 1)[0]
+    limit = max(0, max_len - 3)
+    truncated = text[:limit].rsplit(' ', 1)[0]
     return truncated + "..."
 
 

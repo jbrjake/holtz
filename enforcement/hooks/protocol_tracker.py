@@ -54,7 +54,7 @@ def _is_sleep_cmd(cmd: str) -> bool:
 
 def _parse_commit_hash(output: str) -> str:
     """Extract short commit hash from git commit output."""
-    m = re.search(r"\[[\w/.-]+\s+([0-9a-f]{7,})\]", output)
+    m = re.search(r"\[.*?\s([0-9a-f]{7,})\]", output)
     return m.group(1) if m else "unknown"
 
 
