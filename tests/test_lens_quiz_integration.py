@@ -136,8 +136,8 @@ def test_full_quiz_flow_fail(tmp_path):
     assert correct == 0
 
 
-def test_evidence_rejects_rubber_stamp():
-    """Evidence check rejects a transcript with 0 source file reads."""
+def test_evidence_rejects_zero_reads():
+    """Evidence check rejects a transcript with 0 source file reads (read-count gate)."""
     evidence_mod = _load_module("lens_evidence", _HOOK_DIR / "lens_evidence.py")
     transcript = [
         {"type": "assistant", "content": "Everything looks fine. No issues found."},
@@ -145,6 +145,21 @@ def test_evidence_rejects_rubber_stamp():
     evidence = evidence_mod.check_transcript(transcript, keywords=["except"], lens="error-propagation")
     assert not evidence["pass"]
     assert "0 files read" in evidence["reason"]
+
+
+def test_evidence_rejects_no_keywords():
+    """BH-011: Evidence check rejects transcript with reads but no lens keywords."""
+    evidence_mod = _load_module("lens_evidence", _HOOK_DIR / "lens_evidence.py")
+    # 5 reads but no keyword hits — this is the actual rubber-stamp case
+    transcript = [
+        {"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "name": "Read", "input": {"file_path": f"src/file_{i}.py"}},
+            {"type": "text", "text": "Looks good to me."},
+        ]}} for i in range(5)
+    ]
+    evidence = evidence_mod.check_transcript(transcript, keywords=["except", "raise", "catch"], lens="error-propagation")
+    assert not evidence["pass"]
+    assert "keyword" in evidence["reason"].lower()
 
 
 def test_quiz_bank_validation_catches_bad_entries():
