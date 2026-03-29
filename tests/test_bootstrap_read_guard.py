@@ -191,6 +191,26 @@ class TestReadGuard:
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "block"
 
+    def test_bash_case_insensitive_quiz_bank_blocked(self):
+        """BH-020: alternate-case paths must be blocked on case-insensitive FS."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "cat enforcement/QUIZ-BANK.JSON"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_bash_case_insensitive_session_key_blocked(self):
+        """BH-020: alternate-case .sahjhan/SESSION.KEY must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "xxd docs/holtz/.SAHJHAN/SESSION.KEY"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
     def test_bash_sahjhan_cmd_with_guarded_path_allowed(self):
         """sahjhan commands referencing quiz-bank.json should be allowed since
         sahjhan itself needs to read the quiz bank."""
