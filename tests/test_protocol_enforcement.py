@@ -146,6 +146,38 @@ class TestParseStatusText:
         assert result["sets"]["perspective"]["total"] == 13
         assert result["perspectives_done"] == 5
 
+    def test_current_perspective_first_incomplete(self):
+        """BH-018: current_perspective should be the first non-✓ member."""
+        from _protocol_cache import parse_status_text
+
+        text = (
+            "state: fix_loop (30 events, chain valid)\n"
+            "sets:\n"
+            "  perspective: 2/13 [✓ component, ✓ integration, security, error-propagation]\n"
+        )
+        result = parse_status_text(text)
+        assert result["current_perspective"] == "security"
+
+    def test_current_perspective_all_complete(self):
+        """BH-018: When all perspectives have ✓, current_perspective is 'all_complete'."""
+        from _protocol_cache import parse_status_text
+
+        text = (
+            "state: fix_loop (80 events, chain valid)\n"
+            "sets:\n"
+            "  perspective: 13/13 [✓ component, ✓ integration, ✓ security]\n"
+        )
+        result = parse_status_text(text)
+        assert result["current_perspective"] == "all_complete"
+
+    def test_current_perspective_no_set_data(self):
+        """BH-018: Without perspective set data, current_perspective stays unknown."""
+        from _protocol_cache import parse_status_text
+
+        text = "state: idle (0 events, chain valid)\n"
+        result = parse_status_text(text)
+        assert result["current_perspective"] == "unknown"
+
 
 class TestProtocolTracker:
     """Tests for protocol_tracker.py PostToolUse hook."""

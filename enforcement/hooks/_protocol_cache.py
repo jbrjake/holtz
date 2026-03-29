@@ -108,12 +108,25 @@ def parse_status_text(text: str) -> dict[str, Any]:
             continue
 
         # "  perspective: 3/13 [✓ component, ..."
-        m = re.match(r"^\s*(\w[\w-]*):\s+(\d+)/(\d+)\s+\[", stripped)
+        m = re.match(r"^\s*(\w[\w-]*):\s+(\d+)/(\d+)\s+\[(.+)\]", stripped)
         if m:
             set_name = m.group(1)
             complete = int(m.group(2))
             total = int(m.group(3))
+            members_text = m.group(4)
             result["sets"][set_name] = {"complete": complete, "total": total}
+            # Parse individual members to find the first incomplete one
+            if set_name == "perspective":
+                for member in members_text.split(","):
+                    member = member.strip()
+                    if member.startswith("\u2713"):
+                        continue  # ✓ = complete
+                    # First member without ✓ is the current perspective
+                    # Strip any prefix markers (· etc)
+                    name = re.sub(r"^[·\s]+", "", member).strip()
+                    if name:
+                        result["_first_incomplete_perspective"] = name
+                        break
             continue
 
         # "  fix_commit: ready" or "  fix_commit: blocked"
@@ -132,10 +145,13 @@ def parse_status_text(text: str) -> dict[str, Any]:
 
     # Extract current perspective from sets
     perspective_set = result["sets"].get("perspective", {})
-    result["current_perspective"] = "unknown"
     if perspective_set:
         result["perspectives_done"] = perspective_set.get("complete", 0)
         result["perspectives_total"] = perspective_set.get("total", 13)
+        if "_first_incomplete_perspective" in result:
+            result["current_perspective"] = result.pop("_first_incomplete_perspective")
+        elif perspective_set.get("complete", 0) == perspective_set.get("total", 13):
+            result["current_perspective"] = "all_complete"
 
     return result
 
