@@ -83,6 +83,7 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     status = parse_status_text(result.stdout)
 
     cache["state"] = status.get("current_state", "")
+    cache["perspective"] = status.get("current_perspective", "?")
     perspective = status.get("sets", {}).get("perspective", {})
     cache["perspectives_done"] = perspective.get("complete", 0)
     cache["perspectives_total"] = perspective.get("total", 0) or cache.get("perspectives_total", 13)
