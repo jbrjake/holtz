@@ -54,3 +54,25 @@ def test_upgrade_passes():
         evidence_path=None,
     )
     assert result is True
+
+
+def test_unknown_original_severity_raises():
+    """BH-009: Unknown original severity must raise, not silently map to rank 0."""
+    import pytest
+    with pytest.raises(ValueError, match="Unknown original severity"):
+        check_downgrade(
+            original_severity="TYPO",
+            resolved_severity="LOW",
+            evidence_path=None,
+        )
+
+
+def test_unknown_resolved_severity_raises():
+    """Unknown resolved severity must raise, not silently map to rank 0."""
+    import pytest
+    with pytest.raises(ValueError, match="Unknown resolved severity"):
+        check_downgrade(
+            original_severity="HIGH",
+            resolved_severity="BOGUS",
+            evidence_path=None,
+        )

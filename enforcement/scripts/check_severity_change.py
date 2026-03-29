@@ -22,8 +22,18 @@ def check_downgrade(
     A downgrade requires evidence_path to exist as a real file.
     Same severity or upgrades always pass.
     """
-    orig_rank = SEVERITY_ORDER.get(original_severity, 0)
-    resolved_rank = SEVERITY_ORDER.get(resolved_severity, 0)
+    if original_severity not in SEVERITY_ORDER:
+        raise ValueError(
+            f"Unknown original severity '{original_severity}'. "
+            f"Valid: {', '.join(SEVERITY_ORDER)}"
+        )
+    if resolved_severity not in SEVERITY_ORDER:
+        raise ValueError(
+            f"Unknown resolved severity '{resolved_severity}'. "
+            f"Valid: {', '.join(SEVERITY_ORDER)}"
+        )
+    orig_rank = SEVERITY_ORDER[original_severity]
+    resolved_rank = SEVERITY_ORDER[resolved_severity]
 
     if resolved_rank >= orig_rank:
         return True  # not a downgrade
@@ -43,7 +53,13 @@ def main() -> None:
     resolved = sys.argv[2]
     evidence = sys.argv[3] if len(sys.argv) > 3 else None
 
-    if check_downgrade(original, resolved, evidence):
+    try:
+        valid = check_downgrade(original, resolved, evidence)
+    except ValueError as e:
+        print(f"FAIL: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if valid:
         sys.exit(0)
     else:
         print(
