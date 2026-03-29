@@ -115,59 +115,150 @@ def questions_hash(questions: list[dict]) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
+def _extract_symbol_body(file_content: str, symbol: str) -> str | None:
+    """Extract the body of a function/class/constant from file content by symbol name.
+
+    Handles 'ClassName.method', 'function_name', and 'CONSTANT_NAME'.
+    Returns the relevant source region as a string, or None if not found.
+    """
+    lines = file_content.split("\n")
+
+    # For dotted symbols like ClassName.method, search for 'def method' inside 'class ClassName'
+    if "." in symbol:
+        class_name, method_name = symbol.split(".", 1)
+        class_pattern = re.compile(rf"^class\s+{re.escape(class_name)}\b")
+        method_pattern = re.compile(rf"^\s+def\s+{re.escape(method_name)}\b")
+        in_class = False
+        method_start = None
+        for i, line in enumerate(lines):
+            if class_pattern.match(line):
+                in_class = True
+            elif in_class and method_pattern.match(line):
+                method_start = i
+                break
+            elif in_class and re.match(r"^class\s", line):
+                in_class = False  # left the class
+        if method_start is not None:
+            return _extract_def_body(lines, method_start)
+        return None
+
+    # For UPPER_CASE names or _UPPER_CASE, treat as constants/attributes
+    if re.match(r"^_?[A-Z][A-Z_0-9]+$", symbol):
+        pattern = re.compile(rf"^\s*{re.escape(symbol)}\s*=")
+        for i, line in enumerate(lines):
+            if pattern.match(line):
+                start = max(0, i - 2)
+                end = min(len(lines), i + 6)
+                return "\n".join(lines[start:end])
+
+    # For function/class names
+    pattern = re.compile(rf"^(?:def|class)\s+{re.escape(symbol)}\b")
+    for i, line in enumerate(lines):
+        if pattern.match(line):
+            return _extract_def_body(lines, i)
+
+    return None
+
+
+def _extract_def_body(lines: list[str], start: int) -> str:
+    """Extract a function/class body starting at the def/class line."""
+    if start >= len(lines):
+        return ""
+    # Get indentation of the def line
+    def_line = lines[start]
+    def_indent = len(def_line) - len(def_line.lstrip())
+    body_lines = [def_line]
+    for line in lines[start + 1:]:
+        stripped = line.strip()
+        if not stripped:
+            body_lines.append(line)
+            continue
+        line_indent = len(line) - len(line.lstrip())
+        if line_indent <= def_indent:
+            break  # dedented past the function — done
+        body_lines.append(line)
+    return "\n".join(body_lines)
+
+
 def verify_answer_freshness(
     question: dict, cwd: str
 ) -> bool:
-    """Check if a quiz question's source file still contains the expected answer.
+    """Check if a quiz question's source symbol still contains the expected answer.
+
+    Source format: 'file.py::symbol_name' (symbol-anchored, survives line shifts)
+    or legacy 'file.py:line_no' (line-anchored, deprecated).
 
     Returns True if the answer is still valid (or if we can't verify).
     Returns False if the source has changed and the answer is stale.
     """
     source = question.get("source", "")
+    if not source:
+        return True
+
+    # Symbol-anchored format: file.py::symbol
+    if "::" in source:
+        filepath_part, symbol = source.split("::", 1)
+        filepath = os.path.join(cwd, filepath_part)
+        if not os.path.isfile(filepath):
+            return False
+        try:
+            with open(filepath, encoding="utf-8") as f:
+                content = f.read()
+        except OSError:
+            return True
+        body = _extract_symbol_body(content, symbol)
+        if body is None:
+            return False  # symbol no longer exists
+        return _check_answer_in_text(question, body)
+
+    # Legacy line-anchored format: file.py:line_no
     if ":" not in source:
-        return True  # can't verify without line number
+        return True
 
     parts = source.rsplit(":", 1)
     filepath = os.path.join(cwd, parts[0])
     if not os.path.isfile(filepath):
-        return False  # file deleted — answer is stale
+        return False
 
     try:
         line_no = int(parts[1])
     except ValueError:
-        return True  # can't parse line number
+        return True
 
     try:
         with open(filepath, encoding="utf-8") as f:
             file_lines = f.readlines()
     except OSError:
-        return True  # can't read — assume fresh
+        return True
 
-    # Check if any keyword from the correct answer option appears near the line
+    start = max(0, (line_no - 1) - 3)
+    end = min(len(file_lines), (line_no - 1) + 4)
+    window = "".join(file_lines[start:end])
+    return _check_answer_in_text(question, window)
+
+
+def _check_answer_in_text(question: dict, text: str) -> bool:
+    """Check if the correct answer's keywords appear in the given text."""
     answer_key = question.get("a", "")
     if not answer_key or len(answer_key) != 1:
-        return False  # missing or malformed answer key — treat as stale
+        return False
     answer_idx = ord(answer_key) - ord("A")
     if answer_idx < 0 or answer_idx >= len(question.get("opts", [])):
         return True
 
     answer_text = question["opts"][answer_idx].lower()
-    # Check a window of lines around the source line
-    start = max(0, (line_no - 1) - 3)
-    end = min(len(file_lines), (line_no - 1) + 4)
-    window = "".join(file_lines[start:end]).lower()
+    text_lower = text.lower()
 
-    # If the answer text has commas, check each part (filter empty strings)
-    answer_parts = [p.strip() for p in answer_text.split(",") if p.strip()]
+    # Split on commas and common connectors so "tempfile + os.replace" becomes
+    # ["tempfile", "os.replace"] rather than one unsplittable phrase.
+    answer_parts = re.split(r"[,+/&]|\band\b|\bor\b|\bvia\b|\bthen\b", answer_text)
+    answer_parts = [p.strip() for p in answer_parts if p.strip()]
     if not answer_parts:
         return False
-    # BH-009: If all parts are very short (< 3 chars), require ALL to match
-    # to avoid spurious single-character matches. Otherwise, any part suffices.
     if all(len(p) < 3 for p in answer_parts):
-        return all(part in window for part in answer_parts)
-    # Normal case: filter out short parts and require at least one match
+        return all(part in text_lower for part in answer_parts)
     long_parts = [p for p in answer_parts if len(p) >= 3]
-    return bool(long_parts) and any(part in window for part in long_parts)
+    return bool(long_parts) and any(part in text_lower for part in long_parts)
 
 
 def score_answers(

@@ -3,520 +3,1105 @@
     "lens": "component",
     "q": "What does ImpactGraph.save() use for atomic writes?",
     "a": "B",
-    "opts": ["shutil.copy2", "tempfile + os.replace", "open() with mode 'w'", "json.dump direct to path"],
-    "source": "skills/holtz/scripts/impact_graph.py:93",
-    "keywords": ["ImpactGraph", "save", "atomic"]
+    "opts": [
+      "shutil.copy2",
+      "tempfile + os.replace",
+      "open() with mode 'w'",
+      "json.dump direct to path"
+    ],
+    "source": "skills/holtz/scripts/impact_graph.py::ImpactGraph.save",
+    "keywords": [
+      "ImpactGraph",
+      "save",
+      "atomic"
+    ]
   },
   {
     "lens": "component",
     "q": "ImpactGraph._REQUIRED_NODE_KEYS contains which three keys?",
     "a": "B",
-    "opts": ["type, file, line", "id, type, file", "id, file, line", "type, file, audit_count"],
-    "source": "skills/holtz/scripts/impact_graph.py:52",
-    "keywords": ["ImpactGraph", "node", "required"]
+    "opts": [
+      "type, file, line",
+      "id, type, file",
+      "id, file, line",
+      "type, file, audit_count"
+    ],
+    "source": "skills/holtz/scripts/impact_graph.py::ImpactGraph",
+    "keywords": [
+      "ImpactGraph",
+      "node",
+      "required"
+    ]
   },
   {
     "lens": "component",
     "q": "DEFAULT_FORMAT in pattern_brief_compact.py is set to what?",
     "a": "D",
-    "opts": ["oneliner", "twoliner", "compact", "structured"],
-    "source": "skills/holtz/scripts/pattern_brief_compact.py:22",
-    "keywords": ["DEFAULT_FORMAT", "pattern_brief_compact", "format"]
+    "opts": [
+      "oneliner",
+      "twoliner",
+      "compact",
+      "structured"
+    ],
+    "source": "skills/holtz/scripts/pattern_brief_compact.py::DEFAULT_FORMAT",
+    "keywords": [
+      "DEFAULT_FORMAT",
+      "pattern_brief_compact",
+      "format"
+    ]
   },
   {
     "lens": "component",
     "q": "HoltzProfilerPlugin.detect() inspects how many turns?",
     "a": "A",
-    "opts": ["10", "5", "3", "20"],
-    "source": "skills/holtz/scripts/profiler_plugin.py:65",
-    "keywords": ["HoltzProfilerPlugin", "detect", "turns"]
+    "opts": [
+      "10",
+      "5",
+      "3",
+      "20"
+    ],
+    "source": "skills/holtz/scripts/profiler_plugin.py::HoltzProfilerPlugin.detect",
+    "keywords": [
+      "HoltzProfilerPlugin",
+      "detect",
+      "turns"
+    ]
   },
   {
     "lens": "component",
     "q": "What is the DRIFT_LINE_THRESHOLD in impact_graph.py?",
     "a": "B",
-    "opts": ["5", "10", "15", "20"],
-    "source": "skills/holtz/scripts/impact_graph.py:22",
-    "keywords": ["DRIFT_LINE_THRESHOLD", "impact_graph", "drift"]
+    "opts": [
+      "5",
+      "10",
+      "15",
+      "20"
+    ],
+    "source": "skills/holtz/scripts/impact_graph.py::DRIFT_LINE_THRESHOLD",
+    "keywords": [
+      "DRIFT_LINE_THRESHOLD",
+      "impact_graph",
+      "drift"
+    ]
   },
   {
     "lens": "integration",
     "q": "enforcement/hooks/_common.py loads hooks/_common.py via what mechanism?",
     "a": "C",
-    "opts": ["sys.path + import", "importlib.import_module", "importlib.util.spec_from_file_location", "exec(open(...).read())"],
-    "source": "enforcement/hooks/_common.py:9",
-    "keywords": ["importlib", "spec_from_file_location", "bridge"]
+    "opts": [
+      "sys.path + import",
+      "importlib.import_module",
+      "importlib.util.spec_from_file_location",
+      "exec(open(...).read())"
+    ],
+    "source": "enforcement/hooks/_common.py::_get_session_key_path",
+    "keywords": [
+      "importlib",
+      "spec_from_file_location",
+      "bridge"
+    ]
   },
   {
     "lens": "integration",
     "q": "lens_quiz.py imports check_artifact from which module?",
     "a": "B",
-    "opts": ["_common", "lens_evidence", "_protocol_cache", "_resolve"],
-    "source": "enforcement/hooks/lens_quiz.py:24",
-    "keywords": ["lens_quiz", "lens_evidence", "import"]
+    "opts": [
+      "_common",
+      "lens_evidence",
+      "_protocol_cache",
+      "_resolve"
+    ],
+    "source": "enforcement/hooks/lens_quiz.py::check_artifact",
+    "keywords": [
+      "lens_quiz",
+      "lens_evidence",
+      "import"
+    ]
   },
   {
     "lens": "integration",
     "q": "token_profiler cli.py imports build_run_profile from which module?",
     "a": "A",
-    "opts": ["token_profiler.analyze", "token_profiler.extract", "token_profiler.models", "token_profiler.report"],
-    "source": "scripts/token_profiler/cli.py:20",
-    "keywords": ["build_run_profile", "analyze", "import"]
+    "opts": [
+      "token_profiler.analyze",
+      "token_profiler.extract",
+      "token_profiler.models",
+      "token_profiler.report"
+    ],
+    "source": "scripts/token_profiler/cli.py::main",
+    "keywords": [
+      "build_run_profile",
+      "analyze",
+      "import"
+    ]
   },
   {
     "lens": "integration",
     "q": "profiler_plugin.py avoids importing token_profiler at runtime using what?",
     "a": "D",
-    "opts": ["lazy import in function body", "try/except ImportError", "importlib.util", "TYPE_CHECKING guard"],
-    "source": "skills/holtz/scripts/profiler_plugin.py:17",
-    "keywords": ["TYPE_CHECKING", "profiler_plugin", "runtime"]
+    "opts": [
+      "lazy import in function body",
+      "try/except ImportError",
+      "importlib.util",
+      "TYPE_CHECKING guard"
+    ],
+    "source": "skills/holtz/scripts/profiler_plugin.py::HoltzProfilerPlugin",
+    "keywords": [
+      "TYPE_CHECKING",
+      "profiler_plugin",
+      "runtime"
+    ]
   },
   {
     "lens": "integration",
     "q": "validate_punchlist.py imports from which shared module?",
     "a": "C",
-    "opts": ["convergence_check", "impact_graph", "markdown_utils", "pattern_brief_compact"],
-    "source": "skills/holtz/skills/holtz/scripts/validate_punchlist.py:30",
-    "keywords": ["validate_punchlist", "markdown_utils", "import"]
+    "opts": [
+      "convergence_check",
+      "impact_graph",
+      "markdown_utils",
+      "pattern_brief_compact"
+    ],
+    "source": "skills/holtz/scripts/validate_punchlist.py::parse_punchlist",
+    "keywords": [
+      "validate_punchlist",
+      "markdown_utils",
+      "import"
+    ]
   },
   {
     "lens": "security",
     "q": "write_guard.py resolves paths using what function to prevent traversal?",
     "a": "B",
-    "opts": ["os.path.abspath", "os.path.realpath", "pathlib.Path.resolve", "os.path.normpath"],
-    "source": "enforcement/hooks/write_guard.py:37",
-    "keywords": ["write_guard", "realpath", "path traversal"]
+    "opts": [
+      "os.path.abspath",
+      "os.path.realpath",
+      "pathlib.Path.resolve",
+      "os.path.normpath"
+    ],
+    "source": "enforcement/hooks/write_guard.py::main",
+    "keywords": [
+      "write_guard",
+      "realpath",
+      "path traversal"
+    ]
   },
   {
     "lens": "security",
     "q": "How many files are in MANAGED_FILES in write_guard.py?",
     "a": "C",
-    "opts": ["3", "4", "5", "6"],
-    "source": "enforcement/hooks/write_guard.py:20",
-    "keywords": ["MANAGED_FILES", "write_guard", "managed"]
+    "opts": [
+      "3",
+      "4",
+      "5",
+      "6"
+    ],
+    "source": "enforcement/hooks/write_guard.py::MANAGED_FILES",
+    "keywords": [
+      "MANAGED_FILES",
+      "write_guard",
+      "managed"
+    ]
   },
   {
     "lens": "security",
     "q": "lens_evidence.py excludes which paths from read_count?",
     "a": "A",
-    "opts": ["docs/ and quiz-bank paths", "enforcement/ paths", "bin/ paths", "scripts/ paths"],
-    "source": "enforcement/hooks/lens_evidence.py:41",
-    "keywords": ["lens_evidence", "read_count", "docs"]
+    "opts": [
+      "docs/ and quiz-bank paths",
+      "enforcement/ paths",
+      "bin/ paths",
+      "scripts/ paths"
+    ],
+    "source": "enforcement/hooks/lens_evidence.py::check_transcript",
+    "keywords": [
+      "lens_evidence",
+      "read_count",
+      "docs"
+    ]
   },
   {
     "lens": "security",
     "q": "is_git_commit() checks --amend to avoid what?",
     "a": "D",
-    "opts": ["empty commits", "large commits", "unsigned commits", "amend disguised as new commit"],
-    "source": "enforcement/hooks/_protocol_cache.py:87",
-    "keywords": ["is_git_commit", "amend", "protocol_cache"]
+    "opts": [
+      "empty commits",
+      "large commits",
+      "unsigned commits",
+      "amend disguised as new commit"
+    ],
+    "source": "enforcement/hooks/_protocol_cache.py::is_git_commit",
+    "keywords": [
+      "is_git_commit",
+      "amend",
+      "protocol_cache"
+    ]
   },
   {
     "lens": "security",
     "q": "bash_guard.py records a protocol_violation event when what happens?",
     "a": "B",
-    "opts": ["any bash command fails", "manifest verify returns non-zero", "stall > 15", "git commit succeeds"],
-    "source": "enforcement/hooks/bash_guard.py:59",
-    "keywords": ["bash_guard", "protocol_violation", "manifest"]
+    "opts": [
+      "any bash command fails",
+      "manifest verify returns non-zero",
+      "stall > 15",
+      "git commit succeeds"
+    ],
+    "source": "enforcement/hooks/bash_guard.py::main",
+    "keywords": [
+      "bash_guard",
+      "protocol_violation",
+      "manifest"
+    ]
   },
   {
     "lens": "error-propagation",
     "q": "ImpactGraph.load() catches which exceptions on JSON parse?",
     "a": "A",
-    "opts": ["json.JSONDecodeError, AttributeError", "ValueError, KeyError", "OSError, TypeError", "json.JSONDecodeError, OSError"],
-    "source": "skills/holtz/scripts/impact_graph.py:84",
-    "keywords": ["ImpactGraph", "load", "JSONDecodeError"]
+    "opts": [
+      "json.JSONDecodeError, AttributeError",
+      "ValueError, KeyError",
+      "OSError, TypeError",
+      "json.JSONDecodeError, OSError"
+    ],
+    "source": "skills/holtz/scripts/impact_graph.py::ImpactGraph.load",
+    "keywords": [
+      "ImpactGraph",
+      "load",
+      "JSONDecodeError"
+    ]
   },
   {
     "lens": "error-propagation",
     "q": "hooks/_common.py read_event() returns what on JSONDecodeError?",
     "a": "C",
-    "opts": ["raises the exception", "None", "{}", "sys.exit(1)"],
-    "source": "hooks/_common.py:37",
-    "keywords": ["read_event", "JSONDecodeError", "graceful"]
+    "opts": [
+      "raises the exception",
+      "None",
+      "{}",
+      "sys.exit(1)"
+    ],
+    "source": "hooks/_common.py::read_event",
+    "keywords": [
+      "read_event",
+      "JSONDecodeError",
+      "graceful"
+    ]
   },
   {
     "lens": "error-propagation",
     "q": "stop_gate.py allows stop on subprocess.TimeoutExpired via what pattern?",
     "a": "B",
-    "opts": ["try/except pass", "try/except exit_stop_allow()", "contextlib.suppress", "result.returncode check"],
-    "source": "enforcement/hooks/stop_gate.py:50",
-    "keywords": ["stop_gate", "TimeoutExpired", "exit_stop_allow"]
+    "opts": [
+      "try/except pass",
+      "try/except exit_stop_allow()",
+      "contextlib.suppress",
+      "result.returncode check"
+    ],
+    "source": "enforcement/hooks/stop_gate.py::main",
+    "keywords": [
+      "stop_gate",
+      "TimeoutExpired",
+      "exit_stop_allow"
+    ]
   },
   {
     "lens": "error-propagation",
     "q": "extract.py raises ValueError for malformed JSON with what context?",
     "a": "D",
-    "opts": ["file path only", "line content only", "exception type only", "file path and line number"],
-    "source": "scripts/token_profiler/extract.py:239",
-    "keywords": ["extract", "ValueError", "malformed"]
+    "opts": [
+      "file path only",
+      "line content only",
+      "exception type only",
+      "file path and line number"
+    ],
+    "source": "scripts/token_profiler/extract.py::_parse_jsonl_line",
+    "keywords": [
+      "extract",
+      "ValueError",
+      "malformed"
+    ]
   },
   {
     "lens": "error-propagation",
     "q": "ImpactGraph.update_risk() raises ValueError for what input?",
     "a": "A",
-    "opts": ["non-finite delta", "delta > 1.0", "delta < 0", "negative node id"],
-    "source": "skills/holtz/scripts/impact_graph.py:231",
-    "keywords": ["update_risk", "ValueError", "finite"]
+    "opts": [
+      "non-finite delta",
+      "delta > 1.0",
+      "delta < 0",
+      "negative node id"
+    ],
+    "source": "skills/holtz/scripts/impact_graph.py::ImpactGraph.update_risk",
+    "keywords": [
+      "update_risk",
+      "ValueError",
+      "finite"
+    ]
   },
   {
     "lens": "data-flow",
     "q": "mask_code_fences() returns a tuple of what two items?",
     "a": "B",
-    "opts": ["masked, normalized", "normalized, masked", "lines, masked_lines", "content, fences"],
-    "source": "skills/holtz/scripts/markdown_utils.py:50",
-    "keywords": ["mask_code_fences", "normalized", "masked"]
+    "opts": [
+      "masked, normalized",
+      "normalized, masked",
+      "lines, masked_lines",
+      "content, fences"
+    ],
+    "source": "skills/holtz/scripts/markdown_utils.py::mask_code_fences",
+    "keywords": [
+      "mask_code_fences",
+      "normalized",
+      "masked"
+    ]
   },
   {
     "lens": "data-flow",
     "q": "extract.py _merge_chunks() takes output_tokens from which chunk?",
     "a": "C",
-    "opts": ["first chunk", "all chunks summed", "final chunk (non-null stop_reason)", "largest chunk"],
-    "source": "scripts/token_profiler/extract.py:272",
-    "keywords": ["_merge_chunks", "output_tokens", "final chunk"]
+    "opts": [
+      "first chunk",
+      "all chunks summed",
+      "final chunk (non-null stop_reason)",
+      "largest chunk"
+    ],
+    "source": "scripts/token_profiler/extract.py::_merge_chunks",
+    "keywords": [
+      "_merge_chunks",
+      "output_tokens",
+      "final chunk"
+    ]
   },
   {
     "lens": "data-flow",
     "q": "compute_tool_attributions() distributes delta proportional to what?",
     "a": "A",
-    "opts": ["tool result content_size_chars", "tool call count", "tool name length", "session_cost"],
-    "source": "scripts/token_profiler/analyze.py:187",
-    "keywords": ["compute_tool_attributions", "content_size_chars", "proportional"]
+    "opts": [
+      "tool result content_size_chars",
+      "tool call count",
+      "tool name length",
+      "session_cost"
+    ],
+    "source": "scripts/token_profiler/analyze.py::compute_tool_attributions",
+    "keywords": [
+      "compute_tool_attributions",
+      "content_size_chars",
+      "proportional"
+    ]
   },
   {
     "lens": "data-flow",
     "q": "parse_punchlist() maps masked offsets to normalized via what?",
     "a": "D",
-    "opts": ["character offset arithmetic", "re.finditer positions", "string split", "line number mapping"],
-    "source": "skills/holtz/scripts/validate_punchlist.py:107",
-    "keywords": ["parse_punchlist", "line number", "masked"]
+    "opts": [
+      "character offset arithmetic",
+      "re.finditer positions",
+      "string split",
+      "line number mapping"
+    ],
+    "source": "skills/holtz/scripts/validate_punchlist.py::parse_punchlist",
+    "keywords": [
+      "parse_punchlist",
+      "line number",
+      "masked"
+    ]
   },
   {
     "lens": "data-flow",
     "q": "RawTurn.context_window property sums which token fields?",
     "a": "B",
-    "opts": ["input + output", "input + cache_creation + cache_read", "all four buckets", "cache_creation + cache_read"],
-    "source": "scripts/token_profiler/models.py:82",
-    "keywords": ["context_window", "cache_creation", "cache_read"]
+    "opts": [
+      "input + output",
+      "input + cache_creation + cache_read",
+      "all four buckets",
+      "cache_creation + cache_read"
+    ],
+    "source": "scripts/token_profiler/models.py::RawTurn.context_window",
+    "keywords": [
+      "context_window",
+      "cache_creation",
+      "cache_read"
+    ]
   },
   {
     "lens": "contract",
     "q": "validate_punchlist.py VALID_STATUSES contains how many values?",
     "a": "C",
-    "opts": ["2", "3", "4", "5"],
-    "source": "skills/holtz/skills/holtz/scripts/validate_punchlist.py:65",
-    "keywords": ["VALID_STATUSES", "OPEN", "RESOLVED"]
+    "opts": [
+      "2",
+      "3",
+      "4",
+      "5"
+    ],
+    "source": "skills/holtz/scripts/validate_punchlist.py::VALID_STATUSES",
+    "keywords": [
+      "VALID_STATUSES",
+      "OPEN",
+      "RESOLVED"
+    ]
   },
   {
     "lens": "contract",
     "q": "PASS_THRESHOLD in lens_quiz.py maps 5 questions to min correct of?",
     "a": "A",
-    "opts": ["4", "3", "5", "2"],
-    "source": "enforcement/hooks/lens_quiz.py:40",
-    "keywords": ["PASS_THRESHOLD", "lens_quiz", "threshold"]
+    "opts": [
+      "4",
+      "3",
+      "5",
+      "2"
+    ],
+    "source": "enforcement/hooks/lens_quiz.py::PASS_THRESHOLD",
+    "keywords": [
+      "PASS_THRESHOLD",
+      "lens_quiz",
+      "threshold"
+    ]
   },
   {
     "lens": "contract",
     "q": "generate_quiz_bank.py requires at minimum how many keywords per entry?",
     "a": "B",
-    "opts": ["2", "3", "4", "5"],
-    "source": "enforcement/scripts/generate_quiz_bank.py:33",
-    "keywords": ["keywords", "quiz_bank", "validation"]
+    "opts": [
+      "2",
+      "3",
+      "4",
+      "5"
+    ],
+    "source": "enforcement/scripts/generate_quiz_bank.py::validate_quiz_bank",
+    "keywords": [
+      "keywords",
+      "quiz_bank",
+      "validation"
+    ]
   },
   {
     "lens": "contract",
     "q": "check_artifact() in lens_evidence.py uses what default min_bytes?",
     "a": "C",
-    "opts": ["10", "25", "50", "100"],
-    "source": "enforcement/hooks/lens_evidence.py:66",
-    "keywords": ["check_artifact", "min_bytes", "artifact"]
+    "opts": [
+      "10",
+      "25",
+      "50",
+      "100"
+    ],
+    "source": "enforcement/hooks/lens_evidence.py::check_artifact",
+    "keywords": [
+      "check_artifact",
+      "min_bytes",
+      "artifact"
+    ]
   },
   {
     "lens": "contract",
     "q": "ImpactGraph.add_node() sets default risk_score to what?",
     "a": "D",
-    "opts": ["None", "1.0", "0.5", "0.0"],
-    "source": "skills/holtz/scripts/impact_graph.py:126",
-    "keywords": ["add_node", "risk_score", "default"]
+    "opts": [
+      "None",
+      "1.0",
+      "0.5",
+      "0.0"
+    ],
+    "source": "skills/holtz/scripts/impact_graph.py::ImpactGraph.add_node",
+    "keywords": [
+      "add_node",
+      "risk_score",
+      "default"
+    ]
   },
   {
     "lens": "semantic-fidelity",
     "q": "blast_radius() in ImpactGraph traverses edges in which direction?",
     "a": "B",
-    "opts": ["outgoing only", "bidirectional", "incoming only", "random walk"],
-    "source": "skills/holtz/scripts/impact_graph.py:179",
-    "keywords": ["blast_radius", "bidirectional", "BFS"]
+    "opts": [
+      "outgoing only",
+      "bidirectional",
+      "incoming only",
+      "random walk"
+    ],
+    "source": "skills/holtz/scripts/impact_graph.py::ImpactGraph.blast_radius",
+    "keywords": [
+      "blast_radius",
+      "bidirectional",
+      "BFS"
+    ]
   },
   {
     "lens": "semantic-fidelity",
     "q": "count_items() ignores Status fields where in PUNCHLIST?",
     "a": "A",
-    "opts": ["outside item blocks (pattern/preamble)", "in resolved items", "in deferred items", "after line 100"],
-    "source": "skills/holtz/scripts/convergence_check.py:31",
-    "keywords": ["count_items", "item blocks", "masked"]
+    "opts": [
+      "outside item blocks (pattern/preamble)",
+      "in resolved items",
+      "in deferred items",
+      "after line 100"
+    ],
+    "source": "skills/holtz/scripts/convergence_check.py::count_items",
+    "keywords": [
+      "count_items",
+      "item blocks",
+      "masked"
+    ]
   },
   {
     "lens": "semantic-fidelity",
     "q": "format_compact() raises ValueError for which invalid fmt value?",
     "a": "C",
-    "opts": ["None", "empty string", "any unknown string", "integer"],
-    "source": "skills/holtz/scripts/pattern_brief_compact.py:157",
-    "keywords": ["format_compact", "ValueError", "fmt"]
+    "opts": [
+      "None",
+      "empty string",
+      "any unknown string",
+      "integer"
+    ],
+    "source": "skills/holtz/scripts/pattern_brief_compact.py::format_compact",
+    "keywords": [
+      "format_compact",
+      "ValueError",
+      "fmt"
+    ]
   },
   {
     "lens": "semantic-fidelity",
     "q": "apply_phase_labels() priority order is plugin, milestones, or default?",
     "a": "D",
-    "opts": ["milestones > plugin > default", "default > milestones > plugin", "plugin > default > milestones", "plugin > milestones > default"],
-    "source": "scripts/token_profiler/analyze.py:232",
-    "keywords": ["apply_phase_labels", "priority", "plugin"]
+    "opts": [
+      "milestones > plugin > default",
+      "default > milestones > plugin",
+      "plugin > default > milestones",
+      "plugin > milestones > default"
+    ],
+    "source": "scripts/token_profiler/analyze.py::apply_phase_labels",
+    "keywords": [
+      "apply_phase_labels",
+      "priority",
+      "plugin"
+    ]
   },
   {
     "lens": "semantic-fidelity",
     "q": "render_items() extracts blocks verbatim or reconstructs them?",
     "a": "A",
-    "opts": ["verbatim from original content", "reconstructs from fields", "renders from punchlist", "generates from template"],
-    "source": "skills/holtz/skills/holtz/scripts/validate_punchlist.py:326",
-    "keywords": ["render_items", "verbatim", "original"]
+    "opts": [
+      "verbatim from original content",
+      "reconstructs from fields",
+      "renders from punchlist",
+      "generates from template"
+    ],
+    "source": "skills/holtz/scripts/validate_punchlist.py::render_items",
+    "keywords": [
+      "render_items",
+      "verbatim",
+      "original"
+    ]
   },
   {
     "lens": "temporal-protocol",
     "q": "primer.py records which event on UserPromptSubmit?",
     "a": "B",
-    "opts": ["audit_start", "context_reset", "perspective_change", "fix_loop_start"],
-    "source": "enforcement/hooks/primer.py:75",
-    "keywords": ["primer", "context_reset", "UserPromptSubmit"]
+    "opts": [
+      "audit_start",
+      "context_reset",
+      "perspective_change",
+      "fix_loop_start"
+    ],
+    "source": "enforcement/hooks/primer.py::main",
+    "keywords": [
+      "primer",
+      "context_reset",
+      "UserPromptSubmit"
+    ]
   },
   {
     "lens": "temporal-protocol",
     "q": "protocol_tracker.py increments stall count on what commands?",
     "a": "C",
-    "opts": ["all bash commands", "only git commands", "non-TDD bash commands", "only sahjhan commands"],
-    "source": "enforcement/hooks/protocol_tracker.py:115",
-    "keywords": ["protocol_tracker", "stall", "TDD"]
+    "opts": [
+      "all bash commands",
+      "only git commands",
+      "non-TDD bash commands",
+      "only sahjhan commands"
+    ],
+    "source": "enforcement/hooks/protocol_tracker.py::main",
+    "keywords": [
+      "protocol_tracker",
+      "stall",
+      "TDD"
+    ]
   },
   {
     "lens": "temporal-protocol",
     "q": "compute_obligations() triggers pattern_check advisory after how many fixes?",
     "a": "A",
-    "opts": ["3", "5", "10", "15"],
-    "source": "enforcement/hooks/_protocol_cache.py:142",
-    "keywords": ["compute_obligations", "fixes_since_pattern", "pattern_check"]
+    "opts": [
+      "3",
+      "5",
+      "10",
+      "15"
+    ],
+    "source": "enforcement/hooks/_protocol_cache.py::compute_obligations",
+    "keywords": [
+      "compute_obligations",
+      "fixes_since_pattern",
+      "pattern_check"
+    ]
   },
   {
     "lens": "temporal-protocol",
     "q": "stall threshold that blocks ALL commands (not just commit) is?",
     "a": "D",
-    "opts": ["5", "10", "13", "15"],
-    "source": "enforcement/hooks/_protocol_cache.py:135",
-    "keywords": ["stall", "blocks_all", "threshold"]
+    "opts": [
+      "5",
+      "10",
+      "13",
+      "15"
+    ],
+    "source": "enforcement/hooks/_protocol_cache.py::compute_obligations",
+    "keywords": [
+      "stall",
+      "blocks_all",
+      "threshold"
+    ]
   },
   {
     "lens": "temporal-protocol",
-    "q": "The awaiting_clear→fix_loop transition gates on which event?",
+    "q": "The awaiting_clear\u2192fix_loop transition gates on which event?",
     "a": "B",
-    "opts": ["audit_start", "context_reset", "perspective_done", "quiz_answered"],
-    "source": "enforcement/hooks/primer.py:9",
-    "keywords": ["awaiting_clear", "context_reset", "transition"]
+    "opts": [
+      "audit_start",
+      "context_reset",
+      "perspective_done",
+      "quiz_answered"
+    ],
+    "source": "enforcement/hooks/primer.py::main",
+    "keywords": [
+      "awaiting_clear",
+      "context_reset",
+      "transition"
+    ]
   },
   {
     "lens": "public-contract",
     "q": "hooks/_common.py exit_ok() for PreToolUse includes which JSON field?",
     "a": "C",
-    "opts": ["permissionGranted", "toolAllowed", "hookSpecificOutput", "decisionReason"],
-    "source": "hooks/_common.py:49",
-    "keywords": ["exit_ok", "hookSpecificOutput", "PreToolUse"]
+    "opts": [
+      "permissionGranted",
+      "toolAllowed",
+      "hookSpecificOutput",
+      "decisionReason"
+    ],
+    "source": "hooks/_common.py::exit_ok",
+    "keywords": [
+      "exit_ok",
+      "hookSpecificOutput",
+      "PreToolUse"
+    ]
   },
   {
     "lens": "public-contract",
     "q": "exit_stop_block() outputs JSON with which decision key value?",
     "a": "A",
-    "opts": ["block", "deny", "reject", "false"],
-    "source": "hooks/_common.py:163",
-    "keywords": ["exit_stop_block", "decision", "block"]
+    "opts": [
+      "block",
+      "deny",
+      "reject",
+      "false"
+    ],
+    "source": "hooks/_common.py::exit_stop_block",
+    "keywords": [
+      "exit_stop_block",
+      "decision",
+      "block"
+    ]
   },
   {
     "lens": "public-contract",
     "q": "exit_stop_allow() outputs what to stdout?",
     "a": "D",
-    "opts": ["{\"allow\": true}", "{\"continue\": true}", "{\"decision\": \"allow\"}", "nothing (no output)"],
-    "source": "hooks/_common.py:88",
-    "keywords": ["exit_stop_allow", "stdout", "no output"]
+    "opts": [
+      "{\"allow\": true}",
+      "{\"continue\": true}",
+      "{\"decision\": \"allow\"}",
+      "nothing (no output)"
+    ],
+    "source": "hooks/_common.py::exit_stop_allow",
+    "keywords": [
+      "exit_stop_allow",
+      "stdout",
+      "no output"
+    ]
   },
   {
     "lens": "public-contract",
     "q": "sahjhan_binary() resolves binary name using platform machine and what?",
     "a": "B",
-    "opts": ["sys.version", "platform.system()", "os.uname()", "subprocess arch check"],
-    "source": "enforcement/hooks/_resolve.py:14",
-    "keywords": ["sahjhan_binary", "platform", "machine"]
+    "opts": [
+      "sys.version",
+      "platform.system()",
+      "os.uname()",
+      "subprocess arch check"
+    ],
+    "source": "enforcement/hooks/_resolve.py::sahjhan_binary",
+    "keywords": [
+      "sahjhan_binary",
+      "platform",
+      "machine"
+    ]
   },
   {
     "lens": "public-contract",
     "q": "verify_hooks.py reads required hooks from which file?",
     "a": "C",
-    "opts": ["settings.local.json", ".claude/settings.json", "hooks-manifest.json", "enforcement.toml"],
-    "source": "enforcement/hooks/verify_hooks.py:16",
-    "keywords": ["verify_hooks", "hooks-manifest", "manifest"]
+    "opts": [
+      "settings.local.json",
+      ".claude/settings.json",
+      "hooks-manifest.json",
+      "enforcement.toml"
+    ],
+    "source": "enforcement/hooks/verify_hooks.py::main",
+    "keywords": [
+      "verify_hooks",
+      "hooks-manifest",
+      "manifest"
+    ]
   },
   {
     "lens": "concurrency",
     "q": "ImpactGraph.save() prevents partial writes via what pattern?",
     "a": "A",
-    "opts": ["write to tmp then os.replace", "file lock then write", "write then fsync", "atomic rename via shutil"],
-    "source": "skills/holtz/scripts/impact_graph.py:93",
-    "keywords": ["save", "atomic", "os.replace"]
+    "opts": [
+      "write to tmp then os.replace",
+      "file lock then write",
+      "write then fsync",
+      "atomic rename via shutil"
+    ],
+    "source": "skills/holtz/scripts/impact_graph.py::ImpactGraph.save",
+    "keywords": [
+      "save",
+      "atomic",
+      "os.replace"
+    ]
   },
   {
     "lens": "concurrency",
     "q": "write_cache() in _protocol_cache.py uses what for atomic write?",
     "a": "B",
-    "opts": ["open with 'x' flag", "tempfile.mkstemp + os.replace", "shutil.move", "file lock"],
-    "source": "enforcement/hooks/_protocol_cache.py:74",
-    "keywords": ["write_cache", "mkstemp", "atomic"]
+    "opts": [
+      "open with 'x' flag",
+      "tempfile.mkstemp + os.replace",
+      "shutil.move",
+      "file lock"
+    ],
+    "source": "enforcement/hooks/_protocol_cache.py::write_cache",
+    "keywords": [
+      "write_cache",
+      "mkstemp",
+      "atomic"
+    ]
   },
   {
     "lens": "concurrency",
     "q": "lens_quiz.py guards duplicate quiz_answered events using what?",
     "a": "D",
-    "opts": ["file lock", "in-memory set", "cache file", "query events before recording"],
-    "source": "enforcement/hooks/lens_quiz.py:364",
-    "keywords": ["quiz_answered", "duplicate", "query"]
+    "opts": [
+      "file lock",
+      "in-memory set",
+      "cache file",
+      "query events before recording"
+    ],
+    "source": "enforcement/hooks/lens_quiz.py::main",
+    "keywords": [
+      "quiz_answered",
+      "duplicate",
+      "query"
+    ]
   },
   {
     "lens": "concurrency",
     "q": "_run_sahjhan() uses subprocess.run with what timeout?",
     "a": "C",
-    "opts": ["1 second", "2 seconds", "5 seconds", "10 seconds"],
-    "source": "enforcement/hooks/lens_quiz.py:193",
-    "keywords": ["_run_sahjhan", "timeout", "subprocess"]
+    "opts": [
+      "1 second",
+      "2 seconds",
+      "5 seconds",
+      "10 seconds"
+    ],
+    "source": "enforcement/hooks/lens_quiz.py::_run_sahjhan",
+    "keywords": [
+      "_run_sahjhan",
+      "timeout",
+      "subprocess"
+    ]
   },
   {
     "lens": "concurrency",
     "q": "ImpactGraph.save() closes the fd before os.replace to prevent what?",
     "a": "A",
-    "opts": ["leaked fd on exception", "write buffering", "permission errors", "double write"],
-    "source": "skills/holtz/scripts/impact_graph.py:97",
-    "keywords": ["save", "os.close", "fd leak"]
+    "opts": [
+      "leaked fd on exception",
+      "write buffering",
+      "permission errors",
+      "double write"
+    ],
+    "source": "skills/holtz/scripts/impact_graph.py::ImpactGraph.save",
+    "keywords": [
+      "save",
+      "os.close",
+      "fd leak"
+    ]
   },
   {
     "lens": "resource-lifecycle",
     "q": "ImpactGraph.save() calls os.unlink on the tmp file in what case?",
     "a": "B",
-    "opts": ["always after write", "on BaseException before replace", "on OSError only", "never"],
-    "source": "skills/holtz/scripts/impact_graph.py:103",
-    "keywords": ["save", "os.unlink", "cleanup"]
+    "opts": [
+      "always after write",
+      "on BaseException before replace",
+      "on OSError only",
+      "never"
+    ],
+    "source": "skills/holtz/scripts/impact_graph.py::ImpactGraph.save",
+    "keywords": [
+      "save",
+      "os.unlink",
+      "cleanup"
+    ]
   },
   {
     "lens": "resource-lifecycle",
     "q": "get_test_counts() uses subprocess.run with what timeout value?",
     "a": "C",
-    "opts": ["30", "60", "300", "600"],
-    "source": "skills/holtz/skills/holtz/scripts/convergence_check.py:116",
-    "keywords": ["get_test_counts", "subprocess", "timeout"]
+    "opts": [
+      "30",
+      "60",
+      "300",
+      "600"
+    ],
+    "source": "skills/holtz/scripts/convergence_check.py::get_test_counts",
+    "keywords": [
+      "get_test_counts",
+      "subprocess",
+      "timeout"
+    ]
   },
   {
     "lens": "resource-lifecycle",
     "q": "bash_guard.py uses what timeout for manifest verify subprocess call?",
     "a": "A",
-    "opts": ["10", "5", "30", "60"],
-    "source": "enforcement/hooks/bash_guard.py:54",
-    "keywords": ["bash_guard", "manifest", "timeout"]
+    "opts": [
+      "10",
+      "5",
+      "30",
+      "60"
+    ],
+    "source": "enforcement/hooks/bash_guard.py::main",
+    "keywords": [
+      "bash_guard",
+      "manifest",
+      "timeout"
+    ]
   },
   {
     "lens": "resource-lifecycle",
     "q": "write_cache() uses os.fdopen to ensure the fd is closed via what?",
     "a": "D",
-    "opts": ["finally block", "contextlib.suppress", "atexit handler", "with statement context manager"],
-    "source": "enforcement/hooks/_protocol_cache.py:76",
-    "keywords": ["write_cache", "fdopen", "context manager"]
+    "opts": [
+      "finally block",
+      "contextlib.suppress",
+      "atexit handler",
+      "with statement context manager"
+    ],
+    "source": "enforcement/hooks/_protocol_cache.py::write_cache",
+    "keywords": [
+      "write_cache",
+      "fdopen",
+      "context manager"
+    ]
   },
   {
     "lens": "resource-lifecycle",
     "q": "discover_subagents() checks how many directory locations?",
     "a": "B",
-    "opts": ["1", "2", "3", "4"],
-    "source": "scripts/token_profiler/extract.py:167",
-    "keywords": ["discover_subagents", "locations", "subagents"]
+    "opts": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "source": "scripts/token_profiler/extract.py::discover_subagents",
+    "keywords": [
+      "discover_subagents",
+      "locations",
+      "subagents"
+    ]
   },
   {
     "lens": "idempotency",
     "q": "ImpactGraph.add_edge() deduplicates on which tuple?",
     "a": "C",
-    "opts": ["source, target", "source, type", "source, target, type", "target, type"],
-    "source": "skills/holtz/scripts/impact_graph.py:138",
-    "keywords": ["add_edge", "deduplicate", "source target type"]
+    "opts": [
+      "source, target",
+      "source, type",
+      "source, target, type",
+      "target, type"
+    ],
+    "source": "skills/holtz/scripts/impact_graph.py::ImpactGraph.add_edge",
+    "keywords": [
+      "add_edge",
+      "deduplicate",
+      "source target type"
+    ]
   },
   {
     "lens": "idempotency",
     "q": "ImpactGraph.add_node() on existing node increments which field?",
     "a": "A",
-    "opts": ["audit_count", "risk_score", "last_audited", "line"],
-    "source": "skills/holtz/scripts/impact_graph.py:116",
-    "keywords": ["add_node", "audit_count", "increment"]
+    "opts": [
+      "audit_count",
+      "risk_score",
+      "last_audited",
+      "line"
+    ],
+    "source": "skills/holtz/scripts/impact_graph.py::ImpactGraph.add_node",
+    "keywords": [
+      "add_node",
+      "audit_count",
+      "increment"
+    ]
   },
   {
     "lens": "idempotency",
     "q": "lens_quiz.py checks posed_events before posing quiz to prevent what?",
     "a": "D",
-    "opts": ["overwriting answers", "stale questions", "score reset", "posing quiz twice"],
-    "source": "enforcement/hooks/lens_quiz.py:334",
-    "keywords": ["posed_events", "quiz_posed", "idempotent"]
+    "opts": [
+      "overwriting answers",
+      "stale questions",
+      "score reset",
+      "posing quiz twice"
+    ],
+    "source": "enforcement/hooks/lens_quiz.py::main",
+    "keywords": [
+      "posed_events",
+      "quiz_posed",
+      "idempotent"
+    ]
   },
   {
     "lens": "idempotency",
-    "q": "protocol_tracker.py sets stall=0 after sahjhan command runs — why?",
+    "q": "protocol_tracker.py sets stall=0 after sahjhan command runs \u2014 why?",
     "a": "B",
-    "opts": ["to reset error state", "because sahjhan is a legitimate protocol event", "to prevent overflow", "because it fails otherwise"],
-    "source": "enforcement/hooks/protocol_tracker.py:74",
-    "keywords": ["stall", "sahjhan", "reset"]
+    "opts": [
+      "to reset error state",
+      "because sahjhan is a legitimate protocol event",
+      "to prevent overflow",
+      "because it fails otherwise"
+    ],
+    "source": "enforcement/hooks/protocol_tracker.py::main",
+    "keywords": [
+      "stall",
+      "sahjhan",
+      "reset"
+    ]
   },
   {
     "lens": "idempotency",
     "q": "filter_items() returns what when both filters are None?",
     "a": "C",
-    "opts": ["empty list", "original list reference", "new copy of items", "None"],
-    "source": "skills/holtz/skills/holtz/scripts/validate_punchlist.py:292",
-    "keywords": ["filter_items", "None", "copy"]
+    "opts": [
+      "empty list",
+      "original list reference",
+      "new copy of items",
+      "None"
+    ],
+    "source": "skills/holtz/scripts/validate_punchlist.py::filter_items",
+    "keywords": [
+      "filter_items",
+      "None",
+      "copy"
+    ]
   },
   {
     "lens": "observability",
     "q": "ImpactGraph.load() prints WARNING to which output stream?",
     "a": "B",
-    "opts": ["sys.stdout", "sys.stderr", "logging.warning", "print default"],
-    "source": "skills/holtz/scripts/impact_graph.py:85",
-    "keywords": ["ImpactGraph", "WARNING", "stderr"]
+    "opts": [
+      "sys.stdout",
+      "sys.stderr",
+      "logging.warning",
+      "print default"
+    ],
+    "source": "skills/holtz/scripts/impact_graph.py::ImpactGraph.load",
+    "keywords": [
+      "ImpactGraph",
+      "WARNING",
+      "stderr"
+    ]
   },
   {
     "lens": "observability",
     "q": "format_state_line() produces a max of how many tokens?",
     "a": "A",
-    "opts": ["20", "30", "50", "100"],
-    "source": "enforcement/hooks/_protocol_cache.py:161",
-    "keywords": ["format_state_line", "tokens", "state"]
+    "opts": [
+      "20",
+      "30",
+      "50",
+      "100"
+    ],
+    "source": "enforcement/hooks/_protocol_cache.py::format_state_line",
+    "keywords": [
+      "format_state_line",
+      "tokens",
+      "state"
+    ]
   },
   {
     "lens": "observability",
     "q": "check_transcript() returns which four keys in its result dict?",
     "a": "D",
-    "opts": ["pass, reads, hits, error", "ok, read_count, keywords, msg", "pass, count, keywords, reason", "pass, read_count, keyword_hits, reason"],
-    "source": "enforcement/hooks/lens_evidence.py:12",
-    "keywords": ["check_transcript", "return", "dict"]
+    "opts": [
+      "pass, reads, hits, error",
+      "ok, read_count, keywords, msg",
+      "pass, count, keywords, reason",
+      "pass, read_count, keyword_hits, reason"
+    ],
+    "source": "enforcement/hooks/lens_evidence.py::check_transcript",
+    "keywords": [
+      "check_transcript",
+      "return",
+      "dict"
+    ]
   },
   {
     "lens": "observability",
     "q": "questions_hash() uses which hash algorithm for the ledger event?",
     "a": "C",
-    "opts": ["MD5", "SHA-1", "SHA-256", "SHA-512"],
-    "source": "enforcement/hooks/lens_quiz.py:99",
-    "keywords": ["questions_hash", "SHA-256", "ledger"]
+    "opts": [
+      "MD5",
+      "SHA-1",
+      "SHA-256",
+      "SHA-512"
+    ],
+    "source": "enforcement/hooks/lens_quiz.py::questions_hash",
+    "keywords": [
+      "questions_hash",
+      "SHA-256",
+      "ledger"
+    ]
   },
   {
     "lens": "observability",
     "q": "_inject_computed_properties() adds which two missing properties to JSON?",
     "a": "B",
-    "opts": ["total and cost", "total and total_cost", "sum and total_cost", "total_tokens and cost"],
-    "source": "scripts/token_profiler/cli.py:301",
-    "keywords": ["_inject_computed_properties", "total", "total_cost"]
+    "opts": [
+      "total and cost",
+      "total and total_cost",
+      "sum and total_cost",
+      "total_tokens and cost"
+    ],
+    "source": "scripts/token_profiler/cli.py::_inject_computed_properties",
+    "keywords": [
+      "_inject_computed_properties",
+      "total",
+      "total_cost"
+    ]
   }
 ]
