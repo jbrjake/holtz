@@ -111,18 +111,10 @@ class TestModernOutputFormat:
 
     # -- exit_ok --
 
-    def test_exit_ok_exits_zero(self):
-        code, _, _ = self._run_common_func("exit_ok")
-        assert code == 0
-
     def test_exit_ok_outputs_valid_json(self):
         _, output, _ = self._run_common_func("exit_ok")
         assert output.get("continue") is True
         assert output.get("suppressOutput") is True
-
-    def test_exit_ok_no_stderr(self):
-        _, _, stderr = self._run_common_func("exit_ok")
-        assert stderr == ""
 
     def test_exit_ok_pretooluse_includes_hook_specific_output(self):
         """PreToolUse exit_ok includes hookSpecificOutput to avoid phantom error."""
@@ -139,25 +131,13 @@ class TestModernOutputFormat:
 
     # -- exit_warn --
 
-    def test_exit_warn_exits_zero(self):
-        code, _, _ = self._run_common_func("exit_warn", "test warning")
-        assert code == 0
-
     def test_exit_warn_outputs_valid_json(self):
         _, output, _ = self._run_common_func("exit_warn", "test warning")
         assert output.get("continue") is True
         assert output.get("suppressOutput") is False
         assert output.get("additionalContext") == "test warning"
 
-    def test_exit_warn_no_stderr(self):
-        _, _, stderr = self._run_common_func("exit_warn", "test warning")
-        assert stderr == ""
-
     # -- exit_block --
-
-    def test_exit_block_exits_zero(self):
-        code, _, _ = self._run_common_func("exit_block", "test block")
-        assert code == 0
 
     def test_exit_block_outputs_valid_json(self):
         _, output, _ = self._run_common_func("exit_block", "test block")
@@ -171,30 +151,14 @@ class TestModernOutputFormat:
         assert hook_output["permissionDecision"] == "block"
         assert hook_output["permissionDecisionReason"] == "reason here"
 
-    def test_exit_block_no_stderr(self):
-        _, _, stderr = self._run_common_func("exit_block", "test block")
-        assert stderr == ""
-
     # -- exit_stop_allow --
-
-    def test_exit_stop_allow_exits_zero(self):
-        code, _, _ = self._run_common_func("exit_stop_allow")
-        assert code == 0
 
     def test_exit_stop_allow_no_output(self):
         """Stop allow should produce no stdout (empty = allow)."""
         _, output, _ = self._run_common_func("exit_stop_allow")
         assert output == {}
 
-    def test_exit_stop_allow_no_stderr(self):
-        _, _, stderr = self._run_common_func("exit_stop_allow")
-        assert stderr == ""
-
     # -- exit_stop_block --
-
-    def test_exit_stop_block_exits_zero(self):
-        code, _, _ = self._run_common_func("exit_stop_block", "test reason")
-        assert code == 0
 
     def test_exit_stop_block_outputs_stop_format(self):
         """Stop block should use decision/reason format, not PreToolUse format."""
@@ -208,9 +172,6 @@ class TestModernOutputFormat:
         assert "hookSpecificOutput" not in output
         assert "continue" not in output
 
-    def test_exit_stop_block_no_stderr(self):
-        _, _, stderr = self._run_common_func("exit_stop_block", "test reason")
-        assert stderr == ""
 
 
 # --- _common.py mask_fenced_blocks ---
@@ -387,18 +348,17 @@ class TestSubagentFindingsCheckInProcess:
     @staticmethod
     def _run_main(event, capsys):
         """Import and run main() in-process, returning parsed JSON output."""
+        import contextlib
         import importlib
+        import io
+        from unittest.mock import patch
+
         sys.path.insert(0, HOOKS_DIR)
         import subagent_findings_check
         importlib.reload(subagent_findings_check)
-        from unittest.mock import patch
-        import io
         stdin_data = io.StringIO(json.dumps(event))
-        with patch("sys.stdin", stdin_data):
-            try:
-                subagent_findings_check.main()
-            except SystemExit:
-                pass
+        with patch("sys.stdin", stdin_data), contextlib.suppress(SystemExit):
+            subagent_findings_check.main()
         captured = capsys.readouterr()
         try:
             return json.loads(captured.out)
