@@ -57,3 +57,9 @@ path = "docs/holtz/project.jsonl"
 "test finding" = "event test_audit_finding"
 "code finding" = "event code_audit_finding"
 "graph delta" = "event graph_delta"
+
+[guards]
+read_blocked = [
+    ".sahjhan/session.key",
+    "enforcement/quiz-bank.json",
+]
