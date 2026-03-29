@@ -762,3 +762,26 @@ class TestActiveLedger:
         spec.loader.exec_module(mod)
         result = mod._active_ledger(str(tmp_path))
         assert result is None
+
+    def test_active_run_marker_matches_ledger_registry(self):
+        """active-run marker value must match a registered ledger name.
+
+        BH-005: If the marker says 'run' but the ledger is named 'run-26',
+        hooks pass --ledger run which fails to resolve. The marker must
+        contain the full ledger name (e.g. 'run-26'), not the template name.
+        """
+        marker = os.path.join(REPO_ROOT, "docs", "holtz", ".sahjhan", "active-run")
+        if not os.path.exists(marker):
+            pytest.skip("No active-run marker (no active audit)")
+        with open(marker, encoding="utf-8") as f:
+            ledger_name = f.read().strip()
+        registry = os.path.join(REPO_ROOT, "docs", "holtz", ".sahjhan", "ledgers.toml")
+        if not os.path.exists(registry):
+            pytest.skip("No ledger registry")
+        with open(registry, encoding="utf-8") as f:
+            registry_text = f.read()
+        assert f'name = "{ledger_name}"' in registry_text, (
+            f"active-run marker says '{ledger_name}' but no ledger with that "
+            f"name found in ledgers.toml. Hooks will fail to resolve --ledger {ledger_name}. "
+            f"Use the full ledger name (e.g. 'run-26'), not the template name ('run')."
+        )
