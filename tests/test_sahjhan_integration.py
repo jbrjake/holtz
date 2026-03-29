@@ -10,6 +10,8 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENFORCEMENT_HOOKS_DIR = os.path.join(REPO_ROOT, "enforcement", "hooks")
 
