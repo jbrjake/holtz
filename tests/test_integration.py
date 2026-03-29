@@ -274,18 +274,22 @@ def test_readme_metrics_match_actual():
     actual_examples = len(list((root / "skills" / "holtz" / "examples").glob("*.md")))
     actual_scripts = len(list((root / "skills" / "holtz" / "scripts").glob("*.py")))
     actual_patterns = len(list((root / "skills" / "holtz" / "patterns").glob("*.md")))
-    actual_hooks = (
-        len([f for f in (root / "hooks").glob("*.py") if f.name != "_common.py"])
-        + len([f for f in (root / "enforcement" / "hooks").glob("*.py")
-               if not f.name.startswith("_")])
-    )
+    actual_hooks = len([
+        f for f in (root / "enforcement" / "hooks").glob("*.py")
+        if not f.name.startswith("_")
+    ])
 
     result = subprocess.run(
-        ["python", "-m", "pytest", "tests/", "--co", "-q"],
+        ["python", "-m", "pytest", "tests/", "--collect-only"],
         capture_output=True, text=True, cwd=str(root),
     )
-    test_line = result.stdout.strip().split("\n")[-1]
-    actual_tests = int(re.search(r"(\d+) test", test_line).group(1))
+    # Last line of --collect-only output: "N tests collected in X.XXs"
+    test_match = re.search(r"(\d+) tests? collected", result.stdout)
+    assert test_match, (
+        f"Could not parse test count from pytest --collect-only output. "
+        f"Last 3 lines: {result.stdout.strip().splitlines()[-3:]}"
+    )
+    actual_tests = int(test_match.group(1))
 
     actual_lines = 0
     for d in [root / "tests", root / "skills" / "holtz" / "scripts", root / "hooks",

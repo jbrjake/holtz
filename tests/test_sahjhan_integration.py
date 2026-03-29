@@ -112,6 +112,20 @@ class TestBootstrapHook:
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_allowed(code, output)
 
+    def test_bin_sahjhan_symlink_is_relative(self):
+        """BH-003: bin/sahjhan symlink must be relative for CI compatibility.
+
+        An absolute symlink works locally but breaks realpath comparison
+        in CI where the repo is cloned to a different path.
+        """
+        link = os.path.join(REPO_ROOT, "bin", "sahjhan")
+        if not os.path.islink(link):
+            return  # not applicable if symlink doesn't exist
+        target = os.readlink(link)
+        assert not os.path.isabs(target), (
+            f"bin/sahjhan symlink must be relative, got absolute: {target}"
+        )
+
     def test_blocks_path_traversal(self):
         """Bootstrap hook blocks path traversal attempts to enforcement/."""
         event = {
@@ -315,10 +329,12 @@ class TestBashGuard:
         run_enforcement_hook(
             "bash_guard.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
         )
-        if log_file.exists():
-            logged = log_file.read_text()
-            assert "--field" in logged, "violation event should use --field syntax"
-            assert "project=holtz" in logged, "violation event missing project field"
+        assert log_file.exists(), (
+            "bash_guard should record a protocol_violation event when manifest verify fails"
+        )
+        logged = log_file.read_text()
+        assert "--field" in logged, "violation event should use --field syntax"
+        assert "project=holtz" in logged, "violation event missing project field"
 
     def test_degrades_gracefully_on_oserror(self, tmp_path):
         """BH-015: bash_guard degrades gracefully when binary is unexecutable."""
@@ -343,16 +359,32 @@ class TestBashGuard:
 class TestStopGate:
     """Tests for the stop gate."""
 
-    def test_allows_without_sahjhan_binary(self):
-        """Stop gate allows when no Sahjhan binary is installed."""
-        code, output, _ = run_enforcement_hook("stop_gate.py", {})
+    def test_allows_without_sahjhan_binary(self, tmp_path):
+        """Stop gate allows when no Sahjhan binary is installed.
+
+        BH-005: Must use isolated tmp_path to avoid picking up live
+        .sahjhan/ state from the repo root during active audit runs.
+        """
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
         assert code == 0
         # No binary = no output = allow
         assert output == {}
 
-    def test_allows_without_active_run(self):
-        """Stop gate allows when no active Sahjhan run exists."""
-        code, output, _ = run_enforcement_hook("stop_gate.py", {})
+    def test_allows_without_active_run(self, tmp_path):
+        """Stop gate allows when no active Sahjhan run exists.
+
+        BH-005: Must use isolated tmp_path to avoid picking up live state.
+        """
+        # Create binary but no .sahjhan directory
+        _create_mock_binary(tmp_path, 'echo "state: finalized (1 events, chain valid)"')
+        (tmp_path / "enforcement").mkdir(parents=True)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
         assert code == 0
         assert output == {}
 
@@ -377,17 +409,30 @@ class TestStopGate:
 class TestPrimer:
     """Tests for the UserPromptSubmit primer hook."""
 
-    def test_allows_without_sahjhan_binary(self):
-        """Primer allows when no Sahjhan binary is installed."""
-        event = {"user_message": "continue", "cwd": REPO_ROOT}
-        code, output, _ = run_enforcement_hook("primer.py", event)
+    def test_allows_without_sahjhan_binary(self, tmp_path):
+        """Primer allows when no Sahjhan binary is installed.
+
+        BH-005: Must use isolated tmp_path to avoid picking up live
+        .sahjhan/ state from the repo root during active audit runs.
+        """
+        event = {"user_message": "continue", "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
         assert code == 0
         assert output.get("continue") is True
 
-    def test_allows_without_active_run(self):
-        """Primer allows when no active Sahjhan run exists."""
-        event = {"user_message": "continue", "cwd": REPO_ROOT}
-        code, output, _ = run_enforcement_hook("primer.py", event)
+    def test_allows_without_active_run(self, tmp_path):
+        """Primer allows when no active Sahjhan run exists.
+
+        BH-005: Must use isolated tmp_path to avoid picking up live state.
+        """
+        _create_mock_binary(tmp_path, 'echo "state: idle (1 events, chain valid)"')
+        (tmp_path / "enforcement").mkdir(parents=True)
+        event = {"user_message": "continue", "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
         assert code == 0
         assert output.get("continue") is True
 
@@ -410,12 +455,13 @@ class TestPrimer:
         run_enforcement_hook(
             "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
         )
-        if log_file.exists():
-            logged = log_file.read_text()
-            # Primer records context_reset event — check field syntax
-            if "context_reset" in logged:
-                assert "--field" in logged, "reset event should use --field syntax"
-                assert "project=holtz" in logged, "reset event missing project field"
+        assert log_file.exists(), (
+            "primer should record a context_reset event when active non-terminal run exists"
+        )
+        logged = log_file.read_text()
+        assert "context_reset" in logged, "expected context_reset event in log"
+        assert "--field" in logged, "reset event should use --field syntax"
+        assert "project=holtz" in logged, "reset event missing project field"
 
     def test_degrades_gracefully_on_oserror(self, tmp_path):
         """BH-015: primer degrades gracefully when binary is unexecutable."""

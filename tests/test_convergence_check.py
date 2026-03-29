@@ -140,8 +140,8 @@ def test_detect_pyproject_without_pytest(tmp_path, monkeypatch):
     )
     monkeypatch.chdir(tmp_path)
     result = cc.detect_test_runner()
-    assert result != "pytest", (
-        f"pyproject.toml without pytest config should not detect pytest, got '{result}'"
+    assert result is None, (
+        f"pyproject.toml without pytest config should return None, got '{result}'"
     )
 
 
@@ -154,8 +154,8 @@ def test_detect_pyproject_with_pytest_in_comment(tmp_path, monkeypatch):
     )
     monkeypatch.chdir(tmp_path)
     result = cc.detect_test_runner()
-    assert result != "pytest", (
-        f"pyproject.toml with 'pytest' only in a comment should not detect pytest, got '{result}'"
+    assert result is None, (
+        f"pyproject.toml with 'pytest' only in a comment should return None, got '{result}'"
     )
 
 
@@ -700,8 +700,8 @@ def test_detect_pyproject_bracket_in_comment(tmp_path, monkeypatch):
     )
     monkeypatch.chdir(tmp_path)
     result = cc.detect_test_runner()
-    assert result != "pytest", (
-        f"pyproject.toml with [tool.pytest only in a comment should not detect pytest, got '{result}'"
+    assert result is None, (
+        f"pyproject.toml with [tool.pytest only in a comment should return None, got '{result}'"
     )
 
 
