@@ -148,6 +148,22 @@ def test_renders_have_ledger_field():
         )
 
 
+def test_render_ledger_templates_match_protocol():
+    """Every ledger_template in renders.toml must have a matching template in protocol.toml."""
+    renders_cfg = tomllib.loads(RENDERS_TOML.read_text())
+    protocol_cfg = tomllib.loads(PROTOCOL_TOML.read_text())
+    declared_templates = set(protocol_cfg.get("ledgers", {}).keys())
+    for render in renders_cfg["renders"]:
+        tmpl = render.get("ledger_template")
+        if tmpl is not None:
+            assert tmpl in declared_templates, (
+                f"Render target '{render['target']}' uses ledger_template '{tmpl}' "
+                f"but protocol.toml only declares: {sorted(declared_templates)}. "
+                f"Ledger must be created with 'sahjhan ledger create --from {tmpl} <N>' "
+                f"so the template link is preserved."
+            )
+
+
 # ── Task 1.4: protocol.toml ──
 
 

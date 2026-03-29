@@ -76,7 +76,7 @@ All protocol state is managed by the Sahjhan enforcement engine. Use these canon
 
 ```
 # Run ledger management (multi-ledger support)
-sahjhan ledger create --name run-N --path docs/holtz/runs/N/ledger.jsonl
+sahjhan ledger create --from run N
 
 # Record findings and resolution
 sahjhan --ledger run-N event finding --field project=holtz --field run=N \
