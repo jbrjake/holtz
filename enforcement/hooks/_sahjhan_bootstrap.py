@@ -20,11 +20,39 @@ PROTECTED = [
     "_sahjhan_bootstrap.py",
 ]
 
+READ_GUARDED = [
+    ".sahjhan/session.key",
+    "enforcement/quiz-bank.json",
+]
+
 # Resolve plugin root: enforcement/hooks/ -> enforcement/ -> repo root
 _PLUGIN_ROOT = os.environ.get(
     "CLAUDE_PLUGIN_ROOT",
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
 )
+
+
+def _is_read_guarded(path: str, cwd: str) -> str | None:
+    """Check if a resolved path matches any read-guarded path. Returns the guard or None."""
+    resolved = os.path.realpath(path) if os.path.isabs(path) else os.path.realpath(os.path.join(cwd, path))
+    for g in READ_GUARDED:
+        for base in (os.path.join(cwd, "docs", "holtz"), _PLUGIN_ROOT, cwd):
+            full = os.path.realpath(os.path.join(base, g))
+            if resolved == full or resolved.startswith(full + os.sep):
+                return g
+    return None
+
+
+def _bash_references_guarded(command: str, cwd: str) -> str | None:
+    """Check if a Bash command references any read-guarded path."""
+    for g in READ_GUARDED:
+        if g in command:
+            return g
+        if g.startswith(".sahjhan/"):
+            full_rel = os.path.join("docs", "holtz", g)
+            if full_rel in command:
+                return g
+    return None
 
 
 def main() -> None:
@@ -37,6 +65,27 @@ def main() -> None:
     path = tool_input.get("file_path", "")
     command = tool_input.get("command", "")
     cwd = event.get("cwd", os.getcwd())
+    tool_name = event.get("tool_name", "")
+
+    # Read guard: block Read tool on guarded paths
+    if tool_name == "Read" and path:
+        guard = _is_read_guarded(path, cwd)
+        if guard:
+            _block(
+                f"BLOCKED: Cannot read '{guard}'. "
+                "This file is protected enforcement infrastructure."
+            )
+            return
+
+    # Read guard: block Bash commands that reference guarded paths
+    if command:
+        guard = _bash_references_guarded(command, cwd)
+        if guard:
+            _block(
+                f"BLOCKED: Bash command references read-guarded path '{guard}'. "
+                "This file cannot be accessed during an audit session."
+            )
+            return
 
     # BH-016: Check Bash commands for shell redirections to protected paths
     # BH-011: Also block cp/mv/install targeting protected paths
