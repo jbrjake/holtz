@@ -380,3 +380,66 @@ class TestSubagentFindingsCheck:
         assert code == 0
         assert "hookSpecificOutput" not in output
 
+
+class TestSubagentFindingsCheckInProcess:
+    """BH-010: In-process tests for subagent_findings_check.py coverage."""
+
+    @staticmethod
+    def _run_main(event, capsys):
+        """Import and run main() in-process, returning parsed JSON output."""
+        import importlib
+        sys.path.insert(0, HOOKS_DIR)
+        import subagent_findings_check
+        importlib.reload(subagent_findings_check)
+        from unittest.mock import patch
+        import io
+        stdin_data = io.StringIO(json.dumps(event))
+        with patch("sys.stdin", stdin_data):
+            try:
+                subagent_findings_check.main()
+            except SystemExit:
+                pass
+        captured = capsys.readouterr()
+        try:
+            return json.loads(captured.out)
+        except json.JSONDecodeError:
+            return {}
+
+    def test_empty_message_ok(self, capsys):
+        output = self._run_main({"last_assistant_message": ""}, capsys)
+        assert output.get("continue") is True
+        assert output.get("suppressOutput") is True
+
+    def test_no_holtz_paths_ok(self, capsys):
+        output = self._run_main({"last_assistant_message": "Fixed src/foo.py"}, capsys)
+        assert output.get("continue") is True
+
+    def test_missing_md_warns(self, tmp_path, capsys):
+        event = {
+            "last_assistant_message": "Wrote docs/holtz/NONEXISTENT.md",
+            "cwd": str(tmp_path),
+        }
+        output = self._run_main(event, capsys)
+        assert output.get("suppressOutput") is False
+        assert "NONEXISTENT.md" in output.get("additionalContext", "")
+
+    def test_existing_file_ok(self, tmp_path, capsys):
+        holtz_dir = tmp_path / "docs" / "holtz"
+        holtz_dir.mkdir(parents=True)
+        (holtz_dir / "PUNCHLIST.md").write_text("# Punchlist")
+        event = {
+            "last_assistant_message": "Updated docs/holtz/PUNCHLIST.md",
+            "cwd": str(tmp_path),
+        }
+        output = self._run_main(event, capsys)
+        assert output.get("continue") is True
+        assert output.get("suppressOutput") is True
+
+    def test_json_artifact_warns(self, tmp_path, capsys):
+        event = {
+            "last_assistant_message": "Updated docs/holtz/impact-graph.json",
+            "cwd": str(tmp_path),
+        }
+        output = self._run_main(event, capsys)
+        assert "impact-graph.json" in output.get("additionalContext", "")
+
