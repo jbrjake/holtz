@@ -36,6 +36,7 @@ fields = [
     { name = "step", type = "string", pattern = "^\\d+$" },
     { name = "id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
     { name = "commit_hash", type = "string", pattern = "^[0-9a-f]{7,40}$" },
+    { name = "evidence_path", type = "string", optional = true },
 ]
 
 [events.blast_radius]
@@ -116,6 +117,7 @@ fields = [
 
 [events.context_reset]
 description = "Context boundary — recorded by primer hook on UserPromptSubmit after /clear"
+restricted = true
 fields = [
     { name = "project", type = "string" },
     { name = "run", type = "string", pattern = "^\\d+$" },
@@ -358,6 +360,7 @@ fields = [
 
 [events.quiz_posed]
 description = "Quiz questions posed to lens subagent"
+restricted = true
 fields = [
     { name = "project", type = "string" },
     { name = "run", type = "string", pattern = "^\\d+$" },
@@ -368,6 +371,7 @@ fields = [
 
 [events.quiz_answered]
 description = "Lens subagent answered quiz"
+restricted = true
 fields = [
     { name = "project", type = "string" },
     { name = "run", type = "string", pattern = "^\\d+$" },
@@ -379,6 +383,7 @@ fields = [
 
 [events.quiz_failed]
 description = "Lens subagent failed quiz"
+restricted = true
 fields = [
     { name = "project", type = "string" },
     { name = "run", type = "string", pattern = "^\\d+$" },
@@ -389,6 +394,7 @@ fields = [
 
 [events.quiz_exhausted]
 description = "Lens subagent exhausted quiz attempts"
+restricted = true
 fields = [
     { name = "project", type = "string" },
     { name = "run", type = "string", pattern = "^\\d+$" },
@@ -411,6 +417,25 @@ description = "Test demonstrating the bug was run and failed before the fix"
 fields = [
     { name = "finding_id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
     { name = "test_name", type = "string" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
+# ── Enforcement hardening events ──
+
+[events.lens_sweep_started]
+description = "A lens sweep has been initiated for a specific perspective"
+fields = [
+    { name = "perspective", type = "string" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
+[events.merge_agent_dispatched]
+description = "Merge agent subagent was dispatched for finding classification"
+fields = [
     { name = "project", type = "string" },
     { name = "run", type = "string", pattern = "^\\d+$" },
     { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
