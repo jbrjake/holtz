@@ -189,3 +189,17 @@ def test_record_authed_event_missing_session_key(tmp_path):
             {"project": "holtz", "run": "1"},
             key_path=str(tmp_path / "nonexistent" / "session.key"),
         )
+
+
+def test_score_answers_count_mismatch():
+    """BH-010: Answer count mismatch returns (0, 0), not a confusing stale error."""
+    quiz_mod = _load_module("lens_quiz", _HOOK_DIR / "lens_quiz.py")
+    bank = [
+        {"lens": "component", "q": "test?", "a": "A", "opts": ["a", "b", "c", "d"],
+         "source": "f1.py", "keywords": ["test", "x", "y"]},
+        {"lens": "component", "q": "test2?", "a": "B", "opts": ["a", "b", "c", "d"],
+         "source": "f2.py", "keywords": ["test", "x", "y"]},
+    ]
+    # 3 answers for 2 questions
+    correct, total = quiz_mod.score_answers(bank, ["A", "B", "C"], "/tmp")
+    assert (correct, total) == (0, 0)

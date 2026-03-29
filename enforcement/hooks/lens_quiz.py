@@ -358,6 +358,13 @@ def main() -> None:
     _, given_answers = parsed
     correct, total = score_answers(questions, given_answers, cwd)
 
+    # Answer count mismatch: score_answers returns (0, 0) — give specific error
+    if len(given_answers) != len(questions):
+        exit_stop_block(
+            f"Answer count mismatch: got {len(given_answers)} answers for "
+            f"{len(questions)} questions. Provide exactly {len(questions)} answers."
+        )
+
     # Check staleness — also handle total=0 (all questions stale)
     if total == 0 or total < len(questions) - MAX_STALE_QUESTIONS:
         exit_stop_block(
