@@ -375,8 +375,8 @@ class TestCommitGate:
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "block"
 
-    def test_injects_soft_obligation(self, tmp_path):
-        """Pattern check due injects warning but doesn't block."""
+    def test_blocks_commit_when_pattern_overdue(self, tmp_path):
+        """Pattern check overdue hard-blocks git commit after 3+ fixes."""
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
@@ -389,10 +389,46 @@ class TestCommitGate:
         }
         code, output, _ = run_enforcement_hook("commit_gate.py", event)
         assert code == 0
-        # Should allow (continue=True) but with additionalContext
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "block"
+        reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
+        assert "pattern" in reason.lower()
+
+    def test_injects_soft_obligation_non_commit_cmd(self, tmp_path):
+        """Pattern check due: non-commit commands still get soft injection (not blocked)."""
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["fixes_since_pattern"] = 4
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_input": {"command": "ls -la"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("commit_gate.py", event)
+        assert code == 0
+        # Non-commit commands should get soft injection, not blocked
         assert output.get("continue") is True
         context = output.get("additionalContext", "")
         assert "pattern_check" in context.lower()
+
+    def test_allows_sahjhan_when_pattern_overdue(self, tmp_path):
+        """Sahjhan commands allowed even when pattern analysis is overdue."""
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["fixes_since_pattern"] = 4
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_input": {"command": "./bin/sahjhan transition pattern_check"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("commit_gate.py", event)
+        assert code == 0
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "allow"
 
 
 class TestPrimerStateLine:

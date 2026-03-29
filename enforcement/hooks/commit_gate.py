@@ -49,6 +49,18 @@ def main() -> None:
     if is_sahjhan_cmd(cmd):
         exit_ok("PreToolUse")
 
+    # Hard block: pattern analysis overdue after 3+ fixes
+    if (cache is not None
+            and cache.get("state") == "fix_loop"
+            and is_git_commit(cmd)
+            and cache.get("fixes_since_pattern", 0) >= 3
+            and not cache.get("unregistered_commits")):
+        exit_block(
+            "BLOCKED: Pattern analysis overdue "
+            f"({cache['fixes_since_pattern']} fixes since last analysis). "
+            "Run: sahjhan transition pattern_check"
+        )
+
     blocks_commit = any(o.get("blocks_commit") for o in obligations)
     blocks_all = any(o.get("blocks_all") for o in obligations)
     injection = format_injection(obligations, cache)
