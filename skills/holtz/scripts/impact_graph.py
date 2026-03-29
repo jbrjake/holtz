@@ -49,7 +49,7 @@ class ImpactGraph:
 
     # Minimum keys required for edges and nodes to be usable by graph methods.
     _REQUIRED_EDGE_KEYS = {"source", "target", "type"}
-    _REQUIRED_NODE_KEYS = {"type", "file"}
+    _REQUIRED_NODE_KEYS = {"id", "type", "file"}
 
     def load(self) -> None:
         """Load graph from JSON file. Handles missing, empty, or corrupt files.

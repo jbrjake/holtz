@@ -986,3 +986,30 @@ def test_load_malformed_mixed_valid_and_invalid(tmp_path):
     assert len(g.edges) == 1
     # Risk scores preserved
     assert g.nodes["a"]["risk_score"] == 0.5
+
+
+def test_load_node_missing_id_key_filtered(tmp_path):
+    """Node with type and file but missing id key should be filtered during load.
+
+    BH-017: risk_hotspots() uses n["id"] in sort key. Nodes missing the id key
+    would pass the _REQUIRED_NODE_KEYS filter but crash downstream methods.
+    """
+    graph_file = tmp_path / "graph.json"
+    graph_file.write_text(json.dumps({
+        "nodes": {
+            "has_id": {"id": "has_id", "type": "module", "file": "a.py", "line": 1,
+                       "last_audited": "2026-01-01", "audit_count": 1, "risk_score": 0.5},
+            "no_id": {"type": "module", "file": "b.py", "line": 2,
+                      "last_audited": "2026-01-01", "audit_count": 1, "risk_score": 0.8},
+        },
+        "edges": [],
+    }))
+    g = ImpactGraph(graph_file)
+    g.load()
+    # Node without id should be filtered out
+    assert "has_id" in g.nodes
+    assert "no_id" not in g.nodes
+    # risk_hotspots should not crash
+    hotspots = g.risk_hotspots(top=10)
+    assert len(hotspots) == 1
+    assert hotspots[0]["id"] == "has_id"
