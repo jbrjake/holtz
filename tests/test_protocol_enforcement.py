@@ -40,6 +40,13 @@ class TestProtocolCache:
         assert not is_git_commit("git status")
         assert not is_git_commit("git log --oneline")
 
+    def test_git_commit_no_false_positives(self):
+        """BH-012: git commit inside echo/comments/strings must not match."""
+        from _protocol_cache import is_git_commit
+        assert not is_git_commit('echo "git commit -m foo"')
+        assert not is_git_commit("# git commit -m 'fix: stuff'")
+        assert not is_git_commit("python -c 'os.system(\"git commit\")'")
+
     def test_detect_sahjhan_command(self):
         """Detects sahjhan commands."""
         from _protocol_cache import is_sahjhan_cmd

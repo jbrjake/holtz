@@ -159,14 +159,23 @@ def parse_status_text(text: str) -> dict[str, Any]:
 def is_git_commit(cmd: str) -> bool:
     """Detect git commit commands (not amend).
 
+    Only matches ``git commit`` at the start of a shell segment (after
+    ;, &&, ||, |, or start of string). Does not match git commit inside
+    echo, comments, or quoted strings.
+
     Checks for ``--amend`` as a CLI flag (word boundary), not as a
     substring of the commit message.
     """
-    if not re.search(r"\bgit\s+commit\b(?!-)", cmd):
-        return False
-    # Strip -m argument and its quoted/unquoted value, then check for --amend
-    stripped = re.sub(r'-m\s+(?:"[^"]*"|\'[^\']*\'|\S+)', '', cmd)
-    return not re.search(r"(?<!\w)--amend\b", stripped)
+    # Split into shell segments and check each one
+    for segment in re.split(r"[;&|]+", cmd):
+        seg = segment.strip()
+        if not re.match(r"git\s+commit\b(?!-)", seg):
+            continue
+        # This segment starts with git commit — check for --amend
+        stripped = re.sub(r'-m\s+(?:"[^"]*"|\'[^\']*\'|\S+)', '', seg)
+        if not re.search(r"(?<!\w)--amend\b", stripped):
+            return True
+    return False
 
 
 def is_sahjhan_cmd(cmd: str) -> bool:
