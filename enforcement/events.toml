@@ -405,3 +405,13 @@ fields = [
     { name = "perspective", type = "string" },
     { name = "resolution", type = "string", pattern = "^human_reviewed$" },
 ]
+
+[events.test_failed_before_fix]
+description = "Test demonstrating the bug was run and failed before the fix"
+fields = [
+    { name = "finding_id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
+    { name = "test_name", type = "string" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
