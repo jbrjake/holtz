@@ -12,14 +12,13 @@ ensuring /clear boundaries are actually observed.
 from __future__ import annotations
 
 import contextlib
-import json
 import os
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _protocol_cache import format_state_line  # noqa: E402
+from _protocol_cache import format_state_line, parse_status_text  # noqa: E402
 from _protocol_cache import read_cache as read_enforcement_cache
 from _resolve import sahjhan_binary  # noqa: E402
 
@@ -47,7 +46,7 @@ def main() -> None:
         cmd = [binary, "--config-dir", config_dir]
         if ledger:
             cmd.extend(["--ledger", ledger])
-        cmd.extend(["status", "--json"])
+        cmd.append("status")
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -61,10 +60,7 @@ def main() -> None:
     if result.returncode != 0:
         exit_ok()
 
-    try:
-        status = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        exit_ok()
+    status = parse_status_text(result.stdout)
 
     current_state = status.get("current_state", "")
     is_terminal = status.get("terminal", False)
@@ -92,8 +88,8 @@ def main() -> None:
             cwd=cwd,
         )
 
-    # Build resume context
-    run_number = status.get("run_number", "?")
+    # Build resume context — use ledger-derived run number (consistent with context_reset event)
+    # status text does not include run_number; derive from ledger name.
     perspective = status.get("current_perspective", "unknown")
     available = status.get("available_transitions", [])
 
@@ -110,14 +106,18 @@ def main() -> None:
         context += f"\nLens: {perspective}. Quiz on exit. Failures restart."
 
     context += (
-        "\nRun `sahjhan status` for full state. "
-        "Run `sahjhan gate check <transition>` to see what gates are blocking."
+        f"\nRun `{binary} status` for full state. "
+        f"Run `{binary} gate check <transition>` to see what gates are blocking."
     )
 
     # Append enforcement state line if cache exists
     state_line = format_state_line(read_enforcement_cache(cwd))
     if state_line:
         context += "\n" + state_line
+
+    context += f"\nSahjhan binary: {binary}"
+    if ledger:
+        context += f"\nActive ledger: {ledger} (use: {binary} --ledger {ledger})"
 
     exit_warn(context)
 
