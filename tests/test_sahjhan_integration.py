@@ -473,15 +473,23 @@ class TestPrimer:
         assert output.get("continue") is True
 
     def test_reset_records_event_with_field_syntax(self, tmp_path):
-        """BH-008: Reset event uses --field key=value syntax."""
-        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        """BH-008: Reset event uses authed-event with --field key=value syntax."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
         (tmp_path / "enforcement").mkdir(parents=True)
+        # Create a session key so compute_event_proof can read it
+        key_path = sahjhan_dir / "session.key"
+        key_path.write_bytes(b"test-session-key-for-primer-test")
         log_file = tmp_path / "reset_cmd.log"
         _create_mock_binary(tmp_path, (
             'echo "$*" >> ' + str(log_file) + '\n'
             'case "$*" in\n'
             '  *status*)\n'
             '    echo "state: fix_loop (10 events, chain valid)"\n'
+            '    exit 0\n'
+            '    ;;\n'
+            '  *"config session-key-path"*)\n'
+            '    echo "' + str(key_path) + '"\n'
             '    exit 0\n'
             '    ;;\n'
             'esac\n'
@@ -496,6 +504,7 @@ class TestPrimer:
         )
         logged = log_file.read_text()
         assert "context_reset" in logged, "expected context_reset event in log"
+        assert "authed-event" in logged, "reset event should use authed-event subcommand"
         assert "--field" in logged, "reset event should use --field syntax"
         assert "project=holtz" in logged, "reset event missing project field"
 

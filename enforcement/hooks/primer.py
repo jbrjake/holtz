@@ -22,7 +22,7 @@ from _protocol_cache import format_state_line, parse_status_text  # noqa: E402
 from _protocol_cache import read_cache as read_enforcement_cache
 from _resolve import sahjhan_binary  # noqa: E402
 
-from _common import _active_ledger, exit_ok, exit_warn, read_event  # noqa: E402
+from _common import _active_ledger, exit_ok, exit_warn, read_event, record_authed_event  # noqa: E402
 
 
 def main() -> None:
@@ -71,21 +71,16 @@ def main() -> None:
     # Record context_reset event (gates awaiting_clear→fix_loop)
     run_number = (ledger or "").replace("run-", "") or "0"
     with contextlib.suppress(OSError, subprocess.TimeoutExpired):
-        reset_cmd = [binary, "--config-dir", config_dir]
-        if ledger:
-            reset_cmd.extend(["--ledger", ledger])
-        reset_cmd.extend([
-            "event", "context_reset",
-            "--field", "project=holtz",
-            "--field", f"run={run_number}",
-            "--field", "auditor=holtz",
-            "--field", "trigger=user_prompt_submit",
-        ])
-        subprocess.run(
-            reset_cmd,
-            capture_output=True,
-            timeout=5,
+        record_authed_event(
+            "context_reset",
+            {
+                "project": "holtz",
+                "run": run_number,
+                "auditor": "holtz",
+                "trigger": "user_prompt_submit",
+            },
             cwd=cwd,
+            ledger=ledger,
         )
 
     # Build resume context — use ledger-derived run number (consistent with context_reset event)
