@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import subprocess
 
 _HOOKS_COMMON = os.path.join(
     os.path.dirname(__file__), '..', '..', 'hooks', '_common.py'
@@ -88,7 +89,7 @@ def record_authed_event(
     fields: dict[str, str],
     cwd: str,
     ledger: str | None = None,
-) -> "subprocess.CompletedProcess[str]":
+) -> subprocess.CompletedProcess[str]:
     """Record a restricted event with HMAC proof via sahjhan authed-event.
 
     Args:
@@ -100,7 +101,6 @@ def record_authed_event(
     Returns:
         The CompletedProcess from the sahjhan call.
     """
-    import subprocess
     from _resolve import sahjhan_binary
 
     key_path = _get_session_key_path(cwd)

@@ -99,24 +99,6 @@
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "convergence_check::check_convergence": {
-      "id": "convergence_check::check_convergence",
-      "type": "function",
-      "file": "skills/holtz/scripts/convergence_check.py",
-      "line": 280,
-      "last_audited": "2026-03-22",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "convergence_check::save_history": {
-      "id": "convergence_check::save_history",
-      "type": "function",
-      "file": "skills/holtz/scripts/convergence_check.py",
-      "line": 247,
-      "last_audited": "2026-03-22",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
     "markdown_utils::mask_code_fences": {
       "id": "markdown_utils::mask_code_fences",
       "type": "function",
@@ -422,6 +404,114 @@
       "last_audited": "2026-03-25",
       "audit_count": 1,
       "risk_score": 0.2
+    },
+    "enforcement._protocol_cache": {
+      "id": "enforcement._protocol_cache",
+      "type": "module",
+      "file": "enforcement/hooks/_protocol_cache.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.lens_quiz": {
+      "id": "enforcement.lens_quiz",
+      "type": "module",
+      "file": "enforcement/hooks/lens_quiz.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.protocol_tracker": {
+      "id": "enforcement.protocol_tracker",
+      "type": "module",
+      "file": "enforcement/hooks/protocol_tracker.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.lens_evidence": {
+      "id": "enforcement.lens_evidence",
+      "type": "module",
+      "file": "enforcement/hooks/lens_evidence.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement._resolve": {
+      "id": "enforcement._resolve",
+      "type": "module",
+      "file": "enforcement/hooks/_resolve.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement._sahjhan_bootstrap": {
+      "id": "enforcement._sahjhan_bootstrap",
+      "type": "module",
+      "file": "enforcement/hooks/_sahjhan_bootstrap.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.commit_gate": {
+      "id": "enforcement.commit_gate",
+      "type": "module",
+      "file": "enforcement/hooks/commit_gate.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.bash_guard": {
+      "id": "enforcement.bash_guard",
+      "type": "module",
+      "file": "enforcement/hooks/bash_guard.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.stop_gate": {
+      "id": "enforcement.stop_gate",
+      "type": "module",
+      "file": "enforcement/hooks/stop_gate.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.write_guard": {
+      "id": "enforcement.write_guard",
+      "type": "module",
+      "file": "enforcement/hooks/write_guard.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.primer": {
+      "id": "enforcement.primer",
+      "type": "module",
+      "file": "enforcement/hooks/primer.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.verify_hooks": {
+      "id": "enforcement.verify_hooks",
+      "type": "module",
+      "file": "enforcement/hooks/verify_hooks.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
     }
   },
   "edges": [
@@ -790,6 +880,136 @@
       "metadata": {
         "discovered": "2026-03-25",
         "confidence": "high"
+      }
+    },
+    {
+      "source": "enforcement.protocol_tracker",
+      "target": "enforcement._protocol_cache",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports cache operations"
+      }
+    },
+    {
+      "source": "enforcement.protocol_tracker",
+      "target": "enforcement._resolve",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports sahjhan_binary"
+      }
+    },
+    {
+      "source": "enforcement.lens_quiz",
+      "target": "enforcement._resolve",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports sahjhan_binary"
+      }
+    },
+    {
+      "source": "enforcement.lens_quiz",
+      "target": "enforcement.lens_evidence",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports check_transcript, check_artifact, parse_transcript_jsonl"
+      }
+    },
+    {
+      "source": "enforcement.commit_gate",
+      "target": "enforcement._protocol_cache",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports cache and is_git_commit"
+      }
+    },
+    {
+      "source": "enforcement._sahjhan_bootstrap",
+      "target": "enforcement._resolve",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports sahjhan_binary"
+      }
+    },
+    {
+      "source": "enforcement.primer",
+      "target": "enforcement._protocol_cache",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports cache state formatting"
+      }
+    },
+    {
+      "source": "enforcement.lens_quiz",
+      "target": "enforcement._protocol_cache",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "quiz scoring re-selects questions that must match originally posed order; currently safe with <=5 questions per lens"
+      }
+    },
+    {
+      "source": "enforcement.verify_hooks",
+      "target": "hooks/_common",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "verify_hooks checks settings.local.json but hooks.json is the plugin hooks file \u2014 different sources"
+      }
+    },
+    {
+      "source": "enforcement.lens_quiz",
+      "target": "enforcement.lens_quiz",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "Phase 3 scoring re-selects questions instead of retrieving posed set; safe only when <=5 per lens"
+      }
+    },
+    {
+      "source": "enforcement.stop_gate",
+      "target": "enforcement._protocol_cache",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "stop_gate assumes parse_status_text returns terminal state from isolated cwd"
+      }
+    },
+    {
+      "source": "enforcement._sahjhan_bootstrap",
+      "target": "README.md",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "bootstrap uses realpath on bin/sahjhan \u2014 assumes symlink is relative"
+      }
+    },
+    {
+      "source": "enforcement.primer",
+      "target": "enforcement._protocol_cache",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "primer records context_reset without exclusive writer lock"
       }
     }
   ]

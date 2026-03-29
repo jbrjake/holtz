@@ -5,8 +5,6 @@ import json
 import subprocess
 import sys
 
-import pytest
-
 SCRIPT = "enforcement/scripts/check_sweep_evidence.py"
 
 

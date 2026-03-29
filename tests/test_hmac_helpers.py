@@ -4,12 +4,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import importlib.util
-import os
-import sys
 from pathlib import Path
 from types import ModuleType
-
-import pytest
 
 # Load enforcement/hooks/_common.py directly by path to avoid sys.path conflicts
 # with hooks/_common.py (same filename, different directories).
