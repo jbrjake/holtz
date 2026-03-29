@@ -269,12 +269,13 @@ def score_answers(
     """Score answers against quiz bank with staleness check.
 
     Returns (correct, total) where total may be < len(questions) if
-    stale questions were dropped.
+    stale questions were dropped.  Returns (-1, -1) on count mismatch
+    (distinguishable from all-stale which returns (0, 0)).
     """
     correct = 0
     total = 0
     if len(questions) != len(answers):
-        return 0, 0  # unevaluable: count mismatch
+        return -1, -1  # unevaluable: count mismatch
     for q, given in zip(questions, answers, strict=True):
         if not verify_answer_freshness(q, cwd):
             continue  # drop stale question
@@ -449,8 +450,8 @@ def main() -> None:
     _, given_answers = parsed
     correct, total = score_answers(questions, given_answers, cwd)
 
-    # Answer count mismatch: score_answers returns (0, 0) — give specific error
-    if len(given_answers) != len(questions):
+    # Answer count mismatch: score_answers returns (-1, -1)
+    if correct == -1:
         exit_stop_block(
             f"Answer count mismatch: got {len(given_answers)} answers for "
             f"{len(questions)} questions. Provide exactly {len(questions)} answers."

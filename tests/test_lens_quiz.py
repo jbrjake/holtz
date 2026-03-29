@@ -279,6 +279,23 @@ def test_score_answers_with_stale_drop(tmp_path):
     assert correct == 4  # all remaining are correct
 
 
+def test_score_answers_count_mismatch():
+    """BH-006: Count mismatch returns (-1, -1), distinguishable from all-stale (0, 0)."""
+    questions = SAMPLE_BANK[:3]
+    # 2 answers for 3 questions
+    correct, total = score_answers(questions, ["A", "B"], "/tmp/nonexistent")
+    assert (correct, total) == (-1, -1)
+
+
+def test_score_answers_all_stale(tmp_path):
+    """BH-006: All-stale returns (0, 0), distinguishable from count mismatch (-1, -1)."""
+    questions = SAMPLE_BANK[:3]
+    answers = [q["a"] for q in questions]
+    # Don't create any source files → all questions are stale
+    correct, total = score_answers(questions, answers, str(tmp_path))
+    assert (correct, total) == (0, 0)
+
+
 # ── Test: non-lens subagent ──
 
 
