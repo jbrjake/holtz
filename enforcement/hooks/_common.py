@@ -39,7 +39,7 @@ def _active_ledger(cwd: str) -> str | None:
         return None
 
 
-def _get_session_key_path(cwd: str | None = None) -> str:
+def _get_session_key_path(cwd: str | None = None, ledger: str | None = None) -> str:
     """Find the session key path via sahjhan config, falling back to default location."""
     if cwd is None:
         cwd = os.getcwd()
@@ -49,9 +49,12 @@ def _get_session_key_path(cwd: str | None = None) -> str:
         binary = sahjhan_binary()
         if os.path.isfile(binary):
             import subprocess
+            cmd = [binary, "--config-dir", os.path.join(cwd, "enforcement")]
+            if ledger:
+                cmd.extend(["--ledger", ledger])
+            cmd.extend(["config", "session-key-path"])
             result = subprocess.run(
-                [binary, "--config-dir", os.path.join(cwd, "enforcement"),
-                 "config", "session-key-path"],
+                cmd,
                 capture_output=True, text=True, timeout=5, cwd=cwd,
             )
             if result.returncode == 0 and result.stdout.strip():
@@ -109,7 +112,7 @@ def record_authed_event(
     """
     from _resolve import sahjhan_binary
 
-    key_path = _get_session_key_path(cwd)
+    key_path = _get_session_key_path(cwd, ledger=ledger)
     proof = compute_event_proof(event_type, fields, key_path)
     binary = sahjhan_binary()
     cmd = [binary, "--config-dir", os.path.join(cwd, "enforcement")]
