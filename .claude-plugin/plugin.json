@@ -1,7 +1,7 @@
 {
   "name": "holtz",
   "description": "Systematic TDD-driven bug hunting with dual auditors. Holtz is depth-first and methodical; Justine is breadth-first and aggressive. Together they find what neither sees alone. Keeps coming back until the codebase converges. Will steal your joy.",
-  "version": "0.69.0",
+  "version": "0.70.0",
   "author": {
     "name": "Jon Rubin",
     "email": "jb.rubin@gmail.com",
