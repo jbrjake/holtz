@@ -351,6 +351,28 @@ class TestSubagentFindingsCheck:
         # Should only mention FOO.md once
         assert output.get("additionalContext", "").count("FOO.md") == 1
 
+    def test_warns_missing_json_artifacts(self, tmp_path):
+        """BH-007: .json artifacts under docs/holtz/ should be checked, not just .md."""
+        event = {
+            "last_assistant_message": "Updated docs/holtz/impact-graph.json",
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_hook("subagent_findings_check.py", event)
+        assert_warned(code, output, "WARNING")
+        assert "impact-graph.json" in output.get("additionalContext", "")
+
+    def test_allows_existing_json_artifact(self, tmp_path):
+        """BH-007: existing .json artifact should be allowed."""
+        holtz_dir = tmp_path / "docs" / "holtz"
+        holtz_dir.mkdir(parents=True)
+        (holtz_dir / "impact-graph.json").write_text("{}")
+        event = {
+            "last_assistant_message": "Updated docs/holtz/impact-graph.json",
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_hook("subagent_findings_check.py", event)
+        assert_allowed(code, output)
+
     def test_subagentstop_does_not_include_hook_specific_output(self):
         """SubagentStop hooks should not include hookSpecificOutput."""
         event = {"last_assistant_message": ""}
