@@ -30,4 +30,4 @@ jobs:
       - name: Test
         run: |
           source .venv/bin/activate
-          python -m pytest --tb=short -q
+          python -m pytest --cov=skills/holtz/scripts --cov=hooks --cov-report=term-missing --cov-fail-under=60 --tb=short -q
