@@ -99,6 +99,54 @@ class TestProtocolCache:
         assert token_estimate <= 35, f"Injection too verbose ({token_estimate} tokens): {text}"
 
 
+class TestParseStatusText:
+    """Tests for parse_status_text — parses sahjhan status output."""
+
+    def test_parses_available_transitions(self):
+        """BH-013: Available transitions are correctly parsed from sahjhan output."""
+        from _protocol_cache import parse_status_text
+
+        text = (
+            "state: fix_loop (51 events, chain valid)\n"
+            "sets:\n"
+            "  perspective: 0/13 [· component, · integration]\n"
+            "next:\n"
+            "  resume: ready\n"
+            "    ✓ 'context_reset' event exists since last transition\n"
+            "  fix_commit: ready\n"
+            "    ✓ cache state matches\n"
+            "  converge: blocked\n"
+            "    ✗ not all perspectives complete\n"
+        )
+        result = parse_status_text(text)
+        assert "resume" in result["available_transitions"]
+        assert "fix_commit" in result["available_transitions"]
+        assert "converge" not in result["available_transitions"]
+
+    def test_parses_state_and_event_count(self):
+        """Basic parsing of state line."""
+        from _protocol_cache import parse_status_text
+
+        text = "state: awaiting_clear (25 events, chain valid)\n"
+        result = parse_status_text(text)
+        assert result["current_state"] == "awaiting_clear"
+        assert result["event_count"] == 25
+
+    def test_parses_perspective_sets(self):
+        """Parses perspective completion from sets output."""
+        from _protocol_cache import parse_status_text
+
+        text = (
+            "state: fix_loop (30 events, chain valid)\n"
+            "sets:\n"
+            "  perspective: 5/13 [✓ component, ✓ integration, · security]\n"
+        )
+        result = parse_status_text(text)
+        assert result["sets"]["perspective"]["complete"] == 5
+        assert result["sets"]["perspective"]["total"] == 13
+        assert result["perspectives_done"] == 5
+
+
 class TestProtocolTracker:
     """Tests for protocol_tracker.py PostToolUse hook."""
 

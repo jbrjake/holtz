@@ -117,7 +117,8 @@ def parse_status_text(text: str) -> dict[str, Any]:
             continue
 
         # "  fix_commit: ready" or "  fix_commit: blocked"
-        m = re.match(r"^\s+(\w[\w_]*):\s+(ready|blocked)", stripped)
+        # BH-013: Use \s* (not \s+) because `stripped` has no leading whitespace.
+        m = re.match(r"^\s*(\w[\w_]*):\s+(ready|blocked)", stripped)
         if m:
             transition = m.group(1)
             status = m.group(2)
