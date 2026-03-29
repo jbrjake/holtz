@@ -20,6 +20,19 @@ PROTECTED = [
     "_sahjhan_bootstrap.py",
 ]
 
+# BH-001 (run 27): Sahjhan-managed files in docs/holtz/ that are rendered
+# from ledger state. Direct writes (including via Bash) must be blocked.
+MANAGED_DOCS = [
+    "docs/holtz/STATUS.md",
+    "docs/holtz/PUNCHLIST.md",
+    "docs/holtz/SUMMARY.md",
+    "docs/holtz/MERGE-REPORT.md",
+    "docs/holtz/PUNCHLIST-MERGED.md",
+]
+
+# Combined set of all paths that must be protected from Bash writes.
+ALL_PROTECTED = PROTECTED + MANAGED_DOCS
+
 # Resolve plugin root: enforcement/hooks/ -> enforcement/ -> repo root
 _PLUGIN_ROOT = os.environ.get(
     "CLAUDE_PLUGIN_ROOT",
@@ -103,6 +116,119 @@ def _bash_references_guarded(command: str, cwd: str) -> str | None:
     return None
 
 
+def _segment_references_protected(segment: str, protected: list[str]) -> str | None:
+    """Check if any argument in a shell segment references a protected path."""
+    args = segment.split()
+    for arg in args:
+        for p in protected:
+            if arg == p or arg.startswith(p) or ("/" + p) in arg:
+                return p
+    return None
+
+
+def _check_bash_write(command: str) -> str | None:
+    """Check if a bash command writes to any protected or managed path.
+
+    Returns a block reason string if blocked, None if allowed.
+    Splits on shell operators (&&, ||, ;, |) and checks each segment.
+    """
+    import re
+    # Split on shell operators to handle chained commands (BH-004 run 27)
+    segments = re.split(r'\s*(?:&&|\|\||[;|])\s*', command)
+
+    for seg in segments:
+        seg = seg.strip()
+        if not seg:
+            continue
+
+        for p in ALL_PROTECTED:
+            # Redirect check: find ALL > and >> in the segment, not just first
+            # BH-002 (run 27): quoted > before real redirect bypassed old check
+            for op in (">>", ">"):  # check >> before > to avoid partial match
+                start = 0
+                while True:
+                    idx = seg.find(op, start)
+                    if idx < 0:
+                        break
+                    # Skip << (heredoc) — >> at idx means idx-1 might be >
+                    if op == ">" and idx > 0 and seg[idx - 1] in "<>":
+                        start = idx + 1
+                        continue
+                    after_op = seg[idx + len(op):].strip()
+                    # Take first whitespace-delimited token as the target
+                    target = after_op.split()[0] if after_op.split() else ""
+                    if target == p or target.startswith(p):
+                        return (
+                            f"BLOCKED: Bash command redirects to protected path '{p}'. "
+                            "This path cannot be modified during an audit session."
+                        )
+                    start = idx + len(op)
+
+            # tee check
+            if "tee " in seg:
+                tee_idx = seg.find("tee ")
+                after_tee = seg[tee_idx + 4:].strip()
+                if any(arg == p or arg.startswith(p) for arg in after_tee.split()):
+                    return (
+                        f"BLOCKED: Bash command tees to protected path '{p}'. "
+                        "This path cannot be modified during an audit session."
+                    )
+
+            # cp/mv/install check: protected path as LAST argument
+            seg_stripped = seg.lstrip()
+            if any(seg_stripped.startswith(c) for c in ("cp ", "mv ", "install ")):
+                args = seg_stripped.split()
+                if len(args) >= 3:
+                    dest = args[-1]
+                    if dest == p or dest.startswith(p):
+                        return (
+                            f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
+                            "This path cannot be modified during an audit session."
+                        )
+
+            # In-place modification tools: sed -i, perl -pi, patch
+            for prefix in ("sed ", "perl "):
+                if prefix in seg:
+                    ref = _segment_references_protected(seg, [p])
+                    if ref:
+                        return (
+                            f"BLOCKED: Bash command modifies protected path '{p}' in-place. "
+                            "This path cannot be modified during an audit session."
+                        )
+            if "patch " in seg:
+                ref = _segment_references_protected(seg, [p])
+                if ref:
+                    return (
+                        f"BLOCKED: Bash command patches protected path '{p}'. "
+                        "This path cannot be modified during an audit session."
+                    )
+
+            # BH-002 (run 27): Interpreter execution — python -c, dd, wget
+            # These can write to arbitrary paths without using shell redirects.
+            # Use substring match on full segment — paths may be inside quotes.
+            for interp in ("python ", "python3 ", "ruby ", "node "):
+                if seg_stripped.startswith(interp) and " -" in seg_stripped and p in seg:
+                    return (
+                            f"BLOCKED: Bash command uses interpreter to write to protected path '{p}'. "
+                            "This path cannot be modified during an audit session."
+                        )
+            if seg_stripped.startswith("dd ") and ("of=" + p) in seg_stripped:
+                return (
+                    f"BLOCKED: Bash command uses dd to write to protected path '{p}'. "
+                    "This path cannot be modified during an audit session."
+                )
+            if seg_stripped.startswith("wget "):
+                args = seg_stripped.split()
+                for i, arg in enumerate(args):
+                    if arg == "-O" and i + 1 < len(args) and args[i + 1].startswith(p):
+                        return (
+                            f"BLOCKED: Bash command uses wget to write to protected path '{p}'. "
+                            "This path cannot be modified during an audit session."
+                        )
+
+    return None
+
+
 def main() -> None:
     try:
         event = json.loads(sys.stdin.read())
@@ -135,63 +261,14 @@ def main() -> None:
             )
             return
 
-    # BH-016: Check Bash commands for shell redirections to protected paths
-    # BH-011: Also block cp/mv/install targeting protected paths
-    # BH-008: Check that the protected path is the TARGET, not just present
+    # BH-016, BH-011, BH-008, BH-001/002/004 (run 27): Check Bash commands
+    # for write operations targeting protected or managed paths.
+    # Split on shell operators first, then check each segment independently.
     if command and not path:
-        for p in PROTECTED:
-            # Redirect check: protected path must appear after the redirect operator
-            for op in (">", ">>"):
-                idx = command.find(op)
-                if idx >= 0:
-                    after_op = command[idx + len(op):].strip()
-                    if after_op.startswith(p):
-                        _block(
-                            f"BLOCKED: Bash command redirects to protected path '{p}'. "
-                            "This path cannot be modified during an audit session."
-                        )
-                        return
-            # tee check: protected path must follow "tee"
-            if "tee " in command:
-                tee_idx = command.find("tee ")
-                after_tee = command[tee_idx + 4:].strip()
-                if any(arg.startswith(p) for arg in after_tee.split()):
-                    _block(
-                        f"BLOCKED: Bash command tees to protected path '{p}'. "
-                        "This path cannot be modified during an audit session."
-                    )
-                    return
-            # cp/mv/install check: protected path must be the LAST argument (destination)
-            cmd_stripped = command.lstrip()
-            if any(cmd_stripped.startswith(c) for c in ("cp ", "mv ", "install ")):
-                args = cmd_stripped.split()
-                if len(args) >= 3:
-                    dest = args[-1]
-                    if dest.startswith(p):
-                        _block(
-                            f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
-                            "This path cannot be modified during an audit session."
-                        )
-                        return
-            # In-place modification tools: sed -i, perl -pi, patch
-            for prefix in ("sed ", "perl "):
-                if prefix in command:
-                    # Check if any argument references a protected path
-                    args = command.split()
-                    if any(arg.startswith(p) or ("/" + p) in arg for arg in args):
-                        _block(
-                            f"BLOCKED: Bash command modifies protected path '{p}' in-place. "
-                            "This path cannot be modified during an audit session."
-                        )
-                        return
-            if "patch " in command:
-                args = command.split()
-                if any(arg.startswith(p) or ("/" + p) in arg for arg in args):
-                    _block(
-                        f"BLOCKED: Bash command patches protected path '{p}'. "
-                        "This path cannot be modified during an audit session."
-                    )
-                    return
+        result = _check_bash_write(command)
+        if result:
+            _block(result)
+            return
         _allow()
         return
 

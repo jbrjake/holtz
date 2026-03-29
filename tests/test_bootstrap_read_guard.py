@@ -211,6 +211,94 @@ class TestReadGuard:
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "block"
 
+    # --- BH-001 (run 27): Bash writes to managed docs/holtz/ files ---
+
+    def test_bash_redirect_to_managed_status_blocked(self):
+        """BH-001: Bash redirect to docs/holtz/STATUS.md must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": 'echo "hacked" > docs/holtz/STATUS.md'},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_bash_redirect_to_managed_punchlist_blocked(self):
+        """BH-001: Bash redirect to docs/holtz/PUNCHLIST.md must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": 'cat /dev/null > docs/holtz/PUNCHLIST.md'},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_bash_tee_to_managed_summary_blocked(self):
+        """BH-001: tee to docs/holtz/SUMMARY.md must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo foo | tee docs/holtz/SUMMARY.md"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_bash_cp_to_managed_merge_report_blocked(self):
+        """BH-001: cp to docs/holtz/MERGE-REPORT.md must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "cp /tmp/evil.md docs/holtz/MERGE-REPORT.md"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    # --- BH-002 (run 27): Interpreter execution bypass ---
+
+    def test_bash_python_c_write_enforcement_blocked(self):
+        """BH-002: python -c writing to enforcement/ must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "python3 -c \"open('enforcement/hooks/test.py','w').write('pwned')\""
+            },
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_bash_dd_write_enforcement_blocked(self):
+        """BH-002: dd to enforcement/ must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "dd if=/dev/zero of=enforcement/states.toml bs=1 count=100"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_bash_redirect_with_quoted_gt_bypass_blocked(self):
+        """BH-002: quoted > before real redirect must not bypass guard."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": 'echo ">" > enforcement/hooks/test.py'},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    # --- BH-004 (run 27): Chained command bypass ---
+
+    def test_bash_chained_cp_enforcement_blocked(self):
+        """BH-004: chained cp to enforcement/ must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "true && cp /dev/null enforcement/hooks/test.py"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
     def test_bash_sahjhan_cmd_with_guarded_path_allowed(self):
         """sahjhan commands referencing quiz-bank.json should be allowed since
         sahjhan itself needs to read the quiz bank."""
