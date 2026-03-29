@@ -1,15 +1,12 @@
 """Tests for sleep detection in protocol_tracker.py."""
 from __future__ import annotations
 
+import contextlib
 import importlib.util
-import io
-import json
-import os
 import sys
-import tempfile
 from pathlib import Path
 from types import ModuleType
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 # Load _is_sleep_cmd from protocol_tracker without relying on sys.path ordering.
 # test_fence_masking_agreement.py inserts hooks/ (top-level) before
@@ -130,12 +127,9 @@ class TestStallPenalty:
             patch.object(_tracker, "write_cache", side_effect=fake_write_cache),
             patch.object(_tracker, "is_sahjhan_cmd", return_value=False),
             patch.object(_tracker, "is_git_commit", return_value=False),
-            patch.object(_tracker, "exit_ok", side_effect=SystemExit(0)),
+            patch.object(_tracker, "exit_ok", side_effect=SystemExit(0)),contextlib.suppress(SystemExit)
         ):
-            try:
-                _tracker.main()
-            except SystemExit:
-                pass
+            _tracker.main()
 
         return captured_cache
 

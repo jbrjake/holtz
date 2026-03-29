@@ -4,8 +4,6 @@ from __future__ import annotations
 import subprocess
 import sys
 
-import pytest
-
 SCRIPT = "enforcement/scripts/validate_merge_report.py"
 
 
