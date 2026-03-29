@@ -32,6 +32,7 @@ from _common import (  # noqa: E402
     exit_stop_allow,
     exit_stop_block,
     read_event,
+    record_authed_event,
 )
 
 # ── Constants ──
@@ -246,21 +247,6 @@ def _query_events(
     return []
 
 
-def _record_event(
-    binary: str,
-    config_dir: str,
-    cwd: str,
-    ledger: str | None,
-    event_type: str,
-    fields: dict[str, str],
-) -> None:
-    """Record an event in the sahjhan ledger."""
-    args = ["event", event_type]
-    for k, v in fields.items():
-        args.extend(["--field", f"{k}={v}"])
-    _run_sahjhan(binary, config_dir, cwd, ledger, args)
-
-
 # ── Main hook logic ──
 
 
@@ -355,9 +341,9 @@ def main() -> None:
     if not posed_events:
         # Phase 2: Pose the quiz
         qhash = questions_hash(questions)
-        _record_event(binary, config_dir, cwd, ledger, "quiz_posed", {
+        record_authed_event("quiz_posed", {
             **base_fields, "questions_hash": qhash
-        })
+        }, cwd, ledger)
         quiz_text = format_quiz_questions(questions, lens)
         exit_stop_block(quiz_text)
 
@@ -386,11 +372,11 @@ def main() -> None:
             binary, config_dir, cwd, ledger, "quiz_answered", lens
         )
         if not already_answered:
-            _record_event(binary, config_dir, cwd, ledger, "quiz_answered", {
+            record_authed_event("quiz_answered", {
                 **base_fields,
                 "score": f"{correct}/{total}",
                 "pass": "true",
-            })
+            }, cwd, ledger)
         exit_stop_allow()
 
     # Failed — check attempt count
@@ -399,14 +385,14 @@ def main() -> None:
     )
     attempt = len(failed_events) + 1  # this is the current (failing) attempt
 
-    _record_event(binary, config_dir, cwd, ledger, "quiz_failed", {
+    record_authed_event("quiz_failed", {
         **base_fields, "score": f"{correct}/{total}"
-    })
+    }, cwd, ledger)
 
     if attempt >= MAX_QUIZ_ATTEMPTS:
-        _record_event(binary, config_dir, cwd, ledger, "quiz_exhausted", {
+        record_authed_event("quiz_exhausted", {
             **base_fields
-        })
+        }, cwd, ledger)
         exit_stop_allow()
 
     exit_stop_block(
