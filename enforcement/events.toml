@@ -193,7 +193,7 @@ fields = [
     { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
     { name = "prediction_id", type = "string", pattern = "^\\d+$" },
     { name = "outcome", type = "string", pattern = "^(CONFIRMED|UNCONFIRMED)$" },
-    { name = "finding_id", type = "string" },
+    { name = "finding_id", type = "string", optional = true },
 ]
 
 # ── New event types for JSONL migration ──

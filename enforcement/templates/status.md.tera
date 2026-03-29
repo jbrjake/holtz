@@ -1,4 +1,4 @@
-{# enforcement/templates/status.md.tera — uses sahjhan v0.5.0 render context #}
+{# enforcement/templates/status.md.tera — uses sahjhan v0.6.1 render context #}
 # Holtz Status
 
 **Project:** {{ protocol.name }} v{{ protocol.version }}
@@ -9,10 +9,8 @@
 **Auditor:** holtz
 
 ## State Transitions
-{% for e in events -%}
-{% if e.event_type == "state_transition" -%}
+{% for e in events | where_eq(attribute="event_type", value="state_transition") -%}
 - [x] {{ e.fields.from }} → **{{ e.fields.to }}** ({{ e.fields.command }})
-{% endif -%}
 {% endfor %}
 
 ## Perspectives ({{ sets.perspective.completed }}/{{ sets.perspective.total }})
@@ -21,14 +19,6 @@
 {% endfor %}
 
 ## Findings
-{% set_global finding_count = 0 -%}
-{% set_global resolved_count = 0 -%}
-{% for e in events -%}
-{% if e.event_type == "finding" -%}
-{% set_global finding_count = finding_count + 1 -%}
-{% endif -%}
-{% if e.event_type == "finding_resolved" -%}
-{% set_global resolved_count = resolved_count + 1 -%}
-{% endif -%}
-{% endfor -%}
+{% set finding_count = events | where_eq(attribute="event_type", value="finding") | length -%}
+{% set resolved_count = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") | length -%}
 **Open:** {{ finding_count - resolved_count }} | **Resolved:** {{ resolved_count }} | **Total:** {{ finding_count }}

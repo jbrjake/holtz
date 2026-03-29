@@ -1,5 +1,5 @@
-{# enforcement/templates/summary.md.tera — uses sahjhan v0.5.0 render context
-   Computes all derived values from the raw event list.
+{# enforcement/templates/summary.md.tera — uses sahjhan v0.6.1 render context
+   Uses where_eq and unique_by filters for cleaner event filtering.
    NOTE: Tera does not short-circuit `and` — nested `if` blocks are used
    to guard field access on events that lack the field (e.g., genesis). #}
 # Holtz Convergence Summary
@@ -10,17 +10,12 @@
 **Ledger:** {{ ledger_len }} events
 **Violations:** {{ violations }}
 
-{# ── Compute finding counts ── #}
-{% set_global finding_count = 0 -%}
-{% set_global resolved_count = 0 -%}
-{% set_global fix_iterations = 0 -%}
-{% for e in events -%}
-{% if e.event_type == "finding" %}{% set_global finding_count = finding_count + 1 %}{% endif -%}
-{% if e.event_type == "finding_resolved" %}{% set_global resolved_count = resolved_count + 1 %}{% endif -%}
-{% if e.event_type == "state_transition" -%}
-{% if e.fields.command == "fix_commit" %}{% set_global fix_iterations = fix_iterations + 1 %}{% endif -%}
-{% endif -%}
-{% endfor -%}
+{# ── Compute finding counts (unique_by deduplicates by fields.id) ── #}
+{% set findings = events | where_eq(attribute="event_type", value="finding") -%}
+{% set resolutions = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") -%}
+{% set finding_count = findings | length -%}
+{% set resolved_count = resolutions | length -%}
+{% set fix_iterations = events | where_eq(attribute="event_type", value="state_transition") | where_eq(attribute="fields.command", value="fix_commit") | length -%}
 
 ## Results
 
@@ -35,60 +30,42 @@
 
 ## Findings by Severity
 
-{# ── Count findings per severity ── #}
+{# ── Count findings per severity (resolved_ids built once above) ── #}
+{% set resolved_ids = resolutions | map(attribute="fields.id") -%}
 | Severity | Found | Resolved |
 |----------|-------|----------|
 {% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
-{% set_global found = 0 -%}
-{% set_global resolved = 0 -%}
-{% set_global resolved_ids = [] -%}
-{% for e in events -%}
-{% if e.event_type == "finding_resolved" %}{% set_global resolved_ids = resolved_ids | concat(with=e.fields.id) %}{% endif -%}
+{% set sev_findings = findings | where_eq(attribute="fields.severity", value=severity) -%}
+{% set_global sev_resolved = 0 -%}
+{% for e in sev_findings -%}
+{% if resolved_ids is containing(e.fields.id) %}{% set_global sev_resolved = sev_resolved + 1 %}{% endif -%}
 {% endfor -%}
-{% for e in events -%}
-{% if e.event_type == "finding" -%}
-{% if e.fields.severity == severity -%}
-{% set_global found = found + 1 -%}
-{% if resolved_ids is containing(e.fields.id) %}{% set_global resolved = resolved + 1 %}{% endif -%}
-{% endif -%}
-{% endif -%}
-{% endfor -%}
-{% if found > 0 -%}
-| {{ severity }} | {{ found }} | {{ resolved }} |
+{% if sev_findings | length > 0 -%}
+| {{ severity }} | {{ sev_findings | length }} | {{ sev_resolved }} |
 {% endif -%}
 {% endfor %}
 
 ## Findings by Perspective
 
-{# ── Count findings per perspective ── #}
+{# ── Count findings per perspective (reuses resolved_ids from above) ── #}
 | Perspective | Found | Resolved |
 |-------------|-------|----------|
-{% set_global resolved_ids = [] -%}
-{% for e in events -%}
-{% if e.event_type == "finding_resolved" %}{% set_global resolved_ids = resolved_ids | concat(with=e.fields.id) %}{% endif -%}
-{% endfor -%}
 {% for m in sets.perspective.members -%}
-{% set_global found = 0 -%}
-{% set_global resolved = 0 -%}
-{% for e in events -%}
-{% if e.event_type == "finding" -%}
-{% if e.fields.perspective == m.name -%}
-{% set_global found = found + 1 -%}
-{% if resolved_ids is containing(e.fields.id) %}{% set_global resolved = resolved + 1 %}{% endif -%}
-{% endif -%}
-{% endif -%}
+{% set persp_findings = findings | where_eq(attribute="fields.perspective", value=m.name) -%}
+{% set_global persp_resolved = 0 -%}
+{% for e in persp_findings -%}
+{% if resolved_ids is containing(e.fields.id) %}{% set_global persp_resolved = persp_resolved + 1 %}{% endif -%}
 {% endfor -%}
-{% if found > 0 -%}
-| {{ m.name }} | {{ found }} | {{ resolved }} |
+{% if persp_findings | length > 0 -%}
+| {{ m.name }} | {{ persp_findings | length }} | {{ persp_resolved }} |
 {% endif -%}
 {% endfor %}
 
 ## State History
 
-{% for e in events -%}
-{% if e.event_type == "state_transition" -%}
+{% set transitions = events | where_eq(attribute="event_type", value="state_transition") -%}
+{% for e in transitions -%}
 - {{ e.fields.from }} → **{{ e.fields.to }}** ({{ e.fields.command }}) — {{ e.timestamp }}
-{% endif -%}
 {% endfor %}
 
 ## Perspective Completion
@@ -100,45 +77,37 @@
 ## Predictions
 
 {# ── Prediction tracking from events ── #}
+{% set predictions = events | where_eq(attribute="event_type", value="prediction") -%}
+{% set outcomes = events | where_eq(attribute="event_type", value="prediction_outcome") -%}
 | ID | Target | Confidence | Outcome | Finding |
 |----|--------|------------|---------|---------|
-{% for e in events -%}
-{% if e.event_type == "prediction" -%}
+{% for e in predictions -%}
 {% set_global outcome = "PENDING" -%}
 {% set_global finding_id = "—" -%}
-{% for o in events -%}
-{% if o.event_type == "prediction_outcome" -%}
+{% for o in outcomes -%}
 {% if o.fields.prediction_id == e.fields.id -%}
 {% set_global outcome = o.fields.outcome -%}
 {% if o.fields.finding_id %}{% set_global finding_id = o.fields.finding_id %}{% endif -%}
 {% endif -%}
-{% endif -%}
 {% endfor -%}
 | {{ e.fields.id }} | {{ e.fields.target }} | {{ e.fields.confidence }} | {{ outcome }} | {{ finding_id }} |
-{% endif -%}
 {% endfor %}
 
 ## Justine Findings
 
-{% set_global justine_count = 0 -%}
-{% for e in events -%}
-{% if e.event_type == "finding" -%}
+{% set_global justine_findings = [] -%}
+{% for e in findings -%}
 {% if e.fields.id is starting_with("BJ-") -%}
-{% set_global justine_count = justine_count + 1 -%}
-{% endif -%}
+{% set_global justine_findings = justine_findings | concat(with=e) -%}
 {% endif -%}
 {% endfor -%}
-{% if justine_count > 0 -%}
-Justine identified **{{ justine_count }}** independent findings.
+{% if justine_findings | length > 0 -%}
+Justine identified **{{ justine_findings | length }}** independent findings.
 
 | ID | Severity | Perspective | Description |
 |----|----------|-------------|-------------|
-{% for e in events -%}
-{% if e.event_type == "finding" -%}
-{% if e.fields.id is starting_with("BJ-") -%}
+{% for e in justine_findings -%}
 | {{ e.fields.id }} | {{ e.fields.severity }} | {{ e.fields.perspective }} | {{ e.fields.description }} |
-{% endif -%}
-{% endif -%}
 {% endfor -%}
 {% else -%}
 No Justine findings recorded for this run.

@@ -20,16 +20,50 @@ PROTECTED = [
     "_sahjhan_bootstrap.py",
 ]
 
-READ_GUARDED = [
-    ".sahjhan/session.key",
-    "enforcement/quiz-bank.json",
-]
-
 # Resolve plugin root: enforcement/hooks/ -> enforcement/ -> repo root
 _PLUGIN_ROOT = os.environ.get(
     "CLAUDE_PLUGIN_ROOT",
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
 )
+
+
+def _load_read_guards() -> list[str]:
+    """Load read-guarded paths from sahjhan guards command.
+
+    Falls back to hardcoded defaults if the binary is unavailable.
+    """
+    import subprocess
+    try:
+        binary = os.path.join(_PLUGIN_ROOT, "bin", "sahjhan-" + _platform_triple())
+        if os.path.isfile(binary):
+            result = subprocess.run(
+                [binary, "--config-dir", os.path.join(_PLUGIN_ROOT, "enforcement"), "guards"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+                guards = data.get("read_blocked", [])
+                if guards:
+                    return guards
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, KeyError):
+        pass
+    return [".sahjhan/session.key", "enforcement/quiz-bank.json"]
+
+
+def _platform_triple() -> str:
+    """Return the platform triple for the current system."""
+    import platform
+    arch = platform.machine()
+    system = platform.system().lower()
+    if arch == "arm64":
+        arch = "aarch64"
+    return {
+        "darwin": f"{arch}-apple-darwin",
+        "linux": f"{arch}-unknown-linux-gnu",
+    }.get(system, f"{arch}-{system}")
+
+
+READ_GUARDED = _load_read_guards()
 
 
 def _is_read_guarded(path: str, cwd: str) -> str | None:
