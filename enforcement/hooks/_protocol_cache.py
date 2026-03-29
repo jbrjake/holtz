@@ -21,22 +21,18 @@ def _read_perspectives_total() -> int:
     """Read perspective count from protocol.toml, falling back to 13."""
     toml_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "protocol.toml")
     try:
-        with open(toml_path, encoding="utf-8") as f:
-            content = f.read()
-        # Simple parse: count items in the values array under [sets.perspective]
-        in_values = False
-        count = 0
-        for line in content.splitlines():
-            if line.strip().startswith("values"):
-                in_values = True
-                continue
-            if in_values:
-                if line.strip() == "]":
-                    break
-                if line.strip().startswith('"'):
-                    count += 1
-        return count if count > 0 else 13
-    except OSError:
+        import tomllib  # Python 3.11+
+    except ModuleNotFoundError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]  # pip install tomli for <3.11
+        except ModuleNotFoundError:
+            return 13
+    try:
+        with open(toml_path, "rb") as f:
+            cfg = tomllib.load(f)
+        values = cfg.get("sets", {}).get("perspective", {}).get("values", [])
+        return len(values) if values else 13
+    except (OSError, Exception):
         return 13
 
 
@@ -81,6 +77,66 @@ def write_cache(cwd: str, cache: dict[str, Any]) -> None:
         with contextlib.suppress(OSError):
             os.unlink(tmp)
         raise
+
+
+def parse_status_text(text: str) -> dict[str, Any]:
+    """Parse the text output of ``sahjhan status`` into a dict.
+
+    Returns a dict with keys: current_state, terminal, event_count,
+    run_number, sets (dict of set_name → {complete, total}),
+    available_transitions (list of str), current_perspective.
+    """
+    result: dict[str, Any] = {
+        "current_state": "",
+        "terminal": False,
+        "event_count": 0,
+        "run_number": "0",
+        "sets": {},
+        "available_transitions": [],
+        "current_perspective": "unknown",
+    }
+
+    lines = text.strip().splitlines()
+    for line in lines:
+        stripped = line.strip()
+
+        # "state: fix_loop (59 events, chain valid)"
+        m = re.match(r"^state:\s+(\S+)\s+\((\d+)\s+events", stripped)
+        if m:
+            result["current_state"] = m.group(1)
+            result["event_count"] = int(m.group(2))
+            continue
+
+        # "  perspective: 3/13 [✓ component, ..."
+        m = re.match(r"^\s*(\w[\w-]*):\s+(\d+)/(\d+)\s+\[", stripped)
+        if m:
+            set_name = m.group(1)
+            complete = int(m.group(2))
+            total = int(m.group(3))
+            result["sets"][set_name] = {"complete": complete, "total": total}
+            continue
+
+        # "  fix_commit: ready" or "  fix_commit: blocked"
+        m = re.match(r"^\s+(\w[\w_]*):\s+(ready|blocked)", stripped)
+        if m:
+            transition = m.group(1)
+            status = m.group(2)
+            if status == "ready":
+                result["available_transitions"].append(transition)
+            continue
+
+    # Terminal states
+    terminal_states = {"finalized"}
+    result["terminal"] = result["current_state"] in terminal_states
+
+    # Extract current perspective from sets
+    perspective_set = result["sets"].get("perspective", {})
+    result["current_perspective"] = "unknown"
+    if perspective_set:
+        result["perspectives_done"] = perspective_set.get("complete", 0)
+        result["perspectives_total"] = perspective_set.get("total", 13)
+
+    return result
 
 
 def is_git_commit(cmd: str) -> bool:
