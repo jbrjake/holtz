@@ -498,14 +498,16 @@ class TestBashGuardWithMockBinary:
 class TestStopGateWithMockBinary:
     """BH-010: Tests that exercise actual stop_gate logic with a mock binary."""
 
-    def _setup(self, tmp_path, status_text):
+    def _setup(self, tmp_path, status_lines):
         (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
         (tmp_path / "enforcement").mkdir(parents=True)
-        _create_mock_binary(tmp_path, f"printf '%s\\n' '{status_text}'")
+        status_file = tmp_path / "mock_status.txt"
+        status_file.write_text("\n".join(status_lines) + "\n")
+        _create_mock_binary(tmp_path, f"cat {status_file}")
 
     def test_allows_terminal_state(self, tmp_path):
         """Stop gate allows when state is terminal."""
-        self._setup(tmp_path, "state: finalized (100 events, chain valid)")
+        self._setup(tmp_path, ["state: finalized (100 events, chain valid)"])
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook(
             "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
@@ -516,7 +518,7 @@ class TestStopGateWithMockBinary:
 
     def test_blocks_non_terminal_state(self, tmp_path):
         """Stop gate blocks when state is not terminal."""
-        self._setup(tmp_path, "state: fix_loop (50 events, chain valid)")
+        self._setup(tmp_path, ["state: fix_loop (50 events, chain valid)"])
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook(
             "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
@@ -530,27 +532,32 @@ class TestStopGateWithMockBinary:
 class TestPrimerWithMockBinary:
     """BH-010: Tests that exercise actual primer logic with a mock binary."""
 
-    def _setup(self, tmp_path, status_text):
+    def _setup(self, tmp_path, status_lines):
         (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
         (tmp_path / "enforcement").mkdir(parents=True)
+        # Write status to a file so the mock binary can cat it
+        status_file = tmp_path / "mock_status.txt"
+        status_file.write_text("\n".join(status_lines) + "\n")
         _create_mock_binary(tmp_path, (
-            'if echo "$@" | grep -q "status"; then\n'
-            f"  printf '%s\\n' '{status_text}'\n"
-            '  exit 0\n'
-            'fi\n'
+            'case "$*" in\n'
+            '  *status*)\n'
+            '    cat ' + str(status_file) + '\n'
+            '    exit 0\n'
+            '    ;;\n'
+            'esac\n'
             'exit 0'
         ))
 
     def test_injects_context_for_active_run(self, tmp_path):
         """Primer injects resume context when an active run exists."""
-        status = (
-            "state: fix_loop (50 events, chain valid)\\n"
-            "sets:\\n"
-            "  perspective: 3/13 [✓ component, · integration, ...]\\n"
-            "next:\\n"
-            "  fix_commit: ready\\n"
-            "  pattern_check: ready"
-        )
+        status = [
+            "state: fix_loop (50 events, chain valid)",
+            "sets:",
+            "  perspective: 3/13 [✓ component, · integration, ...]",
+            "next:",
+            "  fix_commit: ready",
+            "  pattern_check: ready",
+        ]
         self._setup(tmp_path, status)
         # Write active-run marker so run_number is derived from ledger
         (tmp_path / "docs" / "holtz" / ".sahjhan" / "active-run").write_text("run-31\n")
@@ -567,7 +574,7 @@ class TestPrimerWithMockBinary:
 
     def test_silent_for_terminal_state(self, tmp_path):
         """Primer does nothing when run is in terminal state."""
-        self._setup(tmp_path, "state: finalized (100 events, chain valid)")
+        self._setup(tmp_path, ["state: finalized (100 events, chain valid)"])
         event = {"user_message": "hello", "cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook(
             "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
@@ -579,13 +586,13 @@ class TestPrimerWithMockBinary:
 
     def test_injects_lens_priming_in_audit(self, tmp_path):
         """Primer injects lens priming when in audit state with active perspective."""
-        status = (
-            "state: audit (30 events, chain valid)\\n"
-            "sets:\\n"
-            "  perspective: 0/13 [· component, ...]\\n"
-            "next:\\n"
-            "  audit_complete: ready"
-        )
+        status = [
+            "state: audit (30 events, chain valid)",
+            "sets:",
+            "  perspective: 0/13 [· component, ...]",
+            "next:",
+            "  audit_complete: ready",
+        ]
         self._setup(tmp_path, status)
         event = {"user_message": "continue", "cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook(
