@@ -35,6 +35,15 @@ _PLUGIN_ROOT = os.environ.get(
 def _is_read_guarded(path: str, cwd: str) -> str | None:
     """Check if a resolved path matches any read-guarded path. Returns the guard or None."""
     resolved = os.path.realpath(path) if os.path.isabs(path) else os.path.realpath(os.path.join(cwd, path))
+
+    # Structural guard: any session.key under a .sahjhan directory tree
+    parts = resolved.replace("\\", "/").split("/")
+    if "session.key" in parts and ".sahjhan" in parts:
+        sahjhan_idx = parts.index(".sahjhan")
+        key_idx = parts.index("session.key")
+        if key_idx > sahjhan_idx:
+            return ".sahjhan/**/session.key"
+
     for g in READ_GUARDED:
         for base in (os.path.join(cwd, "docs", "holtz"), _PLUGIN_ROOT, cwd):
             full = os.path.realpath(os.path.join(base, g))
@@ -45,6 +54,10 @@ def _is_read_guarded(path: str, cwd: str) -> str | None:
 
 def _bash_references_guarded(command: str, cwd: str) -> str | None:
     """Check if a Bash command references any read-guarded path."""
+    # Structural guard: any command referencing session.key in a .sahjhan context
+    if "session.key" in command and ".sahjhan" in command:
+        return ".sahjhan/**/session.key"
+
     for g in READ_GUARDED:
         if g in command:
             return g

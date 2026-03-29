@@ -128,6 +128,69 @@ class TestReadGuard:
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "block"
 
+    def test_read_per_ledger_session_key_blocked(self):
+        """BH-015: per-ledger session keys must be guarded."""
+        event = {
+            "tool_name": "Read",
+            "tool_input": {
+                "file_path": "docs/holtz/.sahjhan/ledgers/run-26/session.key"
+            },
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_read_per_ledger_session_key_absolute_blocked(self):
+        """BH-015: absolute path to per-ledger session key must be guarded."""
+        event = {
+            "tool_name": "Read",
+            "tool_input": {
+                "file_path": "/tmp/fake-cwd/docs/holtz/.sahjhan/ledgers/run-26/session.key"
+            },
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_bash_cat_per_ledger_session_key_blocked(self):
+        """BH-015: Bash access to per-ledger session keys must be guarded."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "cat docs/holtz/.sahjhan/ledgers/run-26/session.key"
+            },
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_bash_xxd_per_ledger_session_key_blocked(self):
+        """BH-015: xxd access to per-ledger session keys must be guarded."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "xxd /abs/path/.sahjhan/ledgers/run-26/session.key"
+            },
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_bash_python_compute_proof_blocked(self):
+        """BH-015: Python code computing proofs from per-ledger keys must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": (
+                    "python3 -c \"from _common import compute_event_proof; "
+                    "compute_event_proof('ctx', {}, '.sahjhan/ledgers/run-26/session.key')\""
+                )
+            },
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
     def test_bash_sahjhan_cmd_with_guarded_path_allowed(self):
         """sahjhan commands referencing quiz-bank.json should be allowed since
         sahjhan itself needs to read the quiz bank."""

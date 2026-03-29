@@ -3,7 +3,7 @@
 [![CI](https://github.com/jbrjake/holtz/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/jbrjake/holtz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)
-![830 tests](https://img.shields.io/badge/tests-817_passed-brightgreen.svg)
+![835 tests](https://img.shields.io/badge/tests-817_passed-brightgreen.svg)
 ![76% coverage](https://img.shields.io/badge/coverage-76%25-brightgreen.svg)
 
 **Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
@@ -187,7 +187,7 @@ For the complete trace with reasoning chains, code diffs, and prediction accurac
 
 **Run 16** found the run count stale again (same class as every run since 14) and the prediction accuracy overstated. Also PAT-001 for its eleventh and twelfth manifestations: `parse_brief()` applied regex without masking code fences (offset-divergence variant), and the hooks' fence masking tracked fence character but not fence count (grammar variant). Four items, all resolved.
 
-After 25 runs: 830 tests across 18,888 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+After 25 runs: 835 tests across 18,888 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
 
 The full dataset — prediction accuracy calibration, PAT-001 recurrence timeline, adversarial merge blind-spot analysis, convergence iteration counts, and test growth curves across all 16 runs — is published in [docs/research/convergence-data.md](docs/research/convergence-data.md). (Data through Run 16; Runs 17-26 are not yet included in the research dataset.)
 
@@ -211,7 +211,7 @@ Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-1 skill, 3 agents, 24 reference docs, 1 example, 6 Python scripts, 16 seed patterns, 9 enforcement hooks, 830 tests across 18,888 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+1 skill, 3 agents, 24 reference docs, 1 example, 6 Python scripts, 16 seed patterns, 9 enforcement hooks, 835 tests across 18,888 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Why the backstories
 

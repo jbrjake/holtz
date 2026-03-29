@@ -61,5 +61,6 @@ path = "docs/holtz/project.jsonl"
 [guards]
 read_blocked = [
     ".sahjhan/session.key",
+    ".sahjhan/**/session.key",
     "enforcement/quiz-bank.json",
 ]
