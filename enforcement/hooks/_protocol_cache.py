@@ -181,6 +181,13 @@ def is_sahjhan_cmd(cmd: str) -> bool:
     return False
 
 
+def is_fix_loop_state(cache: dict[str, Any] | None) -> bool:
+    """Check if the current protocol state is fix_loop."""
+    if cache is None:
+        return False
+    return cache.get("state") == "fix_loop"
+
+
 def compute_obligations(cache: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Compute current protocol obligations from cache state."""
     if cache is None or not cache.get("active"):

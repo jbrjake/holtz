@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from _protocol_cache import (  # noqa: E402
     compute_obligations,
     format_injection,
+    is_fix_loop_state,
     is_git_commit,
     is_sahjhan_cmd,
     read_cache,
@@ -40,13 +41,23 @@ def main() -> None:
     cwd = event.get("cwd", os.getcwd())
 
     cache = read_cache(cwd)
-    obligations = compute_obligations(cache)
-
-    if not obligations:
-        exit_ok("PreToolUse")
 
     # Sahjhan commands are always allowed
     if is_sahjhan_cmd(cmd):
+        exit_ok("PreToolUse")
+
+    # Unconditional: in fix_loop, git commit requires prior fix_commit registration
+    if cache and is_fix_loop_state(cache) and is_git_commit(cmd):
+        commits = cache.get("unregistered_commits", [])
+        if commits:
+            exit_block(
+                f"BLOCKED: {len(commits)} unregistered commit(s). "
+                "Run sahjhan transition fix_commit before committing again."
+            )
+
+    obligations = compute_obligations(cache)
+
+    if not obligations:
         exit_ok("PreToolUse")
 
     # Hard block: pattern analysis overdue after 3+ fixes
