@@ -98,6 +98,36 @@ class TestReadGuard:
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "block"
 
+    def test_sed_inplace_to_protected_blocked(self):
+        """BH-008: sed -i to protected enforcement/ path must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sed -i 's/old/new/g' enforcement/events.toml"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_perl_inplace_to_protected_blocked(self):
+        """BH-008: perl -pi to protected enforcement/ path must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "perl -pi -e 's/old/new/g' enforcement/states.toml"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_patch_to_protected_blocked(self):
+        """BH-008: patch to protected enforcement/ path must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "patch enforcement/hooks/primer.py < fix.patch"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
     def test_bash_sahjhan_cmd_with_guarded_path_allowed(self):
         """sahjhan commands referencing quiz-bank.json should be allowed since
         sahjhan itself needs to read the quiz bank."""

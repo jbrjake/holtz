@@ -125,6 +125,25 @@ def main() -> None:
                             "This path cannot be modified during an audit session."
                         )
                         return
+            # In-place modification tools: sed -i, perl -pi, patch
+            for prefix in ("sed ", "perl "):
+                if prefix in command:
+                    # Check if any argument references a protected path
+                    args = command.split()
+                    if any(arg.startswith(p) or ("/" + p) in arg for arg in args):
+                        _block(
+                            f"BLOCKED: Bash command modifies protected path '{p}' in-place. "
+                            "This path cannot be modified during an audit session."
+                        )
+                        return
+            if "patch " in command:
+                args = command.split()
+                if any(arg.startswith(p) or ("/" + p) in arg for arg in args):
+                    _block(
+                        f"BLOCKED: Bash command patches protected path '{p}'. "
+                        "This path cannot be modified during an audit session."
+                    )
+                    return
         _allow()
         return
 
