@@ -79,6 +79,12 @@ def compute_event_proof(event_type: str, fields: dict[str, str], key_path: str |
         key_path = _get_session_key_path()
     with open(key_path, "rb") as f:
         key = f.read()
+    for k, v in fields.items():
+        if "\0" in k or "\0" in v:
+            raise ValueError(
+                f"Null byte in HMAC field: key={k!r} value={v!r}. "
+                "Null bytes would collide with the field separator."
+            )
     parts = [event_type] + [f"{k}={v}" for k, v in sorted(fields.items())]
     payload = "\0".join(parts).encode()
     return hmac_mod.new(key, payload, hashlib.sha256).hexdigest()

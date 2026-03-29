@@ -72,6 +72,48 @@ def test_compute_event_proof_matches_manual(tmp_path):
     assert proof == expected
 
 
+def test_compute_event_proof_rejects_null_bytes_in_values(tmp_path):
+    """Field values with null bytes must not produce colliding proofs (BH-014)."""
+    key = b"test-key-32-bytes-exactly-here!!"
+    key_path = tmp_path / "session.key"
+    key_path.write_bytes(key)
+
+    compute_event_proof = _enforcement_common.compute_event_proof
+
+    # A value containing \0 could spoof additional fields
+    injected = {"auditor": "holtz\x00score=5/5"}
+    legitimate = {"auditor": "holtz", "score": "5/5"}
+
+    # Either the proofs must differ, or the function must raise ValueError
+    try:
+        proof_injected = compute_event_proof("quiz_answered", injected, str(key_path))
+    except ValueError:
+        return  # raising is an acceptable defense
+
+    proof_legit = compute_event_proof("quiz_answered", legitimate, str(key_path))
+    assert proof_injected != proof_legit, (
+        "Null byte in field value produces HMAC collision with separate field"
+    )
+
+
+def test_compute_event_proof_rejects_null_bytes_in_keys(tmp_path):
+    """Field keys with null bytes must not produce colliding proofs (BH-014)."""
+    key = b"test-key-32-bytes-exactly-here!!"
+    key_path = tmp_path / "session.key"
+    key_path.write_bytes(key)
+
+    compute_event_proof = _enforcement_common.compute_event_proof
+
+    # A key containing \0 and = could spoof the k=v format
+    try:
+        proof = compute_event_proof("test", {"a\x00b": "c"}, str(key_path))
+    except ValueError:
+        return  # raising is acceptable
+    # If it doesn't raise, the proof should differ from the non-injected version
+    proof_clean = compute_event_proof("test", {"a": "c"}, str(key_path))
+    assert proof != proof_clean
+
+
 def test_compute_event_proof_different_types_differ(tmp_path):
     """Different event types produce different proofs."""
     key = b"test-key-32-bytes-exactly-here!!"
