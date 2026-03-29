@@ -341,9 +341,10 @@ def main() -> None:
     if not posed_events:
         # Phase 2: Pose the quiz
         qhash = questions_hash(questions)
-        record_authed_event("quiz_posed", {
-            **base_fields, "questions_hash": qhash
-        }, cwd, ledger)
+        with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+            record_authed_event("quiz_posed", {
+                **base_fields, "questions_hash": qhash
+            }, cwd, ledger)
         quiz_text = format_quiz_questions(questions, lens)
         exit_stop_block(quiz_text)
 
@@ -372,11 +373,12 @@ def main() -> None:
             binary, config_dir, cwd, ledger, "quiz_answered", lens
         )
         if not already_answered:
-            record_authed_event("quiz_answered", {
-                **base_fields,
-                "score": f"{correct}/{total}",
-                "pass": "true",
-            }, cwd, ledger)
+            with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+                record_authed_event("quiz_answered", {
+                    **base_fields,
+                    "score": f"{correct}/{total}",
+                    "pass": "true",
+                }, cwd, ledger)
         exit_stop_allow()
 
     # Failed — check attempt count
@@ -385,14 +387,16 @@ def main() -> None:
     )
     attempt = len(failed_events) + 1  # this is the current (failing) attempt
 
-    record_authed_event("quiz_failed", {
-        **base_fields, "score": f"{correct}/{total}"
-    }, cwd, ledger)
+    with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+        record_authed_event("quiz_failed", {
+            **base_fields, "score": f"{correct}/{total}"
+        }, cwd, ledger)
 
     if attempt >= MAX_QUIZ_ATTEMPTS:
-        record_authed_event("quiz_exhausted", {
-            **base_fields
-        }, cwd, ledger)
+        with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+            record_authed_event("quiz_exhausted", {
+                **base_fields
+            }, cwd, ledger)
         exit_stop_allow()
 
     exit_stop_block(

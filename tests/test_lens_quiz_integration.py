@@ -172,3 +172,20 @@ def test_artifact_check_integration(tmp_path):
     artifact.write_text("## error-propagation\n\n- primer.py:56 catches OSError,TimeoutExpired\n- bash_guard.py:56 catches OSError,TimeoutExpired\n")
     result = evidence_mod.check_artifact(str(artifact))
     assert result["pass"]
+
+
+def test_record_authed_event_missing_session_key(tmp_path):
+    """record_authed_event raises FileNotFoundError when session.key is absent.
+
+    BH-007: lens_quiz.py must wrap these calls with suppress(OSError) so a
+    missing session key degrades gracefully instead of crashing the hook.
+    """
+    common_mod = _load_module("_common", _HOOK_DIR / "_common.py")
+    import pytest
+    # No session.key → compute_event_proof should raise FileNotFoundError
+    with pytest.raises(FileNotFoundError):
+        common_mod.compute_event_proof(
+            "quiz_posed",
+            {"project": "holtz", "run": "1"},
+            key_path=str(tmp_path / "nonexistent" / "session.key"),
+        )
