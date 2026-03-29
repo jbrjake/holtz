@@ -40,22 +40,42 @@ def main() -> None:
 
     # BH-016: Check Bash commands for shell redirections to protected paths
     # BH-011: Also block cp/mv/install targeting protected paths
+    # BH-008: Check that the protected path is the TARGET, not just present
     if command and not path:
         for p in PROTECTED:
-            if p in command:
-                if any(op in command for op in (">", ">>", "tee ")):
+            # Redirect check: protected path must appear after the redirect operator
+            for op in (">", ">>"):
+                idx = command.find(op)
+                if idx >= 0:
+                    after_op = command[idx + len(op):].strip()
+                    if after_op.startswith(p):
+                        _block(
+                            f"BLOCKED: Bash command redirects to protected path '{p}'. "
+                            "This path cannot be modified during an audit session."
+                        )
+                        return
+            # tee check: protected path must follow "tee"
+            if "tee " in command:
+                tee_idx = command.find("tee ")
+                after_tee = command[tee_idx + 4:].strip()
+                if any(arg.startswith(p) for arg in after_tee.split()):
                     _block(
-                        f"BLOCKED: Bash command writes to protected path '{p}'. "
+                        f"BLOCKED: Bash command tees to protected path '{p}'. "
                         "This path cannot be modified during an audit session."
                     )
                     return
-                cmd_stripped = command.lstrip()
-                if any(cmd_stripped.startswith(c) for c in ("cp ", "mv ", "install ")):
-                    _block(
-                        f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
-                        "This path cannot be modified during an audit session."
-                    )
-                    return
+            # cp/mv/install check: protected path must be the LAST argument (destination)
+            cmd_stripped = command.lstrip()
+            if any(cmd_stripped.startswith(c) for c in ("cp ", "mv ", "install ")):
+                args = cmd_stripped.split()
+                if len(args) >= 3:
+                    dest = args[-1]
+                    if dest.startswith(p):
+                        _block(
+                            f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
+                            "This path cannot be modified during an audit session."
+                        )
+                        return
         _allow()
         return
 

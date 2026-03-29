@@ -173,6 +173,42 @@ class TestBootstrapHook:
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_allowed(code, output)
 
+    def test_blocks_redirect_to_enforcement(self):
+        """BH-008: Bootstrap blocks shell redirects targeting enforcement/."""
+        event = {
+            "tool_input": {"command": "echo bad > enforcement/protocol.toml"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "protected")
+
+    def test_allows_redirect_mentioning_enforcement(self):
+        """BH-008: Bootstrap allows redirects that mention but don't target enforcement/."""
+        event = {
+            "tool_input": {"command": 'echo "checking enforcement/ status" > /tmp/log.txt'},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_allowed(code, output)
+
+    def test_allows_cp_from_enforcement(self):
+        """BH-008: Bootstrap allows cp that reads FROM enforcement/ (not writing to it)."""
+        event = {
+            "tool_input": {"command": "cp enforcement/hooks/primer.py /tmp/backup.py"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_allowed(code, output)
+
+    def test_blocks_cp_to_enforcement(self):
+        """BH-008: Bootstrap blocks cp that writes TO enforcement/."""
+        event = {
+            "tool_input": {"command": "cp /tmp/evil.py enforcement/hooks/primer.py"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "protected")
+
 
 # --- write_guard.py (PreToolUse) ---
 
