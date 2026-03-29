@@ -38,6 +38,20 @@ def _is_tdd_cmd(cmd: str) -> bool:
     )
 
 
+def _is_sleep_cmd(cmd: str) -> bool:
+    """Detect sleep commands used to game timing gates.
+
+    Returns True for sleep >5 seconds. Short sleeps (<=5s) are allowed
+    for legitimate polling. Checks each segment of chained commands
+    (split on &&, ;, ||, |).
+    """
+    for segment in re.split(r'[;&|]+', cmd):
+        m = re.match(r"^\s*sleep\s+(\d+(?:\.\d+)?)", segment)
+        if m and float(m.group(1)) > 5:
+            return True
+    return False
+
+
 def _parse_commit_hash(output: str) -> str:
     """Extract short commit hash from git commit output."""
     m = re.search(r"\[[\w/.-]+\s+([0-9a-f]{7,})\]", output)
@@ -113,7 +127,10 @@ def main() -> None:
         exit_ok()
 
     # Test/lint/type-check commands are legitimate TDD activity — don't count as stalling
-    if not _is_tdd_cmd(cmd):
+    if _is_sleep_cmd(cmd):
+        # Sleep to game timing gates gets double stall penalty
+        cache["stall"] = cache.get("stall", 0) + 2
+    elif not _is_tdd_cmd(cmd):
         cache["stall"] = cache.get("stall", 0) + 1
     write_cache(cwd, cache)
     exit_ok()
