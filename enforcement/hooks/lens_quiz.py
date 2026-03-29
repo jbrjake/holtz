@@ -301,12 +301,13 @@ def main() -> None:
     transcript_available = bool(transcript_path and os.path.isfile(transcript_path))
     if transcript_available:
         events_list = parse_transcript_jsonl(transcript_path)
-        # SEC-007: If the transcript contains no flat tool_name events, it is in
-        # session-JSONL format (tool calls nested inside message.content blocks)
-        # rather than the expected hook-event format. Treat as unavailable so the
-        # min_reads=0 degradation path fires rather than permanently blocking.
-        has_tool_name_events = any("tool_name" in e for e in events_list)
-        if not has_tool_name_events:
+        # BH-016: check_transcript counts reads from session-JSONL format
+        # (nested message.content blocks with tool_use entries). If the transcript
+        # is in flat hook-event format (tool_name at top level), check_transcript
+        # cannot parse it — degrade to min_reads=0 to avoid permanent blocking.
+        # Session-JSONL format (no top-level tool_name) IS processable — keep it.
+        has_flat_events = any("tool_name" in e for e in events_list)
+        if has_flat_events:
             transcript_available = False
             events_list = [{"type": "assistant", "content": message}]
     else:
