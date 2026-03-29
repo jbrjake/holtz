@@ -611,11 +611,8 @@ def test_38_200_node_round_trip(graph):
         if key in attempts:
             continue
         attempts.add(key)
-        try:
-            graph.add_edge(src, tgt, etype)
-            edges_added += 1
-        except KeyError:
-            pass
+        graph.add_edge(src, tgt, etype)
+        edges_added += 1
 
     assert graph.stats()["nodes"] == 200
     assert graph.stats()["edges"] == 500
