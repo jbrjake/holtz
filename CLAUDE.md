@@ -47,8 +47,18 @@ scripts/install-hooks.sh
 
 ## Running Tests
 
+Quick (subagents, iterative work):
 ```bash
-python -m pytest --tb=short -q
+python -m pytest
 ruff check .
 mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/
 ```
+
+Full (main agent, pre-commit, CI — includes coverage gate):
+```bash
+python -m pytest --cov=skills/holtz/scripts --cov=hooks --cov-report=term-missing --cov-fail-under=60
+ruff check .
+mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/
+```
+
+Coverage is excluded from default addopts because concurrent pytest processes (subagents, parallel sessions) deadlock on the SQLite `.coverage` file. Only the main agent should run with `--cov`.
