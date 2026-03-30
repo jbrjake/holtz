@@ -272,14 +272,19 @@ class TestListSessions:
         _minimal_session(tmp_path / "session_b.jsonl")
         result = list_sessions(tmp_path)
         assert len(result) == 2
-        # Each has expected keys
         for entry in result:
-            assert "path" in entry
-            assert "name" in entry
-            assert "size_kb" in entry
-            assert "turns" in entry
-            assert "started" in entry
-            assert "ended" in entry
+            assert isinstance(entry["path"], str) and entry["path"], "path must be a non-empty string"
+            assert isinstance(entry["name"], str) and entry["name"], "name must be a non-empty string"
+            assert isinstance(entry["size_kb"], int) and entry["size_kb"] >= 0, "size_kb must be non-negative int"
+            assert isinstance(entry["turns"], int) and entry["turns"] >= 0, "turns must be non-negative int"
+            assert isinstance(entry["started"], str), "started must be a string"
+            assert isinstance(entry["ended"], str), "ended must be a string"
+        # Verify values match the actual session files
+        names = {e["name"] for e in result}
+        assert "session_a" in names
+        assert "session_b" in names
+        for entry in result:
+            assert entry["turns"] == 2, f"minimal session has 2 turns, got {entry['turns']}"
 
     def test_empty_dir(self, tmp_path: Path) -> None:
         result = list_sessions(tmp_path)
