@@ -48,6 +48,25 @@ PRICING: dict[str, dict[str, float]] = {
 # ---------------------------------------------------------------------------
 
 
+def _longest_prefix_match(
+    model: str, table: dict[str, dict[str, float]],
+) -> dict[str, float] | None:
+    """Find the longest-prefix match for *model* in *table*.
+
+    Returns the matching entry or None if no prefix matches.
+    Skips the "unknown" sentinel key.
+    """
+    best_key: str | None = None
+    best_len = 0
+    for key in table:
+        if key == "unknown":
+            continue
+        if model.startswith(key) and len(key) > best_len:
+            best_key = key
+            best_len = len(key)
+    return table[best_key] if best_key is not None else None
+
+
 def get_pricing(model: str) -> dict[str, float]:
     """Look up pricing for *model* using longest-prefix matching.
 
@@ -59,18 +78,9 @@ def get_pricing(model: str) -> dict[str, float]:
     if model in PRICING:
         return PRICING[model]
 
-    # Longest-prefix match among non-"unknown" keys
-    best_key: str | None = None
-    best_len = 0
-    for key in PRICING:
-        if key == "unknown":
-            continue
-        if model.startswith(key) and len(key) > best_len:
-            best_key = key
-            best_len = len(key)
-
-    if best_key is not None:
-        return PRICING[best_key]
+    result = _longest_prefix_match(model, PRICING)
+    if result is not None:
+        return result
 
     # Fallback
     print(
@@ -117,16 +127,8 @@ def make_pricing_fn(
         if model in merged:
             rates = merged[model]
         else:
-            # Longest-prefix match (same logic as get_pricing)
-            best_key: str | None = None
-            best_len = 0
-            for key in merged:
-                if key == "unknown":
-                    continue
-                if model.startswith(key) and len(key) > best_len:
-                    best_key = key
-                    best_len = len(key)
-            rates = merged[best_key] if best_key is not None else merged.get("unknown", PRICING["unknown"])
+            result = _longest_prefix_match(model, merged)
+            rates = result if result is not None else merged.get("unknown", PRICING["unknown"])
 
         return DollarCost(
             input_cost=usage.input_tokens * rates["input"],
