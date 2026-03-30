@@ -136,6 +136,23 @@ def test_fix_commit_has_circuit_breaker():
     )
 
 
+def test_iteration_boundary_enforces_pattern_check():
+    """BH-020: iteration_boundary must block when 3+ fixes lack pattern analysis."""
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    boundary = None
+    for t in cfg["transitions"]:
+        if t.get("command") == "iteration_boundary":
+            boundary = t
+            break
+    assert boundary is not None, "No iteration_boundary transition found"
+    gate_strs = [json.dumps(g) for g in boundary.get("gates", [])]
+    assert any("pattern_analysis" in g for g in gate_strs), (
+        "iteration_boundary must have a gate enforcing pattern analysis "
+        "after 3+ fix_commits — otherwise the auditor can skip Step 11 "
+        "and miss recurring patterns (BH-020)"
+    )
+
+
 # ── Task 1.3: renders.toml ──
 
 

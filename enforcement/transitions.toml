@@ -77,7 +77,12 @@ gates = [
 from = "fix_loop"
 to = "awaiting_clear"
 command = "iteration_boundary"
-gates = []
+gates = [
+    # BH-020: Enforce pattern analysis after 3+ fixes to prevent recurring band-aid fixes.
+    # Counts fix_commits since the last pattern_analysis_complete. If 3+, blocks until
+    # pattern analysis is done. The auditor cannot skip Step 11 and escape to /clear.
+    { type = "query", sql = "SELECT count(*) < 3 FROM events WHERE type='state_transition' AND command='fix_commit' AND rowid > COALESCE((SELECT MAX(rowid) FROM events WHERE type='pattern_analysis_complete'), 0)", expect = "true", intent = "pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary" },
+]
 
 [[transitions]]
 from = "awaiting_clear"

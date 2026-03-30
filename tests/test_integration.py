@@ -242,17 +242,18 @@ def test_readme_metrics_match_actual():
     the counts on the 'What's inside' line of README.md.
     """
     import re
-    import subprocess
     from pathlib import Path
 
     root = Path(__file__).resolve().parent.parent
     readme = (root / "README.md").read_text()
 
-    # Extract claimed counts from README
+    # Extract claimed counts from README "What's inside" line.
+    # Test count and LOC are NOT in prose — they live only in the badge
+    # (enforced by test_readme_badge_counts_match_actual). This eliminates
+    # the recurring drift where every test addition broke the prose (BH-019/020).
     m = re.search(
         r"(\d+) skills?, (\d+) agents?, (\d+) reference docs?, (\d+) examples?, "
-        r"(\d+) Python scripts?, (\d+) seed patterns?, (\d+) enforcement hooks?, "
-        r"(\d+) tests,",
+        r"(\d+) Python scripts?, (\d+) seed patterns?, (\d+) enforcement hooks?,",
         readme,
     )
     assert m, "Could not find 'What's inside' line in README.md"
@@ -264,7 +265,6 @@ def test_readme_metrics_match_actual():
     claimed_scripts = int(m.group(5))
     claimed_patterns = int(m.group(6))
     claimed_hooks = int(m.group(7))
-    claimed_tests = int(m.group(8))
 
     # Count actual values
     actual_skills = len(list((root / "skills").rglob("SKILL.md")))
@@ -278,18 +278,6 @@ def test_readme_metrics_match_actual():
         if not f.name.startswith("_")
     ])
 
-    result = subprocess.run(
-        ["python", "-m", "pytest", "tests/", "--collect-only"],
-        capture_output=True, text=True, cwd=str(root),
-    )
-    # Last line of --collect-only output: "N tests collected in X.XXs"
-    test_match = re.search(r"(\d+) tests? collected", result.stdout)
-    assert test_match, (
-        f"Could not parse test count from pytest --collect-only output. "
-        f"Last 3 lines: {result.stdout.strip().splitlines()[-3:]}"
-    )
-    actual_tests = int(test_match.group(1))
-
     errors = []
     for label, claimed, actual in [
         ("skills", claimed_skills, actual_skills),
@@ -299,7 +287,6 @@ def test_readme_metrics_match_actual():
         ("Python scripts", claimed_scripts, actual_scripts),
         ("seed patterns", claimed_patterns, actual_patterns),
         ("enforcement hooks", claimed_hooks, actual_hooks),
-        ("tests", claimed_tests, actual_tests),
     ]:
         if claimed != actual:
             errors.append(f"{label}: README says {claimed}, actual {actual}")
