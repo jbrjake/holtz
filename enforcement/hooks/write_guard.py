@@ -12,18 +12,9 @@ import sys
 # Add parent paths for imports
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import exit_block, exit_ok, read_event  # noqa: E402
+from _sahjhan_bootstrap import MANAGED_DOCS as MANAGED_FILES  # noqa: E402  # BH-018: single source of truth
 
-# Specific files rendered by Sahjhan — direct writes are blocked.
-# Only these files are managed; other docs/holtz/ paths (recon/, audit/,
-# impact-graph.json, justine/, etc.) are legitimate audit output.
-MANAGED_FILES = [
-    "docs/holtz/STATUS.md",
-    "docs/holtz/PUNCHLIST.md",
-    "docs/holtz/SUMMARY.md",
-    "docs/holtz/MERGE-REPORT.md",
-    "docs/holtz/PUNCHLIST-MERGED.md",
-]
+from _common import exit_block, exit_ok, read_event  # noqa: E402
 
 
 def main() -> None:

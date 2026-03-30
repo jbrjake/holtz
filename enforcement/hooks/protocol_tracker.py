@@ -109,10 +109,12 @@ def main() -> None:
         if cache is None:
             cache = empty_cache()
         cache = _refresh_from_sahjhan(cwd, cache)
-        if "fix_commit" in cmd:
+        # BH-017: match subcommand tokens, not substrings of full command
+        tokens = cmd.split()
+        if "fix_commit" in tokens:
             cache["unregistered_commits"] = []
             cache["fixes_since_pattern"] = cache.get("fixes_since_pattern", 0) + 1
-        if "pattern_check" in cmd or "pattern_done" in cmd:
+        if "pattern_check" in tokens or "pattern_done" in tokens:
             cache["fixes_since_pattern"] = 0
         write_cache(cwd, cache)
         exit_ok()

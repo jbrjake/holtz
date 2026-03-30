@@ -609,3 +609,38 @@ class TestEnforcementIntegration:
         })
         perm = out.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "allow", f"Expected allow after fix_commit, got {perm}"
+
+    def test_fix_commit_substring_not_triggered_by_option(self, tmp_path):
+        """BH-017: 'fix_commit' in a ledger name does not clear unregistered_commits."""
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["unregistered_commits"] = ["abc123"]
+        write_cache(str(tmp_path), cache)
+
+        # A sahjhan command that mentions fix_commit in an option, not as a subcommand
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan status --ledger fix_commit-test"},
+            "tool_response": {"exit_code": 0, "output": "state: fix_loop"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert updated is not None
+        assert updated["unregistered_commits"] == ["abc123"], (
+            "fix_commit as part of a flag value should not clear unregistered_commits"
+        )
+
+
+class TestManagedFilesSync:
+    """BH-018: MANAGED_FILES and MANAGED_DOCS must be identical."""
+
+    def test_managed_lists_identical(self):
+        """write_guard.MANAGED_FILES must be imported from _sahjhan_bootstrap.MANAGED_DOCS."""
+        from _sahjhan_bootstrap import MANAGED_DOCS
+        from write_guard import MANAGED_FILES
+        assert MANAGED_FILES is MANAGED_DOCS, (
+            "MANAGED_FILES must be the same object as MANAGED_DOCS (imported, not duplicated)"
+        )
