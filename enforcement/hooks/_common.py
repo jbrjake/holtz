@@ -59,7 +59,7 @@ def _get_session_key_path(cwd: str | None = None, ledger: str | None = None) -> 
             )
             if result.returncode == 0 and result.stdout.strip():
                 return result.stdout.strip()
-    except Exception:
+    except (OSError, subprocess.SubprocessError, ImportError):
         pass
     return default
 
