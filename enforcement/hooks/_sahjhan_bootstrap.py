@@ -110,7 +110,7 @@ def _bash_references_guarded(command: str, cwd: str) -> str | None:
     # BH-016: Block glob patterns targeting guarded directories.
     # If the command references a guarded parent dir AND contains glob chars,
     # treat it as a potential bypass.
-    _GLOB_CHARS = ("*", "?", "[")
+    _GLOB_CHARS = ("*", "?", "[", "{")
     if ".sahjhan" in cmd_lower and any(c in command for c in _GLOB_CHARS):
         return ".sahjhan/**/session.key"
 

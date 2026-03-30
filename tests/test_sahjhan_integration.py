@@ -322,6 +322,24 @@ class TestBootstrapHook:
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_blocked(code, output, "read-guarded")
 
+    def test_blocks_brace_expansion_session_key(self):
+        """BH-017: Brace expansion must not bypass read guard for session.key."""
+        event = {
+            "tool_input": {"command": "cat .sahjhan/ses{sion.ke,x}y"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "read-guarded")
+
+    def test_blocks_brace_expansion_quiz_bank(self):
+        """BH-017: Brace expansion must not bypass read guard for quiz-bank.json."""
+        event = {
+            "tool_input": {"command": "cat enforcement/quiz-{bank,x}.json"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "read-guarded")
+
 
 # --- write_guard.py (PreToolUse) ---
 
