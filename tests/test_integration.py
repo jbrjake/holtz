@@ -321,6 +321,52 @@ def test_readme_metrics_match_actual():
     )
 
 
+def test_readme_badge_counts_match_actual():
+    """BH-012: README badge URLs must match actual metrics.
+
+    The shields.io badge at the top of README.md is the most visible
+    metric display. PAT-005 recurrence — badge drifts most often.
+    """
+    import re
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    readme = (root / "README.md").read_text()
+
+    errors = []
+
+    # Test count badge
+    badge_match = re.search(r"tests-(\d+)_total", readme)
+    assert badge_match, "Could not find test count badge in README.md"
+    badge_count = int(badge_match.group(1))
+
+    result = subprocess.run(
+        ["python", "-m", "pytest", "tests/", "--collect-only"],
+        capture_output=True, text=True, cwd=str(root),
+    )
+    test_match = re.search(r"(\d+) tests? collected", result.stdout)
+    assert test_match, "Could not parse test count from pytest"
+    actual_tests = int(test_match.group(1))
+
+    if badge_count != actual_tests:
+        errors.append(f"test badge: shows {badge_count}, actual {actual_tests}")
+
+    # Alt text must match badge URL
+    alt_match = re.search(r"!\[(\d+) tests\]", readme)
+    if alt_match:
+        alt_count = int(alt_match.group(1))
+        if alt_count != badge_count:
+            errors.append(
+                f"badge alt text ({alt_count}) doesn't match URL ({badge_count})"
+            )
+
+    assert not errors, (
+        "README badge counts are stale. Update README.md:\n  "
+        + "\n  ".join(errors)
+    )
+
+
 def test_readme_prose_counts_match_actual():
     """README prose count claims match actual values.
 
