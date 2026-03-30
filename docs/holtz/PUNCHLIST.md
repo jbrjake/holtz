@@ -3,36 +3,29 @@
 
 **Protocol:** holtz v1.0.0
 **Run:** ?
-**State:** Finalized
-**Ledger:** 110 events
+**State:** Fix Loop (Step 10)
+**Ledger:** 189 events
 
-## HIGH
-
-| ID | Category | Location | Perspective | Description | Status |
-|----|----------|----------|-------------|-------------|--------|
-| BH-003 | bug/state | bin/sahjhan (symlink), enforcement/hooks/_sahjhan_bootstrap.py:71 | integration | bin/sahjhan symlink is absolute (/Users/jonr/...) — tracked in git. CI resolves it to a non-existent machine-specific path. _sahjhan_bootstrap.py realpath comparison fails because PROTECTED 'bin/sahjhan' resolves to Jon's local path while the test input resolves to CI workspace path. | RESOLVED |
-| BH-014 | doc/drift | README.md:104 | public-contract | Prediction accuracy statistics fabricated. README claims 82%/59%/67% for HIGH/MEDIUM/LOW across 7 runs. Research data shows 65%/38%/0% across 11 runs. No data slice produces claimed numbers. LOW=67% contradicts all data (actual: 0%). | RESOLVED |
 ## MEDIUM
 
 | ID | Category | Location | Perspective | Description | Status |
 |----|----------|----------|-------------|-------------|--------|
-| BH-001 | doc/drift | README.md:6,190,214 | public-contract | Test count badge and prose say 759, actual is 761. PAT-005 recurrence. | RESOLVED |
-| BH-002 | doc/drift | README.md:190,214 | public-contract | LOC count says 21,120, actual is 21,756. PAT-005 recurrence. | RESOLVED |
-| BH-004 | bug/logic | tests/test_integration.py:284-288 | component | test_readme_metrics_match_actual uses pytest --co -q, but -q suppresses the summary line. re.search returns None, causing AttributeError on .group(1). Fix: use --co without -q, or parse the line count differently. | RESOLVED |
-| BH-005 | test/fragile | tests/test_sahjhan_integration.py:346-357 | integration | TestStopGate test_allows_without_sahjhan_binary and test_allows_without_active_run run without isolated cwd. Hook picks up live .sahjhan/ state from repo root and blocks. Tests are Mystery Guest (AP-15) and Schrodinger Test (AP-8). | RESOLVED |
-| BH-006 | test/bogus | tests/test_sahjhan_integration.py:318-321,413-418 | component | Conditional assertions in test_violation_records_event and test_reset_records_event. If the log file doesn't exist or context_reset isn't in logged, tests pass with zero assertions. Inspector Clouseau (AP-4). | RESOLVED |
-| BH-008 | bug/logic | enforcement/hooks/_sahjhan_bootstrap.py:43-58 | security | Bash redirect detection uses substring matching (p in command). False positives: echo mentioning protected path, cp reading from protected path. Defense-in-depth issue — primary path protection via realpath handles Write/Edit correctly. | RESOLVED |
-| BH-011 | doc/drift | README.md:191,214 | public-contract | LOC count says 17,800, actual Python LOC is 21,909. PAT-005 recurrence. Two instances in 'After 25 runs' paragraph and 'What's inside' section. | RESOLVED |
-| BH-013 | bug/logic | enforcement/hooks/_protocol_cache.py:120 | component | parse_status_text transition regex requires leading whitespace on already-stripped line | RESOLVED |
-| BH-015 | doc/drift | README.md:174-175 | public-contract | Run 1 narrative mixes Run 1 and Run 2 data. Claims '12 issues' and '48 new tests' for Run 1. Research data: Run 1 had 21 findings/19 tests; Run 2 had 12 findings/48 tests. | RESOLVED |
-| BH-016 | bug/logic | enforcement/hooks/lens_quiz.py:308-311 | integration | SEC-007 degrades session-JSONL format (processable by check_transcript) to min_reads=0, while keeping min_reads=5 for hook-event format (unprocessable). Logic inverted: read-count enforcement is always bypassed. | RESOLVED |
-| BH-017 | bug/logic | skills/holtz/scripts/impact_graph.py:226 | component | risk_hotspots() uses n[id] but _REQUIRED_NODE_KEYS is {type, file} — load() allows nodes without id, causing KeyError in sort key | RESOLVED |
-| BH-018 | bug/logic | enforcement/hooks/_protocol_cache.py:135 | component | parse_status_text sets current_perspective=unknown unconditionally — primer.py lens priming line never emits after /clear | RESOLVED |
+| BH-001 | doc/drift | README.md:6 | public-contract | Badge URL says 869_total but actual test count is 874. Alt text says 874 but shield URL is stale. PAT-005 recurrence. | RESOLVED |
+| BH-004 | bug/security | enforcement/hooks/lens_quiz.py:48 | security | Quiz answer bypass via fence info string. _ANSWERS_RE lacks ^ anchor, so LENS:...ANSWERS: on a code fence opener line survives mask_fenced_blocks and matches. A subagent could embed answers in a fence info string to bypass quiz scoring. | RESOLVED |
+| BH-016 | bug/security | enforcement/hooks/_sahjhan_bootstrap.py:98-112 | security | _bash_references_guarded uses literal substring matching for read guards. Shell glob patterns like 'cat docs/holtz/.sahjhan/s*.key' or 'cat docs/holtz/.sahjhan/*' bypass both the structural guard (no 'session.key' in command) and the literal guard (no '.sahjhan/session.key' substring). Attacker subagent could read session.key via glob expansion and forge HMAC proofs. | RESOLVED |
+| BH-017 | bug/security | enforcement/hooks/_sahjhan_bootstrap.py:113 | security | Brace expansion bypass: _GLOB_CHARS omits '{' so 'cat .sahjhan/ses{sion.ke,x}y' evades the glob guard. Bash expands braces before exec, producing session.key. Incomplete fix for BH-016. | RESOLVED |
+| BH-020 | process/audit-blind-spot | SKILL.md:rationalization-table | semantic-fidelity | Holtz applied the same band-aid fix (update stale number) for the third time (BH-002, BH-018, BH-019) without recognizing the PAT-005 recurrence pattern. Required user escalation to identify root cause. Pattern analysis at Step 11 should have caught this after BH-018 resolved — two instances of the same fix-class in one run triggers sibling search. The auditor skipped pattern analysis between BH-018 and convergence attempt. | RESOLVED |
+| BH-021 | bug/schema | enforcement/transitions.toml:84 | contract | iteration_boundary gate SQL uses rowid (SQLite concept) instead of seq (DataFusion schema). Query fails at runtime blocking all iteration_boundary transitions. Introduced in commit 0da131f. | RESOLVED |
 ## LOW
 
 | ID | Category | Location | Perspective | Description | Status |
 |----|----------|----------|-------------|-------------|--------|
-| BH-007 | test/shallow | tests/test_convergence_check.py:143,157,703 | component | Permissive Validator (AP-12): assert result \!= 'pytest' instead of assert result is None. Would pass with any non-pytest string as return value. | RESOLVED |
-| BH-009 | bug/logic | enforcement/hooks/lens_quiz.py:153-161 | data-flow | verify_answer_freshness uses substring matching on comma-split answer parts. Short parts (1-2 chars) could match spuriously. Theoretical risk — current quiz bank uses multi-word options. | RESOLVED |
-| BH-010 | design/coupling | enforcement/hooks/_common.py:1-29 | contract | Bridge re-exports 7 names from hooks/_common.py via importlib. No test validates the export list stays in sync. Future additions to source module break enforcement hooks silently. | RESOLVED |
+| BH-002 | doc/drift | README.md:190,161 | public-contract | Run count inconsistent: line 161 says twenty-seven, line 190 says 28, actual completed runs is 28 (run 29 in progress). LOC claim 19766 is stale, actual Python LOC ~23626. | RESOLVED |
+| BH-003 | doc/drift | README.md:104 | public-contract | Prediction accuracy claims 65%/38%/0% but living punchlist tracks ~69%/~45%/0%. Stale numbers from earlier research epoch. | RESOLVED |
+| BH-005 | bug/logic | enforcement/hooks/_protocol_cache.py:197 | contract | is_sahjhan_cmd fails for bare platform binary names (sahjhan-aarch64-apple-darwin without path prefix). Third condition checks for /sahjhan- but not sahjhan- at start. Low impact — binary is always invoked with path. | RESOLVED |
+| BH-006 | test/fragile | tests/test_sahjhan_integration.py:516 | component | Choose Your Own Adventure anti-pattern: or-disjunction lets test pass whether hook warned OR silently allowed a chained command. Should assert specifically for warning behavior. | RESOLVED |
+| BH-007 | test/fragile | tests/test_token_profiler_integration.py:30 | component | Mystery Guest anti-pattern: hardcoded path to specific JSONL on one developer machine. Test skips if file absent but is a dead test in CI and for any other developer. | RESOLVED |
+| BH-015 | bug/logic | enforcement/hooks/protocol_tracker.py:49 | component | _is_sleep_cmd regex only matches bare numeric seconds. sleep 1m (60s) parses as 1.0 < 5 → returns False. Bash sleep supports s/m/h/d suffixes. Gaming via suffixed sleep notation would bypass the double-stall penalty. | RESOLVED |
+| BH-018 | doc/drift | README.md:6,190,214 | public-contract | LOC count claims 19910 in badge, narrative, and inventory but actual Python LOC is ~24418 (~23% stale). BH-002 recurrence. | RESOLVED |
+| BH-019 | design/fragile | README.md:6,190,214 | public-contract | Exact LOC count hardcoded in 3 README locations goes stale every run. BH-002 and BH-018 both 'fixed' by updating the number. Root cause: exact counts in prose that drift on every code change. PAT-005 systemic recurrence. Fix: remove exact LOC from prose, keep test-enforced badge as single source of truth. | RESOLVED |
 

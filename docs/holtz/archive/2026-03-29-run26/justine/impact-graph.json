@@ -1,0 +1,177 @@
+{
+  "nodes": {
+    "enforcement._common": {
+      "id": "enforcement._common",
+      "type": "module",
+      "file": "enforcement/hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.6
+    },
+    "hooks._common": {
+      "id": "hooks._common",
+      "type": "module",
+      "file": "hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.check_sweep": {
+      "id": "enforcement.check_sweep",
+      "type": "module",
+      "file": "enforcement/scripts/check_sweep_evidence.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.check_severity": {
+      "id": "enforcement.check_severity",
+      "type": "module",
+      "file": "enforcement/scripts/check_severity_change.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.4
+    },
+    "enforcement.lens_quiz": {
+      "id": "enforcement.lens_quiz",
+      "type": "module",
+      "file": "enforcement/hooks/lens_quiz.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.commit_gate": {
+      "id": "enforcement.commit_gate",
+      "type": "module",
+      "file": "enforcement/hooks/commit_gate.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.protocol_tracker": {
+      "id": "enforcement.protocol_tracker",
+      "type": "module",
+      "file": "enforcement/hooks/protocol_tracker.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.3
+    },
+    "README": {
+      "id": "README",
+      "type": "doc",
+      "file": "README.md",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.5
+    },
+    "enforcement.primer": {
+      "id": "enforcement.primer",
+      "type": "module",
+      "file": "enforcement/hooks/primer.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement._protocol_cache": {
+      "id": "enforcement._protocol_cache",
+      "type": "module",
+      "file": "enforcement/hooks/_protocol_cache.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.bootstrap": {
+      "id": "enforcement.bootstrap",
+      "type": "module",
+      "file": "enforcement/hooks/_sahjhan_bootstrap.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    }
+  },
+  "edges": [
+    {
+      "source": "enforcement._common",
+      "target": "hooks._common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement.lens_quiz",
+      "target": "enforcement._common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement.primer",
+      "target": "enforcement._common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement.primer",
+      "target": "enforcement._protocol_cache",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement.commit_gate",
+      "target": "enforcement._protocol_cache",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "README",
+      "target": "enforcement._common",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement._common",
+      "target": "enforcement.lens_quiz",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement.check_severity",
+      "target": "enforcement._common",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    }
+  ]
+}

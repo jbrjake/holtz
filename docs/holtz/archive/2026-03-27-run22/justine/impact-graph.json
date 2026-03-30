@@ -131,8 +131,8 @@
       "type": "module",
       "file": "README.md",
       "line": 1,
-      "last_audited": "2026-03-22",
-      "audit_count": 2,
+      "last_audited": "2026-03-25",
+      "audit_count": 3,
       "risk_score": 0.0
     },
     "skills/holtz/references": {
@@ -405,156 +405,291 @@
       "audit_count": 1,
       "risk_score": 0.2
     },
-    "enforcement._protocol_cache": {
-      "id": "enforcement._protocol_cache",
+    "README": {
+      "id": "README",
       "type": "module",
-      "file": "enforcement/hooks/_protocol_cache.py",
+      "file": "README.md",
       "line": 1,
-      "last_audited": "2026-03-28",
+      "last_audited": "2026-03-25",
+      "audit_count": 2,
+      "risk_score": 0.0
+    },
+    "patterns_dir": {
+      "id": "patterns_dir",
+      "type": "module",
+      "file": "skills/holtz/patterns/",
+      "line": 1,
+      "last_audited": "2026-03-25",
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "enforcement.lens_quiz": {
-      "id": "enforcement.lens_quiz",
+    "anti_patterns": {
+      "id": "anti_patterns",
       "type": "module",
-      "file": "enforcement/hooks/lens_quiz.py",
+      "file": "skills/holtz/references/anti-patterns.md",
       "line": 1,
-      "last_audited": "2026-03-28",
+      "last_audited": "2026-03-25",
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "enforcement.protocol_tracker": {
-      "id": "enforcement.protocol_tracker",
+    "lens_registry": {
+      "id": "lens_registry",
       "type": "module",
-      "file": "enforcement/hooks/protocol_tracker.py",
+      "file": "skills/holtz/references/lens-registry.md",
       "line": 1,
-      "last_audited": "2026-03-28",
+      "last_audited": "2026-03-25",
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "enforcement.lens_evidence": {
-      "id": "enforcement.lens_evidence",
-      "type": "module",
-      "file": "enforcement/hooks/lens_evidence.py",
-      "line": 1,
-      "last_audited": "2026-03-28",
+    "token_profiler::cli::list_sessions": {
+      "id": "token_profiler::cli::list_sessions",
+      "type": "function",
+      "file": "scripts/token_profiler/cli.py",
+      "line": 200,
+      "last_audited": "2026-03-25",
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "enforcement._resolve": {
-      "id": "enforcement._resolve",
-      "type": "module",
-      "file": "enforcement/hooks/_resolve.py",
-      "line": 1,
-      "last_audited": "2026-03-28",
+    "token_profiler::cli::main": {
+      "id": "token_profiler::cli::main",
+      "type": "function",
+      "file": "scripts/token_profiler/cli.py",
+      "line": 350,
+      "last_audited": "2026-03-25",
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "enforcement._sahjhan_bootstrap": {
-      "id": "enforcement._sahjhan_bootstrap",
-      "type": "module",
-      "file": "enforcement/hooks/_sahjhan_bootstrap.py",
-      "line": 1,
-      "last_audited": "2026-03-28",
+    "token_profiler::plugin_protocol::ProfilerPlugin": {
+      "id": "token_profiler::plugin_protocol::ProfilerPlugin",
+      "type": "class",
+      "file": "scripts/token_profiler/plugin_protocol.py",
+      "line": 10,
+      "last_audited": "2026-03-25",
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "enforcement.commit_gate": {
-      "id": "enforcement.commit_gate",
-      "type": "module",
-      "file": "enforcement/hooks/commit_gate.py",
-      "line": 1,
-      "last_audited": "2026-03-28",
+    "token_profiler::cli::_is_plugin_class": {
+      "id": "token_profiler::cli::_is_plugin_class",
+      "type": "function",
+      "file": "scripts/token_profiler/cli.py",
+      "line": 141,
+      "last_audited": "2026-03-25",
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "enforcement.bash_guard": {
-      "id": "enforcement.bash_guard",
+    "token_profiler::report::generate_markdown": {
+      "id": "token_profiler::report::generate_markdown",
+      "type": "function",
+      "file": "scripts/token_profiler/report.py",
+      "line": 50,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_token_profiler_report": {
+      "id": "test_token_profiler_report",
+      "type": "test",
+      "file": "tests/test_token_profiler_report.py",
+      "line": 1,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_token_profiler_integration": {
+      "id": "test_token_profiler_integration",
+      "type": "test",
+      "file": "tests/test_token_profiler_integration.py",
+      "line": 1,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::__init__": {
+      "id": "token_profiler::__init__",
+      "type": "module",
+      "file": "scripts/token_profiler/__init__.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::__main__": {
+      "id": "token_profiler::__main__",
+      "type": "module",
+      "file": "scripts/token_profiler/__main__.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::models": {
+      "id": "token_profiler::models",
+      "type": "module",
+      "file": "scripts/token_profiler/models.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::plugin_protocol": {
+      "id": "token_profiler::plugin_protocol",
+      "type": "module",
+      "file": "scripts/token_profiler/plugin_protocol.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::pricing": {
+      "id": "token_profiler::pricing",
+      "type": "module",
+      "file": "scripts/token_profiler/pricing.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::report": {
+      "id": "token_profiler::report",
+      "type": "module",
+      "file": "scripts/token_profiler/report.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::viewer": {
+      "id": "token_profiler::viewer",
+      "type": "module",
+      "file": "scripts/token_profiler/viewer.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::cli": {
+      "id": "token_profiler::cli",
+      "type": "module",
+      "file": "scripts/token_profiler/cli.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::extract": {
+      "id": "token_profiler::extract",
+      "type": "module",
+      "file": "scripts/token_profiler/extract.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::analyze": {
+      "id": "token_profiler::analyze",
+      "type": "module",
+      "file": "scripts/token_profiler/analyze.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks::_common": {
+      "id": "hooks::_common",
+      "type": "module",
+      "file": "hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "scripts::convergence_check": {
+      "id": "scripts::convergence_check",
+      "type": "module",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "scripts::validate_punchlist": {
+      "id": "scripts::validate_punchlist",
+      "type": "module",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement/hooks/_common": {
+      "id": "enforcement/hooks/_common",
+      "type": "module",
+      "file": "enforcement/hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-26",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement/hooks/bash_guard": {
+      "id": "enforcement/hooks/bash_guard",
       "type": "module",
       "file": "enforcement/hooks/bash_guard.py",
-      "line": 1,
-      "last_audited": "2026-03-28",
+      "line": null,
+      "last_audited": "2026-03-26",
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "enforcement.stop_gate": {
-      "id": "enforcement.stop_gate",
-      "type": "module",
-      "file": "enforcement/hooks/stop_gate.py",
-      "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "enforcement.write_guard": {
-      "id": "enforcement.write_guard",
+    "enforcement/hooks/write_guard": {
+      "id": "enforcement/hooks/write_guard",
       "type": "module",
       "file": "enforcement/hooks/write_guard.py",
-      "line": 1,
-      "last_audited": "2026-03-28",
+      "line": null,
+      "last_audited": "2026-03-26",
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "enforcement.primer": {
-      "id": "enforcement.primer",
+    "enforcement/hooks/stop_gate": {
+      "id": "enforcement/hooks/stop_gate",
       "type": "module",
-      "file": "enforcement/hooks/primer.py",
-      "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "enforcement.verify_hooks": {
-      "id": "enforcement.verify_hooks",
-      "type": "module",
-      "file": "enforcement/hooks/verify_hooks.py",
-      "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "stop_gate": {
-      "id": "stop_gate",
-      "type": "function",
       "file": "enforcement/hooks/stop_gate.py",
       "line": null,
-      "last_audited": "2026-03-30",
+      "last_audited": "2026-03-26",
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "validate_merge_report": {
-      "id": "validate_merge_report",
-      "type": "function",
-      "file": "enforcement/scripts/validate_merge_report.py",
-      "line": null,
-      "last_audited": "2026-03-30",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "get_pricing": {
-      "id": "get_pricing",
-      "type": "function",
-      "file": "scripts/token_profiler/pricing.py",
-      "line": null,
-      "last_audited": "2026-03-30",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "_custom_pricing": {
-      "id": "_custom_pricing",
-      "type": "function",
-      "file": "scripts/token_profiler/pricing.py",
-      "line": null,
-      "last_audited": "2026-03-30",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "states_toml": {
-      "id": "states_toml",
+    "enforcement/hooks/primer": {
+      "id": "enforcement/hooks/primer",
       "type": "module",
-      "file": "enforcement/states.toml",
+      "file": "enforcement/hooks/primer.py",
       "line": null,
-      "last_audited": "2026-03-30",
+      "last_audited": "2026-03-26",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement/hooks/_resolve": {
+      "id": "enforcement/hooks/_resolve",
+      "type": "module",
+      "file": "enforcement/hooks/_resolve.py",
+      "line": null,
+      "last_audited": "2026-03-26",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement/hooks/_sahjhan_bootstrap": {
+      "id": "enforcement/hooks/_sahjhan_bootstrap",
+      "type": "module",
+      "file": "enforcement/hooks/_sahjhan_bootstrap.py",
+      "line": null,
+      "last_audited": "2026-03-26",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "scripts/migrate_legacy": {
+      "id": "scripts/migrate_legacy",
+      "type": "module",
+      "file": "scripts/migrate_legacy.py",
+      "line": null,
+      "last_audited": "2026-03-26",
       "audit_count": 1,
       "risk_score": 0.0
     }
@@ -623,16 +758,6 @@
         "discovered": "2026-03-22",
         "confidence": "medium",
         "note": "README component counts must match actual file counts"
-      }
-    },
-    {
-      "source": "impact_graph::ImpactGraph",
-      "target": "convergence_check::check_convergence",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium",
-        "note": "update_risk delta must be finite; risk_score must be valid float for sorting"
       }
     },
     {
@@ -881,16 +1006,6 @@
     },
     {
       "source": "README.md",
-      "target": "convergence_check::check_convergence",
-      "type": "diverges_from",
-      "metadata": {
-        "discovered": "2026-03-24",
-        "confidence": "medium",
-        "note": "README claims 100%/100%/0% prediction accuracy; actual data averages ~72%/~38%/0%"
-      }
-    },
-    {
-      "source": "README.md",
       "target": "SKILL.md",
       "type": "diverges_from",
       "metadata": {
@@ -928,183 +1043,180 @@
       }
     },
     {
-      "source": "enforcement.protocol_tracker",
-      "target": "enforcement._protocol_cache",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-28",
-        "confidence": "medium",
-        "note": "imports cache operations"
-      }
-    },
-    {
-      "source": "enforcement.protocol_tracker",
-      "target": "enforcement._resolve",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-28",
-        "confidence": "medium",
-        "note": "imports sahjhan_binary"
-      }
-    },
-    {
-      "source": "enforcement.lens_quiz",
-      "target": "enforcement._resolve",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-28",
-        "confidence": "medium",
-        "note": "imports sahjhan_binary"
-      }
-    },
-    {
-      "source": "enforcement.lens_quiz",
-      "target": "enforcement.lens_evidence",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-28",
-        "confidence": "medium",
-        "note": "imports check_transcript, check_artifact, parse_transcript_jsonl"
-      }
-    },
-    {
-      "source": "enforcement.commit_gate",
-      "target": "enforcement._protocol_cache",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-28",
-        "confidence": "medium",
-        "note": "imports cache and is_git_commit"
-      }
-    },
-    {
-      "source": "enforcement._sahjhan_bootstrap",
-      "target": "enforcement._resolve",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-28",
-        "confidence": "medium",
-        "note": "imports sahjhan_binary"
-      }
-    },
-    {
-      "source": "enforcement.primer",
-      "target": "enforcement._protocol_cache",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-28",
-        "confidence": "medium",
-        "note": "imports cache state formatting"
-      }
-    },
-    {
-      "source": "enforcement.lens_quiz",
-      "target": "enforcement._protocol_cache",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-28",
-        "confidence": "medium",
-        "note": "quiz scoring re-selects questions that must match originally posed order; currently safe with <=5 questions per lens"
-      }
-    },
-    {
-      "source": "enforcement.verify_hooks",
-      "target": "hooks/_common",
+      "source": "README",
+      "target": "patterns_dir",
       "type": "diverges_from",
       "metadata": {
-        "discovered": "2026-03-28",
+        "discovered": "2026-03-25",
         "confidence": "medium",
-        "note": "verify_hooks checks settings.local.json but hooks.json is the plugin hooks file \u2014 different sources"
+        "note": "README says 14 seed patterns, actually 16 (BH-001)"
       }
     },
     {
-      "source": "enforcement.lens_quiz",
-      "target": "enforcement.lens_quiz",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-28",
-        "confidence": "medium",
-        "note": "Phase 3 scoring re-selects questions instead of retrieving posed set; safe only when <=5 per lens"
-      }
-    },
-    {
-      "source": "enforcement.stop_gate",
-      "target": "enforcement._protocol_cache",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-29",
-        "confidence": "medium",
-        "note": "stop_gate assumes parse_status_text returns terminal state from isolated cwd"
-      }
-    },
-    {
-      "source": "enforcement._sahjhan_bootstrap",
-      "target": "README.md",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-29",
-        "confidence": "medium",
-        "note": "bootstrap uses realpath on bin/sahjhan \u2014 assumes symlink is relative"
-      }
-    },
-    {
-      "source": "enforcement.primer",
-      "target": "enforcement._protocol_cache",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-29",
-        "confidence": "medium",
-        "note": "primer records context_reset without exclusive writer lock"
-      }
-    },
-    {
-      "source": "README.md",
-      "target": "convergence_check::get_test_counts",
+      "source": "README",
+      "target": "lens_registry",
       "type": "diverges_from",
       "metadata": {
-        "discovered": "2026-03-30",
+        "discovered": "2026-03-25",
         "confidence": "medium",
-        "note": "README badge says 869 tests but actual is 874"
+        "note": "README says 9 lenses in 2 places, actually 13 (BH-002)"
       }
     },
     {
-      "source": "mask_fenced_blocks",
-      "target": "_common.py",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-30",
-        "confidence": "medium",
-        "note": "mask_fenced_blocks keeps opener lines; callers assume no regex-matchable content survives masking"
-      }
-    },
-    {
-      "source": "stop_gate",
-      "target": "states_toml",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-30",
-        "confidence": "medium",
-        "note": "hard-coded allow-list must match state machine states"
-      }
-    },
-    {
-      "source": "validate_merge_report",
-      "target": "states_toml",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-30",
-        "confidence": "medium",
-        "note": "validator checks headers only, not content"
-      }
-    },
-    {
-      "source": "get_pricing",
-      "target": "_custom_pricing",
+      "source": "README",
+      "target": "anti_patterns",
       "type": "diverges_from",
       "metadata": {
-        "discovered": "2026-03-30",
+        "discovered": "2026-03-25",
         "confidence": "medium",
-        "note": "duplicate longest-prefix matching logic"
+        "note": "README says 12 anti-patterns, actually 17 (BH-003)"
+      }
+    },
+    {
+      "source": "test_token_profiler_report",
+      "target": "token_profiler::report::generate_markdown",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "BH-003: structure-only assertions"
+      }
+    },
+    {
+      "source": "token_profiler::cli::list_sessions",
+      "target": "token_profiler::cli::main",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "BH-010: list_sessions lacks json.loads error handling"
+      }
+    },
+    {
+      "source": "token_profiler::plugin_protocol::ProfilerPlugin",
+      "target": "token_profiler::cli::_is_plugin_class",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "BH-015: Protocol unused, manual hasattr duplicate"
+      }
+    },
+    {
+      "source": "token_profiler::cli",
+      "target": "token_profiler::analyze",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::cli",
+      "target": "token_profiler::extract",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::cli",
+      "target": "token_profiler::report",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::cli",
+      "target": "token_profiler::plugin_protocol",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::analyze",
+      "target": "token_profiler::models",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::pricing",
+      "target": "token_profiler::models",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::report",
+      "target": "token_profiler::models",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::viewer",
+      "target": "token_profiler::models",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement/hooks/bash_guard",
+      "target": "enforcement/hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-26",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement/hooks/write_guard",
+      "target": "enforcement/hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-26",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement/hooks/stop_gate",
+      "target": "enforcement/hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-26",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement/hooks/primer",
+      "target": "enforcement/hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-26",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement/hooks/_sahjhan_bootstrap",
+      "target": "enforcement/hooks/_resolve",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-26",
+        "confidence": "medium"
       }
     }
   ]

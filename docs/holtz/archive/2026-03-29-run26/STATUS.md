@@ -2,10 +2,10 @@
 # Holtz Status
 
 **Project:** holtz v1.0.0
-**State:** Fix Loop (Step 10)
-**Ledger:** 195 events
-**Violations:** 1
-**Run:** ?
+**State:** Finalized
+**Ledger:** 230 events
+**Violations:** 51
+**Run:** 26
 **Auditor:** holtz
 
 ## State Transitions
@@ -14,21 +14,24 @@
 - [x] audit → **merge_ready** (audit_complete)
 - [x] merge_ready → **merge_done** (merge_complete)
 - [x] merge_done → **fix_loop** (fix_loop_start)
-- [x] fix_loop → **pattern_analysis** (pattern_check)
-- [x] pattern_analysis → **fix_loop** (pattern_done)
+- [x] fix_loop → **awaiting_clear** (iteration_boundary)
+- [x] awaiting_clear → **fix_loop** (resume)
+- [x] fix_loop → **awaiting_clear** (iteration_boundary)
+- [x] awaiting_clear → **fix_loop** (resume)
+- [x] fix_loop → **fix_loop** (fix_commit)
+- [x] fix_loop → **fix_loop** (fix_commit)
+- [x] fix_loop → **fix_loop** (fix_commit)
+- [x] fix_loop → **fix_loop** (fix_commit)
 - [x] fix_loop → **fix_loop** (fix_commit)
 - [x] fix_loop → **fix_loop** (fix_commit)
 - [x] fix_loop → **awaiting_clear** (iteration_boundary)
 - [x] awaiting_clear → **fix_loop** (resume)
-- [x] fix_loop → **fix_loop** (fix_commit)
-- [x] fix_loop → **awaiting_clear** (iteration_boundary)
-- [x] awaiting_clear → **fix_loop** (resume)
-- [x] fix_loop → **fix_loop** (fix_commit)
-- [x] fix_loop → **awaiting_clear** (iteration_boundary)
-- [x] awaiting_clear → **fix_loop** (resume)
-- [x] fix_loop → **fix_loop** (fix_commit)
-- [x] fix_loop → **pattern_analysis** (pattern_check)
-- [x] pattern_analysis → **fix_loop** (pattern_done)
+- [x] fix_loop → **perspective_clean** (set complete perspective)
+- [x] perspective_clean → **all_perspectives_clean** (all_perspectives)
+- [x] all_perspectives_clean → **final_sweep** (final_sweep_start)
+- [x] final_sweep → **final_sweep_clean** (converge)
+- [x] final_sweep_clean → **converged** (confirm_convergence)
+- [x] converged → **finalized** (finalize)
 
 
 ## Perspectives (13/13)
@@ -48,4 +51,4 @@
 
 
 ## Findings
-**Open:** -7 | **Resolved:** 21 | **Total:** 14
+**Open:** 0 | **Resolved:** 23 | **Total:** 23

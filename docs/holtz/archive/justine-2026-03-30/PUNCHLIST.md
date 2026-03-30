@@ -1,0 +1,222 @@
+# Justine Punchlist
+> Generated: 2026-03-30 | Project: holtz v0.72.19 | Baseline: 873 pass, 0 fail, 1 skip
+
+## Summary
+| Severity | Open | Resolved | Deferred |
+|----------|------|----------|----------|
+| HIGH     | 3    | 0        | 0        |
+| MEDIUM   | 4    | 0        | 0        |
+| LOW      | 1    | 0        | 0        |
+
+## Patterns
+
+## Items
+
+### BJ-001: README badge test count stale (869 displayed vs 874 actual)
+**Severity:** HIGH
+**Category:** doc/drift
+**Location:** `README.md:6`
+**Status:** OPEN
+**Lens:** public-contract
+**Predicted:** Prediction 1 (confidence: HIGH)
+
+**Problem:** The README badge image URL shows "869_total" but the actual test count is 874 (873 passed + 1 skipped). The markdown alt text says "874 tests" which is correct, but the shields.io badge URL renders "869 total" to users viewing the README. This is the visible value. PAT-005 recurrence -- this class has appeared in every 1-3 runs since Run 4.
+
+**Evidence:** Line 6: `![874 tests](https://img.shields.io/badge/tests-869_total-brightgreen.svg)` -- alt text "874 tests" vs URL "869_total". `python -m pytest` reports `873 passed, 1 skipped` = 874 total.
+
+**Discovery Chain:** Read README.md line 6 -> badge URL contains "869_total" -> pytest reports 874 total -> badge is stale by 5 tests
+
+**Acceptance Criteria:**
+- [ ] Badge URL matches actual test count (874 total or whatever current count is)
+- [ ] Alt text matches badge URL
+- [ ] test_readme_metrics_match_actual passes with the corrected badge
+
+**Validation Command:**
+```bash
+grep -o 'tests-[0-9_]*total' README.md
+python -m pytest --tb=short -q 2>&1 | tail -1
+```
+
+### BJ-002: stop_gate hard-coded allow-list missing converged and other safe states
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `enforcement/hooks/stop_gate.py:65`
+**Status:** OPEN
+**Determinism:** deterministic
+**Lens:** integration
+**Predicted:** Prediction 2 (confidence: HIGH)
+
+**Problem:** The stop_gate allows exit from terminal states + (awaiting_clear, idle, recon). The state machine defines 14 states. States like `converged`, `merge_ready`, `merge_done`, `perspective_clean`, `all_perspectives_clean`, and `final_sweep_clean` are all "between steps" states with no active work at risk, but the stop_gate blocks exit from them. Critically, `converged` blocks exit -- an operator who has converged but hasn't finalized (finalize requires baseline_updated + living_punchlist_updated + pattern_contribution_complete events) cannot stop without completing three more steps. The hard-coded allow-list was built incrementally (two fix commits adding states one at a time) rather than derived from a principled rule about the state machine.
+
+**Evidence:** stop_gate.py:65: `if is_terminal or current_state in ("awaiting_clear", "idle", "recon"):` -- states.toml defines 14 states, only 4 are in the allow-list (finalized + 3). The `converged` state is reachable via confirm_convergence but is not terminal and not in the allow-list.
+
+**Discovery Chain:** Read stop_gate.py allow-list -> cross-referenced with states.toml (14 states) -> identified 10 non-terminal states not in allow-list -> several are safe-to-exit states with no active work
+
+**Acceptance Criteria:**
+- [ ] stop_gate allows exit from `converged` state (at minimum)
+- [ ] Decision about other between-steps states is explicit (allow or block with documented rationale)
+- [ ] Test covers the converged state specifically
+
+**Validation Command:**
+```bash
+python -m pytest tests/test_sahjhan_integration.py -k "stop_gate" -v --tb=short
+```
+
+### BJ-003: README badge not covered by test_readme_metrics_match_actual
+**Severity:** HIGH
+**Category:** test/missing
+**Location:** `tests/test_integration.py:237`
+**Status:** OPEN
+**Lens:** contract
+
+**Problem:** `test_readme_metrics_match_actual` checks the "What's inside" prose counts in the README body but does NOT check the shields.io badge URLs at the top of the file. The badge is the most visible metric element -- the first thing a user sees -- and it's the one that drifts most often (PAT-005). The test is supposed to prevent README drift but has a blind spot for the most prominent metric display.
+
+**Evidence:** Test regex at line 252 matches "N skills, N agents, N reference docs, N examples, N Python scripts, N seed patterns, N enforcement hooks, N tests across N lines" -- this is the "What's inside" line. The badge at line 6 (`tests-869_total`) is not parsed or checked by any test.
+
+**Discovery Chain:** BJ-001 confirmed badge stale -> ran test_readme_metrics_match_actual -> test passes despite stale badge -> test doesn't check badge URLs -> test gap
+
+**Acceptance Criteria:**
+- [ ] A test verifies the badge URL test count matches `pytest --collect-only` output
+- [ ] A test verifies the badge URL coverage percentage matches actual coverage
+- [ ] Badge drift is caught automatically in CI
+
+**Validation Command:**
+```bash
+python -m pytest tests/test_integration.py -k "readme" -v --tb=short
+```
+
+### BJ-004: _get_session_key_path bare except Exception swallows programming bugs
+**Severity:** MEDIUM
+**Category:** bug/error-handling
+**Location:** `enforcement/hooks/_common.py:62`
+**Status:** OPEN
+**Determinism:** theoretical
+**Lens:** error-propagation
+
+**Problem:** `_get_session_key_path` uses `except Exception: pass` which swallows all exceptions including programming bugs (AttributeError, TypeError, NameError). If the code in lines 48-61 has a bug, it will be silently swallowed and the function falls back to the default path. The actual error surfaces later as a misleading FileNotFoundError when `compute_event_proof` tries to open the nonexistent default key file. This is the "error destruction" anti-pattern -- the original error is destroyed and replaced with a downstream symptom.
+
+**Evidence:** Line 62: `except Exception: pass` -- this catches AttributeError, TypeError, NameError, etc. The function is used by `compute_event_proof` and `record_authed_event` which are security-critical HMAC operations.
+
+**Discovery Chain:** Read enforcement/_common.py -> found bare except Exception -> traced downstream to compute_event_proof -> error would surface as misleading FileNotFoundError instead of the actual bug
+
+**Acceptance Criteria:**
+- [ ] Exception handler narrowed to (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, ImportError) or equivalent specific exceptions
+- [ ] Programming bugs (AttributeError, TypeError, etc.) propagate instead of being swallowed
+
+**Validation Command:**
+```bash
+python -m pytest tests/test_hmac_helpers.py -v --tb=short
+```
+
+### BJ-005: _sahjhan_bootstrap.py duplicates platform triple logic from _resolve.py
+**Severity:** MEDIUM
+**Category:** design/duplication
+**Location:** `enforcement/hooks/_sahjhan_bootstrap.py:66-76`
+**Status:** OPEN
+**Lens:** contract
+
+**Problem:** `_sahjhan_bootstrap.py._platform_triple()` duplicates the platform triple logic from `_resolve.py.sahjhan_binary()`. Both independently map platform.machine() and platform.system() to a Rust target triple. If one is updated (e.g., to add Windows support), the other must be updated in lockstep or they diverge -- producing a situation where the bootstrap hook protects a different binary path than the one `_resolve.py` returns.
+
+**Evidence:** `_resolve.py:14-21` and `_sahjhan_bootstrap.py:66-76` contain identical platform detection logic. `_sahjhan_bootstrap.py` does not import from `_resolve.py`.
+
+**Discovery Chain:** Read _resolve.py -> read _sahjhan_bootstrap.py -> found identical platform triple logic -> checked if _sahjhan_bootstrap imports _resolve -> it doesn't -> two independent copies of the same algorithm
+
+**Acceptance Criteria:**
+- [ ] Single source of truth for platform triple computation (either import from _resolve or share a helper)
+- [ ] OR explicit test that both implementations agree (equivalence test)
+
+**Validation Command:**
+```bash
+python -c "
+import sys; sys.path.insert(0, 'enforcement/hooks')
+from _resolve import sahjhan_binary
+from _sahjhan_bootstrap import _platform_triple
+binary = sahjhan_binary()
+triple = _platform_triple()
+assert triple in binary, f'{triple} not in {binary}'
+print('OK: platform triple agrees')
+"
+```
+
+### BJ-006: pricing.py duplicates longest-prefix matching logic
+**Severity:** MEDIUM
+**Category:** design/duplication
+**Location:** `scripts/token_profiler/pricing.py:51-80,115-136`
+**Status:** OPEN
+**Lens:** contract
+**Predicted:** Prediction 5 (confidence: MEDIUM)
+
+**Problem:** `get_pricing()` (lines 51-80) and `_custom_pricing()` (lines 115-136) independently implement longest-prefix model name matching. Same algorithm, two copies. If one is updated without the other, they diverge on which pricing table entry matches a given model name.
+
+**Evidence:** Both functions contain: iterate PRICING keys skipping "unknown", check model.startswith(key), track best_len, return best match. The `_custom_pricing` closure captures a `merged` table but uses the same algorithm.
+
+**Discovery Chain:** Read pricing.py -> found two functions with same matching logic -> checked if _custom_pricing delegates to get_pricing -> it doesn't -> two independent copies
+
+**Acceptance Criteria:**
+- [ ] Single lookup function used by both code paths (extract the prefix-matching into a shared helper)
+- [ ] OR equivalence test that both paths produce same results for all known model names
+
+**Validation Command:**
+```bash
+python -m pytest tests/test_token_profiler_cli.py -v --tb=short
+```
+
+### BJ-007: is_git_commit false negative for env-prefix commands
+**Severity:** LOW
+**Category:** bug/logic
+**Location:** `enforcement/hooks/_protocol_cache.py:159-178`
+**Status:** OPEN
+**Determinism:** deterministic
+**Lens:** security
+
+**Problem:** `is_git_commit()` splits on `[;&|]+` and checks each segment for `git commit` at the start. But `VAR=x git commit -m test` is a valid bash commit command (sets VAR in the environment for the git process). The regex `re.match(r"git\s+commit\b", seg)` requires "git" as the first token, so `VAR=x git commit` returns False. The commit tracker would miss this commit, leaving it unregistered in the enforcement cache.
+
+**Evidence:** `is_git_commit('VAR=x git commit -m test')` returns False. This is a valid bash command that performs a git commit.
+
+**Discovery Chain:** Read is_git_commit regex -> identified start-of-segment anchor -> tested env-prefix command -> confirmed false negative
+
+**Acceptance Criteria:**
+- [ ] `is_git_commit('VAR=x git commit -m test')` returns True
+- [ ] OR documented as a known limitation with rationale for not fixing
+
+**Validation Command:**
+```bash
+python -c "
+import sys; sys.path.insert(0, 'enforcement/hooks')
+from _protocol_cache import is_git_commit
+print(is_git_commit('VAR=x git commit -m test'))
+"
+```
+
+### BJ-008: validate_merge_report.py is a Permissive Validator (checks headers, not content)
+**Severity:** MEDIUM
+**Category:** test/bogus
+**Location:** `enforcement/scripts/validate_merge_report.py:20-35`
+**Status:** OPEN
+**Lens:** contract
+
+**Problem:** `validate_merge_report.py` checks only that section headers exist (Agreement, Holtz-Only, Justine-Only, Blind Spot Analysis) via regex. It does not verify that sections contain any content. A merge report with four empty headers passes validation, gates the `merge_complete` transition, and allows the protocol to proceed to the fix loop with zero merge data. This is anti-pattern #12 (Permissive Validator) -- overly broad validation accepting wrong answers.
+
+**Evidence:** `validate('file_with_only_headers.md')` returns `[]` (no missing sections) for a file containing just `## Agreement\n## Holtz-Only\n## Justine-Only\n## Blind Spot Analysis\n`.
+
+**Discovery Chain:** Read validate_merge_report.py -> saw regex checks headers only -> tested headers-only input -> passes validation -> validator accepts structurally correct but semantically empty report
+
+**Acceptance Criteria:**
+- [ ] Validator checks that at least one section has non-whitespace content below its header
+- [ ] Test covers the headers-only case and expects it to fail
+- [ ] OR validator checks for specific content patterns (e.g., table rows, finding IDs)
+
+**Validation Command:**
+```bash
+python -c "
+import sys; sys.path.insert(0, 'enforcement/scripts')
+from validate_merge_report import validate
+import tempfile, os
+with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+    f.write('## Agreement\n## Holtz-Only\n## Justine-Only\n## Blind Spot Analysis\n')
+    path = f.name
+missing = validate(path)
+os.unlink(path)
+assert len(missing) > 0, 'Headers-only report should not pass validation'
+"
+```

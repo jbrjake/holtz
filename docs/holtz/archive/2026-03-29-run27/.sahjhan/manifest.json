@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "managed_paths": [
+    "docs/holtz",
+    "enforcement/"
+  ],
+  "entries": {
+    "docs/holtz/patterns-brief.md": {
+      "sha256": "53cf538aee6ce5bbc1967969fe8d641054085c43b1be952bb6e8e1a32408a55b",
+      "last_operation": "render",
+      "last_updated": "2026-03-30T00:10:58Z",
+      "ledger_seq": 105
+    },
+    "docs/holtz/LIVING-PUNCHLIST.md": {
+      "sha256": "daee8904c260c9d303df1798068444f7edaf7402be2e2210a3c8fde94953450b",
+      "last_operation": "render",
+      "last_updated": "2026-03-30T00:10:58Z",
+      "ledger_seq": 105
+    },
+    "docs/holtz/.sahjhan/ledger.jsonl": {
+      "sha256": "5780ede8029f9d647a25239daba68da9aa95ae03d89ccc6c4773fb58ce6a8861",
+      "last_operation": "ledger_append",
+      "last_updated": "2026-03-30T01:06:24Z",
+      "ledger_seq": 106
+    },
+    "docs/holtz/architecture-baseline.md": {
+      "sha256": "97b6635b629cae3b18ebf3abc0134d1db623d798db01c19c9d1cd13f29734bce",
+      "last_operation": "render",
+      "last_updated": "2026-03-30T00:10:58Z",
+      "ledger_seq": 105
+    },
+    "docs/holtz/STATUS.md": {
+      "sha256": "1582e53b55d7c1e15b1f0813d48454bee1d7a3e409c2f4678bd5573791c9a33b",
+      "last_operation": "render",
+      "last_updated": "2026-03-30T01:06:24Z",
+      "ledger_seq": 106
+    },
+    "docs/holtz/SUMMARY.md": {
+      "sha256": "32c1ba9c5aa504c61f5188869af4d8e673a5eaa7b3105f93e4b18989fe660eca",
+      "last_operation": "render",
+      "last_updated": "2026-03-30T00:10:58Z",
+      "ledger_seq": 105
+    },
+    "docs/holtz/PUNCHLIST.md": {
+      "sha256": "8aebe0b2b35e47445e3683d9a8b5aac101d108a194c00e3f750f6eb6d1a738e6",
+      "last_operation": "render",
+      "last_updated": "2026-03-30T00:10:58Z",
+      "ledger_seq": 105
+    }
+  },
+  "manifest_hash": "8855bed2e203c1af313a3f2b93c9e8f0c38319e517769ef06bf7a7f12629b7e4"
+}

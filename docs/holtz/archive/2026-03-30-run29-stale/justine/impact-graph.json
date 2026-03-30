@@ -50,9 +50,9 @@
       "type": "module",
       "file": "hooks/subagent_findings_check.py",
       "line": 1,
-      "last_audited": "2026-03-22",
-      "audit_count": 2,
-      "risk_score": 0.0
+      "last_audited": "2026-03-29",
+      "audit_count": 3,
+      "risk_score": 0.1
     },
     "validate_punchlist::parse_punchlist": {
       "id": "validate_punchlist::parse_punchlist",
@@ -131,9 +131,9 @@
       "type": "module",
       "file": "README.md",
       "line": 1,
-      "last_audited": "2026-03-22",
-      "audit_count": 2,
-      "risk_score": 0.0
+      "last_audited": "2026-03-29",
+      "audit_count": 3,
+      "risk_score": 0.2
     },
     "skills/holtz/references": {
       "id": "skills/holtz/references",
@@ -410,26 +410,26 @@
       "type": "module",
       "file": "enforcement/hooks/_protocol_cache.py",
       "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
-      "risk_score": 0.0
+      "last_audited": "2026-03-29",
+      "audit_count": 2,
+      "risk_score": 0.1
     },
     "enforcement.lens_quiz": {
       "id": "enforcement.lens_quiz",
       "type": "module",
       "file": "enforcement/hooks/lens_quiz.py",
       "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
-      "risk_score": 0.0
+      "last_audited": "2026-03-29",
+      "audit_count": 2,
+      "risk_score": 0.05
     },
     "enforcement.protocol_tracker": {
       "id": "enforcement.protocol_tracker",
       "type": "module",
       "file": "enforcement/hooks/protocol_tracker.py",
       "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
+      "last_audited": "2026-03-29",
+      "audit_count": 2,
       "risk_score": 0.0
     },
     "enforcement.lens_evidence": {
@@ -437,8 +437,8 @@
       "type": "module",
       "file": "enforcement/hooks/lens_evidence.py",
       "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
+      "last_audited": "2026-03-29",
+      "audit_count": 2,
       "risk_score": 0.0
     },
     "enforcement._resolve": {
@@ -446,8 +446,8 @@
       "type": "module",
       "file": "enforcement/hooks/_resolve.py",
       "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
+      "last_audited": "2026-03-29",
+      "audit_count": 2,
       "risk_score": 0.0
     },
     "enforcement._sahjhan_bootstrap": {
@@ -455,17 +455,17 @@
       "type": "module",
       "file": "enforcement/hooks/_sahjhan_bootstrap.py",
       "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
-      "risk_score": 0.0
+      "last_audited": "2026-03-29",
+      "audit_count": 3,
+      "risk_score": 0.3
     },
     "enforcement.commit_gate": {
       "id": "enforcement.commit_gate",
       "type": "module",
       "file": "enforcement/hooks/commit_gate.py",
       "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
+      "last_audited": "2026-03-29",
+      "audit_count": 2,
       "risk_score": 0.0
     },
     "enforcement.bash_guard": {
@@ -473,8 +473,8 @@
       "type": "module",
       "file": "enforcement/hooks/bash_guard.py",
       "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
+      "last_audited": "2026-03-29",
+      "audit_count": 3,
       "risk_score": 0.0
     },
     "enforcement.stop_gate": {
@@ -482,8 +482,8 @@
       "type": "module",
       "file": "enforcement/hooks/stop_gate.py",
       "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
+      "last_audited": "2026-03-29",
+      "audit_count": 2,
       "risk_score": 0.0
     },
     "enforcement.write_guard": {
@@ -491,17 +491,17 @@
       "type": "module",
       "file": "enforcement/hooks/write_guard.py",
       "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
-      "risk_score": 0.0
+      "last_audited": "2026-03-29",
+      "audit_count": 3,
+      "risk_score": 0.15
     },
     "enforcement.primer": {
       "id": "enforcement.primer",
       "type": "module",
       "file": "enforcement/hooks/primer.py",
       "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
+      "last_audited": "2026-03-29",
+      "audit_count": 2,
       "risk_score": 0.0
     },
     "enforcement.verify_hooks": {
@@ -509,52 +509,52 @@
       "type": "module",
       "file": "enforcement/hooks/verify_hooks.py",
       "line": 1,
-      "last_audited": "2026-03-28",
-      "audit_count": 1,
+      "last_audited": "2026-03-29",
+      "audit_count": 2,
       "risk_score": 0.0
     },
-    "stop_gate": {
-      "id": "stop_gate",
-      "type": "function",
-      "file": "enforcement/hooks/stop_gate.py",
-      "line": null,
-      "last_audited": "2026-03-30",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "validate_merge_report": {
-      "id": "validate_merge_report",
-      "type": "function",
-      "file": "enforcement/scripts/validate_merge_report.py",
-      "line": null,
-      "last_audited": "2026-03-30",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "get_pricing": {
-      "id": "get_pricing",
-      "type": "function",
-      "file": "scripts/token_profiler/pricing.py",
-      "line": null,
-      "last_audited": "2026-03-30",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "_custom_pricing": {
-      "id": "_custom_pricing",
-      "type": "function",
-      "file": "scripts/token_profiler/pricing.py",
-      "line": null,
-      "last_audited": "2026-03-30",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "states_toml": {
-      "id": "states_toml",
+    "enforcement.scripts.check_sweep_evidence": {
+      "id": "enforcement.scripts.check_sweep_evidence",
       "type": "module",
-      "file": "enforcement/states.toml",
+      "file": "enforcement/scripts/check_sweep_evidence.py",
+      "line": 1,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement._common": {
+      "id": "enforcement._common",
+      "type": "module",
+      "file": "enforcement/hooks/_common.py",
+      "line": 1,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.scripts.check_severity_change": {
+      "id": "enforcement.scripts.check_severity_change",
+      "type": "module",
+      "file": "enforcement/scripts/check_severity_change.py",
+      "line": 1,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement._common_enforcement": {
+      "id": "enforcement._common_enforcement",
+      "type": "module",
+      "file": "enforcement/hooks/_common.py",
       "line": null,
-      "last_audited": "2026-03-30",
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks._common_hooks": {
+      "id": "hooks._common_hooks",
+      "type": "module",
+      "file": "hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-29",
       "audit_count": 1,
       "risk_score": 0.0
     }
@@ -932,7 +932,7 @@
       "target": "enforcement._protocol_cache",
       "type": "imports",
       "metadata": {
-        "discovered": "2026-03-28",
+        "discovered": "2026-03-29",
         "confidence": "medium",
         "note": "imports cache operations"
       }
@@ -952,7 +952,7 @@
       "target": "enforcement._resolve",
       "type": "imports",
       "metadata": {
-        "discovered": "2026-03-28",
+        "discovered": "2026-03-29",
         "confidence": "medium",
         "note": "imports sahjhan_binary"
       }
@@ -962,7 +962,7 @@
       "target": "enforcement.lens_evidence",
       "type": "imports",
       "metadata": {
-        "discovered": "2026-03-28",
+        "discovered": "2026-03-29",
         "confidence": "medium",
         "note": "imports check_transcript, check_artifact, parse_transcript_jsonl"
       }
@@ -972,7 +972,7 @@
       "target": "enforcement._protocol_cache",
       "type": "imports",
       "metadata": {
-        "discovered": "2026-03-28",
+        "discovered": "2026-03-29",
         "confidence": "medium",
         "note": "imports cache and is_git_commit"
       }
@@ -982,7 +982,7 @@
       "target": "enforcement._resolve",
       "type": "imports",
       "metadata": {
-        "discovered": "2026-03-28",
+        "discovered": "2026-03-29",
         "confidence": "medium",
         "note": "imports sahjhan_binary"
       }
@@ -992,7 +992,7 @@
       "target": "enforcement._protocol_cache",
       "type": "imports",
       "metadata": {
-        "discovered": "2026-03-28",
+        "discovered": "2026-03-29",
         "confidence": "medium",
         "note": "imports cache state formatting"
       }
@@ -1058,53 +1058,168 @@
       }
     },
     {
+      "source": "enforcement._common",
+      "target": "hooks._common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "re-exports via importlib bridge"
+      }
+    },
+    {
+      "source": "enforcement.lens_quiz",
+      "target": "enforcement._common",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "calls _active_ledger, record_authed_event"
+      }
+    },
+    {
+      "source": "enforcement.primer",
+      "target": "enforcement._common",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "calls _active_ledger, record_authed_event"
+      }
+    },
+    {
+      "source": "enforcement.protocol_tracker",
+      "target": "enforcement._common",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "calls _active_ledger"
+      }
+    },
+    {
       "source": "README.md",
-      "target": "convergence_check::get_test_counts",
+      "target": "enforcement.scripts.check_sweep_evidence",
       "type": "diverges_from",
       "metadata": {
-        "discovered": "2026-03-30",
+        "discovered": "2026-03-29",
         "confidence": "medium",
-        "note": "README badge says 869 tests but actual is 874"
+        "note": "README claims final sweep evidence check but script counts entire session reads"
       }
     },
     {
-      "source": "mask_fenced_blocks",
-      "target": "_common.py",
+      "source": "enforcement._sahjhan_bootstrap",
+      "target": "enforcement.bash_guard",
       "type": "assumes",
       "metadata": {
-        "discovered": "2026-03-30",
+        "discovered": "2026-03-29",
         "confidence": "medium",
-        "note": "mask_fenced_blocks keeps opener lines; callers assume no regex-matchable content survives masking"
+        "note": "bootstrap prevents writes to enforcement/ via PreToolUse; bash_guard detects post-execution"
       }
     },
     {
-      "source": "stop_gate",
-      "target": "states_toml",
+      "source": "enforcement.write_guard",
+      "target": "hooks._common_hooks",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement.bash_guard",
+      "target": "enforcement._resolve",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement.bash_guard",
+      "target": "enforcement._common_enforcement",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement.stop_gate",
+      "target": "enforcement._protocol_cache",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement.lens_quiz",
+      "target": "enforcement._common_enforcement",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement.write_guard",
+      "target": "enforcement._sahjhan_bootstrap",
       "type": "assumes",
       "metadata": {
-        "discovered": "2026-03-30",
+        "discovered": "2026-03-29",
         "confidence": "medium",
-        "note": "hard-coded allow-list must match state machine states"
+        "note": "write_guard assumes bootstrap covers Bash writes to enforcement paths"
       }
     },
     {
-      "source": "validate_merge_report",
-      "target": "states_toml",
+      "source": "enforcement.commit_gate",
+      "target": "enforcement._protocol_cache",
       "type": "assumes",
       "metadata": {
-        "discovered": "2026-03-30",
+        "discovered": "2026-03-29",
         "confidence": "medium",
-        "note": "validator checks headers only, not content"
+        "note": "commit_gate assumes cache reflects sahjhan state"
       }
     },
     {
-      "source": "get_pricing",
-      "target": "_custom_pricing",
+      "source": "enforcement.bash_guard",
+      "target": "enforcement._sahjhan_bootstrap",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "bash_guard detects post-hoc; bootstrap should prevent"
+      }
+    },
+    {
+      "source": "README.md",
+      "target": "enforcement._sahjhan_bootstrap",
       "type": "diverges_from",
       "metadata": {
-        "discovered": "2026-03-30",
+        "discovered": "2026-03-29",
         "confidence": "medium",
-        "note": "duplicate longest-prefix matching logic"
+        "note": "README describes protection scope; bootstrap has narrower coverage"
+      }
+    },
+    {
+      "source": "SKILL.md",
+      "target": "README.md",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "Both contain metric claims that must stay synchronized: test count, line count, run count"
+      }
+    },
+    {
+      "source": "SKILL.md",
+      "target": "enforcement._sahjhan_bootstrap",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "SKILL.md CLI examples assume event field schema from events.toml -- examples are incomplete"
       }
     }
   ]

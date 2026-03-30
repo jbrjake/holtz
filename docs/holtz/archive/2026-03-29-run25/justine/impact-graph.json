@@ -1,0 +1,277 @@
+{
+  "nodes": {
+    "test_integration": {
+      "id": "test_integration",
+      "type": "module",
+      "file": "tests/test_integration.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_sahjhan_integration": {
+      "id": "test_sahjhan_integration",
+      "type": "module",
+      "file": "tests/test_sahjhan_integration.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "stop_gate": {
+      "id": "stop_gate",
+      "type": "module",
+      "file": "enforcement/hooks/stop_gate.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "lens_quiz": {
+      "id": "lens_quiz",
+      "type": "module",
+      "file": "enforcement/hooks/lens_quiz.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "_protocol_cache": {
+      "id": "_protocol_cache",
+      "type": "module",
+      "file": "enforcement/hooks/_protocol_cache.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enf_common": {
+      "id": "enf_common",
+      "type": "module",
+      "file": "enforcement/hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "primer": {
+      "id": "primer",
+      "type": "module",
+      "file": "enforcement/hooks/primer.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "_sahjhan_bootstrap": {
+      "id": "_sahjhan_bootstrap",
+      "type": "module",
+      "file": "enforcement/hooks/_sahjhan_bootstrap.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "lens_evidence": {
+      "id": "lens_evidence",
+      "type": "module",
+      "file": "enforcement/hooks/lens_evidence.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "commit_gate": {
+      "id": "commit_gate",
+      "type": "module",
+      "file": "enforcement/hooks/commit_gate.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "protocol_tracker": {
+      "id": "protocol_tracker",
+      "type": "module",
+      "file": "enforcement/hooks/protocol_tracker.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks_common": {
+      "id": "hooks_common",
+      "type": "module",
+      "file": "hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "readme": {
+      "id": "readme",
+      "type": "doc",
+      "file": "README.md",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "profiler_plugin": {
+      "id": "profiler_plugin",
+      "type": "module",
+      "file": "skills/holtz/scripts/profiler_plugin.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "_resolve": {
+      "id": "_resolve",
+      "type": "module",
+      "file": "enforcement/hooks/_resolve.py",
+      "line": null,
+      "last_audited": "2026-03-29",
+      "audit_count": 1,
+      "risk_score": 0.0
+    }
+  },
+  "edges": [
+    {
+      "source": "test_sahjhan_integration",
+      "target": "stop_gate",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_integration",
+      "target": "readme",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "stop_gate",
+      "target": "enf_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "stop_gate",
+      "target": "_protocol_cache",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "stop_gate",
+      "target": "_resolve",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enf_common",
+      "target": "hooks_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "lens_quiz",
+      "target": "lens_evidence",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "lens_quiz",
+      "target": "enf_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "primer",
+      "target": "_protocol_cache",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "primer",
+      "target": "enf_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "commit_gate",
+      "target": "_protocol_cache",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "commit_gate",
+      "target": "enf_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "protocol_tracker",
+      "target": "_protocol_cache",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "protocol_tracker",
+      "target": "enf_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "stop_gate",
+      "target": "enf_common",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "stop_gate assumes cwd is isolated in tests"
+      }
+    }
+  ]
+}
