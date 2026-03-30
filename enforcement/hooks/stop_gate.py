@@ -59,9 +59,10 @@ def main() -> None:
     is_terminal = status.get("terminal", False)
 
     # Allow stop in terminal states, awaiting_clear (iteration boundary —
-    # the protocol requires /clear before resuming), and idle (no active
-    # work — BH-020: operators need a clean exit point between runs).
-    if is_terminal or current_state in ("awaiting_clear", "idle"):
+    # the protocol requires /clear before resuming), idle (no active
+    # work), and recon (entry state after init — no findings or fixes
+    # at risk). BH-020: operators need clean exit points between runs.
+    if is_terminal or current_state in ("awaiting_clear", "idle", "recon"):
         exit_stop_allow()
 
     # Build a helpful message about what's needed
