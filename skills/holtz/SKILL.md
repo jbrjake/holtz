@@ -84,7 +84,9 @@ sahjhan --ledger run-N event finding --field project=holtz --field run=N \
   --field id=BH-001 --field severity=HIGH --field category=doc/drift \
   --field location="README.md:108" --field perspective=public-contract \
   --field description="Pattern count stale" --field predicted_by=1
-sahjhan --ledger run-N event finding_resolved --field id=BH-001 --field commit_hash=abc1234
+sahjhan --ledger run-N event finding_resolved --field project=holtz --field run=N \
+  --field auditor=holtz --field phase=fix_loop --field step=10 \
+  --field id=BH-001 --field commit_hash=abc1234
 
 # Record recon and audit events
 sahjhan --ledger run-N event recon_finding --field project=holtz --field run=N \
@@ -115,17 +117,26 @@ sahjhan set status perspective         # which perspectives are done
 # Checkpoint before /clear
 sahjhan --ledger run-N ledger checkpoint   # before /clear
 
-# Record events (all use --field key=value syntax)
-sahjhan event recon_step --field step=0 --field artifact_path=docs/holtz/recon/step0-project-overview.md
-sahjhan event blast_radius --field target_node=module.py --field depth=2 \
+# Record events (all use --field key=value syntax — required: project, run, auditor, phase, step)
+sahjhan event recon_step --field project=holtz --field run=N \
+  --field auditor=holtz --field phase=recon --field step=0 \
+  --field artifact_path=docs/holtz/recon/step0-project-overview.md
+sahjhan event blast_radius --field project=holtz --field run=N \
+  --field auditor=holtz --field phase=fix_loop --field step=10 \
+  --field target_node=module.py --field depth=2 \
   --field affected_count=5 --field finding_id=BH-001
-sahjhan event hardening_complete --field finding_id=BH-001 \
-  --field edge_cases_tested=3 --field tests_added=2
-sahjhan event pattern_analysis_complete --field patterns_found=2 --field siblings_found=4
-sahjhan event iteration_complete --field perspective=component \
-  --field items_resolved=3 --field items_remaining=2 \
+sahjhan event hardening_complete --field project=holtz --field run=N \
+  --field auditor=holtz --field phase=fix_loop --field step=10 \
+  --field finding_id=BH-001 --field edge_cases_tested=3 --field tests_added=2
+sahjhan event pattern_analysis_complete --field project=holtz --field run=N \
+  --field auditor=holtz --field phase=fix_loop --field step=11 \
+  --field patterns_found=2 --field siblings_found=4
+sahjhan event iteration_complete --field project=holtz --field run=N \
+  --field auditor=holtz --field phase=fix_loop --field step=10 \
+  --field perspective=component --field items_resolved=3 --field items_remaining=2 \
   --field test_count=50 --field tests_passed=true
-sahjhan event justine_dispatched --field mode=full
+sahjhan event justine_dispatched --field project=holtz --field run=N \
+  --field auditor=holtz --field phase=recon --field mode=full
 ```
 
 ## Terminal Output
