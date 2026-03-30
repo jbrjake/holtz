@@ -30,8 +30,17 @@ def validate(path: str) -> list[str]:
 
     missing = []
     for name, pattern in REQUIRED_SECTIONS:
-        if not re.search(pattern, content, re.IGNORECASE):
+        match = re.search(pattern, content, re.IGNORECASE)
+        if not match:
             missing.append(name)
+            continue
+        # BH-010: check section has non-whitespace content below header
+        after_header = content[match.end():]
+        # Content extends until the next ## header or end of file
+        next_header = re.search(r"^##\s", after_header, re.MULTILINE)
+        section_body = after_header[:next_header.start()] if next_header else after_header
+        if not section_body.strip():
+            missing.append(f"{name} (empty)")
     return missing
 
 

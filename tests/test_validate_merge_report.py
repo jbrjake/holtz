@@ -68,3 +68,19 @@ def test_empty_file(tmp_path):
     report.write_text("")
     result = _run(str(report))
     assert result.returncode != 0
+
+
+def test_headers_only_rejected(tmp_path):
+    """BH-010: Headers with no content must be rejected (permissive validator)."""
+    report = tmp_path / "PUNCHLIST-MERGED.md"
+    report.write_text(
+        "## Agreement\n"
+        "## Holtz-Only\n"
+        "## Justine-Only\n"
+        "## Blind Spot Analysis\n"
+    )
+    result = _run(str(report))
+    assert result.returncode != 0, (
+        "Headers-only report should fail validation"
+    )
+    assert "empty" in result.stderr.lower()
