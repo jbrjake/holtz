@@ -240,6 +240,19 @@ def test_converge_has_quiz_exhaustion_gate():
     raise AssertionError("converge transition not found")
 
 
+def test_gate_sql_uses_seq_not_rowid():
+    """BH-021: Gate SQL must use 'seq' not 'rowid' — Sahjhan uses DataFusion, not SQLite."""
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    for t in cfg["transitions"]:
+        for gate in t.get("gates", []):
+            sql = gate.get("sql", "")
+            assert "rowid" not in sql.lower(), (
+                f"Gate SQL in '{t['command']}' references 'rowid' which is a SQLite concept. "
+                f"Sahjhan's DataFusion backend uses 'seq' for event ordering. "
+                f"SQL: {sql}"
+            )
+
+
 def test_mypy_uses_explicit_package_bases():
     """BH-002: mypy commands must use --explicit-package-bases to avoid _common collision."""
     cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
