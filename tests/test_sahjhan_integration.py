@@ -841,6 +841,44 @@ class TestStopGateWithMockBinary:
         assert code == 0
         assert output == {} or output.get("continue") is True
 
+    @pytest.mark.parametrize("state", [
+        "converged",
+        "merge_ready",
+        "merge_done",
+        "perspective_clean",
+        "all_perspectives_clean",
+        "final_sweep_clean",
+    ])
+    def test_allows_safe_between_steps_states(self, tmp_path, state):
+        """BH-009: Stop gate should allow exit from safe between-steps states."""
+        self._setup(tmp_path, [f"state: {state} (20 events, chain valid)"])
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output == {} or output.get("continue") is True, (
+            f"stop_gate should allow exit from '{state}' but blocked"
+        )
+
+    @pytest.mark.parametrize("state", [
+        "audit",
+        "fix_loop",
+        "pattern_analysis",
+        "final_sweep",
+    ])
+    def test_blocks_active_work_states(self, tmp_path, state):
+        """BH-009: Stop gate should block exit from states with active work."""
+        self._setup(tmp_path, [f"state: {state} (20 events, chain valid)"])
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output.get("decision") == "block", (
+            f"stop_gate should block exit from '{state}' but allowed"
+        )
+
 
 class TestPrimerWithMockBinary:
     """BH-010: Tests that exercise actual primer logic with a mock binary."""

@@ -58,11 +58,12 @@ def main() -> None:
     current_state = status.get("current_state", "")
     is_terminal = status.get("terminal", False)
 
-    # Allow stop in terminal states, awaiting_clear (iteration boundary —
-    # the protocol requires /clear before resuming), idle (no active
-    # work), and recon (entry state after init — no findings or fixes
-    # at risk). BH-020: operators need clean exit points between runs.
-    if is_terminal or current_state in ("awaiting_clear", "idle", "recon"):
+    # Block only states with active work in progress where stopping would
+    # lose audit progress. All other states are safe exit points.
+    # BH-020: operators need clean exit points between runs.
+    # BH-009: derive allow-list from principle, not ad-hoc additions.
+    _ACTIVE_WORK_STATES = {"audit", "fix_loop", "pattern_analysis", "final_sweep"}
+    if is_terminal or current_state not in _ACTIVE_WORK_STATES:
         exit_stop_allow()
 
     # Build a helpful message about what's needed
