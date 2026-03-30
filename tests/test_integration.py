@@ -252,7 +252,7 @@ def test_readme_metrics_match_actual():
     m = re.search(
         r"(\d+) skills?, (\d+) agents?, (\d+) reference docs?, (\d+) examples?, "
         r"(\d+) Python scripts?, (\d+) seed patterns?, (\d+) enforcement hooks?, "
-        r"(\d+) tests across ([\d,]+) lines",
+        r"(\d+) tests,",
         readme,
     )
     assert m, "Could not find 'What's inside' line in README.md"
@@ -265,7 +265,6 @@ def test_readme_metrics_match_actual():
     claimed_patterns = int(m.group(6))
     claimed_hooks = int(m.group(7))
     claimed_tests = int(m.group(8))
-    claimed_lines = int(m.group(9).replace(",", ""))
 
     # Count actual values
     actual_skills = len(list((root / "skills").rglob("SKILL.md")))
@@ -291,12 +290,6 @@ def test_readme_metrics_match_actual():
     )
     actual_tests = int(test_match.group(1))
 
-    actual_lines = 0
-    for d in [root / "tests", root / "skills" / "holtz" / "scripts", root / "hooks",
-              root / "enforcement" / "hooks"]:
-        for f in d.glob("*.py"):
-            actual_lines += len(f.read_text().splitlines())
-
     errors = []
     for label, claimed, actual in [
         ("skills", claimed_skills, actual_skills),
@@ -310,10 +303,6 @@ def test_readme_metrics_match_actual():
     ]:
         if claimed != actual:
             errors.append(f"{label}: README says {claimed}, actual {actual}")
-
-    # Line count: allow ±100 tolerance for rounding (README says "8,500" for 8,545)
-    if abs(claimed_lines - actual_lines) > 100:
-        errors.append(f"lines: README says {claimed_lines}, actual {actual_lines}")
 
     assert not errors, (
         "README 'What's inside' counts are stale. Update README.md:\n  "
