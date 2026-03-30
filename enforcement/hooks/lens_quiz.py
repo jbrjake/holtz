@@ -46,7 +46,7 @@ MAX_STALE_QUESTIONS = 2  # if more than this are stale, quiz is invalid
 
 _LENS_PREFIX_RE = re.compile(r"^LENS:\s*(\S+)", re.MULTILINE)
 _ANSWERS_RE = re.compile(
-    r"LENS:\s*(\S+)\s+ANSWERS:\s*([A-Da-d](?:\s*,\s*[A-Da-d])*)",
+    r"^LENS:\s*(\S+)\s+ANSWERS:\s*([A-Da-d](?:\s*,\s*[A-Da-d])*)",
     re.MULTILINE,
 )
 

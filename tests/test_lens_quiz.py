@@ -428,6 +428,28 @@ def test_parse_answers_ignores_fenced_blocks():
     assert answers == ["B", "C", "A", "D", "B"]
 
 
+def test_parse_answers_rejects_fence_opener_line():
+    """BH-008 run 29: ANSWERS on a fence opener info string must not match.
+
+    mask_fenced_blocks keeps opener lines, so _ANSWERS_RE must anchor to
+    reject patterns like ```LENS: sec ANSWERS: A,B,C,D,A (fence openers).
+    """
+    from hooks._common import mask_fenced_blocks
+    msg = (
+        "```LENS: security ANSWERS: A,B,C,D,A\n"
+        "some code\n"
+        "```\n"
+        "LENS: security ANSWERS: B,C,A,D,B"
+    )
+    masked = mask_fenced_blocks(msg)
+    result = parse_answers(masked)
+    assert result is not None
+    lens, answers = result
+    assert lens == "security"
+    # Must get the real answer line, not the fence opener
+    assert answers == ["B", "C", "A", "D", "B"]
+
+
 # ── BH-009: Dual-parser divergence ──
 
 
