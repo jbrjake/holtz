@@ -62,6 +62,13 @@ class TestProtocolCache:
         assert not is_git_commit("# git commit -m 'fix: stuff'")
         assert not is_git_commit("python -c 'os.system(\"git commit\")'")
 
+    def test_git_commit_with_env_prefix(self):
+        """BH-005 run 29: env-prefix git commit must be detected."""
+        from _protocol_cache import is_git_commit
+        assert is_git_commit("VAR=x git commit -m 'fix: stuff'")
+        assert is_git_commit("FOO=bar BAZ=1 git commit -m 'test'")
+        assert not is_git_commit("VAR=x git commit --amend")
+
     def test_detect_sahjhan_command(self):
         """Detects sahjhan commands."""
         from _protocol_cache import is_sahjhan_cmd
@@ -75,6 +82,12 @@ class TestProtocolCache:
         assert not is_sahjhan_cmd("git commit -m 'fix'; sahjhan status")
         assert not is_sahjhan_cmd("sahjhan status; git push")
         assert not is_sahjhan_cmd("git commit && sahjhan transition fix_commit")
+
+    def test_sahjhan_cmd_bare_binary_name(self):
+        """BH-006 run 29: bare platform binary names must be detected."""
+        from _protocol_cache import is_sahjhan_cmd
+        assert is_sahjhan_cmd("sahjhan-aarch64-apple-darwin status")
+        assert is_sahjhan_cmd("sahjhan-x86_64-unknown-linux-gnu transition run_start")
 
     def test_compute_obligations_no_cache(self):
         """No obligations when no cache."""

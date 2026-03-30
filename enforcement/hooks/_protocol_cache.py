@@ -169,7 +169,9 @@ def is_git_commit(cmd: str) -> bool:
     # Split into shell segments and check each one
     for segment in re.split(r"[;&|]+", cmd):
         seg = segment.strip()
-        if not re.match(r"git\s+commit\b(?!-)", seg):
+        # Strip leading env var assignments (VAR=x git commit ...)
+        stripped_seg = re.sub(r"^\s*(?:\w+=\S*\s+)*", "", seg)
+        if not re.match(r"git\s+commit\b(?!-)", stripped_seg):
             continue
         # This segment starts with git commit — check for --amend
         stripped = re.sub(r'-m\s+(?:"[^"]*"|\'[^\']*\'|\S+)', '', seg)
@@ -194,7 +196,7 @@ def is_sahjhan_cmd(cmd: str) -> bool:
             continue
         has_segment = True
         parts = seg.split()
-        if not (parts and (parts[0] == "sahjhan" or parts[0].endswith("/sahjhan") or "/sahjhan-" in parts[0])):
+        if not (parts and (parts[0] == "sahjhan" or parts[0].endswith("/sahjhan") or "/sahjhan-" in parts[0] or parts[0].startswith("sahjhan-"))):
             return False
     return has_segment
 
