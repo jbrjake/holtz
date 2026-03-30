@@ -525,6 +525,36 @@ class TestPrimer:
         assert output.get("continue") is True
 
 
+# --- BH-004 (run 28): hooks.json configuration validation ---
+
+
+def test_hooks_json_bootstrap_covers_bash():
+    """BH-004: _sahjhan_bootstrap.py must fire for Bash PreToolUse.
+
+    The bootstrap hook contains _check_bash_write and _bash_references_guarded
+    which protect enforcement/ and managed docs from Bash writes, and block
+    Bash access to read-guarded paths (session.key, quiz-bank.json). These
+    functions are dead code unless hooks.json routes Bash events to the hook.
+    """
+    hooks_path = os.path.join(REPO_ROOT, "hooks", "hooks.json")
+    with open(hooks_path, encoding="utf-8") as f:
+        config = json.load(f)
+
+    pre_tool_use = config.get("hooks", {}).get("PreToolUse", [])
+    bash_hooks = []
+    for entry in pre_tool_use:
+        matcher = entry.get("matcher", "")
+        if "Bash" in matcher:
+            for hook in entry.get("hooks", []):
+                bash_hooks.append(hook.get("command", ""))
+
+    assert any("_sahjhan_bootstrap.py" in h for h in bash_hooks), (
+        "hooks.json must include _sahjhan_bootstrap.py in Bash PreToolUse matcher. "
+        "Without it, _check_bash_write and _bash_references_guarded are dead code — "
+        "Bash writes to enforcement/ and managed docs are not preventively blocked."
+    )
+
+
 # --- BH-010: Bridge API sync test ---
 
 
