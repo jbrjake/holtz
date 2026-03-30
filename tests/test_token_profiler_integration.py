@@ -27,10 +27,14 @@ pytestmark = pytest.mark.machine_specific
 # Session paths
 # ---------------------------------------------------------------------------
 
+# BH-014: configurable via env var so other developers can run with their data
 SESSION_PATH = Path(
-    os.path.expanduser(
-        "~/.claude/projects/-Users-jonr-Documents-non-nitro-repos-holtz/"
-        "8ab6ac7a-eaaf-48e7-a6c5-9786f81887f5.jsonl"
+    os.environ.get(
+        "HOLTZ_TEST_SESSION_JSONL",
+        os.path.expanduser(
+            "~/.claude/projects/-Users-jonr-Documents-non-nitro-repos-holtz/"
+            "8ab6ac7a-eaaf-48e7-a6c5-9786f81887f5.jsonl"
+        ),
     )
 )
 JUSTINE_SUBAGENT = "agent-a919e2838d64ac37a"
