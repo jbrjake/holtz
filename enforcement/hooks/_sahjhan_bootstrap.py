@@ -64,16 +64,12 @@ def _load_read_guards() -> list[str]:
 
 
 def _platform_triple() -> str:
-    """Return the platform triple for the current system."""
-    import platform
-    arch = platform.machine()
-    system = platform.system().lower()
-    if arch == "arm64":
-        arch = "aarch64"
-    return {
-        "darwin": f"{arch}-apple-darwin",
-        "linux": f"{arch}-unknown-linux-gnu",
-    }.get(system, f"{arch}-{system}")
+    """Return the platform triple for the current system.
+
+    Delegates to _resolve.platform_triple() for single source of truth.
+    """
+    from _resolve import platform_triple
+    return platform_triple()
 
 
 READ_GUARDED = _load_read_guards()
