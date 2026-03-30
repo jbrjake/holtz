@@ -510,10 +510,10 @@ class TestBashGuard:
         )
         # Should get the warning (manifest failed) since chained cmd is not pure sahjhan
         assert code == 0
-        # Check it didn't just silently skip
-        hook_output = output.get("hookSpecificOutput", {})
-        notification = hook_output.get("notification", "")
-        assert "PROTOCOL VIOLATION" in notification or output.get("continue") is True
+        # exit_warn puts the message in additionalContext, not hookSpecificOutput
+        assert "PROTOCOL VIOLATION" in output.get("additionalContext", ""), (
+            "Expected PROTOCOL VIOLATION warning for non-pure-sahjhan chained command"
+        )
 
     def test_degrades_gracefully_on_oserror(self, tmp_path):
         """BH-015: bash_guard degrades gracefully when binary is unexecutable."""
