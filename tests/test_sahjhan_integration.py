@@ -458,6 +458,63 @@ class TestBashGuard:
         assert "--field" in logged, "violation event should use --field syntax"
         assert "project=holtz" in logged, "violation event missing project field"
 
+    def test_skips_manifest_verify_for_sahjhan_commands(self, tmp_path):
+        """BH-019: bash_guard skips manifest verification for sahjhan commands.
+
+        Sahjhan commands are authorized to modify managed files (they render
+        STATUS.md, PUNCHLIST.md from ledger state). Without this skip,
+        sahjhan transitions trigger permanent protocol violations.
+        """
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "enforcement").mkdir(parents=True)
+        # Create mock binary that would FAIL manifest verify
+        _create_mock_binary(tmp_path, (
+            'echo "tampered" >&2\n'
+            'exit 1'
+        ))
+        # But the command is a sahjhan invocation — should be skipped entirely
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "./bin/sahjhan-aarch64-apple-darwin transition fix_commit BH-001"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook(
+            "bash_guard.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0, "bash_guard should skip verification for sahjhan commands"
+        assert output.get("continue") is True
+
+    def test_does_not_skip_for_chained_sahjhan(self, tmp_path):
+        """BH-019: Chained commands with non-sahjhan segments still get checked."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "enforcement").mkdir(parents=True)
+        _create_mock_binary(tmp_path, (
+            'case "$*" in\n'
+            '  *verify*)\n'
+            '    echo "tampered" >&2\n'
+            '    exit 1\n'
+            '    ;;\n'
+            '  *)\n'
+            '    exit 0\n'
+            '    ;;\n'
+            'esac'
+        ))
+        # Non-sahjhan command chained with sahjhan — should NOT skip
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "cat foo.txt; sahjhan status"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook(
+            "bash_guard.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        # Should get the warning (manifest failed) since chained cmd is not pure sahjhan
+        assert code == 0
+        # Check it didn't just silently skip
+        hook_output = output.get("hookSpecificOutput", {})
+        notification = hook_output.get("notification", "")
+        assert "PROTOCOL VIOLATION" in notification or output.get("continue") is True
+
     def test_degrades_gracefully_on_oserror(self, tmp_path):
         """BH-015: bash_guard degrades gracefully when binary is unexecutable."""
         (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)

@@ -14,6 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from _protocol_cache import is_sahjhan_cmd  # noqa: E402
 from _resolve import sahjhan_binary  # noqa: E402
 
 from _common import _active_ledger, exit_ok, exit_warn, read_event  # noqa: E402
@@ -25,6 +26,13 @@ def main() -> None:
     # Only check after Bash commands complete
     tool_name = event.get("tool_name", "")
     if tool_name != "Bash":
+        exit_ok()
+
+    # BH-019: Sahjhan commands are authorized to modify managed files
+    # (they render STATUS.md, PUNCHLIST.md, etc. from ledger state).
+    # Skip manifest verification for pure sahjhan invocations.
+    cmd = event.get("tool_input", {}).get("command", "")
+    if is_sahjhan_cmd(cmd):
         exit_ok()
 
     binary = sahjhan_binary()
