@@ -196,7 +196,14 @@ def is_sahjhan_cmd(cmd: str) -> bool:
             continue
         has_segment = True
         parts = seg.split()
-        if not (parts and (parts[0] == "sahjhan" or parts[0].endswith("/sahjhan") or "/sahjhan-" in parts[0] or parts[0].startswith("sahjhan-"))):
+        p0 = parts[0] if parts else ""
+        is_sahjhan = (
+            p0 == "sahjhan"
+            or p0.endswith("/sahjhan")
+            or "/sahjhan-" in p0
+            or p0.startswith("sahjhan-")
+        )
+        if not (parts and is_sahjhan):
             return False
     return has_segment
 
