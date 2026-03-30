@@ -130,11 +130,12 @@ def _check_bash_write(command: str) -> str | None:
     """Check if a bash command writes to any protected or managed path.
 
     Returns a block reason string if blocked, None if allowed.
-    Splits on shell operators (&&, ||, ;, |) and checks each segment.
+    Splits on shell operators (&&, ||, ;, |, newline) and checks each segment.
     """
     import re
     # Split on shell operators to handle chained commands (BH-004 run 27)
-    segments = re.split(r'\s*(?:&&|\|\||[;|])\s*', command)
+    # BH-005 run 28: bare newline is a valid shell command separator — include \n
+    segments = re.split(r'\s*(?:&&|\|\||[;|\n])\s*', command)
 
     for seg in segments:
         seg = seg.strip()
@@ -220,11 +221,35 @@ def _check_bash_write(command: str) -> str | None:
             if seg_stripped.startswith("wget "):
                 args = seg_stripped.split()
                 for i, arg in enumerate(args):
+                    # BH-006 run 28: handle both -O <path> and --output-document=<path>
                     if arg == "-O" and i + 1 < len(args) and args[i + 1].startswith(p):
                         return (
                             f"BLOCKED: Bash command uses wget to write to protected path '{p}'. "
                             "This path cannot be modified during an audit session."
                         )
+                    if arg.startswith("--output-document="):
+                        target = arg.split("=", 1)[1]
+                        if target == p or target.startswith(p):
+                            return (
+                                f"BLOCKED: Bash command uses wget to write to protected path '{p}'. "
+                                "This path cannot be modified during an audit session."
+                            )
+            # BH-007 run 28: curl -o / --output handler
+            if seg_stripped.startswith("curl "):
+                args = seg_stripped.split()
+                for i, arg in enumerate(args):
+                    if arg in ("-o", "--output") and i + 1 < len(args) and args[i + 1].startswith(p):
+                        return (
+                            f"BLOCKED: Bash command uses curl to write to protected path '{p}'. "
+                            "This path cannot be modified during an audit session."
+                        )
+                    if arg.startswith("--output="):
+                        target = arg.split("=", 1)[1]
+                        if target == p or target.startswith(p):
+                            return (
+                                f"BLOCKED: Bash command uses curl to write to protected path '{p}'. "
+                                "This path cannot be modified during an audit session."
+                            )
 
     return None
 

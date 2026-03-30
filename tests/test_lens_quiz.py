@@ -389,3 +389,63 @@ def test_verify_freshness_missing_answer_key(tmp_path):
     q = {"source": "test.py:10", "opts": ["a", "b", "c", "d"]}
     # Should return False (stale), not raise KeyError
     assert verify_answer_freshness(q, str(tmp_path)) is False
+
+
+# ── BH-008: PAT-001 fence masking in parse_lens_name / parse_answers ──
+
+
+def test_parse_lens_name_ignores_fenced_blocks():
+    """BH-008: LENS: inside a code fence must not trigger the quiz gate."""
+    msg = (
+        "Here is an example:\n"
+        "```\n"
+        "LENS: error-propagation ANSWERS: A,B,C,D,A\n"
+        "```\n"
+        "That was just an example."
+    )
+    # After masking, the LENS: line inside the fence is blanked
+    from hooks._common import mask_fenced_blocks
+    masked = mask_fenced_blocks(msg)
+    assert parse_lens_name(masked) is None
+
+
+def test_parse_answers_ignores_fenced_blocks():
+    """BH-008: ANSWERS inside a code fence must not be extracted."""
+    msg = (
+        "Here is the format:\n"
+        "```\n"
+        "LENS: component ANSWERS: A,B,C,D,A\n"
+        "```\n"
+        "Now my real answer:\n"
+        "LENS: component ANSWERS: B,C,A,D,B"
+    )
+    from hooks._common import mask_fenced_blocks
+    masked = mask_fenced_blocks(msg)
+    result = parse_answers(masked)
+    assert result is not None
+    lens, answers = result
+    assert lens == "component"
+    assert answers == ["B", "C", "A", "D", "B"]
+
+
+# ── BH-009: Dual-parser divergence ──
+
+
+def test_parse_answers_lens_must_match_parse_lens_name():
+    """BH-009: If parse_lens_name and parse_answers disagree, main() blocks."""
+    # This tests the invariant that both parsers return the same lens name
+    msg_same = "LENS: component ANSWERS: A,B,C,D,A"
+    lens = parse_lens_name(msg_same)
+    parsed = parse_answers(msg_same)
+    assert parsed is not None
+    assert parsed[0] == lens, "Both parsers must agree on lens name"
+
+    # Divergent case: two LENS: lines with different names
+    msg_divergent = "LENS: security\nSome analysis...\nLENS: component ANSWERS: A,B,C,D,A"
+    lens2 = parse_lens_name(msg_divergent)
+    parsed2 = parse_answers(msg_divergent)
+    assert parsed2 is not None
+    # parse_lens_name gets first match, parse_answers gets the one with ANSWERS
+    assert lens2 == "security"
+    assert parsed2[0] == "component"
+    # These differ — main() now detects this and blocks

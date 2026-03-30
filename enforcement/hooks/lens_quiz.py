@@ -31,6 +31,7 @@ from _common import (  # noqa: E402
     _active_ledger,
     exit_stop_allow,
     exit_stop_block,
+    mask_fenced_blocks,
     read_event,
     record_authed_event,
 )
@@ -346,8 +347,12 @@ def main() -> None:
     event = read_event()
     message = event.get("last_assistant_message", "")
 
+    # BH-008 run 28: mask fenced blocks before regex matching (PAT-001)
+    # Prevents LENS: prefix inside code blocks from triggering the quiz gate
+    masked_message = mask_fenced_blocks(message)
+
     # Non-lens subagents pass through
-    lens = parse_lens_name(message)
+    lens = parse_lens_name(masked_message)
     if not lens:
         exit_stop_allow()
     assert lens is not None  # for mypy: exit_stop_allow calls sys.exit
@@ -440,14 +445,20 @@ def main() -> None:
         quiz_text = format_quiz_questions(questions, lens)
         exit_stop_block(quiz_text)
 
-    # Phase 3: Score answers
-    parsed = parse_answers(message)
+    # Phase 3: Score answers (use masked_message for PAT-001 defense, BH-008)
+    parsed = parse_answers(masked_message)
     if not parsed:
         exit_stop_block(
             f"Could not parse answers. Format: LENS: {lens} ANSWERS: A,B,C,D,A"
         )
     assert parsed is not None  # for mypy: exit_stop_block calls sys.exit
-    _, given_answers = parsed
+    # BH-009 run 28: verify lens name consistency between parsers
+    parsed_lens, given_answers = parsed
+    if parsed_lens != lens:
+        exit_stop_block(
+            f"Lens mismatch: header says '{lens}' but answer line says '{parsed_lens}'. "
+            f"Use: LENS: {lens} ANSWERS: A,B,C,D,A"
+        )
     correct, total = score_answers(questions, given_answers, cwd)
 
     # Answer count mismatch: score_answers returns (-1, -1)
