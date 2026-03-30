@@ -68,8 +68,13 @@ class TestProtocolCache:
         assert is_sahjhan_cmd("./bin/sahjhan status")
         assert is_sahjhan_cmd("./bin/sahjhan transition fix_commit")
         assert is_sahjhan_cmd("sahjhan status")
+        assert is_sahjhan_cmd("sahjhan status && sahjhan transition fix_commit")
         assert not is_sahjhan_cmd("git commit -m 'sahjhan'")
         assert not is_sahjhan_cmd("echo sahjhan")
+        # BH-016: chained commands with non-sahjhan segments must return False
+        assert not is_sahjhan_cmd("git commit -m 'fix'; sahjhan status")
+        assert not is_sahjhan_cmd("sahjhan status; git push")
+        assert not is_sahjhan_cmd("git commit && sahjhan transition fix_commit")
 
     def test_compute_obligations_no_cache(self):
         """No obligations when no cache."""

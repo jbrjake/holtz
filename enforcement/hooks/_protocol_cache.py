@@ -179,15 +179,24 @@ def is_git_commit(cmd: str) -> bool:
 
 
 def is_sahjhan_cmd(cmd: str) -> bool:
-    """Detect sahjhan CLI invocations."""
+    """Detect commands that are exclusively sahjhan CLI invocations.
+
+    Returns True only when ALL non-empty segments are sahjhan commands.
+    A chained command like ``git commit; sahjhan status`` returns False
+    because the git-commit segment is not a sahjhan invocation.
+    """
     stripped = cmd.strip()
-    for segment in re.split(r"[;&|]+", stripped):
+    segments = re.split(r"[;&|]+", stripped)
+    has_segment = False
+    for segment in segments:
         seg = segment.strip()
-        # Match: sahjhan, ./bin/sahjhan, bin/sahjhan, /abs/path/to/sahjhan
+        if not seg:
+            continue
+        has_segment = True
         parts = seg.split()
-        if parts and (parts[0] == "sahjhan" or parts[0].endswith("/sahjhan") or "/sahjhan-" in parts[0]):
-            return True
-    return False
+        if not (parts and (parts[0] == "sahjhan" or parts[0].endswith("/sahjhan") or "/sahjhan-" in parts[0])):
+            return False
+    return has_segment
 
 
 def is_fix_loop_state(cache: dict[str, Any] | None) -> bool:
