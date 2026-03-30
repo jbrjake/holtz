@@ -123,6 +123,26 @@ class TestSleepDetection:
         """Short sleeps (<=5s) are fine — used for legitimate polling."""
         assert _is_sleep_cmd("sleep 1") is False
 
+    def test_sleep_suffix_minutes(self):
+        """BH-015: sleep 1m = 60s, must be detected as gaming."""
+        assert _is_sleep_cmd("sleep 1m") is True
+
+    def test_sleep_suffix_hours(self):
+        """BH-015: sleep 1h = 3600s, must be detected."""
+        assert _is_sleep_cmd("sleep 1h") is True
+
+    def test_sleep_suffix_days(self):
+        """BH-015: sleep 1d, must be detected."""
+        assert _is_sleep_cmd("sleep 1d") is True
+
+    def test_sleep_suffix_seconds_short(self):
+        """BH-015: sleep 3s = 3s <= 5, should NOT be detected."""
+        assert _is_sleep_cmd("sleep 3s") is False
+
+    def test_sleep_suffix_seconds_long(self):
+        """BH-015: sleep 10s = 10s > 5, should be detected."""
+        assert _is_sleep_cmd("sleep 10s") is True
+
 
 class TestStallPenalty:
     """Integration tests: main() applies +2 stall penalty for sleep commands."""

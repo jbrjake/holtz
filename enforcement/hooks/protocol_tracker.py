@@ -43,12 +43,17 @@ def _is_sleep_cmd(cmd: str) -> bool:
 
     Returns True for sleep >5 seconds. Short sleeps (<=5s) are allowed
     for legitimate polling. Checks each segment of chained commands
-    (split on &&, ;, ||, |).
+    (split on &&, ;, ||, |). Handles bash sleep suffixes (s/m/h/d).
     """
+    _SUFFIX_MULTIPLIER = {"s": 1, "m": 60, "h": 3600, "d": 86400}
     for segment in re.split(r'[;&|]+', cmd):
-        m = re.match(r"^\s*sleep\s+(\d+(?:\.\d+)?)", segment)
-        if m and float(m.group(1)) > 5:
-            return True
+        m = re.match(r"^\s*sleep\s+(\d+(?:\.\d+)?)([smhd])?", segment)
+        if m:
+            value = float(m.group(1))
+            suffix = m.group(2)
+            seconds = value * _SUFFIX_MULTIPLIER.get(suffix or "s", 1)
+            if seconds > 5:
+                return True
     return False
 
 
