@@ -58,10 +58,10 @@ def main() -> None:
     current_state = status.get("current_state", "")
     is_terminal = status.get("terminal", False)
 
-    # Allow stop in terminal states and awaiting_clear (iteration boundary —
-    # the protocol requires /clear before resuming, so the model must be
-    # allowed to stop).
-    if is_terminal or current_state == "awaiting_clear":
+    # Allow stop in terminal states, awaiting_clear (iteration boundary —
+    # the protocol requires /clear before resuming), and idle (no active
+    # work — BH-020: operators need a clean exit point between runs).
+    if is_terminal or current_state in ("awaiting_clear", "idle"):
         exit_stop_allow()
 
     # Build a helpful message about what's needed

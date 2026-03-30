@@ -831,6 +831,16 @@ class TestStopGateWithMockBinary:
         assert output.get("decision") == "block"
         assert "fix_loop" in output.get("reason", "")
 
+    def test_allows_idle_state(self, tmp_path):
+        """BH-020: Stop gate allows when state is idle (no active work)."""
+        self._setup(tmp_path, ["state: idle (2 events, chain valid)"])
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output == {} or output.get("continue") is True
+
 
 class TestPrimerWithMockBinary:
     """BH-010: Tests that exercise actual primer logic with a mock binary."""
