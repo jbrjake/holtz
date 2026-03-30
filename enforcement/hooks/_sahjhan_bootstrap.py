@@ -96,10 +96,22 @@ def _is_read_guarded(path: str, cwd: str) -> str | None:
 
 
 def _bash_references_guarded(command: str, cwd: str) -> str | None:
-    """Check if a Bash command references any read-guarded path."""
+    """Check if a Bash command references any read-guarded path.
+
+    BH-016: Also blocks glob patterns that could expand to guarded paths.
+    Checks parent directory references (.sahjhan/, enforcement/) with
+    wildcard characters to catch glob-based bypass attempts.
+    """
     cmd_lower = command.lower()
     # Structural guard: any command referencing session.key in a .sahjhan context
     if "session.key" in cmd_lower and ".sahjhan" in cmd_lower:
+        return ".sahjhan/**/session.key"
+
+    # BH-016: Block glob patterns targeting guarded directories.
+    # If the command references a guarded parent dir AND contains glob chars,
+    # treat it as a potential bypass.
+    _GLOB_CHARS = ("*", "?", "[")
+    if ".sahjhan" in cmd_lower and any(c in command for c in _GLOB_CHARS):
         return ".sahjhan/**/session.key"
 
     for g in READ_GUARDED:
@@ -109,6 +121,10 @@ def _bash_references_guarded(command: str, cwd: str) -> str | None:
             full_rel = os.path.join("docs", "holtz", g)
             if full_rel.lower() in cmd_lower:
                 return g
+        # BH-016: Check parent directory of guarded path with glob chars
+        parent = os.path.dirname(g)
+        if parent and parent.lower() in cmd_lower and any(c in command for c in _GLOB_CHARS):
+            return g
     return None
 
 

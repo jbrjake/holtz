@@ -295,6 +295,33 @@ class TestBootstrapHook:
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_allowed(code, output)
 
+    def test_blocks_glob_session_key_read(self):
+        """BH-016: Glob pattern must not bypass read guard for session.key."""
+        event = {
+            "tool_input": {"command": "cat docs/holtz/.sahjhan/s*.key"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "read-guarded")
+
+    def test_blocks_glob_sahjhan_dir_read(self):
+        """BH-016: Wildcard in .sahjhan dir must be blocked."""
+        event = {
+            "tool_input": {"command": "cat docs/holtz/.sahjhan/*"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "read-guarded")
+
+    def test_blocks_glob_quiz_bank_read(self):
+        """BH-016: Glob pattern must not bypass read guard for quiz-bank.json."""
+        event = {
+            "tool_input": {"command": "cat enforcement/quiz-*.json"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "read-guarded")
+
 
 # --- write_guard.py (PreToolUse) ---
 
