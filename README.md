@@ -143,7 +143,7 @@ Holtz is a Claude Code plugin, but the architecture is portable. The skill, patt
 
 **Step 11: Pattern analysis.** Group resolved items, find shared root causes, search for siblings.
 
-**Steps 14-16: Convergence.** Repeat Steps 10-11 until clean, then run a final sweep across all thirteen lenses — component, integration, security, error propagation, data flow, contract, semantic fidelity, temporal protocol, public contract, concurrency, resource lifecycle, idempotency, observability. If any lens finds something, the loop continues. Circuit breakers prevent runaway: max 15 iterations, max 3 attempts per item, stall detection after 3 iterations with no progress. Without these, Holtz would audit forever. He would not consider this a problem.
+**Steps 14-16: Convergence.** Repeat Steps 10-11 until clean, then run a final sweep across all thirteen lenses — component, integration, security, error propagation, data flow, contract, semantic fidelity, temporal protocol, public contract, concurrency, resource lifecycle, idempotency, observability. If any lens finds something, the loop continues. Circuit breakers prevent runaway: max 15 fix commits (enforced by Sahjhan gate), max 3 attempts per item (advisory), stall detection after 15 non-productive commands. Without these, Holtz would audit forever. He would not consider this a problem.
 
 <p align="center"><img src="docs/diagrams/holtz-convergence.svg" alt="Holtz convergence loop"></p>
 
@@ -187,7 +187,7 @@ For the complete trace with reasoning chains, code diffs, and prediction accurac
 
 **Run 16** found the run count stale again (same class as every run since 14) and the prediction accuracy overstated. Also PAT-001 for its eleventh and twelfth manifestations: `parse_brief()` applied regex without masking code fences (offset-divergence variant), and the hooks' fence masking tracked fence character but not fence count (grammar variant). Four items, all resolved.
 
-After 28 runs: 869 tests across 19,649 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+After 28 runs: 869 tests across 19,663 lines of code. Findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
 
 The full dataset — prediction accuracy calibration, PAT-001 recurrence timeline, adversarial merge blind-spot analysis, convergence iteration counts, and test growth curves across all 16 runs — is published in [docs/research/convergence-data.md](docs/research/convergence-data.md). (Data through Run 16; Runs 17-26 are not yet included in the research dataset.)
 
@@ -211,7 +211,7 @@ Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-1 skill, 3 agents, 24 reference docs, 1 example, 6 Python scripts, 16 seed patterns, 9 enforcement hooks, 869 tests across 19,649 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+1 skill, 3 agents, 24 reference docs, 1 example, 6 Python scripts, 16 seed patterns, 9 enforcement hooks, 869 tests across 19,663 lines of code, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 ## Why the backstories
 
