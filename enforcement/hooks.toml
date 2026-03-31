@@ -1,0 +1,117 @@
+# Runtime enforcement hooks for the holtz audit protocol.
+# Evaluated by `sahjhan hook eval` on every tool use.
+# Sealed at init time alongside the other 5 config files.
+
+# ── TDD Gate ──
+# Block source file edits in fix_loop without a prior failing test.
+# Makes TDD mechanically unavoidable. Filter excludes test files.
+# Every fix_commit self-loop is a state transition, so the gate resets.
+
+[[hooks]]
+event = "PreToolUse"
+tools = ["Edit", "Write"]
+states = ["fix_loop"]
+action = "block"
+message = "TDD violation: write and run a failing test before editing source files. Record with: sahjhan event test_failed_before_fix --field finding_id=BH-NNN --field test_name=..."
+
+[hooks.gate]
+type = "ledger_has_event_since"
+event = "test_failed_before_fix"
+since = "last_transition"
+
+[hooks.filter]
+path_not_matches = "tests/**"
+
+# ── Premature Completion Blocker ──
+# Block stop when agent output claims completion in non-terminal states.
+
+[[hooks]]
+event = "Stop"
+states_not = ["converged", "finalized"]
+action = "block"
+message = "You are claiming completion but sahjhan state is {current_state}, not converged/finalized. Run `sahjhan status` to check your position. Continue the protocol."
+
+[hooks.check]
+type = "output_contains_any"
+patterns = [
+    "audit complete",
+    "audit is complete",
+    "all fixes applied",
+    "CONVERGED",
+    "holtz complete",
+    "holtz audit complete",
+    "all issues resolved",
+    "punchlist complete",
+    "work is done",
+    "summary of everything",
+    "convergence achieved",
+    "no remaining items",
+    "all findings resolved",
+]
+
+# ── Edit Accumulation Warning ──
+# Warn after many events in fix_loop without a state transition.
+# Catches "batch all fixes then summarize" anti-pattern.
+
+[[hooks]]
+event = "PostToolUse"
+tools = ["Edit"]
+states = ["fix_loop"]
+action = "warn"
+message = "High activity: {count} events since your last fix_commit. Each fix must be committed atomically. Run: sahjhan transition fix_commit --item-id BH-NNN"
+
+[hooks.check]
+type = "event_count_since_last_transition"
+threshold = 8
+
+# ── Auto-Record: File Reads ──
+
+[[hooks]]
+event = "PostToolUse"
+tools = ["Read"]
+
+[hooks.auto_record]
+event_type = "file_read"
+fields = { file_path = "{tool.file_path}" }
+
+# ── Auto-Record: Source Edits ──
+
+[[hooks]]
+event = "PostToolUse"
+tools = ["Edit", "Write", "NotebookEdit"]
+
+[hooks.auto_record]
+event_type = "source_edit"
+fields = { file_path = "{tool.file_path}" }
+
+# ── Auto-Record: File Searches ──
+
+[[hooks]]
+event = "PostToolUse"
+tools = ["Grep"]
+
+[hooks.auto_record]
+event_type = "file_search"
+fields = { file_path = "{tool.file_path}" }
+
+# ── Monitors ──
+
+[[monitors]]
+name = "fix_loop_stall"
+states = ["fix_loop"]
+action = "warn"
+message = "{count} events since last state transition. Run `sahjhan status`. If you have been fixing bugs without committing, stop and commit each fix atomically."
+
+[monitors.trigger]
+type = "event_count_since_last_transition"
+threshold = 20
+
+[[monitors]]
+name = "audit_stall"
+states = ["audit"]
+action = "warn"
+message = "{count} events in audit state without advancing. Run `sahjhan status` to check progress."
+
+[monitors.trigger]
+type = "event_count_since_last_transition"
+threshold = 30

@@ -504,3 +504,12 @@ description = "Shell command executed by agent (recorded by post-tool hook)"
 fields = [
     { name = "command", type = "string" },
 ]
+
+[events._checkpoint]
+description = "Cross-run project checkpoint — triggers living document renders"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "note", type = "string", optional = true },
+]

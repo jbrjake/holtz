@@ -32,7 +32,7 @@ values = [
 
 [ledgers.run]
 description = "Per-run audit ledger"
-path_template = "docs/holtz/runs/{run}/ledger.jsonl"
+path_template = "docs/holtz/runs/{template.instance_id}/ledger.jsonl"
 
 [ledgers.project]
 description = "Cross-run project ledger"
