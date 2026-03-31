@@ -21,8 +21,8 @@ from pathlib import Path
 VALID_SCOPES = {"per-file", "cross-file"}
 
 # Matches **Field:** value (field name is captured, value starts after the colon)
-_FIELD_RE = re.compile(r"^\*\*([A-Za-z_ -]+):\*\*\s*(.*)")
-_HEADING_RE = re.compile(r"^##\s+(\S+.*)$")
+_FIELD_RE = re.compile(r"^\*\*([A-Za-z_ -]+):\*\*[ \t]*(.*)")
+_HEADING_RE = re.compile(r"^##[ \t]+(\S+.*)$")
 
 # Map from markdown field names to dict keys
 _FIELD_MAP = {
