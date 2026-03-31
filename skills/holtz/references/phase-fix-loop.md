@@ -2,21 +2,50 @@
 
 > Core rules, rationalization red flags, and quick reference are in [../SKILL.md](../SKILL.md). Read that first if this is a fresh context.
 
-### Step 10: TDD Fix Loop
+<HARD-GATE>
+Before entering the fix loop, read [references/step-10-fix-loop.md](references/step-10-fix-loop.md) and record:
+`sahjhan event reference_read --field path=step-10-fix-loop.md`
+The `fix_loop_start` transition will not pass without this event.
+</HARD-GATE>
 
-Read [references/step-10-fix-loop.md](references/step-10-fix-loop.md) for the complete fix loop procedure (triage flowchart, fast path, investigation path, can't-reproduce path, per-fix hardening, blast radius analysis).
+### Step 10: TDD Fix Loop
 
 Read [references/impact-graph-operations.md](references/impact-graph-operations.md) for blast radius queries and risk score updates.
 
-1. **Re-read worklist** — If `docs/holtz/PUNCHLIST-MERGED.md` exists, use it. Otherwise, use `docs/holtz/PUNCHLIST.md`. **If the punchlist has more than 6 items**, use filtered reads to reduce context load:
-   ```bash
-   python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py <punchlist-path> --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
-   ```
-   This shows all OPEN/IN PROGRESS items plus the 3 most recently resolved items (for cross-item pattern recognition). Items resolved earlier are on disk and available in Step 11.
-2. **Triage** → Fast Path (test/doc/design/deterministic bug) | Investigation Path (intermittent/theoretical bug) | Can't-Reproduce Path (repro test passes)
-3. After each fix: **Per-Fix Hardening** (edge variants, regression tests) → **Blast Radius Analysis** (impact graph 2-hop query, risk score updates)
-4. Commit format: `fix(<scope>): <desc>` with punchlist ID in body
-5. **Run `sahjhan transition fix_commit --item-id BH-NNN` IMMEDIATELY after each commit** — this records the fix, runs gate checks (test suite, blast radius, hardening), and updates the rendered punchlist.
+**Re-read worklist** — If `docs/holtz/PUNCHLIST-MERGED.md` exists, use it. Otherwise, use `docs/holtz/PUNCHLIST.md`. **If the punchlist has more than 6 items**, use filtered reads to reduce context load:
+```bash
+python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py <punchlist-path> --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
+```
+This shows all OPEN/IN PROGRESS items plus the 3 most recently resolved items (for cross-item pattern recognition). Items resolved earlier are on disk and available in Step 11.
+
+#### Per-Item Fix Procedure (MANDATORY — do not skip steps)
+
+For EACH punchlist item, in order:
+
+1. `sahjhan event fix_start --field finding_id=BH-NNN`
+2. Write a failing test. Run it. Confirm it FAILS.
+3. `sahjhan event test_failed_before_fix --field finding_id=BH-NNN --field test_name=...`
+4. Write the fix. Run the failing test. Confirm it PASSES.
+5. Run full suite. Confirm all pass.
+6. Run blast radius: `python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json blast_radius <node> --depth 2`
+7. `sahjhan event blast_radius --field finding_id=BH-NNN --field affected_count=N`
+8. Write edge-case hardening tests (minimum 1).
+9. `sahjhan event hardening_complete --field finding_id=BH-NNN --field edge_cases_tested=N`
+10. `git commit` with finding ID in body. Format: `fix(<scope>): <desc>`
+11. `sahjhan transition fix_commit --item-id BH-NNN`
+12. Move to next item.
+
+**You cannot do step 4 before step 3.** The pre-edit hook enforces this.
+
+#### Fix Loop Output Rules
+
+**During the fix loop, do not write explanatory text between fixes.**
+Your output should be:
+- Tool calls (test writes, edits, bash commands)
+- One-line status after each fix_commit: "FIX N/M: BH-NNN resolved. Suite: X pass."
+- Nothing else until convergence.
+
+If you find yourself writing a summary table, STOP. You are not in the finalize phase.
 
 ### Step 11: Pattern Analysis [recurring: every 3-5 fixes during Step 10]
 

@@ -433,6 +433,24 @@ fields = [
     { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
 ]
 
+[events.fix_start]
+description = "Starting work on a punchlist item"
+fields = [
+    { name = "finding_id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
+[events.reference_read]
+description = "A reference file was read before entering a gated phase"
+fields = [
+    { name = "path", type = "string" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
 [events.merge_agent_dispatched]
 description = "Merge agent subagent was dispatched for finding classification"
 fields = [

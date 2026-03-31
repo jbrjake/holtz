@@ -121,6 +121,8 @@ sahjhan --ledger run-N ledger checkpoint --name pre-clear   # before /clear
 sahjhan event recon_step --field project=holtz --field run=N \
   --field auditor=holtz --field phase=recon --field step=0 \
   --field artifact_path=docs/holtz/recon/step0-project-overview.md
+sahjhan event fix_start --field project=holtz --field run=N \
+  --field auditor=holtz --field finding_id=BH-001
 sahjhan event blast_radius --field project=holtz --field run=N \
   --field auditor=holtz --field phase=fix_loop --field step=10 \
   --field target_node=module.py --field depth=2 \
@@ -181,6 +183,9 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 | "The CLI is too verbose for this small change" | Every protocol violation in Run 19 started with "this is too small to matter." Use the CLI. |
 | "I'll update the manifest after" | The manifest is updated atomically by the CLI. You cannot update it. |
 | "Let me summarize what I just wrote..." | The file IS the summary. Restating it doubles the context cost. Reference the path. |
+| "Let me fix all the bugs and summarize at the end" | Each fix is an atomic cycle. Batching fixes loses blast radius isolation and skips TDD. The protocol broke the moment you batched. |
+| "I'll write the final summary now" | SUMMARY.md is Step 17. You're in Step 10. The convergence gate hasn't passed. |
+| "These fixes are straightforward, I don't need per-fix hardening" | You said that. You wrote 9 fixes without a single new test. |
 
 ## Context Survival Protocol
 

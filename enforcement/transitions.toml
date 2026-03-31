@@ -47,7 +47,9 @@ gates = [
 from = "merge_done"
 to = "fix_loop"
 command = "fix_loop_start"
-gates = []
+gates = [
+    { type = "ledger_has_event", event = "reference_read", filter = { path = "step-10-fix-loop.md" }, min_count = 1, intent = "must read fix loop procedure before starting" },
+]
 
 # Direct audit -> fix_loop for lens rotations (no merge on subsequent passes)
 [[transitions]]
@@ -56,6 +58,7 @@ to = "fix_loop"
 command = "fix_loop_start"
 gates = [
     { type = "ledger_has_event", event = "state_transition", filter = { to = "merge_done" }, min_count = 1, intent = "first pass must go through merge before fix loop" },
+    { type = "ledger_has_event", event = "reference_read", filter = { path = "step-10-fix-loop.md" }, min_count = 1, intent = "must read fix loop procedure before starting" },
 ]
 
 [[transitions]]
