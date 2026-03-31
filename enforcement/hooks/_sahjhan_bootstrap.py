@@ -44,11 +44,13 @@ def _load_read_guards() -> list[str]:
     """Load read-guarded paths from sahjhan guards command.
 
     Falls back to hardcoded defaults if the binary is unavailable.
+    Triggers self-bootstrap if binary is missing.
     """
     import subprocess
     try:
-        binary = os.path.join(_PLUGIN_ROOT, "bin", "sahjhan-" + _platform_triple())
-        if os.path.isfile(binary):
+        from _resolve import ensure_sahjhan
+        binary = ensure_sahjhan()
+        if binary is not None:
             result = subprocess.run(
                 [binary, "--config-dir", os.path.join(_PLUGIN_ROOT, "enforcement"), "guards"],
                 capture_output=True, text=True, timeout=5,
@@ -58,18 +60,9 @@ def _load_read_guards() -> list[str]:
                 guards = data.get("read_blocked", [])
                 if guards:
                     return guards
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, KeyError):
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, KeyError, ImportError):
         pass
     return [".sahjhan/session.key", "enforcement/quiz-bank.json"]
-
-
-def _platform_triple() -> str:
-    """Return the platform triple for the current system.
-
-    Delegates to _resolve.platform_triple() for single source of truth.
-    """
-    from _resolve import platform_triple
-    return platform_triple()
 
 
 READ_GUARDED = _load_read_guards()
