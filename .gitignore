@@ -13,3 +13,5 @@ BUG-HUNTER-SUMMARY.md
 docs/holtz/.sahjhan/
 docs/holtz/HISTORY.json
 bin/sahjhan-*
+bin/.sahjhan-bootstrap-failed
+bin/.sahjhan-version
