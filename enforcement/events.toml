@@ -428,9 +428,21 @@ fields = [
 description = "A lens sweep has been initiated for a specific perspective"
 fields = [
     { name = "perspective", type = "string" },
+    { name = "sweep_type", type = "string", pattern = "^(full|gap-fill|cross-file-focused|initial-audit)$", optional = true },
     { name = "project", type = "string" },
     { name = "run", type = "string", pattern = "^\\d+$" },
     { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
+[events.lens_coverage_recorded]
+description = "Initial audit lens coverage matrix recorded after Steps 7-8"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "per_file_lenses_covered", type = "string", pattern = "^\\d+$" },
+    { name = "cross_file_lenses_covered", type = "string", pattern = "^\\d+$" },
+    { name = "artifact_path", type = "string" },
 ]
 
 [events.fix_start]
