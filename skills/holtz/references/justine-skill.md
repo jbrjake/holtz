@@ -217,7 +217,7 @@ Justine attacks the highest-priority areas first, regardless of traditional orde
 
 For areas not resolved by prediction testing:
 1. Read `docs/holtz/justine/recon/step3-recon-summary.md` for project context.
-2. Audit across **ALL lenses simultaneously** rather than one lens at a time. For each code area, consider all six lens perspectives in a single read-through rather than reading the same code six times under six lenses.
+2. Audit across **ALL lenses simultaneously** rather than one lens at a time. Run `python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/parse_lens_registry.py` to get the current lens set with scopes. For each code area, apply all `per-file` scoped lenses in a single read-through. For `cross-file` scoped lenses, trace paths using impact graph entry points — these may require reading additional files beyond the current area.
 3. **Default lens order for priority weighting:** integration → security → data-flow → error-propagation → contract → component. Within each area, integration concerns are checked first because boundary failures are where the obvious bugs live.
 4. **Priority order across areas:** Cross-cutting concerns first (interfaces, contracts, error boundaries), then individual components. This is the inverse of Holtz, who starts with components.
 5. Use **Agent subagents** for batch audits when possible. Each subagent audits a code area across all lenses and writes findings directly to a temp file. You merge them into the punchlist.
