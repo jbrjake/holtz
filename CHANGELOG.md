@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Add changes here as they're merged. Move to a version heading on release. -->
 
-## [0.73.3] - 2026-03-30
+## [0.73.5] - 2026-03-30
 
 _264 commits since v0.4.0 — this is a massive release._
 
