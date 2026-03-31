@@ -4,17 +4,14 @@ from __future__ import annotations
 import hashlib
 import os
 import stat
-import tempfile
+import sys
 import time
 from unittest import mock
 
-import pytest
-
 # Import under test — patch sys.path so enforcement/hooks/ is importable
-import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'enforcement', 'hooks'))
 
-import _resolve
+import _resolve  # noqa: E402
 
 
 class TestEnsureSahjhan:
@@ -38,7 +35,7 @@ class TestEnsureSahjhan:
         binary.parent.mkdir(parents=True)
 
         with mock.patch.object(_resolve, 'sahjhan_binary', return_value=str(binary)), \
-             mock.patch('_resolve.urlopen', side_effect=OSError("no network")):
+             mock.patch.object(_resolve, 'urlopen', side_effect=OSError("no network")):
             result = _resolve.ensure_sahjhan()
         assert result is None
 
@@ -58,7 +55,7 @@ class TestEnsureSahjhan:
 
         with mock.patch.object(_resolve, 'sahjhan_binary', return_value=str(binary)), \
              mock.patch.object(_resolve, 'SAHJHAN_CHECKSUMS', mock_checksums), \
-             mock.patch('_resolve.urlopen', return_value=mock_resp):
+             mock.patch.object(_resolve, 'urlopen', return_value=mock_resp):
             result = _resolve.ensure_sahjhan()
 
         assert result == str(binary)
@@ -82,7 +79,7 @@ class TestEnsureSahjhan:
 
         with mock.patch.object(_resolve, 'sahjhan_binary', return_value=str(binary)), \
              mock.patch.object(_resolve, 'SAHJHAN_CHECKSUMS', mock_checksums), \
-             mock.patch('_resolve.urlopen', return_value=mock_resp):
+             mock.patch.object(_resolve, 'urlopen', return_value=mock_resp):
             result = _resolve.ensure_sahjhan()
 
         assert result is None
@@ -96,7 +93,7 @@ class TestEnsureSahjhan:
         marker.write_text(str(time.time()))
 
         with mock.patch.object(_resolve, 'sahjhan_binary', return_value=str(binary)), \
-             mock.patch('_resolve.urlopen') as mock_urlopen:
+             mock.patch.object(_resolve, 'urlopen') as mock_urlopen:
             result = _resolve.ensure_sahjhan()
 
         assert result is None
@@ -120,7 +117,7 @@ class TestEnsureSahjhan:
 
         with mock.patch.object(_resolve, 'sahjhan_binary', return_value=str(binary)), \
              mock.patch.object(_resolve, 'SAHJHAN_CHECKSUMS', mock_checksums), \
-             mock.patch('_resolve.urlopen', return_value=mock_resp):
+             mock.patch.object(_resolve, 'urlopen', return_value=mock_resp):
             result = _resolve.ensure_sahjhan()
 
         assert result == str(binary)
@@ -144,7 +141,7 @@ class TestEnsureSahjhan:
 
         with mock.patch.object(_resolve, 'sahjhan_binary', return_value=str(binary)), \
              mock.patch.object(_resolve, 'SAHJHAN_CHECKSUMS', mock_checksums), \
-             mock.patch('_resolve.urlopen', return_value=mock_resp):
+             mock.patch.object(_resolve, 'urlopen', return_value=mock_resp):
             result = _resolve.ensure_sahjhan()
 
         assert result == str(binary)
@@ -157,7 +154,7 @@ class TestEnsureSahjhan:
         binary.write_bytes(b"manually-vendored")
 
         with mock.patch.object(_resolve, 'sahjhan_binary', return_value=str(binary)), \
-             mock.patch('_resolve.urlopen') as mock_urlopen:
+             mock.patch.object(_resolve, 'urlopen') as mock_urlopen:
             result = _resolve.ensure_sahjhan()
 
         assert result == str(binary)
@@ -176,7 +173,7 @@ class TestEnsureSahjhan:
 
         with mock.patch.object(_resolve, 'sahjhan_binary', return_value=str(binary)), \
              mock.patch.object(_resolve, 'SAHJHAN_CHECKSUMS', {triple: "a" * 64}), \
-             mock.patch('_resolve.urlopen', return_value=mock_resp):
+             mock.patch.object(_resolve, 'urlopen', return_value=mock_resp):
             result = _resolve.ensure_sahjhan()
 
         assert result is None
