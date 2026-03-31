@@ -11,7 +11,7 @@ from urllib.request import urlopen
 
 # ── Pinned version and integrity checksums ──
 
-SAHJHAN_VERSION = "0.5.0"
+SAHJHAN_VERSION = "0.6.1"
 _RELEASE_BASE = "https://github.com/jbrjake/sahjhan/releases/download"
 _BOOTSTRAP_COOLDOWN = 3600  # seconds before retrying after failure
 
