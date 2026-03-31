@@ -1106,6 +1106,185 @@
         "confidence": "medium",
         "note": "duplicate longest-prefix matching logic"
       }
+    },
+    {
+      "source": "validate_punchlist::render_items",
+      "target": "validate_punchlist::parse_punchlist",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "validate_punchlist::render_items",
+      "target": "markdown_utils::mask_code_fences",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "validate_punchlist::render_items",
+      "target": "validate_punchlist::parse_punchlist",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium",
+        "note": "render_items uses masked char offsets to index original_content \u2014 assumes mask_code_fences preserves character offsets, but it does not (fenced lines replaced with empty strings)"
+      }
+    },
+    {
+      "source": "validate_punchlist::filter_items",
+      "target": "validate_punchlist::parse_punchlist",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_pattern_brief_compact",
+      "target": "pattern_brief_compact::parse_brief",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "5 tests, all happy-path"
+      }
+    },
+    {
+      "source": "pattern_brief_compact::parse_brief",
+      "target": "pattern_brief_compact::_extract",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Called for each field in each entry"
+      }
+    },
+    {
+      "source": "pattern_brief_compact::_extract",
+      "target": "markdown_utils::mask_code_fences",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Assumes input has no code fences \u2014 does not call mask_code_fences before regex"
+      }
+    },
+    {
+      "source": "validate_punchlist.py",
+      "target": "markdown_utils.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check.py",
+      "target": "markdown_utils.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "impact_graph_gate.py",
+      "target": "_common.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "status_staleness_gate.py",
+      "target": "_common.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "artifact_verification.py",
+      "target": "_common.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "subagent_findings_check.py",
+      "target": "_common.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check.py",
+      "target": "validate_punchlist.py",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Both split on ### BH-NNN: headers in masked content \u2014 must stay aligned"
+      }
+    },
+    {
+      "source": "validate_punchlist.py",
+      "target": "convergence_check.py",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Both use mask_code_fences to split on ### BH/BJ-NNN headers \u2014 must agree on item boundaries"
+      }
+    },
+    {
+      "source": "impact_graph_gate.py",
+      "target": "status_staleness_gate.py",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Both use substring containment for path matching \u2014 same pattern, same limitations"
+      }
+    },
+    {
+      "source": "test_integration.py",
+      "target": "README.md",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "test_readme_metrics_match_actual validates test count but not line count or other metrics"
+      }
+    },
+    {
+      "source": "test_integration.py",
+      "target": "validate_punchlist.py",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_integration.py",
+      "target": "convergence_check.py",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
     }
   ]
 }
