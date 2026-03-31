@@ -20,7 +20,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _resolve import sahjhan_binary  # noqa: E402
+from _resolve import ensure_sahjhan  # noqa: E402
 from lens_evidence import (  # noqa: E402
     check_artifact,
     check_transcript,
@@ -359,12 +359,12 @@ def main() -> None:
 
     # Setup
     cwd = event.get("cwd", os.getcwd())
-    binary = sahjhan_binary()
+    binary = ensure_sahjhan()
     config_dir = os.path.join(cwd, "enforcement")
     quiz_bank_path = os.path.join(cwd, "enforcement", "quiz-bank.json")
 
     # Graceful degradation: no binary → allow
-    if not os.path.isfile(binary):
+    if binary is None:
         exit_stop_allow()
 
     ledger = _active_ledger(cwd)

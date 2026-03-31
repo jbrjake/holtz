@@ -45,9 +45,9 @@ def _get_session_key_path(cwd: str | None = None, ledger: str | None = None) -> 
         cwd = os.getcwd()
     default = os.path.join(cwd, "docs", "holtz", ".sahjhan", "session.key")
     try:
-        from _resolve import sahjhan_binary
-        binary = sahjhan_binary()
-        if os.path.isfile(binary):
+        from _resolve import ensure_sahjhan
+        binary = ensure_sahjhan()
+        if binary is not None:
             import subprocess
             cmd = [binary, "--config-dir", os.path.join(cwd, "enforcement")]
             if ledger:
@@ -110,11 +110,13 @@ def record_authed_event(
     Returns:
         The CompletedProcess from the sahjhan call.
     """
-    from _resolve import sahjhan_binary
+    from _resolve import ensure_sahjhan
 
     key_path = _get_session_key_path(cwd, ledger=ledger)
     proof = compute_event_proof(event_type, fields, key_path)
-    binary = sahjhan_binary()
+    binary = ensure_sahjhan()
+    if binary is None:
+        raise OSError("Sahjhan binary unavailable")
     cmd = [binary, "--config-dir", os.path.join(cwd, "enforcement")]
     if ledger:
         cmd.extend(["--ledger", ledger])

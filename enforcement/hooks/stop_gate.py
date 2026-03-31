@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _protocol_cache import parse_status_text  # noqa: E402
-from _resolve import sahjhan_binary  # noqa: E402
+from _resolve import ensure_sahjhan  # noqa: E402
 
 from _common import _active_ledger, exit_stop_allow, exit_stop_block, read_event  # noqa: E402
 
@@ -22,8 +22,8 @@ from _common import _active_ledger, exit_stop_allow, exit_stop_block, read_event
 def main() -> None:
     event = read_event()
 
-    binary = sahjhan_binary()
-    if not os.path.isfile(binary):
+    binary = ensure_sahjhan()
+    if binary is None:
         exit_stop_allow()
 
     cwd = event.get("cwd", os.getcwd())

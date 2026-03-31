@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _protocol_cache import is_sahjhan_cmd  # noqa: E402
-from _resolve import sahjhan_binary  # noqa: E402
+from _resolve import ensure_sahjhan  # noqa: E402
 
 from _common import _active_ledger, exit_ok, exit_warn, read_event  # noqa: E402
 
@@ -35,8 +35,8 @@ def main() -> None:
     if is_sahjhan_cmd(cmd):
         exit_ok()
 
-    binary = sahjhan_binary()
-    if not os.path.isfile(binary):
+    binary = ensure_sahjhan()
+    if binary is None:
         # Sahjhan not vendored yet — skip verification
         exit_ok()
 

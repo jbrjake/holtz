@@ -21,7 +21,7 @@ from _protocol_cache import (  # noqa: E402
     read_cache,
     write_cache,
 )
-from _resolve import sahjhan_binary  # noqa: E402
+from _resolve import ensure_sahjhan  # noqa: E402
 
 from _common import _active_ledger, exit_ok, read_event  # noqa: E402
 
@@ -65,8 +65,8 @@ def _parse_commit_hash(output: str) -> str:
 
 def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     """Query sahjhan status (text) and update cache fields."""
-    binary = sahjhan_binary()
-    if not os.path.isfile(binary):
+    binary = ensure_sahjhan()
+    if binary is None:
         return cache
     config_dir = os.path.join(cwd, "enforcement")
     ledger = _active_ledger(cwd)

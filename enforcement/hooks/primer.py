@@ -20,16 +20,16 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _protocol_cache import format_state_line, parse_status_text  # noqa: E402
 from _protocol_cache import read_cache as read_enforcement_cache
-from _resolve import sahjhan_binary  # noqa: E402
+from _resolve import ensure_sahjhan  # noqa: E402
 
 from _common import _active_ledger, exit_ok, exit_warn, read_event, record_authed_event  # noqa: E402
 
 
 def main() -> None:
     event = read_event()
-    binary = sahjhan_binary()
+    binary = ensure_sahjhan()
 
-    if not os.path.isfile(binary):
+    if binary is None:
         exit_ok()
 
     cwd = event.get("cwd", os.getcwd())
