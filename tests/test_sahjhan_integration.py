@@ -1051,3 +1051,165 @@ class TestActiveLedger:
             f"name found in ledgers.toml. Hooks will fail to resolve --ledger {ledger_name}. "
             f"Use the full ledger name (e.g. 'run-26'), not the template name ('run')."
         )
+
+
+# --- pre_tool_hook.py (PreToolUse) ---
+
+
+class TestPreToolHook:
+    """Tests for the pre_tool_hook.py thin wrapper."""
+
+    def test_blocks_managed_path(self):
+        """pre_tool_hook blocks writes to sahjhan-managed files."""
+        event = {
+            "tool_input": {"file_path": "docs/holtz/STATUS.md"},
+            "tool_name": "Edit",
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("pre_tool_hook.py", event)
+        assert_blocked(code, output, "managed")
+
+    def test_allows_non_managed_path(self):
+        """pre_tool_hook allows writes outside managed paths."""
+        event = {
+            "tool_input": {"file_path": "src/main.py"},
+            "tool_name": "Edit",
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("pre_tool_hook.py", event)
+        assert_allowed(code, output)
+
+    def test_allows_empty_path(self):
+        """pre_tool_hook allows when no file path is provided."""
+        event = {"tool_input": {}, "tool_name": "Edit", "cwd": REPO_ROOT}
+        code, output, _ = run_enforcement_hook("pre_tool_hook.py", event)
+        assert_allowed(code, output)
+
+    def test_degrades_gracefully_without_binary(self, tmp_path):
+        """pre_tool_hook allows when sahjhan binary is unavailable."""
+        event = {
+            "tool_input": {"file_path": "src/main.py"},
+            "tool_name": "Edit",
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert_allowed(code, output)
+
+
+# --- stop_hook.py (Stop) ---
+
+
+class TestStopHook:
+    """Tests for the stop_hook.py thin wrapper."""
+
+    def test_allows_without_binary(self, tmp_path):
+        """stop_hook degrades gracefully when no binary available."""
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output == {}
+
+    def test_allows_without_active_run(self, tmp_path):
+        """stop_hook allows when no .sahjhan directory exists."""
+        _create_mock_binary(tmp_path, 'echo "state: finalized (1 events, chain valid)"')
+        (tmp_path / "enforcement").mkdir(parents=True)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output == {}
+
+    def test_degrades_gracefully_on_oserror(self, tmp_path):
+        """stop_hook allows when binary is unexecutable."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        _create_mock_binary(tmp_path, "exit 0")
+        binary_path = list((tmp_path / "bin").iterdir())[0]
+        binary_path.chmod(0o000)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        binary_path.chmod(0o755)
+        assert code == 0
+
+
+# --- post_tool_hook.py (PostToolUse) ---
+
+
+class TestPostToolHook:
+    """Tests for the post_tool_hook.py thin wrapper."""
+
+    def test_allows_without_binary(self, tmp_path):
+        """post_tool_hook degrades gracefully when no binary available."""
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "src/main.py"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook(
+            "post_tool_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output.get("continue") is True
+
+    @pytest.fixture
+    def ptmod(self):
+        """Load post_tool_hook module for unit testing."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "post_tool_hook",
+            os.path.join(ENFORCEMENT_HOOKS_DIR, "post_tool_hook.py"),
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_enriches_read_line_span(self, ptmod):
+        """post_tool_hook enriches file_read with offset/limit as line span."""
+        record = {"event_type": "file_read", "fields": {"file_path": "src/main.py"}}
+        tool_input = {"file_path": "src/main.py", "offset": "10", "limit": "50"}
+        result = ptmod._enrich_auto_record(record, "Read", tool_input)
+        assert result["fields"]["line_start"] == "10"
+        assert result["fields"]["line_end"] == "59"
+        assert result["fields"]["tool"] == "Read"
+
+    def test_enriches_edit_lines_changed(self, ptmod):
+        """post_tool_hook enriches source_edit with lines_changed from old_string."""
+        record = {"event_type": "source_edit", "fields": {"file_path": "src/main.py"}}
+        tool_input = {
+            "file_path": "src/main.py",
+            "old_string": "line1\nline2\nline3",
+            "new_string": "new1\nnew2",
+        }
+        result = ptmod._enrich_auto_record(record, "Edit", tool_input)
+        assert result["fields"]["lines_changed"] == "3"
+        assert result["fields"]["edit_type"] == "partial"
+        assert result["fields"]["tool"] == "Edit"
+
+    def test_enriches_write_full_file(self, ptmod):
+        """post_tool_hook marks Write as full_file edit."""
+        record = {"event_type": "source_edit", "fields": {"file_path": "src/main.py"}}
+        tool_input = {"file_path": "src/main.py", "content": "full file content"}
+        result = ptmod._enrich_auto_record(record, "Write", tool_input)
+        assert result["fields"]["edit_type"] == "full_file"
+        assert result["fields"]["tool"] == "Write"
+
+    def test_enriches_grep_search(self, ptmod):
+        """post_tool_hook enriches file_search with pattern and path."""
+        record = {"event_type": "file_search", "fields": {"file_path": ""}}
+        tool_input = {"pattern": "TODO", "path": "src/"}
+        result = ptmod._enrich_auto_record(record, "Grep", tool_input)
+        assert result["fields"]["pattern"] == "TODO"
+        assert result["fields"]["search_path"] == "src/"
+        assert result["fields"]["tool"] == "Grep"
+
+    def test_builds_bash_command_event(self, ptmod):
+        """post_tool_hook builds bash_command event from tool_input."""
+        result = ptmod._build_bash_event({"command": "git status"})
+        assert result["event_type"] == "bash_command"
+        assert result["fields"]["command"] == "git status"
