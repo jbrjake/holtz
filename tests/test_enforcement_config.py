@@ -3,9 +3,9 @@
 import json
 import re
 import sys
+from pathlib import Path
 
 import pytest
-from pathlib import Path
 
 if sys.version_info >= (3, 11):  # noqa: UP036
     import tomllib
