@@ -29,7 +29,7 @@ def test_passes_with_all_hooks(tmp_path):
         "PreToolUse": [
             {"matcher": "Write|Edit", "hooks": [
                 {"type": "command", "command": "python enforcement/hooks/_sahjhan_bootstrap.py"},
-                {"type": "command", "command": "python enforcement/hooks/write_guard.py"},
+                {"type": "command", "command": "python enforcement/hooks/pre_tool_hook.py"},
             ]},
             {"matcher": "Read", "hooks": [
                 {"type": "command", "command": "python enforcement/hooks/_sahjhan_bootstrap.py"},
@@ -43,6 +43,9 @@ def test_passes_with_all_hooks(tmp_path):
                 {"type": "command", "command": "python enforcement/hooks/bash_guard.py"},
                 {"type": "command", "command": "python enforcement/hooks/protocol_tracker.py"},
             ]},
+            {"matcher": "", "hooks": [
+                {"type": "command", "command": "python enforcement/hooks/post_tool_hook.py"},
+            ]},
         ],
         "UserPromptSubmit": [
             {"matcher": "", "hooks": [
@@ -51,7 +54,7 @@ def test_passes_with_all_hooks(tmp_path):
         ],
         "Stop": [
             {"matcher": "", "hooks": [
-                {"type": "command", "command": "python enforcement/hooks/stop_gate.py"},
+                {"type": "command", "command": "python enforcement/hooks/stop_hook.py"},
             ]},
         ],
         "SubagentStop": [
@@ -77,7 +80,7 @@ def test_detects_partial_hooks(tmp_path):
         "PreToolUse": [
             {"matcher": "Write|Edit", "hooks": [
                 {"type": "command", "command": "python enforcement/hooks/_sahjhan_bootstrap.py"},
-                {"type": "command", "command": "python enforcement/hooks/write_guard.py"},
+                {"type": "command", "command": "python enforcement/hooks/pre_tool_hook.py"},
             ]},
             {"matcher": "Bash", "hooks": [
                 {"type": "command", "command": "python enforcement/hooks/commit_gate.py"},
