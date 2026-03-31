@@ -70,25 +70,25 @@ digraph {
     fillcolor="#e9d8fd" color="#6b46c1" fontcolor="#44337a"
   ]
 
-  // Hooks — amber
-  artifact_verification [
-    label="artifact_verification"
+  // Enforcement hooks — amber
+  write_guard [
+    label="write_guard"
     fillcolor="#fefcbf" color="#d69e2e" fontcolor="#744210"
   ]
-  impact_graph_gate [
-    label="impact_graph_gate"
+  lens_quiz [
+    label="lens_quiz"
     fillcolor="#fefcbf" color="#d69e2e" fontcolor="#744210"
   ]
-  status_staleness_gate [
-    label="status_staleness_gate"
+  protocol_tracker [
+    label="protocol_tracker"
     fillcolor="#fefcbf" color="#d69e2e" fontcolor="#744210"
   ]
   subagent_findings_check [
     label="subagent_findings_check"
     fillcolor="#fefcbf" color="#d69e2e" fontcolor="#744210"
   ]
-  hooks_common [
-    label="_common"
+  _protocol_cache [
+    label="_protocol_cache"
     fillcolor="#fefcbf" color="#d69e2e" fontcolor="#744210"
   ]
 
@@ -101,10 +101,14 @@ digraph {
     label="references/"
     fillcolor="#c6f6d5" color="#38a169" fontcolor="#22543d"
   ]
+  lens_registry [
+    label="lens-registry.md"
+    fillcolor="#c6f6d5" color="#38a169" fontcolor="#22543d"
+  ]
 
   // Tests — light indigo
-  test_hooks [
-    label="test_hooks"
+  test_enforcement [
+    label="test_enforcement"
     fillcolor="#e8e0f0" color="#805ad5" fontcolor="#44337a"
   ]
   test_validate_punchlist [
@@ -131,10 +135,9 @@ digraph {
   // Import edges — solid gray
   validate_punchlist -> markdown_utils [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
   convergence_check -> markdown_utils [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
-  artifact_verification -> hooks_common [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
-  impact_graph_gate -> hooks_common [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
-  status_staleness_gate -> hooks_common [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
-  subagent_findings_check -> hooks_common [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
+  write_guard -> _protocol_cache [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
+  lens_quiz -> _protocol_cache [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
+  protocol_tracker -> _protocol_cache [color="#a0aec0" fontcolor="#90cdf4" label="imports"]
 
   // Call edges — solid blue
   parse_punchlist -> mask_code_fences [color="#3182ce" fontcolor="#63b3ed" label="calls"]
@@ -144,10 +147,10 @@ digraph {
   filter_items -> parse_punchlist [color="#3182ce" fontcolor="#63b3ed" label="calls"]
 
   // Test edges — dotted purple
-  test_hooks -> impact_graph_gate [color="#805ad5" style=dotted fontcolor="#b794f4" label="tests"]
-  test_hooks -> status_staleness_gate [color="#805ad5" style=dotted fontcolor="#b794f4" label="tests"]
-  test_hooks -> artifact_verification [color="#805ad5" style=dotted fontcolor="#b794f4" label="tests"]
-  test_hooks -> subagent_findings_check [color="#805ad5" style=dotted fontcolor="#b794f4" label="tests"]
+  test_enforcement -> write_guard [color="#805ad5" style=dotted fontcolor="#b794f4" label="tests"]
+  test_enforcement -> lens_quiz [color="#805ad5" style=dotted fontcolor="#b794f4" label="tests"]
+  test_enforcement -> protocol_tracker [color="#805ad5" style=dotted fontcolor="#b794f4" label="tests"]
+  test_enforcement -> subagent_findings_check [color="#805ad5" style=dotted fontcolor="#b794f4" label="tests"]
   test_validate_punchlist -> validate_punchlist [color="#805ad5" style=dotted fontcolor="#b794f4" label="tests"]
   test_convergence_check -> convergence_check [color="#805ad5" style=dotted fontcolor="#b794f4" label="tests"]
   test_impact_graph -> impact_graph_mod [color="#805ad5" style=dotted fontcolor="#b794f4" label="tests"]
@@ -161,46 +164,41 @@ digraph {
     fontcolor="#fc8181"
     label="assumes\nheader format\nmust stay aligned"
   ]
-  artifact_verification -> ImpactGraph [
+  ImpactGraph -> check_convergence [
     color="#e53e3e" style=dashed penwidth=1.5
     fontcolor="#fc8181"
-    label="assumes\ncreates file\nat --graph path"
+    label="assumes\ndelta is finite\nrisk_score valid"
   ]
   readme -> validate_punchlist [
     color="#e53e3e" style=dashed penwidth=1.5
     fontcolor="#fc8181"
     label="assumes\ncounts match\nactual files"
   ]
-  ImpactGraph -> check_convergence [
-    color="#e53e3e" style=dashed penwidth=1.5
-    fontcolor="#fc8181"
-    label="assumes\ndelta is finite\nrisk_score valid"
-  ]
   convergence_check -> validate_punchlist [
     color="#e53e3e" style=dashed penwidth=1.5
     fontcolor="#fc8181"
     label="assumes\ncompatible\nheader regex"
-  ]
-  status_staleness_gate -> impact_graph_gate [
-    color="#e53e3e" style=dashed penwidth=1.5
-    fontcolor="#fc8181"
-    label="assumes\nsame cwd\nresolution"
   ]
   ImpactGraph -> impact_graph_mod [
     color="#e53e3e" style=dashed penwidth=1.5
     fontcolor="#fc8181"
     label="assumes\nedges have\nsource/target/type"
   ]
-  impact_graph_gate -> impact_graph_mod [
-    color="#e53e3e" style=dashed penwidth=1.5
-    fontcolor="#fc8181"
-    label="assumes\ncreates file\nat expected path"
-  ]
   render_items -> parse_punchlist [
     color="#e53e3e" style=dashed penwidth=1.5
     fontcolor="#fc8181"
     label="assumes\nmasked offsets\nmatch original"
     constraint=false
+  ]
+  lens_quiz -> lens_registry [
+    color="#e53e3e" style=dashed penwidth=1.5
+    fontcolor="#fc8181"
+    label="assumes\nquiz answers match\nregistry content"
+  ]
+  protocol_tracker -> convergence_check [
+    color="#e53e3e" style=dashed penwidth=1.5
+    fontcolor="#fc8181"
+    label="assumes\nsame state\nlabels"
   ]
 
   // Diverges_from edges — dashed orange

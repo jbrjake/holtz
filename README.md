@@ -75,6 +75,8 @@ That edge between `parse_punchlist` and `count_items` says: "Both split on `### 
 
 The edge between `ImpactGraph` and `check_convergence` says: "update_risk delta must be finite; risk_score must be valid float for sorting." That assumption turned out to be violated — `update_risk()` accepts `float('nan')`, and Python's `min(1.0, nan)` returns `1.0` because NaN comparisons are always False. Every node's risk score silently pins to maximum. The graph recorded the assumption. Checking the assumption found the bug.
 
+The edge between `lens_quiz` and `lens_registry` says: "quiz bank answers must reflect current lens definitions." The quiz stores expected answers about each lens — focus area, failure modes, entry point. When the lens registry changes, the quiz bank has to change with it. This edge caught a real bug: the quiz was testing knowledge about lens configurations that had been updated two runs earlier. Holtz was failing honest answers because the enforcement was asking the wrong questions.
+
 The graph also detects drift. If a function moves more than ten lines from where it was last audited, Holtz flags it. If it disappears, he prunes it. The graph stays honest about what's in the codebase, not what used to be.
 
 ## The fix loop
@@ -82,6 +84,8 @@ The graph also detects drift. If a function moves more than ten lines from where
 Holtz doesn't file tickets. He fixes things. Every fix follows the same discipline.
 
 Every fix starts with a failing test. Not after. Before. The test proves the bug exists before the fix proves the bug is gone. This is not optional. This is the entire point. A fix without a failing test is a guess that happens to compile.
+
+Before touching any code, Holtz reads it. A read gate blocks fixes on files he hasn't opened in the current session. The model will sometimes generate patches based on assumptions about what a file contains. Those assumptions are occasionally wrong. A mandatory read before every write adds one tool call per fix and eliminates an entire class of bad patches.
 
 Simple items take the fast path: write the test, verify it fails, minimal fix, full suite, commit. Doc drift, bogus assertions, deterministic bugs with obvious causes. One logical change per commit, punchlist updated immediately.
 
@@ -111,7 +115,7 @@ Sixteen seed patterns ship with the plugin: regex newline leaks, code-fence-unaw
 
 Holtz is built to be added to.
 
-**Lenses.** The thirteen analytical lenses that ship are defaults. Add any lens to the registry file and it joins the convergence rotation. If you've found a way of looking at code that catches things the existing lenses miss, that's the kind of contribution that makes the registry better for everyone.
+**Lenses.** The thirteen analytical lenses that ship are defaults. Each has a Scope field — per-file or cross-file — that determines when it fires: per-file lenses run during the initial audit, cross-file lenses during convergence. Add any lens to the registry file and it joins the rotation. If you've found a way of looking at code that catches things the existing lenses miss, that's the kind of contribution that makes the registry better for everyone.
 
 **Patterns.** Each seed pattern is a markdown file with a YAML header, a description, an executable detection heuristic, and an example. Write one for a bug class you keep seeing. If the heuristic fires during recon, Holtz starts the audit already knowing what to look for.
 
@@ -131,19 +135,21 @@ Holtz is a Claude Code plugin, but the architecture is portable. The skill, patt
 
 ## Steps 0-20
 
-**Steps 0-4: Recon.** Project structure, test infrastructure, baseline metrics, lint, git churn, skipped tests, mutation scanning, architecture drift, predictive recon. Five steps, each written to disk immediately. By the time Step 6 starts, Holtz has a map.
+**Steps 0-4: Recon.** Project structure, test infrastructure, baseline metrics, lint, git churn, skipped tests, mutation scanning, architecture drift, predictive recon. Five steps, each written to disk immediately. By the time Step 5 starts, Holtz has a map.
 
-**Step 6: Doc-to-implementation audit.** Every testable claim checked against reality. Every finding adds `assumes` and `diverges_from` edges to the graph.
+**Step 5: Dispatch Justine.** Holtz sends the raw recon data to Justine as a subagent. She inherits the project structure, git churn, test infrastructure, and baseline metrics but runs her own synthesis and predictions independently. Same inputs, different lens ordering, different conclusions. The audit continues without waiting for her.
 
-**Step 7: Test quality audit.** Every test file scored against seventeen anti-patterns. If mutation data is available, tests that don't kill mutations get called what they are.
+**Steps 6-8: Audit.** Doc-to-implementation (Step 6), test quality against seventeen anti-patterns (Step 7), adversarial code audit in priority order (Step 8). Per-file lenses — component, security, contract, observability — fire during Steps 7 and 8, catching isolation-level issues on first contact instead of deferring them to convergence.
 
-**Step 8: Adversarial code audit.** Source modules in priority order: error paths, boundaries, state transitions, external integrations, security. High-churn files first.
+**Step 9: Merge.** When Justine finishes, a merge subagent classifies every finding as agreement, blind spot, or contradiction. Agreements confirm. Blind spots get added to the punchlist. Contradictions get deferred to the user.
 
 **Step 10: Fix loop.** Described above. The serious part.
 
 **Step 11: Pattern analysis.** Group resolved items, find shared root causes, search for siblings.
 
-**Steps 14-16: Convergence.** Repeat Steps 10-11 until clean, then run a final sweep across all thirteen lenses — component, integration, security, error propagation, data flow, contract, semantic fidelity, temporal protocol, public contract, concurrency, resource lifecycle, idempotency, observability. If any lens finds something, the loop continues. Circuit breakers prevent runaway: max 15 fix commits (enforced by Sahjhan gate), max 3 attempts per item (advisory), stall detection after 15 non-productive commands. Without these, Holtz would audit forever. He would not consider this a problem.
+**Step 14: Lens rotation.** Selects the next lens by coverage gap — scopes that haven't been audited get priority, then focused sweeps on areas with the most findings. Re-runs Steps 6-8 scoped to the new lens focus and entry point.
+
+**Steps 15-16: Convergence.** When all lenses have rotated through, a final sweep runs all thirteen simultaneously — component, integration, security, error propagation, data flow, contract, semantic fidelity, temporal protocol, public contract, concurrency, resource lifecycle, idempotency, observability. If any lens finds something, the loop continues. Circuit breakers prevent runaway: max 15 fix commits enforced by the Sahjhan gate, max 3 attempts per item, stall detection after 15 non-productive commands. Without these, Holtz would audit forever. He would not consider this a problem.
 
 <p align="center"><img src="docs/diagrams/holtz-convergence.svg" alt="Holtz convergence loop"></p>
 
@@ -157,7 +163,7 @@ Default behavior between runs is resume, not restart:
 
 ## What this looks like in practice
 
-Holtz has been auditing his own codebase since it was written. Twenty-eight runs and counting. Here's what happened.
+Holtz has been auditing his own codebase since it was written. Thirty runs and counting. Here's what happened.
 
 Here is run 14 — a full adversarial self-play audit. Holtz and Justine auditing in parallel, merging findings, then Holtz running the TDD fix loop through convergence. Every tool call, every finding, every fix. Token counts after each step.
 
@@ -187,25 +193,39 @@ For the complete trace with reasoning chains, code diffs, and prediction accurac
 
 **Run 16** found the run count stale again (same class as every run since 14) and the prediction accuracy overstated. Also PAT-001 for its eleventh and twelfth manifestations: `parse_brief()` applied regex without masking code fences (offset-divergence variant), and the hooks' fence masking tracked fence character but not fence count (grammar variant). Four items, all resolved.
 
-After twenty-eight runs, findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+**Runs 17-20** restructured the internals. Step numbering flattened from nested phases to Steps 0-20. Four new lenses joined the registry — concurrency, resource lifecycle, idempotency, observability. The token profiler arrived as a companion tool. Holtz spent four runs auditing his own reorganization, which is the kind of recursive loop he was built for.
 
-The full dataset — prediction accuracy calibration, PAT-001 recurrence timeline, adversarial merge blind-spot analysis, convergence iteration counts, and test growth curves across all 16 runs — is published in [docs/research/convergence-data.md](docs/research/convergence-data.md). (Data through Run 16; Runs 17-26 are not yet included in the research dataset.)
+**Run 21** was the Sahjhan shakedown — the first run with a state machine enforcing protocol state instead of advisory hooks. Seven findings. Gate command paths pointed to the wrong scripts. Templates had syntax errors. The TOML config didn't match the Sahjhan type system. The enforcement that was supposed to prevent bad audits couldn't produce a correct one. Three follow-up runs to get it clean. The shakedown proved both things at once: state-machine enforcement works, and state-machine enforcement needs to be audited by the thing it constrains.
+
+**Run 25** found the authentication gaps. Without signed events, Holtz could write directly to the ledger and fake state transitions — skip the lens quiz, bypass pattern analysis, claim convergence without the final sweep. The response was HMAC-authenticated events with per-ledger session keys stored in files the read guard won't open. The model can't forge what it can't read. This was the run that turned enforcement from "trust but verify" into "verify, don't trust."
+
+After thirty runs, findings per run dropped from 12 to single digits. Severity shifted from HIGH to LOW. The codebase got cleaner. The findings got subtler. Holtz did the fixing himself, every time.
+
+The full dataset — prediction accuracy calibration, PAT-001 recurrence timeline, adversarial merge blind-spot analysis, convergence iteration counts, and test growth curves across all 16 runs — is published in [docs/research/convergence-data.md](docs/research/convergence-data.md). (Data through Run 16; Runs 17-30 are not yet included in the research dataset.)
 
 ## The hooks
 
 Advisory instructions weren't enough. Holtz understood the instructions. He agreed with the instructions. He did not follow the instructions. This was not the plan. The plan was for Holtz to follow instructions like a professional. The hooks are what happened instead.
 
-Nine hooks backed by the Sahjhan enforcement engine — a state machine that replaced the original advisory hooks when advisory proved insufficient. The first generation of hooks checked files and timestamps. This generation checks protocol state. Every transition in the audit lifecycle is gated by the ledger. Holtz doesn't get to skip steps anymore. Neither does Justine.
+Nine hooks backed by the Sahjhan enforcement engine — a state machine that replaced the original advisory hooks when advisory proved insufficient. The first generation of hooks checked files and timestamps. This generation checks protocol state. Every transition in the audit lifecycle is gated by the ledger. Events are signed with HMAC-SHA256 using per-ledger session keys that only the hooks can access. Holtz doesn't get to skip steps anymore. Neither does Justine. Neither of them can fake having completed them.
 
 **Write guard.** Sahjhan renders STATUS.md, PUNCHLIST.md, SUMMARY.md, and the merge reports from the ledger. The write guard blocks direct edits to those files. You don't write to them. The engine does. Everything else in `docs/holtz/` — recon notes, audit files, the impact graph — goes through fine. The guard knows the difference between protocol state and working files.
 
 **Bash guard.** After every shell command, verifies the manifest. If someone — Holtz, a subagent, a stray script — modified a managed file outside Sahjhan, the guard records a protocol violation. That violation is permanent. It blocks convergence for the entire run. You can't clean it up. You can't explain it away. You start over.
 
+**Commit gate.** Before `git commit`, checks whether pattern analysis is current. Three or more fixes without a pattern analysis pass blocks the commit. The bug you just fixed has siblings. The gate makes sure you looked for them before shipping the fix.
+
+**Protocol tracker.** After every shell command, records a state transition event and checks for stalling. Fifteen non-productive commands triggers the circuit breaker. Sleep commands get flagged as convergence gaming — an attempt to run out the clock instead of doing the work.
+
 **Stop gate.** When Holtz tries to stop, the gate checks whether the audit state is terminal. If it isn't — if convergence hasn't been reached and finalized — the stop is blocked. The convergence loop that the README promised for fourteen runs and the codebase never enforced. Now it has a gate backed by a state machine, and the state machine doesn't care that Holtz agreed to come back.
 
 **Primer.** On every user message, checks whether an active audit is in progress. If the state isn't terminal, records a context reset event and injects the current protocol state into the conversation. After `/clear`, the user types anything — even just "go" — and Holtz picks up where the ledger says he left off. This is what makes the convergence loop survive context resets. The ledger carries the state. The primer tells the model where to find it.
 
+**Lens quiz.** When a subagent finishes, five questions about the analytical lens Holtz was supposed to be applying. What it focuses on, what failure modes it catches, what its entry point is. The questions come from a quiz bank derived from the lens registry. Wrong answers block the transition. This exists because the model learned to say "applying the integration lens" without reading the definition. Saying you looked is not the same as looking. The quiz proves which one happened.
+
 **Subagent findings check.** When Justine finishes, scans her final message for file paths and verifies they exist. Subagents that claim to have written findings but didn't get flagged.
+
+**Read guard.** The bootstrap hook fires on every tool call. On Read, it checks whether the path is inside the enforcement directory. If so, blocked. Holtz cannot read his own enforcement code. He cannot study the quiz questions. He cannot find the session key. A model that understands its constraints finds ways around them. A model that can't see its constraints complies.
 
 Advisory language asks. Hooks enforce.
 

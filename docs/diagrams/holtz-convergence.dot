@@ -64,7 +64,7 @@ digraph {
     fontcolor="#744210"
   ]
   next_lens [
-    label="Select next lens from registry\nUpdate Active Lens in STATUS.md\nRun Steps 6-8 scoped to\nnew lens focus + entry point"
+    label="Select next lens\n(gap-fill uncovered scopes,\nthen focused sweeps)\nRun Steps 6-8 scoped to lens"
   ]
   all_done [
     label="All lenses\nCOMPLETE?"
