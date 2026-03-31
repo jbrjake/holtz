@@ -647,13 +647,14 @@ class TestEnforcementIntegration:
         )
 
 
-class TestManagedFilesSync:
-    """BH-018: MANAGED_FILES and MANAGED_DOCS must be identical."""
+class TestPreToolHookExists:
+    """pre_tool_hook.py must exist as write_guard replacement."""
 
-    def test_managed_lists_identical(self):
-        """write_guard.MANAGED_FILES must be imported from _sahjhan_bootstrap.MANAGED_DOCS."""
-        from _sahjhan_bootstrap import MANAGED_DOCS
-        from write_guard import MANAGED_FILES
-        assert MANAGED_FILES is MANAGED_DOCS, (
-            "MANAGED_FILES must be the same object as MANAGED_DOCS (imported, not duplicated)"
+    def test_pre_tool_hook_exists(self):
+        """pre_tool_hook.py must exist as write_guard replacement."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "pre_tool_hook",
+            os.path.join(REPO_ROOT, "enforcement", "hooks", "pre_tool_hook.py"),
         )
+        assert spec is not None, "pre_tool_hook.py must exist"

@@ -20,6 +20,9 @@ PROTOCOL_TOML = ENFORCEMENT_DIR / "protocol.toml"
 
 BREADCRUMBS = ["project", "run", "auditor"]
 
+# Auto-recorded events don't need breadcrumb fields — they're telemetry, not audit events
+_AUTO_RECORDED_EVENTS = {"file_read", "source_edit", "file_search", "bash_command"}
+
 NEW_EVENT_TYPES = [
     "recon_finding", "audit_claim", "test_audit_finding",
     "code_audit_finding", "merge_result", "convergence_iteration",
@@ -32,10 +35,17 @@ NEW_EVENT_TYPES = [
 
 
 def test_all_events_have_breadcrumbs():
-    """Every event type must have project, run, auditor fields."""
+    """Every event type must have project, run, auditor fields.
+
+    Auto-recorded events (file_read, source_edit, file_search, bash_command)
+    are excluded — they are ground-truth telemetry emitted by hooks, not audit
+    events authored by the auditor, so they don't carry breadcrumb fields.
+    """
     cfg = tomllib.loads(EVENTS_TOML.read_text())
     events = cfg["events"]
     for name, defn in events.items():
+        if name in _AUTO_RECORDED_EVENTS:
+            continue
         field_names = [f["name"] for f in defn["fields"]]
         for bc in BREADCRUMBS:
             assert bc in field_names, (

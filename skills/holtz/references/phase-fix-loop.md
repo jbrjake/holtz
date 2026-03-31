@@ -2,21 +2,50 @@
 
 > Core rules, rationalization red flags, and quick reference are in [../SKILL.md](../SKILL.md). Read that first if this is a fresh context.
 
-### Step 10: TDD Fix Loop
+<HARD-GATE>
+Before entering the fix loop, read [references/step-10-fix-loop.md](references/step-10-fix-loop.md) and record:
+`sahjhan event reference_read --field path=step-10-fix-loop.md`
+The `fix_loop_start` transition will not pass without this event.
+</HARD-GATE>
 
-Read [references/step-10-fix-loop.md](references/step-10-fix-loop.md) for the complete fix loop procedure (triage flowchart, fast path, investigation path, can't-reproduce path, per-fix hardening, blast radius analysis).
+### Step 10: TDD Fix Loop
 
 Read [references/impact-graph-operations.md](references/impact-graph-operations.md) for blast radius queries and risk score updates.
 
-1. **Re-read worklist** — If `docs/holtz/PUNCHLIST-MERGED.md` exists, use it. Otherwise, use `docs/holtz/PUNCHLIST.md`. **If the punchlist has more than 6 items**, use filtered reads to reduce context load:
-   ```bash
-   python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py <punchlist-path> --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
-   ```
-   This shows all OPEN/IN PROGRESS items plus the 3 most recently resolved items (for cross-item pattern recognition). Items resolved earlier are on disk and available in Step 11.
-2. **Triage** → Fast Path (test/doc/design/deterministic bug) | Investigation Path (intermittent/theoretical bug) | Can't-Reproduce Path (repro test passes)
-3. After each fix: **Per-Fix Hardening** (edge variants, regression tests) → **Blast Radius Analysis** (impact graph 2-hop query, risk score updates)
-4. Commit format: `fix(<scope>): <desc>` with punchlist ID in body
-5. **Run `sahjhan transition fix_commit --item-id BH-NNN` IMMEDIATELY after each commit** — this records the fix, runs gate checks (test suite, blast radius, hardening), and updates the rendered punchlist.
+**Re-read worklist** — If `docs/holtz/PUNCHLIST-MERGED.md` exists, use it. Otherwise, use `docs/holtz/PUNCHLIST.md`. **If the punchlist has more than 6 items**, use filtered reads to reduce context load:
+```bash
+python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py <punchlist-path> --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
+```
+This shows all OPEN/IN PROGRESS items plus the 3 most recently resolved items (for cross-item pattern recognition). Items resolved earlier are on disk and available in Step 11.
+
+#### Per-Item Fix Procedure (MANDATORY — do not skip steps)
+
+For EACH punchlist item, in order:
+
+1. `sahjhan event fix_start --field finding_id=BH-NNN`
+2. Write a failing test. Run it. Confirm it FAILS.
+3. `sahjhan event test_failed_before_fix --field finding_id=BH-NNN --field test_name=...`
+4. Write the fix. Run the failing test. Confirm it PASSES.
+5. Run full suite. Confirm all pass.
+6. Run blast radius: `python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json blast_radius <node> --depth 2`
+7. `sahjhan event blast_radius --field finding_id=BH-NNN --field affected_count=N`
+8. Write edge-case hardening tests (minimum 1).
+9. `sahjhan event hardening_complete --field finding_id=BH-NNN --field edge_cases_tested=N`
+10. `git commit` with finding ID in body. Format: `fix(<scope>): <desc>`
+11. `sahjhan transition fix_commit --item-id BH-NNN`
+12. Move to next item.
+
+**You cannot do step 4 before step 3.** The pre-edit hook enforces this.
+
+#### Fix Loop Output Rules
+
+**During the fix loop, do not write explanatory text between fixes.**
+Your output should be:
+- Tool calls (test writes, edits, bash commands)
+- One-line status after each fix_commit: "FIX N/M: BH-NNN resolved. Suite: X pass."
+- Nothing else until convergence.
+
+If you find yourself writing a summary table, STOP. You are not in the finalize phase.
 
 ### Step 11: Pattern Analysis [recurring: every 3-5 fixes during Step 10]
 
@@ -61,7 +90,31 @@ After each fix: impact graph 2-hop query. Check downstream assumptions. If an as
 
 Read [references/lens-registry.md](references/lens-registry.md) for the full set of analytical lenses. The convergence loop rotates through lenses. True convergence requires ALL lenses clean in the same final sweep.
 
-Re-run Steps 6-8 scoped to the current analytical lens. After completing, return to Step 10 (fix loop) for any new findings. When a perspective passes clean, run `sahjhan set complete perspective`. Then `sahjhan transition lens_rotate` to switch to the next perspective.
+**Determine sweep strategy per lens.** Run `python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/parse_lens_registry.py` and read `docs/holtz/audit/lens-coverage.md` (written after Steps 7-8). The sweep strategy depends on lens scope and initial audit coverage:
+
+| Scope | Initial Coverage | Sweep Strategy |
+|-------|-----------------|----------------|
+| per-file | covered | **Gap-fill:** Audit only files not covered in initial audit (new files, files changed by fixes, files missed by subagent batching). Record `sweep_type=gap-fill`. |
+| per-file | not covered | **Full:** Standard Steps 6-8 scoped to this lens. Record `sweep_type=full`. |
+| cross-file | covered | **Focused:** Re-trace entry points from lens registry using updated impact graph. Focus on paths affected by fixes since initial audit. Record `sweep_type=cross-file-focused`. |
+| cross-file | not covered | **Full:** Standard Steps 6-8 scoped to this lens entry point. Record `sweep_type=full`. |
+
+For each lens sweep, record: `sahjhan event lens_sweep_started --field perspective={lens} --field sweep_type={type}`
+
+**Gap-fill sweep procedure (per-file lenses with initial coverage):**
+1. Read `docs/holtz/audit/lens-coverage.md` for which files were covered
+2. Identify gaps: files created/modified since initial audit (`git diff --name-only` from audit commit), plus any files not in subagent batches
+3. Dispatch a subagent with the gap files and the lens's audit priorities
+4. Write findings to `docs/holtz/audit/lens-{name}.md`
+
+**Focused sweep procedure (cross-file lenses with initial coverage):**
+1. Read the lens's initial audit output at `docs/holtz/audit/lens-{name}.md`
+2. Query impact graph for edges relevant to this lens's entry point
+3. Focus on paths that include nodes modified by fixes since the initial audit
+4. Dispatch a subagent with the focused path list and lens audit priorities
+5. Write findings to `docs/holtz/audit/lens-{name}.md` (append or replace)
+
+After completing a lens sweep (any type), return to Step 10 (fix loop) for any new findings. When a perspective passes clean, run `sahjhan set complete perspective`. Then `sahjhan transition lens_rotate` to switch to the next perspective.
 
 **Circuit Breakers:**
 - **MAX_ITERATIONS:** 15 total fix-loop iterations. Enforced by Sahjhan's `fix_commit` gate (`max_count = 15`). After 15, the gate blocks — report remaining items to the user.
@@ -81,7 +134,11 @@ digraph {
   lens_clean [label="Current lens:\nzero OPEN items AND\nno new items (2 iters)\nAND suite stable?" shape=diamond]
   mark [label="sahjhan set complete\nperspective"]
   switch [label="Switch lens?\n(COMPLETE OR\n3 consecutive LOW)" shape=diamond]
-  next_lens [label="sahjhan transition lens_rotate\nRun Steps 6-8 scoped to\nnew lens focus + entry point"]
+  scope_check [label="Lens scope?\n(parse_lens_registry.py)" shape=diamond]
+  gap_fill [label="Gap-fill sweep:\nper-file lens,\ncovered areas only"]
+  focused [label="Focused sweep:\ncross-file lens,\naffected paths only"]
+  full_sweep [label="Full sweep:\nSteps 6-8 scoped\nto lens"]
+  coverage [label="Initial audit\ncoverage?" shape=diamond]
   all_done [label="All lenses\nCOMPLETE?" shape=diamond]
   final [label="Final sweep:\nALL lenses simultaneously"]
   clean [label="Clean?" shape=diamond]
@@ -96,9 +153,16 @@ digraph {
   lens_clean -> mark [label="yes"]
   lens_clean -> boundary [label="no\n(iteration boundary)"]
   mark -> switch
-  switch -> next_lens [label="yes"]
+  switch -> scope_check [label="yes"]
   switch -> all_done [label="no"]
-  next_lens -> boundary
+  scope_check -> coverage [label="per-file"]
+  scope_check -> coverage [label="cross-file"]
+  coverage -> gap_fill [label="per-file\ncovered"]
+  coverage -> focused [label="cross-file\ncovered"]
+  coverage -> full_sweep [label="not covered"]
+  gap_fill -> boundary
+  focused -> boundary
+  full_sweep -> boundary
   all_done -> final [label="yes"]
   all_done -> boundary [label="no"]
   final -> clean

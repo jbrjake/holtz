@@ -121,6 +121,8 @@ sahjhan --ledger run-N ledger checkpoint --name pre-clear   # before /clear
 sahjhan event recon_step --field project=holtz --field run=N \
   --field auditor=holtz --field phase=recon --field step=0 \
   --field artifact_path=docs/holtz/recon/step0-project-overview.md
+sahjhan event fix_start --field project=holtz --field run=N \
+  --field auditor=holtz --field finding_id=BH-001
 sahjhan event blast_radius --field project=holtz --field run=N \
   --field auditor=holtz --field phase=fix_loop --field step=10 \
   --field target_node=module.py --field depth=2 \
@@ -181,6 +183,9 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 | "The CLI is too verbose for this small change" | Every protocol violation in Run 19 started with "this is too small to matter." Use the CLI. |
 | "I'll update the manifest after" | The manifest is updated atomically by the CLI. You cannot update it. |
 | "Let me summarize what I just wrote..." | The file IS the summary. Restating it doubles the context cost. Reference the path. |
+| "Let me fix all the bugs and summarize at the end" | Each fix is an atomic cycle. Batching fixes loses blast radius isolation and skips TDD. The protocol broke the moment you batched. |
+| "I'll write the final summary now" | SUMMARY.md is Step 17. You're in Step 10. The convergence gate hasn't passed. |
+| "These fixes are straightforward, I don't need per-fix hardening" | You said that. You wrote 9 fixes without a single new test. |
 
 ## Context Survival Protocol
 
@@ -238,7 +243,7 @@ digraph {
 Before starting ANY work, check for existing Sahjhan state and output files:
 
 1. **Run `sahjhan status`:** If there's an active run, it tells you exactly where the last run stopped. Resume from that state — do not restart from Step 0.
-2. **If no Sahjhan state but `docs/holtz/recon/` dir exists:** A prior run crashed during recon (Steps 0-4). Run `sahjhan transition run_start`, then check which `docs/holtz/recon/step*.md` files exist. Resume from the first missing step.
+2. **If no Sahjhan state but `docs/holtz/recon/` dir exists:** A prior run crashed during recon (Steps 0-4). Create the run ledger (`sahjhan ledger create --from run N`) then run `sahjhan transition run_start`, then check which `docs/holtz/recon/step*.md` files exist. Resume from the first missing step.
 3. **If no Sahjhan state but `docs/holtz/PUNCHLIST.md` exists:** A prior run completed before Sahjhan was installed. Read it + any STATUS.md to determine position. Initialize Sahjhan and advance to the appropriate state.
 4. **If the user says "start fresh" or "re-audit":** Archive the run: move the current run's files from `docs/holtz/` to `docs/holtz/archive/{date}-run{NN}/` as a backup, then create fresh output files in `docs/holtz/`. **Exception:** `patterns-brief.md`, `patterns-brief-archive.md`, and `impact-graph.json` persist across runs — copy them from the archive back into `docs/holtz/` if they were moved. The impact graph grows richer over time and should never be discarded. The architecture baseline (`docs/holtz/architecture-baseline.md`) and living punchlist (`docs/holtz/LIVING-PUNCHLIST.md`) also persist across runs — never archive them. The living punchlist is updated at the end of each converged run, not during. The architecture baseline's Drift Log is appended during Step 0 as drift is detected; its Structural Snapshot and Documented Intent sections are updated only at convergence.
 5. **If `docs/holtz/SUMMARY.md` exists:** A prior run completed. Ask the user if they want a fresh audit or to review/extend the prior findings.

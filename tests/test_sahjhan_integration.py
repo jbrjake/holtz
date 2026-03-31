@@ -341,118 +341,6 @@ class TestBootstrapHook:
         assert_blocked(code, output, "read-guarded")
 
 
-# --- write_guard.py (PreToolUse) ---
-
-
-class TestWriteGuard:
-    """Tests for the managed-path write guard."""
-
-    def test_blocks_merge_report(self):
-        """Write guard blocks MERGE-REPORT.md (sahjhan-rendered)."""
-        event = {
-            "tool_input": {"file_path": "docs/holtz/MERGE-REPORT.md"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_blocked(code, output, "managed by Sahjhan")
-
-    def test_blocks_punchlist_md(self):
-        """Write guard blocks PUNCHLIST.md (sahjhan-rendered)."""
-        event = {
-            "tool_input": {"file_path": "docs/holtz/PUNCHLIST.md"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_blocked(code, output, "managed by Sahjhan")
-
-    def test_allows_non_managed_path(self):
-        """Write guard allows writes outside managed paths."""
-        event = {
-            "tool_input": {"file_path": "src/main.py"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_allowed(code, output)
-
-    def test_allows_empty_path(self):
-        """Write guard allows when no file path is provided."""
-        event = {"tool_input": {}, "cwd": REPO_ROOT}
-        code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_allowed(code, output)
-
-    def test_allows_recon_subdirectory(self):
-        """BH-009: Write guard allows writes to docs/holtz/recon/ (not managed)."""
-        event = {
-            "tool_input": {"file_path": "docs/holtz/recon/step0.md"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_allowed(code, output)
-
-    def test_allows_audit_subdirectory(self):
-        """BH-009: Write guard allows writes to docs/holtz/audit/ (not managed)."""
-        event = {
-            "tool_input": {"file_path": "docs/holtz/audit/1-doc-claims.md"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_allowed(code, output)
-
-    def test_allows_impact_graph(self):
-        """BH-009: Write guard allows writes to docs/holtz/impact-graph.json."""
-        event = {
-            "tool_input": {"file_path": "docs/holtz/impact-graph.json"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_allowed(code, output)
-
-    def test_allows_justine_directory(self):
-        """BH-009: Write guard allows writes to docs/holtz/justine/."""
-        event = {
-            "tool_input": {"file_path": "docs/holtz/justine/PUNCHLIST.md"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_allowed(code, output)
-
-    def test_blocks_status_md(self):
-        """BH-009: Write guard blocks STATUS.md (sahjhan-rendered)."""
-        event = {
-            "tool_input": {"file_path": "docs/holtz/STATUS.md"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_blocked(code, output, "managed by Sahjhan")
-
-    def test_blocks_summary_md(self):
-        """BH-009: Write guard blocks SUMMARY.md (sahjhan-rendered)."""
-        event = {
-            "tool_input": {"file_path": "docs/holtz/SUMMARY.md"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_blocked(code, output, "managed by Sahjhan")
-
-    def test_allows_prefix_collision_path(self):
-        """BH-014: Write guard does not block docs/holtz2/ (prefix collision)."""
-        event = {
-            "tool_input": {"file_path": "docs/holtz2/test.md"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_allowed(code, output)
-
-    def test_allows_docs_outside_holtz(self):
-        """Write guard allows writes to docs/ but not docs/holtz/."""
-        event = {
-            "tool_input": {"file_path": "docs/README.md"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("write_guard.py", event)
-        assert_allowed(code, output)
-
-
 # --- bash_guard.py (PostToolUse) ---
 
 
@@ -575,56 +463,6 @@ class TestBashGuard:
         binary_path.chmod(0o755)  # restore for cleanup
         assert code == 0, "bash_guard should degrade gracefully on OSError"
         assert output.get("continue") is True
-
-
-# --- stop_gate.py (Stop) ---
-
-
-class TestStopGate:
-    """Tests for the stop gate."""
-
-    def test_allows_without_sahjhan_binary(self, tmp_path):
-        """Stop gate allows when no Sahjhan binary is installed.
-
-        BH-005: Must use isolated tmp_path to avoid picking up live
-        .sahjhan/ state from the repo root during active audit runs.
-        """
-        event = {"cwd": str(tmp_path)}
-        code, output, _ = run_enforcement_hook(
-            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
-        )
-        assert code == 0
-        # No binary = no output = allow
-        assert output == {}
-
-    def test_allows_without_active_run(self, tmp_path):
-        """Stop gate allows when no active Sahjhan run exists.
-
-        BH-005: Must use isolated tmp_path to avoid picking up live state.
-        """
-        # Create binary but no .sahjhan directory
-        _create_mock_binary(tmp_path, 'echo "state: finalized (1 events, chain valid)"')
-        (tmp_path / "enforcement").mkdir(parents=True)
-        event = {"cwd": str(tmp_path)}
-        code, output, _ = run_enforcement_hook(
-            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
-        )
-        assert code == 0
-        assert output == {}
-
-    def test_degrades_gracefully_on_oserror(self, tmp_path):
-        """BH-015: stop_gate degrades gracefully when binary is unexecutable."""
-        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
-        _create_mock_binary(tmp_path, "exit 0")
-        binary_path = list((tmp_path / "bin").iterdir())[0]
-        binary_path.chmod(0o000)
-        event = {"cwd": str(tmp_path)}
-        code, output, _ = run_enforcement_hook(
-            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
-        )
-        binary_path.chmod(0o755)  # restore for cleanup
-        # Should allow stop (degrade gracefully), not crash
-        assert code == 0
 
 
 # --- primer.py (UserPromptSubmit) ---
@@ -843,88 +681,6 @@ class TestBashGuardWithMockBinary:
         assert "PROTOCOL VIOLATION" in output.get("additionalContext", "")
 
 
-class TestStopGateWithMockBinary:
-    """BH-010: Tests that exercise actual stop_gate logic with a mock binary."""
-
-    def _setup(self, tmp_path, status_lines):
-        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
-        (tmp_path / "enforcement").mkdir(parents=True)
-        status_file = tmp_path / "mock_status.txt"
-        status_file.write_text("\n".join(status_lines) + "\n")
-        _create_mock_binary(tmp_path, f"cat {status_file}")
-
-    def test_allows_terminal_state(self, tmp_path):
-        """Stop gate allows when state is terminal."""
-        self._setup(tmp_path, ["state: finalized (100 events, chain valid)"])
-        event = {"cwd": str(tmp_path)}
-        code, output, _ = run_enforcement_hook(
-            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
-        )
-        assert code == 0
-        # Terminal = no output (exit_stop_allow)
-        assert output == {} or output.get("continue") is True
-
-    def test_blocks_non_terminal_state(self, tmp_path):
-        """Stop gate blocks when state is not terminal."""
-        self._setup(tmp_path, ["state: fix_loop (50 events, chain valid)"])
-        event = {"cwd": str(tmp_path)}
-        code, output, _ = run_enforcement_hook(
-            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
-        )
-        assert code == 0
-        # exit_stop_block outputs {"decision": "block", "reason": "..."}
-        assert output.get("decision") == "block"
-        assert "fix_loop" in output.get("reason", "")
-
-    def test_allows_idle_state(self, tmp_path):
-        """BH-020: Stop gate allows when state is idle (no active work)."""
-        self._setup(tmp_path, ["state: idle (2 events, chain valid)"])
-        event = {"cwd": str(tmp_path)}
-        code, output, _ = run_enforcement_hook(
-            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
-        )
-        assert code == 0
-        assert output == {} or output.get("continue") is True
-
-    @pytest.mark.parametrize("state", [
-        "converged",
-        "merge_ready",
-        "merge_done",
-        "perspective_clean",
-        "all_perspectives_clean",
-        "final_sweep_clean",
-    ])
-    def test_allows_safe_between_steps_states(self, tmp_path, state):
-        """BH-009: Stop gate should allow exit from safe between-steps states."""
-        self._setup(tmp_path, [f"state: {state} (20 events, chain valid)"])
-        event = {"cwd": str(tmp_path)}
-        code, output, _ = run_enforcement_hook(
-            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
-        )
-        assert code == 0
-        assert output == {} or output.get("continue") is True, (
-            f"stop_gate should allow exit from '{state}' but blocked"
-        )
-
-    @pytest.mark.parametrize("state", [
-        "audit",
-        "fix_loop",
-        "pattern_analysis",
-        "final_sweep",
-    ])
-    def test_blocks_active_work_states(self, tmp_path, state):
-        """BH-009: Stop gate should block exit from states with active work."""
-        self._setup(tmp_path, [f"state: {state} (20 events, chain valid)"])
-        event = {"cwd": str(tmp_path)}
-        code, output, _ = run_enforcement_hook(
-            "stop_gate.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
-        )
-        assert code == 0
-        assert output.get("decision") == "block", (
-            f"stop_gate should block exit from '{state}' but allowed"
-        )
-
-
 class TestPrimerWithMockBinary:
     """BH-010: Tests that exercise actual primer logic with a mock binary."""
 
@@ -1051,3 +807,165 @@ class TestActiveLedger:
             f"name found in ledgers.toml. Hooks will fail to resolve --ledger {ledger_name}. "
             f"Use the full ledger name (e.g. 'run-26'), not the template name ('run')."
         )
+
+
+# --- pre_tool_hook.py (PreToolUse) ---
+
+
+class TestPreToolHook:
+    """Tests for the pre_tool_hook.py thin wrapper."""
+
+    def test_blocks_managed_path(self):
+        """pre_tool_hook blocks writes to sahjhan-managed files."""
+        event = {
+            "tool_input": {"file_path": "docs/holtz/STATUS.md"},
+            "tool_name": "Edit",
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("pre_tool_hook.py", event)
+        assert_blocked(code, output, "managed")
+
+    def test_allows_non_managed_path(self):
+        """pre_tool_hook allows writes outside managed paths."""
+        event = {
+            "tool_input": {"file_path": "src/main.py"},
+            "tool_name": "Edit",
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("pre_tool_hook.py", event)
+        assert_allowed(code, output)
+
+    def test_allows_empty_path(self):
+        """pre_tool_hook allows when no file path is provided."""
+        event = {"tool_input": {}, "tool_name": "Edit", "cwd": REPO_ROOT}
+        code, output, _ = run_enforcement_hook("pre_tool_hook.py", event)
+        assert_allowed(code, output)
+
+    def test_degrades_gracefully_without_binary(self, tmp_path):
+        """pre_tool_hook allows when sahjhan binary is unavailable."""
+        event = {
+            "tool_input": {"file_path": "src/main.py"},
+            "tool_name": "Edit",
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert_allowed(code, output)
+
+
+# --- stop_hook.py (Stop) ---
+
+
+class TestStopHook:
+    """Tests for the stop_hook.py thin wrapper."""
+
+    def test_allows_without_binary(self, tmp_path):
+        """stop_hook degrades gracefully when no binary available."""
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output == {}
+
+    def test_allows_without_active_run(self, tmp_path):
+        """stop_hook allows when no .sahjhan directory exists."""
+        _create_mock_binary(tmp_path, 'echo "state: finalized (1 events, chain valid)"')
+        (tmp_path / "enforcement").mkdir(parents=True)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output == {}
+
+    def test_degrades_gracefully_on_oserror(self, tmp_path):
+        """stop_hook allows when binary is unexecutable."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        _create_mock_binary(tmp_path, "exit 0")
+        binary_path = list((tmp_path / "bin").iterdir())[0]
+        binary_path.chmod(0o000)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        binary_path.chmod(0o755)
+        assert code == 0
+
+
+# --- post_tool_hook.py (PostToolUse) ---
+
+
+class TestPostToolHook:
+    """Tests for the post_tool_hook.py thin wrapper."""
+
+    def test_allows_without_binary(self, tmp_path):
+        """post_tool_hook degrades gracefully when no binary available."""
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "src/main.py"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook(
+            "post_tool_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output.get("continue") is True
+
+    @pytest.fixture
+    def ptmod(self):
+        """Load post_tool_hook module for unit testing."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "post_tool_hook",
+            os.path.join(ENFORCEMENT_HOOKS_DIR, "post_tool_hook.py"),
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_enriches_read_line_span(self, ptmod):
+        """post_tool_hook enriches file_read with offset/limit as line span."""
+        record = {"event_type": "file_read", "fields": {"file_path": "src/main.py"}}
+        tool_input = {"file_path": "src/main.py", "offset": "10", "limit": "50"}
+        result = ptmod._enrich_auto_record(record, "Read", tool_input)
+        assert result["fields"]["line_start"] == "10"
+        assert result["fields"]["line_end"] == "59"
+        assert result["fields"]["tool"] == "Read"
+
+    def test_enriches_edit_lines_changed(self, ptmod):
+        """post_tool_hook enriches source_edit with lines_changed from old_string."""
+        record = {"event_type": "source_edit", "fields": {"file_path": "src/main.py"}}
+        tool_input = {
+            "file_path": "src/main.py",
+            "old_string": "line1\nline2\nline3",
+            "new_string": "new1\nnew2",
+        }
+        result = ptmod._enrich_auto_record(record, "Edit", tool_input)
+        assert result["fields"]["lines_changed"] == "3"
+        assert result["fields"]["edit_type"] == "partial"
+        assert result["fields"]["tool"] == "Edit"
+
+    def test_enriches_write_full_file(self, ptmod):
+        """post_tool_hook marks Write as full_file edit."""
+        record = {"event_type": "source_edit", "fields": {"file_path": "src/main.py"}}
+        tool_input = {"file_path": "src/main.py", "content": "full file content"}
+        result = ptmod._enrich_auto_record(record, "Write", tool_input)
+        assert result["fields"]["edit_type"] == "full_file"
+        assert result["fields"]["tool"] == "Write"
+
+    def test_enriches_grep_search(self, ptmod):
+        """post_tool_hook enriches file_search with pattern and path."""
+        record = {"event_type": "file_search", "fields": {"file_path": ""}}
+        tool_input = {"pattern": "TODO", "path": "src/"}
+        result = ptmod._enrich_auto_record(record, "Grep", tool_input)
+        assert result["fields"]["pattern"] == "TODO"
+        assert result["fields"]["search_path"] == "src/"
+        assert result["fields"]["tool"] == "Grep"
+
+    def test_builds_bash_command_event(self, ptmod):
+        """post_tool_hook builds bash_command event from tool_input."""
+        result = ptmod._build_bash_event({"command": "git status"})
+        assert result["event_type"] == "bash_command"
+        assert result["fields"]["command"] == "git status"

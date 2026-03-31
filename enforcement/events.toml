@@ -428,6 +428,36 @@ fields = [
 description = "A lens sweep has been initiated for a specific perspective"
 fields = [
     { name = "perspective", type = "string" },
+    { name = "sweep_type", type = "string", pattern = "^(full|gap-fill|cross-file-focused|initial-audit)$", optional = true },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
+[events.lens_coverage_recorded]
+description = "Initial audit lens coverage matrix recorded after Steps 7-8"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "per_file_lenses_covered", type = "string", pattern = "^\\d+$" },
+    { name = "cross_file_lenses_covered", type = "string", pattern = "^\\d+$" },
+    { name = "artifact_path", type = "string" },
+]
+
+[events.fix_start]
+description = "Starting work on a punchlist item"
+fields = [
+    { name = "finding_id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
+[events.reference_read]
+description = "A reference file was read before entering a gated phase"
+fields = [
+    { name = "path", type = "string" },
     { name = "project", type = "string" },
     { name = "run", type = "string", pattern = "^\\d+$" },
     { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
@@ -439,4 +469,47 @@ fields = [
     { name = "project", type = "string" },
     { name = "run", type = "string", pattern = "^\\d+$" },
     { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
+# ── Auto-recorded tool use events (sahjhan 0.7.0 hooks) ──
+
+[events.file_read]
+description = "File read by agent (auto-recorded by hook eval)"
+fields = [
+    { name = "file_path", type = "string" },
+    { name = "line_start", type = "string", pattern = "^\\d+$", optional = true },
+    { name = "line_end", type = "string", pattern = "^\\d+$", optional = true },
+    { name = "tool", type = "string" },
+]
+
+[events.source_edit]
+description = "Source file modified by agent (auto-recorded by hook eval)"
+fields = [
+    { name = "file_path", type = "string" },
+    { name = "lines_changed", type = "string", pattern = "^\\d+$", optional = true },
+    { name = "edit_type", type = "string", pattern = "^(partial|full_file)$", optional = true },
+    { name = "tool", type = "string" },
+]
+
+[events.file_search]
+description = "File search by agent (auto-recorded by hook eval)"
+fields = [
+    { name = "pattern", type = "string", optional = true },
+    { name = "search_path", type = "string", optional = true },
+    { name = "tool", type = "string" },
+]
+
+[events.bash_command]
+description = "Shell command executed by agent (recorded by post-tool hook)"
+fields = [
+    { name = "command", type = "string" },
+]
+
+[events._checkpoint]
+description = "Cross-run project checkpoint — triggers living document renders"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "note", type = "string", optional = true },
 ]
