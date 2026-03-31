@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.90.1] - 2026-03-31
+
+_Changes since v0.73.6_
+
+### Added
+- **holtz:** update README for sahjhan 0.7.0 runtime hooks
+- **holtz:** remove write_guard.py and stop_gate.py, update all test references
+- **holtz:** update hook registrations for sahjhan 0.7.0 thin wrappers
+- **holtz:** add pre_tool_hook.py thin wrapper replacing write_guard.py
+- **holtz:** add stop_hook.py with state blocking and premature completion detection
+- **holtz:** add post_tool_hook.py with auto-record enrichment for all tool types
+- **holtz:** add hooks.toml with TDD gate, completion blocker, stall monitors, and auto-recording
+- **holtz:** add auto-recorded event types for tool use tracking
+- **holtz:** upgrade sahjhan binary from 0.6.1 to 0.7.0
+- **docs:** rewrite README for Sahjhan enforcement, lens scoping, and runs 17-30
+- **holtz:** revise Step 14 lens rotation to use scope-aware gap-fill/focused sweeps
+- **holtz:** update Justine J2 to reference lens scope field from registry
+- **holtz:** front-load per-file and cross-file lenses into initial audit (Steps 7-8)
+- **holtz:** add parse_lens_registry.py script for programmatic lens classification
+- **holtz:** add lens_coverage_recorded event and sweep_type field for front-loaded audit
+- **holtz:** add Scope field to lens registry for per-file/cross-file classification
+- **holtz:** harden fix loop with checklist, read gate, and narration ban
+
+### Fixed
+- **tests:** exclude auto-recorded events from breadcrumb check, fix import sort
+- **holtz:** update README counts and replace \s with [ \t] in parse_lens_registry regexes
+- **enforcement:** include .sahjhan-version in version pin bump to 0.6.1
+- **holtz:** ensure run ledger is created before findings are emitted
+
+### Documentation
+- add implementation plan for sahjhan 0.7.0 runtime hooks upgrade
+- add design spec for sahjhan 0.7.0 runtime hooks upgrade
+
+### Infrastructure
+- commit sahjhan version marker and pre-existing plan file
+
 ## [0.73.6] - 2026-03-30
 
 _Changes since v0.4.0_
