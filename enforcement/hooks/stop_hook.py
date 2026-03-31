@@ -18,9 +18,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import _active_ledger, exit_stop_allow, exit_stop_block, read_event  # noqa: E402
 from _protocol_cache import parse_status_text  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
+
+from _common import _active_ledger, exit_stop_allow, exit_stop_block, read_event  # noqa: E402
 
 _ACTIVE_WORK_STATES = {"audit", "fix_loop", "pattern_analysis", "final_sweep"}
 
