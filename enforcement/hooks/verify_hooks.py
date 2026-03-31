@@ -45,7 +45,7 @@ def main() -> None:
                 registered.append(cmd)
 
         for script in required_scripts:
-            if not any(cmd.rstrip().endswith(script) for cmd in registered):
+            if not any(script in cmd for cmd in registered):
                 missing.append(f"{event_type}/{script}")
 
     if missing:
