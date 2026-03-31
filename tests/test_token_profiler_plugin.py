@@ -41,9 +41,9 @@ class TestDetect:
         turns = [_make_turn(0, "Running Holtz full audit on this codebase.")]
         assert plugin.detect(turns) is True
 
-    def test_detects_phase_0_reference(self):
+    def test_detects_step_0_reference(self):
         plugin = HoltzProfilerPlugin()
-        turns = [_make_turn(0, "Starting phase 0 reconnaissance.")]
+        turns = [_make_turn(0, "Starting step 0 reconnaissance.")]
         assert plugin.detect(turns) is True
 
     def test_detects_full_audit_reference(self):
@@ -84,53 +84,53 @@ class TestDetect:
 class TestLabelPhases:
     """Tests for HoltzProfilerPlugin.label_phases()."""
 
-    def test_full_phase_progression(self):
-        """All 7 phases detected in order, with correct inheritance."""
+    def test_full_step_progression(self):
+        """All 7 step groups detected in order, with correct inheritance."""
         plugin = HoltzProfilerPlugin()
         turns = [
-            _make_turn(0, "Starting Phase 0 reconnaissance of the repo."),
-            _make_turn(1, "Reading config files."),  # inherits recon
-            _make_turn(2, "Now entering Phase 1 Doc Audit of all claims."),
-            _make_turn(3, "Phase 2 Test Quality review begins."),
-            _make_turn(4, "Phase 3 Adversarial Code review starts."),
-            _make_turn(5, "Merging: classify Justine findings now."),
-            _make_turn(6, "Phase 4 TDD fix loop begins."),
-            _make_turn(7, "Writing a failing test."),  # inherits fix-loop
+            _make_turn(0, "Starting Step 0 reconnaissance of the repo."),
+            _make_turn(1, "Reading config files."),  # inherits step-0-4
+            _make_turn(2, "Now entering Step 6 Doc Audit of all claims."),
+            _make_turn(3, "Step 7 Test Quality review begins."),
+            _make_turn(4, "Step 8 Adversarial Code review starts."),
+            _make_turn(5, "Step 9 Merging: classify Justine findings now."),
+            _make_turn(6, "Step 10 TDD fix loop begins."),
+            _make_turn(7, "Writing a failing test."),  # inherits step-10
             _make_turn(8, "convergence check, writing SUMMARY.md"),
         ]
         result = plugin.label_phases(turns)
 
-        assert result[0] == "recon"
-        assert result[1] == "recon"  # inherited
-        assert result[2] == "phase-1"
-        assert result[3] == "phase-2"
-        assert result[4] == "phase-3"
-        assert result[5] == "merge"
-        assert result[6] == "fix-loop"
-        assert result[7] == "fix-loop"  # inherited
-        assert result[8] == "convergence"
+        assert result[0] == "step-0-4"
+        assert result[1] == "step-0-4"  # inherited
+        assert result[2] == "step-6"
+        assert result[3] == "step-7"
+        assert result[4] == "step-8"
+        assert result[5] == "step-9"
+        assert result[6] == "step-10"
+        assert result[7] == "step-10"  # inherited
+        assert result[8] == "step-14-15"
 
     def test_all_turns_get_labels(self):
-        """Every turn index gets a label, even those before any phase is detected."""
+        """Every turn index gets a label, even those before any step is detected."""
         plugin = HoltzProfilerPlugin()
         turns = [
             _make_turn(0, "Just starting up."),
-            _make_turn(1, "Phase 0 recon begins."),
+            _make_turn(1, "Step 0 recon begins."),
             _make_turn(2, "Continuing the work."),
         ]
         result = plugin.label_phases(turns)
-        # Turn 0 has no phase marker, should get "unknown" or similar default
+        # Turn 0 has no step marker, should get "unknown" or similar default
         assert 0 in result
         assert 1 in result
         assert 2 in result
-        assert result[1] == "recon"
-        assert result[2] == "recon"  # inherited from turn 1
+        assert result[1] == "step-0-4"
+        assert result[2] == "step-0-4"  # inherited from turn 1
 
-    def test_phase_detected_by_regex_patterns(self):
+    def test_step_detected_by_regex_patterns(self):
         """Regex patterns match various phrasings."""
         plugin = HoltzProfilerPlugin()
         turns = [
-            _make_turn(0, "Starting phase-0-recon scan."),
+            _make_turn(0, "Starting recon-procedures scan."),
             _make_turn(1, "I'll examine each doc claim in detail."),
             _make_turn(2, "Test Audit of the test suite quality."),
             _make_turn(3, "Adversarial Audit of source modules."),
@@ -139,13 +139,13 @@ class TestLabelPhases:
             _make_turn(6, "Final commit and convergence achieved."),
         ]
         result = plugin.label_phases(turns)
-        assert result[0] == "recon"
-        assert result[1] == "phase-1"
-        assert result[2] == "phase-2"
-        assert result[3] == "phase-3"
-        assert result[4] == "merge"
-        assert result[5] == "fix-loop"
-        assert result[6] == "convergence"
+        assert result[0] == "step-0-4"
+        assert result[1] == "step-6"
+        assert result[2] == "step-7"
+        assert result[3] == "step-8"
+        assert result[4] == "step-9"
+        assert result[5] == "step-10"
+        assert result[6] == "step-14-15"
 
     def test_empty_turns(self):
         plugin = HoltzProfilerPlugin()

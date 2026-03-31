@@ -13,20 +13,31 @@ This file is Holtz's program counter. Located at `docs/holtz/STATUS.md` in the t
 **Iteration:** {N}
 
 ## Current Position
-**Phase:** {0-6}
-**Step:** {e.g., 0c, Phase 2 batch 3, Phase 4 item BH-012}
+**Step:** {0-20}
 **Status:** {IN PROGRESS | BLOCKED | CONVERGING | COMPLETE}
 
 ## Completed
-- [x] Phase 0a: Project overview
-- [x] Phase 0b: Test infrastructure
-- [ ] Phase 0c: Test baseline
-- [ ] Phase 0d: Lint results
-- [ ] Phase 0e: Churn analysis
-- [ ] Phase 0f: Skipped tests
-- [ ] Phase 0 recommendation escalation: {N items escalated | skipped}
-- [ ] Phase 0g: Recon summary
-- [ ] Phase 0h: Predictive recon
+- [ ] Step 0: Project overview + drift detection
+- [ ] Step 1: Run toolchain (subagent)
+- [ ] Step 2: Code signals (subagent)
+- [ ] Step 3: Recon summary
+- [ ] Step 4: Predictions
+- [ ] Step 5: Dispatch Justine
+- [ ] Step 6: Doc-to-implementation audit
+- [ ] Step 7: Test quality audit
+- [ ] Step 8: Adversarial code audit
+- [ ] Step 9: Merge Justine findings (subagent)
+- [ ] Step 10: TDD fix loop
+- [ ] Step 11: Pattern analysis [recurring]
+- [ ] Step 12: Per-fix hardening [recurring]
+- [ ] Step 13: Blast radius check [recurring]
+- [ ] Step 14: Lens rotation
+- [ ] Step 15: Convergence check
+- [ ] Step 16: Resweep
+- [ ] Step 17: Architecture baseline update (subagent)
+- [ ] Step 18: Pattern library contribution (subagent)
+- [ ] Step 19: Living punchlist update (subagent)
+- [ ] Step 20: Write SUMMARY.md
 
 ## Next Action
 {Exactly what to do next. One sentence. Specific enough to resume without context.}
@@ -42,6 +53,14 @@ This file is Holtz's program counter. Located at `docs/holtz/STATUS.md` in the t
 | Punchlist deferred | — | {N} |
 | Patterns identified | — | {N} |
 | Convergence iterations | — | {N} |
+
+## Cold File Coverage
+| Metric | Value |
+|--------|-------|
+| Total source files | {n} |
+| Files audited (any run) | {n} |
+| Cold file ratio | {n}% |
+| Cold files audited this run | {n} |
 
 ## Notes
 {Anything important for resumption: blocked items, user decisions, scope constraints.}
@@ -70,9 +89,9 @@ This file is Holtz's program counter. Located at `docs/holtz/STATUS.md` in the t
 
 ## Rules
 
-- Update after every completed step, not just every phase.
+- Update after every completed step.
 - The "Next Action" field must be specific enough that a fresh context can resume without reading anything else first.
-- Metrics update with each phase transition and each fix loop iteration.
+- Metrics update with each step transition and each fix loop iteration.
 - If blocked, explain why and what would unblock it.
 - Active Lens updates whenever the auditor switches to a different lens. Record the completed lens in "Lenses Completed This Run" and reset finding rate tracking. (Lens switching protocol is defined in Tier 2. Until then, the lens remains `component` for the full run.)
 - Pattern Library updates whenever a new PAT-NNN pattern is discovered. Carry forward patterns from prior runs.

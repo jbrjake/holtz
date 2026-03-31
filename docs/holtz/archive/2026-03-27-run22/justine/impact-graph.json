@@ -1,0 +1,1223 @@
+{
+  "nodes": {
+    "validate_punchlist": {
+      "id": "validate_punchlist",
+      "type": "module",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 3,
+      "risk_score": 0.0
+    },
+    "convergence_check": {
+      "id": "convergence_check",
+      "type": "module",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 3,
+      "risk_score": 0.0
+    },
+    "impact_graph": {
+      "id": "impact_graph",
+      "type": "module",
+      "file": "skills/holtz/scripts/impact_graph.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 3,
+      "risk_score": 0.0
+    },
+    "markdown_utils": {
+      "id": "markdown_utils",
+      "type": "module",
+      "file": "skills/holtz/scripts/markdown_utils.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 3,
+      "risk_score": 0.0
+    },
+    "hooks._common": {
+      "id": "hooks._common",
+      "type": "module",
+      "file": "hooks/_common.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 2,
+      "risk_score": 0.0
+    },
+    "hooks.subagent_findings_check": {
+      "id": "hooks.subagent_findings_check",
+      "type": "module",
+      "file": "hooks/subagent_findings_check.py",
+      "line": 1,
+      "last_audited": "2026-03-22",
+      "audit_count": 2,
+      "risk_score": 0.0
+    },
+    "validate_punchlist::parse_punchlist": {
+      "id": "validate_punchlist::parse_punchlist",
+      "type": "function",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": 78,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "validate_punchlist::validate": {
+      "id": "validate_punchlist::validate",
+      "type": "function",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": 374,
+      "last_audited": "2026-03-24",
+      "audit_count": 3,
+      "risk_score": 0.0
+    },
+    "convergence_check::count_items": {
+      "id": "convergence_check::count_items",
+      "type": "function",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": 26,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "convergence_check::detect_test_runner": {
+      "id": "convergence_check::detect_test_runner",
+      "type": "function",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": 64,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "convergence_check::get_test_counts": {
+      "id": "convergence_check::get_test_counts",
+      "type": "function",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": 99,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "markdown_utils::mask_code_fences": {
+      "id": "markdown_utils::mask_code_fences",
+      "type": "function",
+      "file": "skills/holtz/scripts/markdown_utils.py",
+      "line": 50,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "markdown_utils::has_unclosed_fence": {
+      "id": "markdown_utils::has_unclosed_fence",
+      "type": "function",
+      "file": "skills/holtz/scripts/markdown_utils.py",
+      "line": 72,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "impact_graph::ImpactGraph": {
+      "id": "impact_graph::ImpactGraph",
+      "type": "class",
+      "file": "skills/holtz/scripts/impact_graph.py",
+      "line": 41,
+      "last_audited": "2026-03-22",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "README.md": {
+      "id": "README.md",
+      "type": "module",
+      "file": "README.md",
+      "line": 1,
+      "last_audited": "2026-03-25",
+      "audit_count": 3,
+      "risk_score": 0.0
+    },
+    "skills/holtz/references": {
+      "id": "skills/holtz/references",
+      "type": "module",
+      "file": "skills/holtz/references/",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks/_common": {
+      "id": "hooks/_common",
+      "type": "module",
+      "file": "hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks/subagent_findings_check": {
+      "id": "hooks/subagent_findings_check",
+      "type": "module",
+      "file": "hooks/subagent_findings_check.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_hooks": {
+      "id": "test_hooks",
+      "type": "module",
+      "file": "tests/test_hooks.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_validate_punchlist": {
+      "id": "test_validate_punchlist",
+      "type": "module",
+      "file": "tests/test_validate_punchlist.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_convergence_check": {
+      "id": "test_convergence_check",
+      "type": "module",
+      "file": "tests/test_convergence_check.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_impact_graph": {
+      "id": "test_impact_graph",
+      "type": "module",
+      "file": "tests/test_impact_graph.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_integration": {
+      "id": "test_integration",
+      "type": "module",
+      "file": "tests/test_integration.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_markdown_utils": {
+      "id": "test_markdown_utils",
+      "type": "module",
+      "file": "tests/test_markdown_utils.py",
+      "line": null,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "validate_punchlist::filter_items": {
+      "id": "validate_punchlist::filter_items",
+      "type": "function",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": 274,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "validate_punchlist::render_items": {
+      "id": "validate_punchlist::render_items",
+      "type": "function",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": 317,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "pattern_brief_compact::parse_brief": {
+      "id": "pattern_brief_compact::parse_brief",
+      "type": "function",
+      "file": "skills/holtz/scripts/pattern_brief_compact.py",
+      "line": 36,
+      "last_audited": "2026-03-24",
+      "audit_count": 2,
+      "risk_score": 0.0
+    },
+    "pattern_brief_compact::format_compact": {
+      "id": "pattern_brief_compact::format_compact",
+      "type": "function",
+      "file": "skills/holtz/scripts/pattern_brief_compact.py",
+      "line": 109,
+      "last_audited": "2026-03-24",
+      "audit_count": 2,
+      "risk_score": 0.0
+    },
+    "merge-agent": {
+      "id": "merge-agent",
+      "type": "agent",
+      "file": "agents/merge-agent.md",
+      "line": 1,
+      "last_audited": "2026-03-23",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_pattern_brief_compact": {
+      "id": "test_pattern_brief_compact",
+      "type": "test",
+      "file": "tests/test_pattern_brief_compact.py",
+      "line": 1,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "pattern_brief_compact::_extract": {
+      "id": "pattern_brief_compact::_extract",
+      "type": "function",
+      "file": "skills/holtz/scripts/pattern_brief_compact.py",
+      "line": 62,
+      "last_audited": "2026-03-24",
+      "audit_count": 2,
+      "risk_score": 0.0
+    },
+    "markdown_utils.py": {
+      "id": "markdown_utils.py",
+      "type": "module",
+      "file": "skills/holtz/scripts/markdown_utils.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "validate_punchlist.py": {
+      "id": "validate_punchlist.py",
+      "type": "module",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "convergence_check.py": {
+      "id": "convergence_check.py",
+      "type": "module",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "impact_graph.py": {
+      "id": "impact_graph.py",
+      "type": "module",
+      "file": "skills/holtz/scripts/impact_graph.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "pattern_brief_compact.py": {
+      "id": "pattern_brief_compact.py",
+      "type": "module",
+      "file": "skills/holtz/scripts/pattern_brief_compact.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "_common.py": {
+      "id": "_common.py",
+      "type": "module",
+      "file": "hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "subagent_findings_check.py": {
+      "id": "subagent_findings_check.py",
+      "type": "module",
+      "file": "hooks/subagent_findings_check.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_integration.py": {
+      "id": "test_integration.py",
+      "type": "test",
+      "file": "tests/test_integration.py",
+      "line": null,
+      "last_audited": "2026-03-24",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "SKILL.md": {
+      "id": "SKILL.md",
+      "type": "module",
+      "file": "skills/holtz/SKILL.md",
+      "line": 1,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "mask_code_fences": {
+      "id": "mask_code_fences",
+      "type": "function",
+      "file": "skills/holtz/scripts/markdown_utils.py",
+      "line": 52,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "mask_fenced_blocks": {
+      "id": "mask_fenced_blocks",
+      "type": "function",
+      "file": "hooks/_common.py",
+      "line": 95,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.7
+    },
+    "count_items": {
+      "id": "count_items",
+      "type": "function",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": 29,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "parse_punchlist": {
+      "id": "parse_punchlist",
+      "type": "function",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": 73,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "_detect_step": {
+      "id": "_detect_step",
+      "type": "function",
+      "file": "skills/holtz/scripts/profiler_plugin.py",
+      "line": 143,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.2
+    },
+    "README": {
+      "id": "README",
+      "type": "module",
+      "file": "README.md",
+      "line": 1,
+      "last_audited": "2026-03-25",
+      "audit_count": 2,
+      "risk_score": 0.0
+    },
+    "patterns_dir": {
+      "id": "patterns_dir",
+      "type": "module",
+      "file": "skills/holtz/patterns/",
+      "line": 1,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "anti_patterns": {
+      "id": "anti_patterns",
+      "type": "module",
+      "file": "skills/holtz/references/anti-patterns.md",
+      "line": 1,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "lens_registry": {
+      "id": "lens_registry",
+      "type": "module",
+      "file": "skills/holtz/references/lens-registry.md",
+      "line": 1,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::cli::list_sessions": {
+      "id": "token_profiler::cli::list_sessions",
+      "type": "function",
+      "file": "scripts/token_profiler/cli.py",
+      "line": 200,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::cli::main": {
+      "id": "token_profiler::cli::main",
+      "type": "function",
+      "file": "scripts/token_profiler/cli.py",
+      "line": 350,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::plugin_protocol::ProfilerPlugin": {
+      "id": "token_profiler::plugin_protocol::ProfilerPlugin",
+      "type": "class",
+      "file": "scripts/token_profiler/plugin_protocol.py",
+      "line": 10,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::cli::_is_plugin_class": {
+      "id": "token_profiler::cli::_is_plugin_class",
+      "type": "function",
+      "file": "scripts/token_profiler/cli.py",
+      "line": 141,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::report::generate_markdown": {
+      "id": "token_profiler::report::generate_markdown",
+      "type": "function",
+      "file": "scripts/token_profiler/report.py",
+      "line": 50,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_token_profiler_report": {
+      "id": "test_token_profiler_report",
+      "type": "test",
+      "file": "tests/test_token_profiler_report.py",
+      "line": 1,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "test_token_profiler_integration": {
+      "id": "test_token_profiler_integration",
+      "type": "test",
+      "file": "tests/test_token_profiler_integration.py",
+      "line": 1,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::__init__": {
+      "id": "token_profiler::__init__",
+      "type": "module",
+      "file": "scripts/token_profiler/__init__.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::__main__": {
+      "id": "token_profiler::__main__",
+      "type": "module",
+      "file": "scripts/token_profiler/__main__.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::models": {
+      "id": "token_profiler::models",
+      "type": "module",
+      "file": "scripts/token_profiler/models.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::plugin_protocol": {
+      "id": "token_profiler::plugin_protocol",
+      "type": "module",
+      "file": "scripts/token_profiler/plugin_protocol.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::pricing": {
+      "id": "token_profiler::pricing",
+      "type": "module",
+      "file": "scripts/token_profiler/pricing.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::report": {
+      "id": "token_profiler::report",
+      "type": "module",
+      "file": "scripts/token_profiler/report.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::viewer": {
+      "id": "token_profiler::viewer",
+      "type": "module",
+      "file": "scripts/token_profiler/viewer.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::cli": {
+      "id": "token_profiler::cli",
+      "type": "module",
+      "file": "scripts/token_profiler/cli.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::extract": {
+      "id": "token_profiler::extract",
+      "type": "module",
+      "file": "scripts/token_profiler/extract.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "token_profiler::analyze": {
+      "id": "token_profiler::analyze",
+      "type": "module",
+      "file": "scripts/token_profiler/analyze.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "hooks::_common": {
+      "id": "hooks::_common",
+      "type": "module",
+      "file": "hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "scripts::convergence_check": {
+      "id": "scripts::convergence_check",
+      "type": "module",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "scripts::validate_punchlist": {
+      "id": "scripts::validate_punchlist",
+      "type": "module",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": null,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement/hooks/_common": {
+      "id": "enforcement/hooks/_common",
+      "type": "module",
+      "file": "enforcement/hooks/_common.py",
+      "line": null,
+      "last_audited": "2026-03-26",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement/hooks/bash_guard": {
+      "id": "enforcement/hooks/bash_guard",
+      "type": "module",
+      "file": "enforcement/hooks/bash_guard.py",
+      "line": null,
+      "last_audited": "2026-03-26",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement/hooks/write_guard": {
+      "id": "enforcement/hooks/write_guard",
+      "type": "module",
+      "file": "enforcement/hooks/write_guard.py",
+      "line": null,
+      "last_audited": "2026-03-26",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement/hooks/stop_gate": {
+      "id": "enforcement/hooks/stop_gate",
+      "type": "module",
+      "file": "enforcement/hooks/stop_gate.py",
+      "line": null,
+      "last_audited": "2026-03-26",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement/hooks/primer": {
+      "id": "enforcement/hooks/primer",
+      "type": "module",
+      "file": "enforcement/hooks/primer.py",
+      "line": null,
+      "last_audited": "2026-03-26",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement/hooks/_resolve": {
+      "id": "enforcement/hooks/_resolve",
+      "type": "module",
+      "file": "enforcement/hooks/_resolve.py",
+      "line": null,
+      "last_audited": "2026-03-26",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement/hooks/_sahjhan_bootstrap": {
+      "id": "enforcement/hooks/_sahjhan_bootstrap",
+      "type": "module",
+      "file": "enforcement/hooks/_sahjhan_bootstrap.py",
+      "line": null,
+      "last_audited": "2026-03-26",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "scripts/migrate_legacy": {
+      "id": "scripts/migrate_legacy",
+      "type": "module",
+      "file": "scripts/migrate_legacy.py",
+      "line": null,
+      "last_audited": "2026-03-26",
+      "audit_count": 1,
+      "risk_score": 0.0
+    }
+  },
+  "edges": [
+    {
+      "source": "validate_punchlist",
+      "target": "markdown_utils",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check",
+      "target": "markdown_utils",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "hooks.subagent_findings_check",
+      "target": "hooks._common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "validate_punchlist::parse_punchlist",
+      "target": "markdown_utils::mask_code_fences",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check::count_items",
+      "target": "markdown_utils::mask_code_fences",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "validate_punchlist::parse_punchlist",
+      "target": "convergence_check::count_items",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium",
+        "note": "Both split on B[HJ]-NNN headers in masked content \u2014 must stay aligned"
+      }
+    },
+    {
+      "source": "README.md",
+      "target": "validate_punchlist",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium",
+        "note": "README component counts must match actual file counts"
+      }
+    },
+    {
+      "source": "convergence_check",
+      "target": "validate_punchlist",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-22",
+        "confidence": "medium",
+        "note": "Both parse ### B[HJ]-NNN: headers with compatible regex"
+      }
+    },
+    {
+      "source": "README.md",
+      "target": "skills/holtz/references",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium",
+        "note": "README says 14 ref docs, actual 16 after Justine refactor"
+      }
+    },
+    {
+      "source": "impact_graph::ImpactGraph",
+      "target": "impact_graph",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium",
+        "note": "load() assumes edges have source/target/type keys; all methods iterate edges without guards"
+      }
+    },
+    {
+      "source": "hooks/subagent_findings_check",
+      "target": "hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_hooks",
+      "target": "hooks/subagent_findings_check",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_validate_punchlist",
+      "target": "validate_punchlist",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_convergence_check",
+      "target": "convergence_check",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_impact_graph",
+      "target": "impact_graph",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_markdown_utils",
+      "target": "markdown_utils",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_integration",
+      "target": "validate_punchlist",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_integration",
+      "target": "convergence_check",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "validate_punchlist::render_items",
+      "target": "validate_punchlist::parse_punchlist",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "validate_punchlist::render_items",
+      "target": "markdown_utils::mask_code_fences",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "validate_punchlist::render_items",
+      "target": "validate_punchlist::parse_punchlist",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium",
+        "note": "render_items uses masked char offsets to index original_content \u2014 assumes mask_code_fences preserves character offsets, but it does not (fenced lines replaced with empty strings)"
+      }
+    },
+    {
+      "source": "validate_punchlist::filter_items",
+      "target": "validate_punchlist::parse_punchlist",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_pattern_brief_compact",
+      "target": "pattern_brief_compact::parse_brief",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "5 tests, all happy-path"
+      }
+    },
+    {
+      "source": "pattern_brief_compact::parse_brief",
+      "target": "pattern_brief_compact::_extract",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Called for each field in each entry"
+      }
+    },
+    {
+      "source": "pattern_brief_compact::_extract",
+      "target": "markdown_utils::mask_code_fences",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Assumes input has no code fences \u2014 does not call mask_code_fences before regex"
+      }
+    },
+    {
+      "source": "validate_punchlist.py",
+      "target": "markdown_utils.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check.py",
+      "target": "markdown_utils.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "subagent_findings_check.py",
+      "target": "_common.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check.py",
+      "target": "validate_punchlist.py",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Both split on ### BH-NNN: headers in masked content \u2014 must stay aligned"
+      }
+    },
+    {
+      "source": "validate_punchlist.py",
+      "target": "convergence_check.py",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Both use mask_code_fences to split on ### BH/BJ-NNN headers \u2014 must agree on item boundaries"
+      }
+    },
+    {
+      "source": "test_integration.py",
+      "target": "README.md",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "test_readme_metrics_match_actual validates test count but not line count or other metrics"
+      }
+    },
+    {
+      "source": "test_integration.py",
+      "target": "validate_punchlist.py",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_integration.py",
+      "target": "convergence_check.py",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "README.md",
+      "target": "SKILL.md",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "README says 'Eight steps' for recon, SKILL.md defines 5 (Steps 0-4)"
+      }
+    },
+    {
+      "source": "mask_fenced_blocks",
+      "target": "mask_code_fences",
+      "type": "assumes",
+      "metadata": {
+        "note": "Both must produce identical output on identical inputs \u2014 same logical operation, different implementations",
+        "confidence": "high",
+        "discovered": "2026-03-25"
+      }
+    },
+    {
+      "source": "parse_punchlist",
+      "target": "mask_code_fences",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "high"
+      }
+    },
+    {
+      "source": "count_items",
+      "target": "mask_code_fences",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "high"
+      }
+    },
+    {
+      "source": "README",
+      "target": "patterns_dir",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "README says 14 seed patterns, actually 16 (BH-001)"
+      }
+    },
+    {
+      "source": "README",
+      "target": "lens_registry",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "README says 9 lenses in 2 places, actually 13 (BH-002)"
+      }
+    },
+    {
+      "source": "README",
+      "target": "anti_patterns",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "README says 12 anti-patterns, actually 17 (BH-003)"
+      }
+    },
+    {
+      "source": "test_token_profiler_report",
+      "target": "token_profiler::report::generate_markdown",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "BH-003: structure-only assertions"
+      }
+    },
+    {
+      "source": "token_profiler::cli::list_sessions",
+      "target": "token_profiler::cli::main",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "BH-010: list_sessions lacks json.loads error handling"
+      }
+    },
+    {
+      "source": "token_profiler::plugin_protocol::ProfilerPlugin",
+      "target": "token_profiler::cli::_is_plugin_class",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "BH-015: Protocol unused, manual hasattr duplicate"
+      }
+    },
+    {
+      "source": "token_profiler::cli",
+      "target": "token_profiler::analyze",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::cli",
+      "target": "token_profiler::extract",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::cli",
+      "target": "token_profiler::report",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::cli",
+      "target": "token_profiler::plugin_protocol",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::analyze",
+      "target": "token_profiler::models",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::pricing",
+      "target": "token_profiler::models",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::report",
+      "target": "token_profiler::models",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "token_profiler::viewer",
+      "target": "token_profiler::models",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement/hooks/bash_guard",
+      "target": "enforcement/hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-26",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement/hooks/write_guard",
+      "target": "enforcement/hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-26",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement/hooks/stop_gate",
+      "target": "enforcement/hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-26",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement/hooks/primer",
+      "target": "enforcement/hooks/_common",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-26",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "enforcement/hooks/_sahjhan_bootstrap",
+      "target": "enforcement/hooks/_resolve",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-26",
+        "confidence": "medium"
+      }
+    }
+  ]
+}

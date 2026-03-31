@@ -45,33 +45,6 @@
       "audit_count": 2,
       "risk_score": 0.0
     },
-    "hooks.artifact_verification": {
-      "id": "hooks.artifact_verification",
-      "type": "module",
-      "file": "hooks/artifact_verification.py",
-      "line": 1,
-      "last_audited": "2026-03-22",
-      "audit_count": 2,
-      "risk_score": 0.0
-    },
-    "hooks.impact_graph_gate": {
-      "id": "hooks.impact_graph_gate",
-      "type": "module",
-      "file": "hooks/impact_graph_gate.py",
-      "line": 1,
-      "last_audited": "2026-03-22",
-      "audit_count": 2,
-      "risk_score": 0.0
-    },
-    "hooks.status_staleness_gate": {
-      "id": "hooks.status_staleness_gate",
-      "type": "module",
-      "file": "hooks/status_staleness_gate.py",
-      "line": 1,
-      "last_audited": "2026-03-22",
-      "audit_count": 2,
-      "risk_score": 0.0
-    },
     "hooks.subagent_findings_check": {
       "id": "hooks.subagent_findings_check",
       "type": "module",
@@ -126,24 +99,6 @@
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "convergence_check::check_convergence": {
-      "id": "convergence_check::check_convergence",
-      "type": "function",
-      "file": "skills/holtz/scripts/convergence_check.py",
-      "line": 280,
-      "last_audited": "2026-03-22",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "convergence_check::save_history": {
-      "id": "convergence_check::save_history",
-      "type": "function",
-      "file": "skills/holtz/scripts/convergence_check.py",
-      "line": 247,
-      "last_audited": "2026-03-22",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
     "markdown_utils::mask_code_fences": {
       "id": "markdown_utils::mask_code_fences",
       "type": "function",
@@ -193,33 +148,6 @@
       "id": "hooks/_common",
       "type": "module",
       "file": "hooks/_common.py",
-      "line": null,
-      "last_audited": "2026-03-23",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "hooks/impact_graph_gate": {
-      "id": "hooks/impact_graph_gate",
-      "type": "module",
-      "file": "hooks/impact_graph_gate.py",
-      "line": null,
-      "last_audited": "2026-03-23",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "hooks/status_staleness_gate": {
-      "id": "hooks/status_staleness_gate",
-      "type": "module",
-      "file": "hooks/status_staleness_gate.py",
-      "line": null,
-      "last_audited": "2026-03-23",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "hooks/artifact_verification": {
-      "id": "hooks/artifact_verification",
-      "type": "module",
-      "file": "hooks/artifact_verification.py",
       "line": null,
       "last_audited": "2026-03-23",
       "audit_count": 1,
@@ -319,9 +247,9 @@
       "id": "pattern_brief_compact::format_compact",
       "type": "function",
       "file": "skills/holtz/scripts/pattern_brief_compact.py",
-      "line": 98,
-      "last_audited": "2026-03-23",
-      "audit_count": 1,
+      "line": 109,
+      "last_audited": "2026-03-24",
+      "audit_count": 2,
       "risk_score": 0.0
     },
     "merge-agent": {
@@ -346,9 +274,9 @@
       "id": "pattern_brief_compact::_extract",
       "type": "function",
       "file": "skills/holtz/scripts/pattern_brief_compact.py",
-      "line": 51,
+      "line": 62,
       "last_audited": "2026-03-24",
-      "audit_count": 1,
+      "audit_count": 2,
       "risk_score": 0.0
     },
     "markdown_utils.py": {
@@ -405,33 +333,6 @@
       "audit_count": 1,
       "risk_score": 0.0
     },
-    "impact_graph_gate.py": {
-      "id": "impact_graph_gate.py",
-      "type": "module",
-      "file": "hooks/impact_graph_gate.py",
-      "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "status_staleness_gate.py": {
-      "id": "status_staleness_gate.py",
-      "type": "module",
-      "file": "hooks/status_staleness_gate.py",
-      "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
-    "artifact_verification.py": {
-      "id": "artifact_verification.py",
-      "type": "module",
-      "file": "hooks/artifact_verification.py",
-      "line": null,
-      "last_audited": "2026-03-24",
-      "audit_count": 1,
-      "risk_score": 0.0
-    },
     "subagent_findings_check.py": {
       "id": "subagent_findings_check.py",
       "type": "module",
@@ -449,6 +350,213 @@
       "last_audited": "2026-03-24",
       "audit_count": 1,
       "risk_score": 0.0
+    },
+    "SKILL.md": {
+      "id": "SKILL.md",
+      "type": "module",
+      "file": "skills/holtz/SKILL.md",
+      "line": 1,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "mask_code_fences": {
+      "id": "mask_code_fences",
+      "type": "function",
+      "file": "skills/holtz/scripts/markdown_utils.py",
+      "line": 52,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "mask_fenced_blocks": {
+      "id": "mask_fenced_blocks",
+      "type": "function",
+      "file": "hooks/_common.py",
+      "line": 95,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.7
+    },
+    "count_items": {
+      "id": "count_items",
+      "type": "function",
+      "file": "skills/holtz/scripts/convergence_check.py",
+      "line": 29,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "parse_punchlist": {
+      "id": "parse_punchlist",
+      "type": "function",
+      "file": "skills/holtz/scripts/validate_punchlist.py",
+      "line": 73,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "_detect_step": {
+      "id": "_detect_step",
+      "type": "function",
+      "file": "skills/holtz/scripts/profiler_plugin.py",
+      "line": 143,
+      "last_audited": "2026-03-25",
+      "audit_count": 1,
+      "risk_score": 0.2
+    },
+    "enforcement._protocol_cache": {
+      "id": "enforcement._protocol_cache",
+      "type": "module",
+      "file": "enforcement/hooks/_protocol_cache.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.lens_quiz": {
+      "id": "enforcement.lens_quiz",
+      "type": "module",
+      "file": "enforcement/hooks/lens_quiz.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.protocol_tracker": {
+      "id": "enforcement.protocol_tracker",
+      "type": "module",
+      "file": "enforcement/hooks/protocol_tracker.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.lens_evidence": {
+      "id": "enforcement.lens_evidence",
+      "type": "module",
+      "file": "enforcement/hooks/lens_evidence.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement._resolve": {
+      "id": "enforcement._resolve",
+      "type": "module",
+      "file": "enforcement/hooks/_resolve.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement._sahjhan_bootstrap": {
+      "id": "enforcement._sahjhan_bootstrap",
+      "type": "module",
+      "file": "enforcement/hooks/_sahjhan_bootstrap.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.commit_gate": {
+      "id": "enforcement.commit_gate",
+      "type": "module",
+      "file": "enforcement/hooks/commit_gate.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.bash_guard": {
+      "id": "enforcement.bash_guard",
+      "type": "module",
+      "file": "enforcement/hooks/bash_guard.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.stop_gate": {
+      "id": "enforcement.stop_gate",
+      "type": "module",
+      "file": "enforcement/hooks/stop_gate.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.write_guard": {
+      "id": "enforcement.write_guard",
+      "type": "module",
+      "file": "enforcement/hooks/write_guard.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.primer": {
+      "id": "enforcement.primer",
+      "type": "module",
+      "file": "enforcement/hooks/primer.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "enforcement.verify_hooks": {
+      "id": "enforcement.verify_hooks",
+      "type": "module",
+      "file": "enforcement/hooks/verify_hooks.py",
+      "line": 1,
+      "last_audited": "2026-03-28",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "stop_gate": {
+      "id": "stop_gate",
+      "type": "function",
+      "file": "enforcement/hooks/stop_gate.py",
+      "line": null,
+      "last_audited": "2026-03-30",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "validate_merge_report": {
+      "id": "validate_merge_report",
+      "type": "function",
+      "file": "enforcement/scripts/validate_merge_report.py",
+      "line": null,
+      "last_audited": "2026-03-30",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "get_pricing": {
+      "id": "get_pricing",
+      "type": "function",
+      "file": "scripts/token_profiler/pricing.py",
+      "line": null,
+      "last_audited": "2026-03-30",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "_custom_pricing": {
+      "id": "_custom_pricing",
+      "type": "function",
+      "file": "scripts/token_profiler/pricing.py",
+      "line": null,
+      "last_audited": "2026-03-30",
+      "audit_count": 1,
+      "risk_score": 0.0
+    },
+    "states_toml": {
+      "id": "states_toml",
+      "type": "module",
+      "file": "enforcement/states.toml",
+      "line": null,
+      "last_audited": "2026-03-30",
+      "audit_count": 1,
+      "risk_score": 0.0
     }
   },
   "edges": [
@@ -464,33 +572,6 @@
     {
       "source": "convergence_check",
       "target": "markdown_utils",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "hooks.artifact_verification",
-      "target": "hooks._common",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "hooks.impact_graph_gate",
-      "target": "hooks._common",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "hooks.status_staleness_gate",
-      "target": "hooks._common",
       "type": "imports",
       "metadata": {
         "discovered": "2026-03-22",
@@ -535,16 +616,6 @@
       }
     },
     {
-      "source": "hooks.artifact_verification",
-      "target": "impact_graph::ImpactGraph",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium",
-        "note": "Hook assumes impact_graph.py creates file at --graph path"
-      }
-    },
-    {
       "source": "README.md",
       "target": "validate_punchlist",
       "type": "assumes",
@@ -575,16 +646,6 @@
       }
     },
     {
-      "source": "hooks.status_staleness_gate",
-      "target": "hooks.impact_graph_gate",
-      "type": "assumes",
-      "metadata": {
-        "discovered": "2026-03-22",
-        "confidence": "medium",
-        "note": "Both share the same cwd resolution and path normalization pattern"
-      }
-    },
-    {
       "source": "README.md",
       "target": "skills/holtz/references",
       "type": "diverges_from",
@@ -605,63 +666,9 @@
       }
     },
     {
-      "source": "hooks/impact_graph_gate",
-      "target": "hooks/_common",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-23",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "hooks/status_staleness_gate",
-      "target": "hooks/_common",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-23",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "hooks/artifact_verification",
-      "target": "hooks/_common",
-      "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-23",
-        "confidence": "medium"
-      }
-    },
-    {
       "source": "hooks/subagent_findings_check",
       "target": "hooks/_common",
       "type": "imports",
-      "metadata": {
-        "discovered": "2026-03-23",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "test_hooks",
-      "target": "hooks/impact_graph_gate",
-      "type": "tests",
-      "metadata": {
-        "discovered": "2026-03-23",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "test_hooks",
-      "target": "hooks/status_staleness_gate",
-      "type": "tests",
-      "metadata": {
-        "discovered": "2026-03-23",
-        "confidence": "medium"
-      }
-    },
-    {
-      "source": "test_hooks",
-      "target": "hooks/artifact_verification",
-      "type": "tests",
       "metadata": {
         "discovered": "2026-03-23",
         "confidence": "medium"
@@ -731,13 +738,373 @@
       }
     },
     {
-      "source": "hooks/impact_graph_gate",
-      "target": "impact_graph",
+      "source": "validate_punchlist::render_items",
+      "target": "validate_punchlist::parse_punchlist",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "validate_punchlist::render_items",
+      "target": "markdown_utils::mask_code_fences",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "validate_punchlist::render_items",
+      "target": "validate_punchlist::parse_punchlist",
       "type": "assumes",
       "metadata": {
         "discovered": "2026-03-23",
         "confidence": "medium",
-        "note": "Gate checks for impact-graph.json existence -- assumes impact_graph.py creates it at that path"
+        "note": "render_items uses masked char offsets to index original_content \u2014 assumes mask_code_fences preserves character offsets, but it does not (fenced lines replaced with empty strings)"
+      }
+    },
+    {
+      "source": "validate_punchlist::filter_items",
+      "target": "validate_punchlist::parse_punchlist",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-23",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_pattern_brief_compact",
+      "target": "pattern_brief_compact::parse_brief",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "5 tests, all happy-path"
+      }
+    },
+    {
+      "source": "pattern_brief_compact::parse_brief",
+      "target": "pattern_brief_compact::_extract",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Called for each field in each entry"
+      }
+    },
+    {
+      "source": "pattern_brief_compact::_extract",
+      "target": "markdown_utils::mask_code_fences",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Assumes input has no code fences \u2014 does not call mask_code_fences before regex"
+      }
+    },
+    {
+      "source": "validate_punchlist.py",
+      "target": "markdown_utils.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check.py",
+      "target": "markdown_utils.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "subagent_findings_check.py",
+      "target": "_common.py",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "convergence_check.py",
+      "target": "validate_punchlist.py",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Both split on ### BH-NNN: headers in masked content \u2014 must stay aligned"
+      }
+    },
+    {
+      "source": "validate_punchlist.py",
+      "target": "convergence_check.py",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "Both use mask_code_fences to split on ### BH/BJ-NNN headers \u2014 must agree on item boundaries"
+      }
+    },
+    {
+      "source": "test_integration.py",
+      "target": "README.md",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "test_readme_metrics_match_actual validates test count but not line count or other metrics"
+      }
+    },
+    {
+      "source": "test_integration.py",
+      "target": "validate_punchlist.py",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "test_integration.py",
+      "target": "convergence_check.py",
+      "type": "tests",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium"
+      }
+    },
+    {
+      "source": "README.md",
+      "target": "convergence_check::check_convergence",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-24",
+        "confidence": "medium",
+        "note": "README claims 100%/100%/0% prediction accuracy; actual data averages ~72%/~38%/0%"
+      }
+    },
+    {
+      "source": "README.md",
+      "target": "SKILL.md",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "medium",
+        "note": "README says 'Eight steps' for recon, SKILL.md defines 5 (Steps 0-4)"
+      }
+    },
+    {
+      "source": "mask_fenced_blocks",
+      "target": "mask_code_fences",
+      "type": "assumes",
+      "metadata": {
+        "note": "Both must produce identical output on identical inputs \u2014 same logical operation, different implementations",
+        "confidence": "high",
+        "discovered": "2026-03-25"
+      }
+    },
+    {
+      "source": "parse_punchlist",
+      "target": "mask_code_fences",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "high"
+      }
+    },
+    {
+      "source": "count_items",
+      "target": "mask_code_fences",
+      "type": "calls",
+      "metadata": {
+        "discovered": "2026-03-25",
+        "confidence": "high"
+      }
+    },
+    {
+      "source": "enforcement.protocol_tracker",
+      "target": "enforcement._protocol_cache",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports cache operations"
+      }
+    },
+    {
+      "source": "enforcement.protocol_tracker",
+      "target": "enforcement._resolve",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports sahjhan_binary"
+      }
+    },
+    {
+      "source": "enforcement.lens_quiz",
+      "target": "enforcement._resolve",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports sahjhan_binary"
+      }
+    },
+    {
+      "source": "enforcement.lens_quiz",
+      "target": "enforcement.lens_evidence",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports check_transcript, check_artifact, parse_transcript_jsonl"
+      }
+    },
+    {
+      "source": "enforcement.commit_gate",
+      "target": "enforcement._protocol_cache",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports cache and is_git_commit"
+      }
+    },
+    {
+      "source": "enforcement._sahjhan_bootstrap",
+      "target": "enforcement._resolve",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports sahjhan_binary"
+      }
+    },
+    {
+      "source": "enforcement.primer",
+      "target": "enforcement._protocol_cache",
+      "type": "imports",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "imports cache state formatting"
+      }
+    },
+    {
+      "source": "enforcement.lens_quiz",
+      "target": "enforcement._protocol_cache",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "quiz scoring re-selects questions that must match originally posed order; currently safe with <=5 questions per lens"
+      }
+    },
+    {
+      "source": "enforcement.verify_hooks",
+      "target": "hooks/_common",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "verify_hooks checks settings.local.json but hooks.json is the plugin hooks file \u2014 different sources"
+      }
+    },
+    {
+      "source": "enforcement.lens_quiz",
+      "target": "enforcement.lens_quiz",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-28",
+        "confidence": "medium",
+        "note": "Phase 3 scoring re-selects questions instead of retrieving posed set; safe only when <=5 per lens"
+      }
+    },
+    {
+      "source": "enforcement.stop_gate",
+      "target": "enforcement._protocol_cache",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "stop_gate assumes parse_status_text returns terminal state from isolated cwd"
+      }
+    },
+    {
+      "source": "enforcement._sahjhan_bootstrap",
+      "target": "README.md",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "bootstrap uses realpath on bin/sahjhan \u2014 assumes symlink is relative"
+      }
+    },
+    {
+      "source": "enforcement.primer",
+      "target": "enforcement._protocol_cache",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-29",
+        "confidence": "medium",
+        "note": "primer records context_reset without exclusive writer lock"
+      }
+    },
+    {
+      "source": "README.md",
+      "target": "convergence_check::get_test_counts",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-30",
+        "confidence": "medium",
+        "note": "README badge says 869 tests but actual is 874"
+      }
+    },
+    {
+      "source": "mask_fenced_blocks",
+      "target": "_common.py",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-30",
+        "confidence": "medium",
+        "note": "mask_fenced_blocks keeps opener lines; callers assume no regex-matchable content survives masking"
+      }
+    },
+    {
+      "source": "stop_gate",
+      "target": "states_toml",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-30",
+        "confidence": "medium",
+        "note": "hard-coded allow-list must match state machine states"
+      }
+    },
+    {
+      "source": "validate_merge_report",
+      "target": "states_toml",
+      "type": "assumes",
+      "metadata": {
+        "discovered": "2026-03-30",
+        "confidence": "medium",
+        "note": "validator checks headers only, not content"
+      }
+    },
+    {
+      "source": "get_pricing",
+      "target": "_custom_pricing",
+      "type": "diverges_from",
+      "metadata": {
+        "discovered": "2026-03-30",
+        "confidence": "medium",
+        "note": "duplicate longest-prefix matching logic"
       }
     },
     {

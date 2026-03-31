@@ -1,0 +1,11 @@
+[[ledgers]]
+name = "run-25"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/25/ledger.jsonl"
+mode = "stateful"
+created = "2026-03-29T03:51:14Z"
+
+[[ledgers]]
+name = "default"
+path = "ledger.jsonl"
+mode = "stateful"
+created = "2026-03-29T03:51:27Z"

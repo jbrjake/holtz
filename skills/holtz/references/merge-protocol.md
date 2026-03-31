@@ -25,7 +25,7 @@ An auditor is considered **stalled** if either condition is met:
 1. **Inactivity:** Its `STATUS.md` has not been updated in more than 30 minutes.
 2. **No progress:** It has completed 3 consecutive fix loop iterations with no reduction in open punchlist items.
 
-If one auditor stalls, the parent proceeds with the merge using whatever findings the stalled auditor produced up to that point. The merge report notes which auditor stalled, at what phase, and how many findings it produced before stalling.
+If one auditor stalls, the parent proceeds with the merge using whatever findings the stalled auditor produced up to that point. The merge report notes which auditor stalled, at what step, and how many findings it produced before stalling.
 
 ## Merge Classification Rules
 
@@ -126,7 +126,7 @@ Based on what each auditor missed:
 Post-merge sequence:
 
 1. Holtz reads `PUNCHLIST-MERGED.md` as his worklist.
-2. Holtz runs Phases 4-6 (fix loop, pattern analysis, convergence) on the merged items.
+2. Holtz runs Steps 10-16 (fix loop, pattern analysis, convergence, resweep) on the merged items.
 3. Parent process archives `docs/holtz/justine/` to `docs/holtz/archive/justine-{ISO date}/`, then deletes the archived `impact-graph.json` (its data has already been merged into the canonical graph — the archive retains all other files for reference).
 4. Justine is not re-dispatched for the fix loop.
 5. If a full re-audit is needed after fixes, a new adversarial self-play round can be initiated.

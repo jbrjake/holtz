@@ -1,0 +1,40 @@
+[[renders]]
+target = "STATUS.md"
+template = "templates/status.md.tera"
+trigger = "on_transition"
+ledger_template = "run"
+
+[[renders]]
+target = "PUNCHLIST.md"
+template = "templates/punchlist.md.tera"
+trigger = "on_event"
+event_types = ["finding", "finding_resolved"]
+ledger_template = "run"
+
+[[renders]]
+target = "SUMMARY.md"
+template = "templates/summary.md.tera"
+trigger = "on_state"
+state = "converged"
+ledger_template = "run"
+
+[[renders]]
+target = "LIVING-PUNCHLIST.md"
+template = "templates/living-punchlist.md.tera"
+trigger = "on_event"
+event_types = ["_checkpoint"]
+ledger = "project"
+
+[[renders]]
+target = "architecture-baseline.md"
+template = "templates/architecture-baseline.md.tera"
+trigger = "on_event"
+event_types = ["_checkpoint"]
+ledger = "project"
+
+[[renders]]
+target = "patterns-brief.md"
+template = "templates/patterns-brief.md.tera"
+trigger = "on_event"
+event_types = ["_checkpoint"]
+ledger = "project"

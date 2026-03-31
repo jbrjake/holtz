@@ -1,0 +1,9 @@
+{
+  "required_hooks": {
+    "PreToolUse": ["_sahjhan_bootstrap.py", "write_guard.py", "commit_gate.py"],
+    "PostToolUse": ["bash_guard.py", "protocol_tracker.py"],
+    "UserPromptSubmit": ["primer.py"],
+    "Stop": ["stop_gate.py"],
+    "SubagentStop": ["lens_quiz.py"]
+  }
+}

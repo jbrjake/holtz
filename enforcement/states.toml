@@ -1,0 +1,47 @@
+[states.idle]
+label = "Idle"
+initial = true
+
+[states.recon]
+label = "Recon (Steps 0-4)"
+
+[states.audit]
+label = "Audit Active (Steps 6-8)"
+params = [{ name = "current_perspective", set = "perspective", source = "current" }]
+
+[states.merge_ready]
+label = "Merge Ready (Step 9)"
+
+[states.merge_done]
+label = "Merge Done"
+
+[states.fix_loop]
+label = "Fix Loop (Step 10)"
+params = [{ name = "current_perspective", set = "perspective", source = "current" }]
+
+[states.awaiting_clear]
+label = "Awaiting Context Reset"
+# Agent must tell user to /clear; primer hook records context_reset event
+
+[states.pattern_analysis]
+label = "Pattern Analysis (Step 11)"
+
+[states.perspective_clean]
+label = "Perspective Clean"
+params = [{ name = "completed_perspective", set = "perspective", source = "last_completed" }]
+
+[states.all_perspectives_clean]
+label = "All Perspectives Clean"
+
+[states.final_sweep]
+label = "Final Sweep (Step 16)"
+
+[states.final_sweep_clean]
+label = "Final Sweep Clean"
+
+[states.converged]
+label = "Converged"
+
+[states.finalized]
+label = "Finalized"
+terminal = true

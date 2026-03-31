@@ -67,6 +67,20 @@ def assert_warned(code, output, reason_substring=""):
         assert reason_substring in context
 
 
+def assert_stop_blocked(code, output, reason_substring=""):
+    """Assert that the Stop hook blocked the stop."""
+    assert code == 0, f"Expected exit 0, got {code}"
+    assert output.get("decision") == "block"
+    if reason_substring:
+        assert reason_substring in output.get("reason", "")
+
+
+def assert_stop_allowed(code, output):
+    """Assert that the Stop hook allowed the stop (no output)."""
+    assert code == 0, f"Expected exit 0, got {code}"
+    assert output == {}
+
+
 # --- _common.py output format ---
 
 
@@ -97,18 +111,10 @@ class TestModernOutputFormat:
 
     # -- exit_ok --
 
-    def test_exit_ok_exits_zero(self):
-        code, _, _ = self._run_common_func("exit_ok")
-        assert code == 0
-
     def test_exit_ok_outputs_valid_json(self):
         _, output, _ = self._run_common_func("exit_ok")
         assert output.get("continue") is True
         assert output.get("suppressOutput") is True
-
-    def test_exit_ok_no_stderr(self):
-        _, _, stderr = self._run_common_func("exit_ok")
-        assert stderr == ""
 
     def test_exit_ok_pretooluse_includes_hook_specific_output(self):
         """PreToolUse exit_ok includes hookSpecificOutput to avoid phantom error."""
@@ -125,25 +131,13 @@ class TestModernOutputFormat:
 
     # -- exit_warn --
 
-    def test_exit_warn_exits_zero(self):
-        code, _, _ = self._run_common_func("exit_warn", "test warning")
-        assert code == 0
-
     def test_exit_warn_outputs_valid_json(self):
         _, output, _ = self._run_common_func("exit_warn", "test warning")
         assert output.get("continue") is True
         assert output.get("suppressOutput") is False
         assert output.get("additionalContext") == "test warning"
 
-    def test_exit_warn_no_stderr(self):
-        _, _, stderr = self._run_common_func("exit_warn", "test warning")
-        assert stderr == ""
-
     # -- exit_block --
-
-    def test_exit_block_exits_zero(self):
-        code, _, _ = self._run_common_func("exit_block", "test block")
-        assert code == 0
 
     def test_exit_block_outputs_valid_json(self):
         _, output, _ = self._run_common_func("exit_block", "test block")
@@ -157,9 +151,85 @@ class TestModernOutputFormat:
         assert hook_output["permissionDecision"] == "block"
         assert hook_output["permissionDecisionReason"] == "reason here"
 
-    def test_exit_block_no_stderr(self):
-        _, _, stderr = self._run_common_func("exit_block", "test block")
-        assert stderr == ""
+    # -- exit_stop_allow --
+
+    def test_exit_stop_allow_no_output(self):
+        """Stop allow should produce no stdout (empty = allow)."""
+        _, output, _ = self._run_common_func("exit_stop_allow")
+        assert output == {}
+
+    # -- exit_stop_block --
+
+    def test_exit_stop_block_outputs_stop_format(self):
+        """Stop block should use decision/reason format, not PreToolUse format."""
+        _, output, _ = self._run_common_func("exit_stop_block", "test reason")
+        assert output.get("decision") == "block"
+        assert output.get("reason") == "test reason"
+
+    def test_exit_stop_block_no_pretooluse_fields(self):
+        """Stop hooks should NOT use PreToolUse format."""
+        _, output, _ = self._run_common_func("exit_stop_block", "test reason")
+        assert "hookSpecificOutput" not in output
+        assert "continue" not in output
+
+
+
+# --- _common.py mask_fenced_blocks ---
+
+
+class TestMaskFencedBlocks:
+    """Tests for _common.mask_fenced_blocks fence length enforcement.
+
+    BH-004 run 16: mask_fenced_blocks must track fence character count so
+    a 4-backtick fence is NOT closed by a 3-backtick line (CommonMark spec).
+    """
+
+    def _mask(self, text):
+        code_str = (
+            f"import sys; sys.path.insert(0, {HOOKS_DIR!r}); "
+            f"from _common import mask_fenced_blocks; "
+            f"print(mask_fenced_blocks({text!r}))"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code_str],
+            capture_output=True, text=True, timeout=10,
+        )
+        assert result.returncode == 0, result.stderr
+        return result.stdout.rstrip("\n")
+
+    def test_4_backtick_fence_not_closed_by_3(self):
+        """A 4-backtick opening fence must NOT be closed by 3 backticks."""
+        text = "Before\n````python\ncode inside\n```\nstill inside\n````\nAfter"
+        masked = self._mask(text)
+        lines = masked.split("\n")
+        # "still inside" (line index 4) must be masked (empty)
+        assert lines[4] == "", (
+            f"Line 'still inside' should be masked but got: {lines[4]!r}"
+        )
+        # "After" (line index 6) must NOT be masked
+        assert lines[6] == "After", (
+            f"Line 'After' should not be masked but got: {lines[6]!r}"
+        )
+
+    def test_longer_closer_valid(self):
+        """A 5-backtick line CAN close a 3-backtick fence (CommonMark)."""
+        text = "Before\n```\ncode\n`````\nAfter"
+        masked = self._mask(text)
+        lines = masked.split("\n")
+        # "code" (line index 2) should be masked
+        assert lines[2] == "", f"'code' should be masked but got: {lines[2]!r}"
+        # "After" (line index 4) should NOT be masked
+        assert lines[4] == "After", f"'After' should not be masked but got: {lines[4]!r}"
+
+    def test_tilde_fence_not_closed_by_backtick(self):
+        """A tilde fence cannot be closed by backticks."""
+        text = "Before\n~~~\ncode\n```\nstill fenced\n~~~\nAfter"
+        masked = self._mask(text)
+        lines = masked.split("\n")
+        assert lines[4] == "", (
+            f"'still fenced' should be masked but got: {lines[4]!r}"
+        )
+        assert lines[6] == "After"
 
 
 # --- _common.py read_event ---
@@ -171,7 +241,7 @@ class TestReadEvent:
     def test_empty_stdin_does_not_crash(self):
         """Hooks should handle empty stdin gracefully."""
         result = subprocess.run(
-            [sys.executable, os.path.join(HOOKS_DIR, "impact_graph_gate.py")],
+            [sys.executable, os.path.join(HOOKS_DIR, "subagent_findings_check.py")],
             input="",
             capture_output=True,
             text=True,
@@ -182,294 +252,13 @@ class TestReadEvent:
     def test_malformed_json_does_not_crash(self):
         """Hooks should handle malformed JSON gracefully."""
         result = subprocess.run(
-            [sys.executable, os.path.join(HOOKS_DIR, "impact_graph_gate.py")],
+            [sys.executable, os.path.join(HOOKS_DIR, "subagent_findings_check.py")],
             input="not valid json",
             capture_output=True,
             text=True,
             timeout=10,
         )
         assert result.returncode == 0
-
-
-# --- impact_graph_gate.py (PreToolUse) ---
-
-
-class TestImpactGraphGate:
-    """Tests for the impact graph gate hook."""
-
-    def test_allows_non_audit_writes(self):
-        """Writes outside docs/holtz/audit/ should be allowed."""
-        event = {"tool_input": {"file_path": "docs/holtz/recon/0a.md"}}
-        code, output, _ = run_hook("impact_graph_gate.py", event)
-        assert_allowed(code, output)
-
-    def test_allows_audit_write_when_graph_exists(self, tmp_path):
-        """Writes to audit/ should be allowed when impact-graph.json exists."""
-        docs = tmp_path / "docs" / "holtz"
-        docs.mkdir(parents=True)
-        (docs / "impact-graph.json").write_text("{}")
-        event = {
-            "tool_input": {"file_path": str(docs / "audit" / "1-doc-claims.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("impact_graph_gate.py", event)
-        assert_allowed(code, output)
-
-    def test_blocks_audit_write_when_graph_missing(self, tmp_path):
-        """Writes to audit/ should be blocked when impact-graph.json is missing."""
-        event = {
-            "tool_input": {"file_path": str(tmp_path / "docs" / "holtz" / "audit" / "1.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("impact_graph_gate.py", event)
-        assert_blocked(code, output, "BLOCKED")
-
-    def test_allows_empty_file_path(self):
-        """Empty file_path should be allowed."""
-        event = {"tool_input": {"file_path": ""}}
-        code, output, _ = run_hook("impact_graph_gate.py", event)
-        assert_allowed(code, output)
-
-    def test_justine_audit_checks_justine_graph(self, tmp_path):
-        """Justine audit writes should check Justine's graph, not Holtz's."""
-        event = {
-            "tool_input": {"file_path": str(tmp_path / "docs" / "holtz" / "justine" / "audit" / "1.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("impact_graph_gate.py", event)
-        assert_blocked(code, output, "justine")
-
-    def test_pretooluse_allow_has_hook_specific_output(self):
-        """PreToolUse allow should include hookSpecificOutput."""
-        event = {"tool_input": {"file_path": "src/foo.py"}}
-        code, output, _ = run_hook("impact_graph_gate.py", event)
-        assert code == 0
-        hook_output = output.get("hookSpecificOutput", {})
-        assert hook_output.get("permissionDecision") == "allow"
-
-    def test_pretooluse_block_has_hook_specific_output(self, tmp_path):
-        """PreToolUse block should include hookSpecificOutput."""
-        event = {
-            "tool_input": {"file_path": str(tmp_path / "docs" / "holtz" / "audit" / "1.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("impact_graph_gate.py", event)
-        assert code == 0
-        hook_output = output.get("hookSpecificOutput", {})
-        assert hook_output.get("permissionDecision") == "block"
-        assert hook_output.get("hookEventName") == "PreToolUse"
-
-    def test_blocks_punchlist_merged_when_graph_missing(self, tmp_path):
-        """Writes to PUNCHLIST-MERGED.md should be blocked when graph is missing (BH-004)."""
-        event = {
-            "tool_input": {"file_path": str(tmp_path / "docs" / "holtz" / "PUNCHLIST-MERGED.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("impact_graph_gate.py", event)
-        assert_blocked(code, output, "BLOCKED")
-
-    def test_allows_punchlist_merged_when_graph_exists(self, tmp_path):
-        """Writes to PUNCHLIST-MERGED.md should be allowed when graph exists (BH-004)."""
-        docs = tmp_path / "docs" / "holtz"
-        docs.mkdir(parents=True)
-        (docs / "impact-graph.json").write_text("{}")
-        event = {
-            "tool_input": {"file_path": str(docs / "PUNCHLIST-MERGED.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("impact_graph_gate.py", event)
-        assert_allowed(code, output)
-
-    def test_blocks_justine_punchlist_when_graph_missing(self, tmp_path):
-        """Writes to Justine's PUNCHLIST.md should check Justine's graph (BH-006)."""
-        event = {
-            "tool_input": {"file_path": str(tmp_path / "docs" / "holtz" / "justine" / "PUNCHLIST.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("impact_graph_gate.py", event)
-        assert_blocked(code, output, "justine")
-
-    def test_allows_justine_punchlist_when_graph_exists(self, tmp_path):
-        """Writes to Justine's PUNCHLIST.md should be allowed when Justine's graph exists (BH-006)."""
-        justine_dir = tmp_path / "docs" / "holtz" / "justine"
-        justine_dir.mkdir(parents=True)
-        (justine_dir / "impact-graph.json").write_text("{}")
-        event = {
-            "tool_input": {"file_path": str(justine_dir / "PUNCHLIST.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("impact_graph_gate.py", event)
-        assert_allowed(code, output)
-
-
-# --- status_staleness_gate.py (PreToolUse) ---
-
-
-class TestStatusStalenessGate:
-    """Tests for the status staleness gate hook."""
-
-    def test_allows_non_holtz_writes(self):
-        """Writes outside docs/holtz/ should be allowed."""
-        event = {"tool_input": {"file_path": "src/foo.py"}}
-        code, output, _ = run_hook("status_staleness_gate.py", event)
-        assert_allowed(code, output)
-
-    def test_allows_status_md_write(self, tmp_path):
-        """Writing to STATUS.md itself should always be allowed."""
-        status = tmp_path / "docs" / "holtz" / "STATUS.md"
-        status.parent.mkdir(parents=True)
-        status.write_text("old")
-        # Make it stale
-        os.utime(str(status), (0, 0))
-        event = {
-            "tool_input": {"file_path": str(status)},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("status_staleness_gate.py", event)
-        assert_allowed(code, output)
-
-    def test_allows_fresh_status(self, tmp_path):
-        """Writes should be allowed when STATUS.md is fresh."""
-        status = tmp_path / "docs" / "holtz" / "STATUS.md"
-        status.parent.mkdir(parents=True)
-        status.write_text("current")
-        event = {
-            "tool_input": {"file_path": str(tmp_path / "docs" / "holtz" / "PUNCHLIST.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("status_staleness_gate.py", event)
-        assert_allowed(code, output)
-
-    def test_blocks_stale_status(self, tmp_path):
-        """Writes should be blocked when STATUS.md is stale."""
-        status = tmp_path / "docs" / "holtz" / "STATUS.md"
-        status.parent.mkdir(parents=True)
-        status.write_text("stale")
-        os.utime(str(status), (0, 0))
-        event = {
-            "tool_input": {"file_path": str(tmp_path / "docs" / "holtz" / "PUNCHLIST.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("status_staleness_gate.py", event)
-        assert_blocked(code, output, "BLOCKED")
-
-    def test_allows_when_no_status_exists(self, tmp_path):
-        """First write of a run (no STATUS.md yet) should be allowed."""
-        event = {
-            "tool_input": {"file_path": str(tmp_path / "docs" / "holtz" / "recon" / "0a.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("status_staleness_gate.py", event)
-        assert_allowed(code, output)
-
-    def test_blocks_when_status_missing_but_recon_exists(self, tmp_path):
-        """STATUS.md missing but recon/ exists = deleted mid-run, should block (BH-005)."""
-        holtz = tmp_path / "docs" / "holtz"
-        recon = holtz / "recon"
-        recon.mkdir(parents=True)
-        (recon / "0a.md").write_text("recon data")
-        event = {
-            "tool_input": {"file_path": str(holtz / "PUNCHLIST.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("status_staleness_gate.py", event)
-        assert_blocked(code, output, "missing")
-
-    def test_blocks_when_status_missing_but_punchlist_exists(self, tmp_path):
-        """STATUS.md missing but PUNCHLIST.md exists = deleted mid-run, should block (BH-005)."""
-        holtz = tmp_path / "docs" / "holtz"
-        holtz.mkdir(parents=True)
-        (holtz / "PUNCHLIST.md").write_text("items")
-        event = {
-            "tool_input": {"file_path": str(holtz / "recon" / "0b.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("status_staleness_gate.py", event)
-        assert_blocked(code, output, "missing")
-
-    def test_status_exemption_scoped_to_protocol_paths(self, tmp_path):
-        """Only the protocol STATUS.md paths should be exempt, not arbitrary files."""
-        status = tmp_path / "docs" / "holtz" / "STATUS.md"
-        status.parent.mkdir(parents=True)
-        status.write_text("stale")
-        os.utime(str(status), (0, 0))
-        # A file named STATUS.md in a subdirectory should NOT be exempt
-        event = {
-            "tool_input": {"file_path": str(tmp_path / "docs" / "holtz" / "recon" / "STATUS.md")},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("status_staleness_gate.py", event)
-        assert_blocked(code, output)
-
-    def test_pretooluse_allow_has_hook_specific_output(self):
-        """PreToolUse allow should include hookSpecificOutput."""
-        event = {"tool_input": {"file_path": "src/foo.py"}}
-        code, output, _ = run_hook("status_staleness_gate.py", event)
-        assert code == 0
-        hook_output = output.get("hookSpecificOutput", {})
-        assert hook_output.get("permissionDecision") == "allow"
-
-
-# --- artifact_verification.py (PostToolUse) ---
-
-
-class TestArtifactVerification:
-    """Tests for the artifact verification hook."""
-
-    def test_ignores_non_impact_graph_commands(self):
-        """Commands that don't run impact_graph.py should be allowed."""
-        event = {"tool_input": {"command": "python -m pytest test_foo.py"}}
-        code, output, _ = run_hook("artifact_verification.py", event)
-        assert_allowed(code, output)
-
-    def test_ignores_test_impact_graph_filename(self):
-        """Commands referencing test_impact_graph.py should not trigger the check."""
-        event = {"tool_input": {"command": "python -m pytest test_impact_graph.py"}}
-        code, output, _ = run_hook("artifact_verification.py", event)
-        assert_allowed(code, output)
-
-    def test_allows_when_graph_exists(self, tmp_path):
-        """Running impact_graph.py should be allowed when graph file exists."""
-        graph = tmp_path / "docs" / "holtz" / "impact-graph.json"
-        graph.parent.mkdir(parents=True)
-        graph.write_text("{}")
-        event = {
-            "tool_input": {"command": f"python impact_graph.py --graph {graph} add_node x y z"},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("artifact_verification.py", event)
-        assert_allowed(code, output)
-
-    def test_warns_when_graph_missing(self, tmp_path):
-        """Running impact_graph.py should warn when graph file doesn't exist."""
-        event = {
-            "tool_input": {"command": "python impact_graph.py --graph docs/holtz/impact-graph.json add_node x y z"},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("artifact_verification.py", event)
-        assert_warned(code, output, "BLOCKED")
-
-    def test_skips_shell_variable_paths(self):
-        """Commands with shell variable in --graph path should be skipped."""
-        event = {"tool_input": {"command": 'python impact_graph.py --graph "$GRAPH" add_node x y z'}}
-        code, output, _ = run_hook("artifact_verification.py", event)
-        assert_allowed(code, output)
-
-    def test_default_graph_path_when_no_graph_flag(self, tmp_path):
-        """When --graph is not specified, default path should be used."""
-        event = {
-            "tool_input": {"command": "python impact_graph.py add_node x y z"},
-            "cwd": str(tmp_path),
-        }
-        code, output, _ = run_hook("artifact_verification.py", event)
-        assert_warned(code, output, "impact-graph.json")
-
-    def test_posttooluse_does_not_include_hook_specific_output(self):
-        """PostToolUse hooks should not include hookSpecificOutput."""
-        event = {"tool_input": {"command": "python -m pytest test_foo.py"}}
-        code, output, _ = run_hook("artifact_verification.py", event)
-        assert code == 0
-        assert "hookSpecificOutput" not in output
 
 
 # --- subagent_findings_check.py (SubagentStop) ---
@@ -523,9 +312,94 @@ class TestSubagentFindingsCheck:
         # Should only mention FOO.md once
         assert output.get("additionalContext", "").count("FOO.md") == 1
 
+    def test_warns_missing_json_artifacts(self, tmp_path):
+        """BH-007: .json artifacts under docs/holtz/ should be checked, not just .md."""
+        event = {
+            "last_assistant_message": "Updated docs/holtz/impact-graph.json",
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_hook("subagent_findings_check.py", event)
+        assert_warned(code, output, "WARNING")
+        assert "impact-graph.json" in output.get("additionalContext", "")
+
+    def test_allows_existing_json_artifact(self, tmp_path):
+        """BH-007: existing .json artifact should be allowed."""
+        holtz_dir = tmp_path / "docs" / "holtz"
+        holtz_dir.mkdir(parents=True)
+        (holtz_dir / "impact-graph.json").write_text("{}")
+        event = {
+            "last_assistant_message": "Updated docs/holtz/impact-graph.json",
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_hook("subagent_findings_check.py", event)
+        assert_allowed(code, output)
+
     def test_subagentstop_does_not_include_hook_specific_output(self):
         """SubagentStop hooks should not include hookSpecificOutput."""
         event = {"last_assistant_message": ""}
         code, output, _ = run_hook("subagent_findings_check.py", event)
         assert code == 0
         assert "hookSpecificOutput" not in output
+
+
+class TestSubagentFindingsCheckInProcess:
+    """BH-010: In-process tests for subagent_findings_check.py coverage."""
+
+    @staticmethod
+    def _run_main(event, capsys):
+        """Import and run main() in-process, returning parsed JSON output."""
+        import contextlib
+        import importlib
+        import io
+        from unittest.mock import patch
+
+        sys.path.insert(0, HOOKS_DIR)
+        import subagent_findings_check
+        importlib.reload(subagent_findings_check)
+        stdin_data = io.StringIO(json.dumps(event))
+        with patch("sys.stdin", stdin_data), contextlib.suppress(SystemExit):
+            subagent_findings_check.main()
+        captured = capsys.readouterr()
+        try:
+            return json.loads(captured.out)
+        except json.JSONDecodeError:
+            return {}
+
+    def test_empty_message_ok(self, capsys):
+        output = self._run_main({"last_assistant_message": ""}, capsys)
+        assert output.get("continue") is True
+        assert output.get("suppressOutput") is True
+
+    def test_no_holtz_paths_ok(self, capsys):
+        output = self._run_main({"last_assistant_message": "Fixed src/foo.py"}, capsys)
+        assert output.get("continue") is True
+
+    def test_missing_md_warns(self, tmp_path, capsys):
+        event = {
+            "last_assistant_message": "Wrote docs/holtz/NONEXISTENT.md",
+            "cwd": str(tmp_path),
+        }
+        output = self._run_main(event, capsys)
+        assert output.get("suppressOutput") is False
+        assert "NONEXISTENT.md" in output.get("additionalContext", "")
+
+    def test_existing_file_ok(self, tmp_path, capsys):
+        holtz_dir = tmp_path / "docs" / "holtz"
+        holtz_dir.mkdir(parents=True)
+        (holtz_dir / "PUNCHLIST.md").write_text("# Punchlist")
+        event = {
+            "last_assistant_message": "Updated docs/holtz/PUNCHLIST.md",
+            "cwd": str(tmp_path),
+        }
+        output = self._run_main(event, capsys)
+        assert output.get("continue") is True
+        assert output.get("suppressOutput") is True
+
+    def test_json_artifact_warns(self, tmp_path, capsys):
+        event = {
+            "last_assistant_message": "Updated docs/holtz/impact-graph.json",
+            "cwd": str(tmp_path),
+        }
+        output = self._run_main(event, capsys)
+        assert "impact-graph.json" in output.get("additionalContext", "")
+

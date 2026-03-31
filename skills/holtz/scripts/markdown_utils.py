@@ -70,11 +70,21 @@ def mask_code_fences(content: str) -> tuple[str, str]:
 
 
 def has_unclosed_fence(content: str) -> bool:
-    """Check if content has a code fence that is never closed."""
+    """Check if content has a code fence that is never closed.
+
+    Note: _iterate_fences yields True for closing fence lines (they are
+    part of the fenced region for masking purposes) before resetting its
+    internal state. To get the correct post-close state, we append a
+    sentinel empty line — the sentinel's fenced status reflects whether
+    the document truly ends inside an unclosed fence.
+    """
     content = content.replace('\r\n', '\n')
     lines = content.split('\n')
-    # Consume the generator; the last yielded in_fence state tells us
-    # whether the document ends inside an unclosed fence.
+    # Append a sentinel line so _iterate_fences processes one more line
+    # after the real content. An empty line cannot be a fence delimiter,
+    # so its fenced status reflects the true in_fence state after any
+    # closing fence on the final real line.
+    lines.append('')
     in_fence = False
     for _, fenced in _iterate_fences(lines):
         in_fence = fenced

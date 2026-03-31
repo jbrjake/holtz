@@ -1,0 +1,101 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest:*)",
+      "Bash(ruff check:*)",
+      "Bash(mypy:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git status:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"enforcement/hooks/_sahjhan_bootstrap.py\""
+          },
+          {
+            "type": "command",
+            "command": "python \"enforcement/hooks/write_guard.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"enforcement/hooks/_sahjhan_bootstrap.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"enforcement/hooks/commit_gate.py\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"enforcement/hooks/bash_guard.py\""
+          },
+          {
+            "type": "command",
+            "command": "python \"enforcement/hooks/protocol_tracker.py\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"hooks/subagent_findings_check.py\""
+          },
+          {
+            "type": "command",
+            "command": "python \"enforcement/hooks/lens_quiz.py\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"enforcement/hooks/stop_gate.py\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"enforcement/hooks/primer.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

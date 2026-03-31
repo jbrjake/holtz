@@ -1,7 +1,9 @@
 .DS_Store
 __pycache__/
 *.pyc
-.claude/
+.coverage
+.claude/*
+!.claude/settings.local.json.example
 .venv/
 recon/
 audit/
@@ -9,3 +11,8 @@ BUG-HUNTER-STATUS.md
 BUG-HUNTER-PUNCHLIST.md
 BUG-HUNTER-SUMMARY.md
 .worktrees/
+docs/holtz/.sahjhan/
+docs/holtz/HISTORY.json
+bin/sahjhan-*
+bin/.sahjhan-bootstrap-failed
+bin/.sahjhan-version

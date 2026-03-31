@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Guard against recursion when we amend
+[[ "${_HOLTZ_VERSION_BUMPED:-}" == "1" ]] && exit 0
+
+PLUGIN_JSON=".claude-plugin/plugin.json"
+
+# Read the just-created commit
+FIRST_LINE=$(git log -1 --pretty=%s)
+BODY=$(git log -1 --pretty=%b)
+
+# Skip merge commits
+if [[ "$FIRST_LINE" =~ ^Merge ]]; then
+    exit 0
+fi
+
+# Check for BREAKING CHANGE in body
+HAS_BREAKING=false
+if echo "$BODY" | grep -q "^BREAKING CHANGE" 2>/dev/null; then
+    HAS_BREAKING=true
+fi
+
+# Parse conventional commit prefix
+# Matches: type(scope)!: or type!: or type(scope): or type:
+CONV_COMMIT_RE='^([a-z]+)(\([^)]+\))?(!)?: '
+if [[ "$FIRST_LINE" =~ $CONV_COMMIT_RE ]]; then
+    TYPE="${BASH_REMATCH[1]}"
+    BANG="${BASH_REMATCH[3]}"
+else
+    exit 0
+fi
+
+# Determine bump type
+BUMP=""
+if [[ "$BANG" == "!" ]] || [[ "$HAS_BREAKING" == "true" ]]; then
+    BUMP="major"
+elif [[ "$TYPE" == "feat" ]]; then
+    BUMP="minor"
+elif [[ "$TYPE" == "fix" ]] || [[ "$TYPE" == "perf" ]]; then
+    BUMP="patch"
+else
+    # docs, chore, refactor, test, ci, style — no bump
+    exit 0
+fi
+
+# Check plugin.json exists
+if [[ ! -f "$PLUGIN_JSON" ]]; then
+    echo "post-commit: $PLUGIN_JSON not found, skipping version bump." >&2
+    exit 0
+fi
+
+# Bump version using Python for reliable JSON handling
+NEW_VERSION=$(python3 -c "
+import json, sys
+
+with open('$PLUGIN_JSON') as f:
+    data = json.load(f)
+
+version = data.get('version', '0.0.0')
+parts = version.split('.')
+if len(parts) != 3:
+    print(f'post-commit: malformed version \"{version}\"', file=sys.stderr)
+    sys.exit(1)
+
+try:
+    major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
+except ValueError:
+    print(f'post-commit: non-numeric version \"{version}\"', file=sys.stderr)
+    sys.exit(1)
+
+bump = '$BUMP'
+if bump == 'major':
+    major += 1
+    minor = 0
+    patch = 0
+elif bump == 'minor':
+    minor += 1
+    patch = 0
+elif bump == 'patch':
+    patch += 1
+
+new_version = f'{major}.{minor}.{patch}'
+data['version'] = new_version
+
+with open('$PLUGIN_JSON', 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+
+print(new_version)
+") || {
+    echo "post-commit: version bump failed" >&2
+    exit 0
+}
+
+# Stage and amend the commit to include the version bump
+git add "$PLUGIN_JSON"
+export _HOLTZ_VERSION_BUMPED=1
+git commit --amend --no-edit
+
+echo "post-commit: bumped version to $NEW_VERSION ($BUMP)" >&2

@@ -12,7 +12,7 @@
 **Determinism:** {deterministic | intermittent | theoretical} ← bug/* categories only, optional for others
 **Investigation:** {`docs/holtz/investigations/BH-{NNN}.md` if complex, omit if straightforward}
 **Lens:** {component | integration | security | error-propagation | data-flow | contract — which analytical lens discovered this finding, optional}
-**Predicted:** {Prediction N (confidence: HIGH|MEDIUM|LOW) — if this finding matched a prediction from 0h-predictions.md, optional}
+**Predicted:** {Prediction N (confidence: HIGH|MEDIUM|LOW) — if this finding matched a prediction from step4-predictions.md, optional}
 
 **Problem:** {What's wrong. Actual vs expected behavior. 1-3 sentences.}
 
@@ -47,13 +47,13 @@
 
 ## Determinism Values
 
-For `bug/*` categories, assess determinism during Phase 3 (adversarial audit):
+For `bug/*` categories, assess determinism during Step 8 (adversarial code audit):
 
 - **deterministic** — reliably triggered by a specific input or sequence
 - **intermittent** — occurs under some conditions but not all (timing, load, ordering)
 - **theoretical** — identified from code analysis, not yet observed in practice (race conditions, uncovered paths)
 
-This informs the reproduction strategy in Phase 4. Deterministic bugs get a standard reproduction test. Intermittent bugs get statistical reproduction (loop test N times). Theoretical bugs may require the can't-reproduce protocol.
+This informs the reproduction strategy in Step 10. Deterministic bugs get a standard reproduction test. Intermittent bugs get statistical reproduction (loop test N times). Theoretical bugs may require the can't-reproduce protocol.
 
 ## Discovery Chain
 

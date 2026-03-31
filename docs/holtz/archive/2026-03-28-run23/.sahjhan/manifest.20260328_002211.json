@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "managed_paths": [
+    "docs/holtz",
+    "enforcement/"
+  ],
+  "entries": {
+    "docs/holtz/.sahjhan/ledger.jsonl": {
+      "sha256": "ae0983e52d590273661c70d32eb9df7d10975e199022668d113ff387e0787c19",
+      "last_operation": "ledger_append",
+      "last_updated": "2026-03-28T00:22:01Z",
+      "ledger_seq": 177
+    },
+    "docs/holtz/PUNCHLIST.md": {
+      "sha256": "6c0f963392fa9fd7bad3d66351920b95f39a2ec22d3b09ab34b71b409f9da0a8",
+      "last_operation": "render",
+      "last_updated": "2026-03-27T03:24:21Z",
+      "ledger_seq": 98
+    },
+    "docs/holtz/STATUS.md": {
+      "sha256": "86ac9b0ffc8130147a786290d97d4daba6c190260513e6279ba596276d0f057c",
+      "last_operation": "render",
+      "last_updated": "2026-03-27T03:58:04Z",
+      "ledger_seq": 167
+    }
+  },
+  "manifest_hash": "68d0ff7273fc98bd6e71d4f74433419cf0da48bb7595b2acde1752b33b1807c6"
+}

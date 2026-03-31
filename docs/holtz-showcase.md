@@ -551,7 +551,7 @@ solved it) that test_coverage.py simply missed.
 ### The Bug
 
 `impact_graph.py` was designed, implemented, tested (44 tests), and referenced
-in the skill file across Phases 0-5. But across **10+ consecutive audit runs**,
+in the skill file across Steps 0-11. But across **10+ consecutive audit runs**,
 no run ever executed the graph. `impact-graph.json` never existed on disk.
 
 ### Discovery Trail
@@ -563,8 +563,8 @@ layer of the same bug: the enforcement hook was also broken.
 ```
 STEP 1: The confession — graph never created
   Doc-to-implementation audit of SKILL.md:
-  SKILL.md Phase 0 references "create impact graph"
-  SKILL.md Phases 1-5 references "update impact graph"
+  SKILL.md Steps 0-4 references "create impact graph"
+  SKILL.md Steps 6-11 references "update impact graph"
   impact_graph.py → fully implemented, 44 passing tests
 
   ls docs/holtz/impact-graph.json → FILE NOT FOUND
@@ -572,7 +572,7 @@ STEP 1: The confession — graph never created
   → Across 10+ audit runs, nobody created it
 
   "I designed the impact graph. I wrote impact_graph.py. I wrote tests
-  for it. I wrote skill instructions that reference it in Phase 0-5.
+  for it. I wrote skill instructions that reference it in Steps 0-11.
   I ran bug hunts on top of myself. And not once did anyone — including
   me auditing myself — actually call the script to create a graph."
 
@@ -599,7 +599,7 @@ STEP 3: THE SECOND LAYER — the enforcement hook is also broken
 STEP 4: Justine's conclusion (verbatim)
   "The gate is a complete no-op: it will never block anything because
    its path filter matches a directory that does not exist in the
-   protocol. The HARD-GATE requirement ('Audit phases require a live
+   protocol. The HARD-GATE requirement ('Audit steps require a live
    impact graph') is unenforced despite the hook existing."
 
 STEP 5: Pattern classification
@@ -884,19 +884,19 @@ codebase already had the fix in `parse_punchlist` (line-number-based mapping) �
 
 ## Meta: How Holtz Works
 
-### The Seven-Phase Methodology
+### The Step 0-20 Methodology
 
 ```
-Phase 0: Recon      → Project overview, test infra, churn, skipped tests,
-                       lint, predictions, impact graph
-Phase 1: Doc Claims → Does the code match what docs promise?
-Phase 2: Test Qual  → Are tests actually testing anything? (Rubber stamps,
-                       shallow tests, missing integration tests)
-Phase 3: Adversarial → Error paths, race conditions, state consistency,
-                        resource leaks, boundary violations
-Phase 4: TDD Fix    → Write failing test, fix bug, verify green
-Phase 5: Patterns   → Generalize findings into reusable heuristics
-Phase 6: Converge   → Repeat until 2 consecutive passes find nothing new
+Steps 0-4: Recon       → Project overview, test infra, churn, skipped tests,
+                          lint, predictions, impact graph
+Step 6:    Doc Claims   → Does the code match what docs promise?
+Step 7:    Test Qual    → Are tests actually testing anything? (Rubber stamps,
+                          shallow tests, missing integration tests)
+Step 8:    Adversarial  → Error paths, race conditions, state consistency,
+                          resource leaks, boundary violations
+Step 10:   TDD Fix      → Write failing test, fix bug, verify green
+Step 11:   Patterns     → Generalize findings into reusable heuristics
+Steps 14-16: Converge   → Repeat until 2 consecutive passes find nothing new
 ```
 
 ### The Prediction System

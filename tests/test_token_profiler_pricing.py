@@ -1,7 +1,7 @@
 """Tests for token_profiler pricing module."""
 
 from token_profiler.models import DollarCost, Usage
-from token_profiler.pricing import PRICING, apply_pricing_to_usage, get_pricing
+from token_profiler.pricing import PRICING, apply_pricing_to_usage, get_pricing, make_pricing_fn
 
 # ---------------------------------------------------------------------------
 # PRICING table — verify spec values
@@ -170,3 +170,51 @@ class TestApplyPricingToUsage:
         assert abs(result.cache_read_cost - 1.50) < 1e-9
         assert abs(result.output_cost - 75.00) < 1e-9
         assert abs(result.total_cost - 110.25) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# make_pricing_fn — custom pricing override  (BH-011)
+# ---------------------------------------------------------------------------
+
+
+class TestMakePricingFn:
+    """Custom pricing tables should override default rates."""
+
+    def test_custom_rates_override_defaults(self):
+        """Custom table overrides rates for a known model."""
+        custom_table = {
+            "claude-opus-4-6": {
+                "input": 10.0 / 1_000_000,
+                "cache_creation": 12.5 / 1_000_000,
+                "cache_read": 1.0 / 1_000_000,
+                "output": 50.0 / 1_000_000,
+            },
+        }
+        fn = make_pricing_fn(custom_table)
+        usage = Usage(input_tokens=1_000_000, output_tokens=1_000_000)
+        result = fn(usage, "claude-opus-4-6")
+        assert abs(result.input_cost - 10.0) < 1e-9
+        assert abs(result.output_cost - 50.0) < 1e-9
+
+    def test_custom_table_falls_through_to_default(self):
+        """Models not in custom table still use default pricing."""
+        custom_table = {
+            "claude-opus-4-6": {
+                "input": 99.0 / 1_000_000,
+                "cache_creation": 0.0,
+                "cache_read": 0.0,
+                "output": 0.0,
+            },
+        }
+        fn = make_pricing_fn(custom_table)
+        usage = Usage(input_tokens=1_000_000)
+        result = fn(usage, "claude-sonnet-4-6")
+        # Should use default sonnet pricing, not opus override
+        assert abs(result.input_cost - 3.0) < 1e-9
+
+    def test_none_table_returns_default_fn(self):
+        """Passing None should return the default apply_pricing_to_usage."""
+        fn = make_pricing_fn(None)
+        usage = Usage(input_tokens=1_000_000)
+        result = fn(usage, "claude-opus-4-6")
+        assert abs(result.input_cost - 15.0) < 1e-9

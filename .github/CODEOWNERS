@@ -1,0 +1,9 @@
+# Default owner for everything
+* @jbrjake
+
+# Specific areas can be delegated as maintainers are added
+# /skills/holtz/   @jbrjake
+# /agents/         @jbrjake
+# /hooks/          @jbrjake
+# /tests/          @jbrjake
+# /docs/           @jbrjake

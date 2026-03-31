@@ -31,7 +31,7 @@ digraph {
     color="#3182ce"
   ]
   fix_loop [
-    label="Phase 4 (next batch)\n→ Phase 5 (every 3-5)\n→ full suite + linters"
+    label="Step 10 (next batch)\n→ Step 11 (every 3-5)\n→ full suite + linters"
   ]
   breaker [
     label="Circuit breaker\ntriggered?"
@@ -64,7 +64,7 @@ digraph {
     fontcolor="#744210"
   ]
   next_lens [
-    label="Select next lens from registry\nUpdate Active Lens in STATUS.md\nRun Phases 1-3 scoped to\nnew lens focus + entry point"
+    label="Select next lens from registry\nUpdate Active Lens in STATUS.md\nRun Steps 6-8 scoped to\nnew lens focus + entry point"
   ]
   all_done [
     label="All lenses\nCOMPLETE?"

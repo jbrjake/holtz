@@ -75,7 +75,6 @@ def test_03_edge_metadata_preservation(graph):
         note="passes frequency as float Hz",
     )
     assert edge["metadata"]["note"] == "passes frequency as float Hz"
-    assert "error" not in edge
 
 
 def test_04_persistence_round_trip(graph):
@@ -352,9 +351,10 @@ def test_21_boundary_clamping(graph):
 
 
 def test_22_update_risk_nonexistent(graph):
-    """update_risk on nonexistent node → error, no phantom node."""
-    result = graph.update_risk("ghost_pepper", 0.3)
-    assert "error" in result
+    """update_risk on nonexistent node → KeyError, no phantom node."""
+    import pytest
+    with pytest.raises(KeyError, match="ghost_pepper"):
+        graph.update_risk("ghost_pepper", 0.3)
     assert "ghost_pepper" not in graph.nodes
 
 
@@ -378,18 +378,20 @@ def test_24_empty_risk_hotspots(graph):
 
 
 def test_update_risk_nan_rejected(graph):
-    """update_risk with NaN delta returns error instead of corrupting risk_score."""
+    """update_risk with NaN delta raises ValueError instead of corrupting risk_score."""
+    import pytest
     graph.add_node("f.py::func", "function", "f.py", line=1)
-    result = graph.update_risk("f.py::func", float("nan"))
-    assert "error" in result
+    with pytest.raises(ValueError, match="finite"):
+        graph.update_risk("f.py::func", float("nan"))
     assert graph.nodes["f.py::func"]["risk_score"] == 0.0  # unchanged
 
 
 def test_update_risk_inf_rejected(graph):
-    """update_risk with inf delta returns error."""
+    """update_risk with inf delta raises ValueError."""
+    import pytest
     graph.add_node("f.py::func", "function", "f.py", line=1)
-    result = graph.update_risk("f.py::func", float("inf"))
-    assert "error" in result
+    with pytest.raises(ValueError, match="finite"):
+        graph.update_risk("f.py::func", float("inf"))
     assert graph.nodes["f.py::func"]["risk_score"] == 0.0  # unchanged
 
 
@@ -469,13 +471,14 @@ def test_28_prune_last_node(graph):
 
 
 def test_29_double_prune(graph):
-    """prune_node twice → error on second call, no crash."""
+    """prune_node twice → KeyError on second call, no crash."""
+    import pytest
     graph.add_node("twice.py::gone", "function", "twice.py", line=1)
     result1 = graph.prune_node("twice.py::gone")
-    assert "error" not in result1
+    assert "removed_edges" in result1
 
-    result2 = graph.prune_node("twice.py::gone")
-    assert "error" in result2
+    with pytest.raises(KeyError, match="twice.py::gone"):
+        graph.prune_node("twice.py::gone")
 
 
 def test_30_prune_missing_empty_graph(graph, project):
@@ -572,16 +575,17 @@ def test_36_neighbors_nonexistent(graph):
 
 
 def test_37_add_edge_nonexistent_endpoint(graph):
-    """add_edge with nonexistent target → error, no edge created, no phantom node."""
+    """add_edge with nonexistent target → KeyError, no edge created, no phantom node."""
+    import pytest
     graph.add_node("real.py::exists", "function", "real.py", line=1)
-    result = graph.add_edge("real.py::exists", "fake.py::phantom", "calls")
-    assert "error" in result
+    with pytest.raises(KeyError, match="fake.py::phantom"):
+        graph.add_edge("real.py::exists", "fake.py::phantom", "calls")
     assert graph.stats()["edges"] == 0
     assert "fake.py::phantom" not in graph.nodes
 
     # Also test nonexistent source
-    result2 = graph.add_edge("fake.py::phantom", "real.py::exists", "calls")
-    assert "error" in result2
+    with pytest.raises(KeyError, match="fake.py::phantom"):
+        graph.add_edge("fake.py::phantom", "real.py::exists", "calls")
 
 
 # ---------------------------------------------------------------------------
@@ -607,9 +611,8 @@ def test_38_200_node_round_trip(graph):
         if key in attempts:
             continue
         attempts.add(key)
-        result = graph.add_edge(src, tgt, etype)
-        if "error" not in result:
-            edges_added += 1
+        graph.add_edge(src, tgt, etype)
+        edges_added += 1
 
     assert graph.stats()["nodes"] == 200
     assert graph.stats()["edges"] == 500
@@ -897,7 +900,6 @@ def test_add_edge_update_missing_metadata(graph):
     graph.edges.append({"source": "a.py::fn_a", "target": "b.py::fn_b", "type": "calls"})
     # Updating should not raise KeyError
     result = graph.add_edge("a.py::fn_a", "b.py::fn_b", "calls", note="updated")
-    assert "error" not in result
     assert result.get("metadata", {}).get("note") == "updated"
 
 
@@ -981,3 +983,30 @@ def test_load_malformed_mixed_valid_and_invalid(tmp_path):
     assert len(g.edges) == 1
     # Risk scores preserved
     assert g.nodes["a"]["risk_score"] == 0.5
+
+
+def test_load_node_missing_id_key_filtered(tmp_path):
+    """Node with type and file but missing id key should be filtered during load.
+
+    BH-017: risk_hotspots() uses n["id"] in sort key. Nodes missing the id key
+    would pass the _REQUIRED_NODE_KEYS filter but crash downstream methods.
+    """
+    graph_file = tmp_path / "graph.json"
+    graph_file.write_text(json.dumps({
+        "nodes": {
+            "has_id": {"id": "has_id", "type": "module", "file": "a.py", "line": 1,
+                       "last_audited": "2026-01-01", "audit_count": 1, "risk_score": 0.5},
+            "no_id": {"type": "module", "file": "b.py", "line": 2,
+                      "last_audited": "2026-01-01", "audit_count": 1, "risk_score": 0.8},
+        },
+        "edges": [],
+    }))
+    g = ImpactGraph(graph_file)
+    g.load()
+    # Node without id should be filtered out
+    assert "has_id" in g.nodes
+    assert "no_id" not in g.nodes
+    # risk_hotspots should not crash
+    hotspots = g.risk_hotspots(top=10)
+    assert len(hotspots) == 1
+    assert hotspots[0]["id"] == "has_id"

@@ -23,63 +23,63 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/h
 python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json drift_check --project-root .
 ```
 
-3. **Stale edge verification (LLM-driven):** Verify `calls` and `imports` edges by grepping for the call/import in the source file. Remove severed relationships. `assumes` and `diverges_from` edges are NOT verified here — they require re-evaluation during Phases 1-3.
+3. **Stale edge verification (LLM-driven):** Verify `calls` and `imports` edges by grepping for the call/import in the source file. Remove severed relationships. `assumes` and `diverges_from` edges are NOT verified here — they require re-evaluation during Steps 6-8.
 
 4. **Add new nodes** for files and functions discovered in recon:
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_node "<module>:<function>" "function" "<file_path>" --line <N>
 ```
 
-## Adding Edges During Audit Phases
+## Adding Edges During Audit Steps
 
 <HARD-GATE>
-Every audit phase (1, 2, 3) MUST add edges to the impact graph. After completing each phase, run `stats` to verify the edge count increased. If you processed 5+ claims/files/modules and added zero edges, STOP — re-examine your findings for missed relationships before proceeding to the next phase.
+Every audit step (6, 7, 8) MUST add edges to the impact graph. After completing each step, run `stats` to verify the edge count increased. If you processed 5+ claims/files/modules and added zero edges, STOP — re-examine your findings for missed relationships before proceeding to the next step.
 </HARD-GATE>
 
 ### Edge Types
 
 | Type | Meaning | When to add |
 |------|---------|-------------|
-| `imports` | A imports/requires B | Phase 0 recon, reading code |
-| `calls` | A calls function in B | Phase 3 adversarial audit |
-| `tests` | Test file covers function | Phase 2 test audit |
-| `assumes` | A makes an assumption about B's behavior | Phases 1-3, any cross-module assumption |
-| `diverges_from` | A and B parse/interpret same data differently | Phase 1 doc audit, Phase 3 code audit |
-| `shares_pattern` | A and B exhibit same bug pattern | Phase 5 pattern analysis |
-| `co_fixed` | A and B were fixed in same commit | Phase 4 blast radius |
+| `imports` | A imports/requires B | Steps 0-4 recon, reading code |
+| `calls` | A calls function in B | Step 8 adversarial code audit |
+| `tests` | Test file covers function | Step 7 test audit |
+| `assumes` | A makes an assumption about B's behavior | Steps 6-8, any cross-module assumption |
+| `diverges_from` | A and B parse/interpret same data differently | Step 6 doc audit, Step 8 code audit |
+| `shares_pattern` | A and B exhibit same bug pattern | Step 11 pattern analysis |
+| `co_fixed` | A and B were fixed in same commit | Step 10 blast radius |
 
 ### CLI Commands for Each Edge Type
 
 ```bash
-# Relationship edges (Phase 0)
+# Relationship edges (Steps 0-4)
 python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<source_id>" "<target_id>" "imports"
 python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<caller_id>" "<callee_id>" "calls"
 
-# Test coverage edges (Phase 2)
+# Test coverage edges (Step 7)
 python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<test_file_id>" "<function_id>" "tests"
 
-# Semantic edges (Phases 1-3) — ALWAYS include --note
+# Semantic edges (Steps 6-8) — ALWAYS include --note
 python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<source_id>" "<target_id>" "assumes" --note "<what A assumes about B>"
 python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<source_id>" "<target_id>" "diverges_from" --note "<how A and B differ>"
 
-# Pattern edges (Phase 5)
+# Pattern edges (Step 11)
 python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<func_a_id>" "<func_b_id>" "shares_pattern" --note "PAT-NNN"
 
-# Co-fix edges (Phase 4 blast radius)
+# Co-fix edges (Step 10 blast radius)
 python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<func_a_id>" "<func_b_id>" "co_fixed" --note "<commit_hash>"
 ```
 
 ### Verification
 
-After completing each phase, verify edges were added:
+After completing each step, verify edges were added:
 
 ```bash
 python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats
 ```
 
-Expected output shows node count, edge count, and edge type breakdown. The edge count MUST increase after each audit phase.
+Expected output shows node count, edge count, and edge type breakdown. The edge count MUST increase after each audit step.
 
-## Blast Radius Queries (Phase 4)
+## Blast Radius Queries (Step 10)
 
 After each fix, query the impact graph for downstream effects:
 
@@ -98,7 +98,7 @@ For each node in the blast radius:
 4. If assumption violated → new punchlist item
 5. If assumption holds → update edge metadata with `"verified {date}"`
 
-## Risk Score Updates (Phase 4)
+## Risk Score Updates (Step 10)
 
 After each fix and blast radius check:
 

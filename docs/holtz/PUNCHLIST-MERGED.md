@@ -1,303 +1,325 @@
-# Holtz Punchlist
-> Generated: 2026-03-24 | Project: holtz | Baseline: 321 pass, 0 fail, 0 skip
+# Punchlist (Merged)
 
-## Summary
-| Severity | Open | Resolved | Deferred |
-|----------|------|----------|----------|
-| MEDIUM   | 0    | 6        | 0        |
-| LOW      | 0    | 2        | 0        |
+**Protocol:** holtz v1.0.0
+**Merge date:** 2026-03-30
+**Holtz findings:** 7 (BH-001 through BH-007)
+**Justine findings:** 8 (BJ-001 through BJ-008)
+**Merged total:** 14
 
-## Patterns
+## HIGH
 
-## Items
+| ID | Category | Location | Perspective | Description | Status |
+|----|----------|----------|-------------|-------------|--------|
+| BH-001 | doc/drift | README.md:6 | public-contract | Badge URL says 869_total but actual test count is 874. Alt text says 874 but shield URL is stale. PAT-005 recurrence. | OPEN |
+| BH-009 | bug/logic | enforcement/hooks/stop_gate.py:65 | integration | stop_gate hard-coded allow-list missing safe between-steps states. States like converged, merge_ready, merge_done, perspective_clean, all_perspectives_clean, and final_sweep_clean are not terminal and not in the allow-list. Critically, converged blocks exit — an operator who has converged cannot stop without completing three more finalize steps. Allow-list was built incrementally rather than derived from a principled rule about the state machine. | OPEN |
+| BH-012 | test/missing | tests/test_integration.py:237 | contract | test_readme_metrics_match_actual checks "What's inside" prose counts but does NOT check the shields.io badge URLs. The badge at line 6 is not parsed or checked by any test. Badge is the most visible metric element and drifts most often (PAT-005), yet the test that should prevent README drift has a blind spot for the most prominent metric display. | OPEN |
 
-### BH-001: README metrics test only validates test count
-<!-- Was: Holtz BH-001 + Justine BJ-002 -->
-**Severity:** MEDIUM
-**Category:** design/inconsistency
-**Location:** `tests/test_integration.py:215`
-**Status:** RESOLVED
+## MEDIUM
+
+| ID | Category | Location | Perspective | Description | Status |
+|----|----------|----------|-------------|-------------|--------|
+| BH-002 | doc/drift | README.md:104 | public-contract | Prediction accuracy claims 65%/38%/0% but living punchlist tracks ~69%/~45%/0%. Stale numbers from earlier research epoch. | OPEN |
+| BH-003 | doc/drift | README.md:190,161 | public-contract | Run count inconsistent: line 161 says twenty-seven, line 190 says 28, actual completed runs is 28 (run 29 in progress). LOC claim 19766 is stale, actual Python LOC ~23626. | OPEN |
+| BH-004 | bug/error-handling | enforcement/hooks/_common.py:62 | error-propagation | _get_session_key_path uses except Exception: pass which swallows all exceptions including programming bugs (AttributeError, TypeError, NameError). The original error is destroyed and replaced with a downstream misleading FileNotFoundError when compute_event_proof tries to open the nonexistent default key file. Function is used by security-critical HMAC operations. | OPEN |
+| BH-007 | design/duplication | enforcement/hooks/_sahjhan_bootstrap.py:66-76 | contract | _sahjhan_bootstrap.py._platform_triple() duplicates the platform triple logic from _resolve.py.sahjhan_binary(). Both independently map platform.machine() and platform.system() to a Rust target triple. If one is updated the other must be updated in lockstep or they diverge — bootstrap hook would protect a different binary path than the one _resolve.py returns. | OPEN |
+| BH-008 | bug/security | enforcement/hooks/lens_quiz.py:48 | security | Quiz answer bypass via fence info string. _ANSWERS_RE lacks ^ anchor, so LENS:...ANSWERS: on a code fence opener line survives mask_fenced_blocks and matches. A subagent could embed answers in a fence info string to bypass quiz scoring. | OPEN |
+| BH-010 | test/bogus | enforcement/scripts/validate_merge_report.py:20-35 | contract | validate_merge_report.py checks only that section headers exist via regex. It does not verify that sections contain any content. A merge report with four empty headers passes validation, gates the merge_complete transition, and allows the protocol to proceed to the fix loop with zero merge data. Anti-pattern #12 (Permissive Validator). | OPEN |
+| BH-011 | design/duplication | scripts/token_profiler/pricing.py:51-80,115-136 | contract | get_pricing() and _custom_pricing() independently implement longest-prefix model name matching. Same algorithm, two copies. If one is updated without the other, they diverge on which pricing table entry matches a given model name. | OPEN |
+
+## LOW
+
+| ID | Category | Location | Perspective | Description | Status |
+|----|----------|----------|-------------|-------------|--------|
+| BH-005 | bug/logic | enforcement/hooks/_protocol_cache.py:159-178 | security | is_git_commit() false negative for env-prefix commands. VAR=x git commit -m test is a valid bash commit command but the regex re.match(r"git\s+commit\b", seg) requires "git" as the first token, returning False. The commit tracker would miss this commit, leaving it unregistered in the enforcement cache. | OPEN |
+| BH-006 | bug/logic | enforcement/hooks/_protocol_cache.py:197 | contract | is_sahjhan_cmd fails for bare platform binary names (sahjhan-aarch64-apple-darwin without path prefix). Third condition checks for /sahjhan- but not sahjhan- at start. Low impact — binary is always invoked with path. | OPEN |
+| BH-013 | test/fragile | tests/test_sahjhan_integration.py:516 | component | Choose Your Own Adventure anti-pattern: or-disjunction lets test pass whether hook warned OR silently allowed a chained command. Should assert specifically for warning behavior. | OPEN |
+| BH-014 | test/fragile | tests/test_token_profiler_integration.py:30 | component | Mystery Guest anti-pattern: hardcoded path to specific JSONL on one developer machine. Test skips if file absent but is a dead test in CI and for any other developer. | OPEN |
+
+---
+
+## Item Details
+
+### BH-001: README badge test count stale (869 displayed vs 874 actual)
+**Severity:** HIGH
+**Category:** doc/drift
+**Location:** `README.md:6`
+**Perspective:** public-contract
+**Status:** OPEN
 **Found by:** both auditors
+**Severity disagreement:** Holtz=MEDIUM, Justine=HIGH. Using HIGH.
+<!-- Was: Holtz BH-001 + Justine BJ-001 -->
 
-**Problem:** This recommendation has appeared in 4 consecutive audit summaries
-without being fully implemented: "Automate README metrics check for all
-counts". The test `test_readme_metrics_match_actual` validates the test count
-but not reference doc count (claimed 17), line count (claimed 8,500), skill
-count, agent count, script count, seed pattern count, or hook count. Any of
-these can drift silently.
+**Problem:** Badge URL says 869_total but actual test count is 874. Alt text says 874 but shield URL is stale. PAT-005 recurrence.
 
-**Evidence:** Found in: run 9 (2026-03-22), run 10 (2026-03-22), run 13
-(2026-03-24), Justine run 1 (2026-03-22). Current test at
-test_integration.py:215 extracts all 9 fields from the regex but only asserts
-on `claimed_tests`.
+**Evidence:** `![874 tests](https://img.shields.io/badge/tests-869_total-brightgreen.svg)` — alt text "874 tests" vs URL "869_total". `python -m pytest` reports `873 passed, 1 skipped` = 874 total.
 
-**Discovery Chain:** Prior summary scan → recommendation "automate README
-metrics" found in 4 summaries → test exists but only checks 1 of 9 extracted
-fields → 8 unchecked fields can drift silently
+---
 
-**Acceptance Criteria:**
-- [ ] All numeric claims in README "What's inside" line are validated against actual file counts
-- [ ] Validation: `python -m pytest tests/test_integration.py::test_readme_metrics_match_actual -v` passes with all fields checked
-
-**Validation Command:**
-```bash
-python -m pytest tests/test_integration.py::test_readme_metrics_match_actual -v
-```
-
-### BH-002: No automated \s convention check
-<!-- Was: Holtz BH-002 + Justine BJ-004 -->
-**Severity:** MEDIUM
-**Category:** design/inconsistency
-**Location:** `skills/holtz/scripts/pattern_brief_compact.py`
-**Status:** RESOLVED
-**Found by:** both auditors
-
-**Problem:** This recommendation has appeared in 2 consecutive audit summaries
-without being implemented: "Add \s convention check to CI". The project
-convention is `[ \t]` instead of `\s` in source regex to prevent newline leaks
-(PAT-003). `pattern_brief_compact.py` currently violates this convention with
-`\s` on lines 41 and 53. No CI check or pre-commit hook prevents future
-regressions.
-
-**Evidence:** Found in: run 11 (2026-03-22), Justine run 11 (2026-03-22).
-`grep -rn '\\s[*+?]' skills/holtz/scripts/` finds 2 hits in
-pattern_brief_compact.py.
-
-**Discovery Chain:** Prior summary scan → recommendation "add \s convention
-check to CI" found in 2 summaries → `grep` confirms 2 violations exist →
-CI workflow has no convention check step
-
-**Acceptance Criteria:**
-- [ ] All `\s` quantified usages in source regex replaced with `[ \t]` equivalents
-- [ ] CI includes a check that prevents `\s` in source files (or a test that greps for it)
-- [ ] Validation: `grep -rnP '\\s[*+?]' skills/holtz/scripts/` returns no hits
-
-**Validation Command:**
-```bash
-grep -rnP '\\s[*+?]' skills/holtz/scripts/ && echo "FAIL: \\s found" || echo "PASS: no \\s"
-```
-
-### BH-003: parse_brief has no edge case tests for empty fields or code fences
-<!-- Was: Holtz BH-003 -->
-**Severity:** MEDIUM
-**Category:** test/shallow
-**Location:** `tests/test_pattern_brief_compact.py`
-**Status:** RESOLVED
-**Found by:** Holtz only
-**Predicted:** Prediction 1 (confidence: HIGH), Prediction 3 (confidence: MEDIUM)
-
-**Problem:** `parse_brief()` has 5 tests, all using well-formed SAMPLE_BRIEF
-with values on the same line as each field. No test exercises: (1) a field with
-an empty value on its line, which triggers the `\s*` regex to consume the
-newline and capture the next field's content; (2) a code fence containing a
-`## PAT-NNN:` header, which parse_brief matches as a real entry since it
-doesn't mask code fences.
-
-**Evidence:** test_pattern_brief_compact.py SAMPLE_BRIEF has all fields
-populated. `parse_brief()` at line 44 calls `header_re.finditer(content)`
-without masking. The `_extract` function at line 53 uses `\s*` which matches
-newlines.
-
-**Discovery Chain:** Prediction 1 (regex-newline-leak heuristic) → verified
-`\s*` in field extraction regex → checked test file → all tests use well-formed
-input → empty-field and code-fence edge cases untested
-
-**Acceptance Criteria:**
-- [ ] Test exists for parse_brief with a field that has no value on its line (empty after `:**`)
-- [ ] Test exists for parse_brief with a code fence containing `## PAT-NNN:` header
-- [ ] Both tests assert correct behavior (empty field returns empty string, code fence header is not matched)
-
-**Validation Command:**
-```bash
-python -m pytest tests/test_pattern_brief_compact.py -v -k "empty or fence"
-```
-
-### BH-004: parse_brief field extraction leaks across fields on empty values
-<!-- Was: Holtz BH-004 -->
-**Severity:** MEDIUM
-**Category:** bug/logic
-**Location:** `skills/holtz/scripts/pattern_brief_compact.py:53`
-**Status:** RESOLVED
-**Determinism:** deterministic
-**Found by:** Holtz only
-**Predicted:** Prediction 1 (confidence: HIGH)
-**Lens:** component
-
-**Problem:** The `_extract()` function uses `\s*` after the field bold marker
-(`**Field:**\s*`). When a field has an empty value on its line (e.g.,
-`**What to look for:**\n`), `\s*` consumes the newline and `(.*?)` with DOTALL
-captures content from the next field. Result: the empty field gets populated
-with the next field's entire content including its bold marker.
-
-**Evidence:** Reproduction:
-```python
-brief = '## PAT-001: test (Run 1, 2026-03-20)\n**What to look for:**\n**Detection heuristic:** `grep foo`\n**Example:** bar\n'
-entries = parse_brief(brief)
-# entries[0].what_to_look_for == '**Detection heuristic:** `grep foo`'
-# Expected: ''
-```
-
-**Discovery Chain:** Global pattern regex-newline-leak heuristic → `\s*` on
-line 53 matches newline → tested with empty field → confirmed content bleed
-from next field
-
-**Acceptance Criteria:**
-- [ ] `\s*` replaced with `[ \t]*` in the _extract regex (line 53)
-- [ ] parse_brief returns empty string for fields with no value on their line
-- [ ] Existing tests still pass
-
-**Validation Command:**
-```bash
-python -c "
-import sys; sys.path.insert(0, 'skills/holtz/scripts')
-from pattern_brief_compact import parse_brief
-brief = '## PAT-001: test (Run 1, 2026-03-20)\n**What to look for:**\n**Detection heuristic:** \`grep\`\n**Example:** bar\n'
-e = parse_brief(brief)
-assert e[0].what_to_look_for == '', f'Expected empty, got: {e[0].what_to_look_for}'
-print('PASS')
-"
-```
-
-### BH-005: parse_brief matches pattern headers inside code fences
-<!-- Was: Holtz BH-005 -->
-**Severity:** MEDIUM
-**Category:** bug/logic
-**Location:** `skills/holtz/scripts/pattern_brief_compact.py:44`
-**Status:** RESOLVED
-**Determinism:** deterministic
-**Found by:** Holtz only
-**Predicted:** Prediction 3 (confidence: MEDIUM)
-**Lens:** component
-
-**Problem:** `parse_brief()` applies `header_re.finditer(content)` directly to
-content without masking code fences. If the pattern brief contains a code
-example with a `## PAT-NNN: name (Run N, YYYY-MM-DD)` header inside a code
-fence, parse_brief matches it as a real entry. This is the same root cause
-family as PAT-001 (code-fence-unaware parsing).
-
-**Evidence:** Reproduction:
-```python
-brief = '## PAT-001: real (Run 1, 2026-03-20)\n...\n```\n## PAT-999: fake (Run 99, 2099-01-01)\n```\n'
-entries = parse_brief(brief)
-# len(entries) == 2 — PAT-999 matched inside code fence
-# Expected: len(entries) == 1
-```
-
-**Discovery Chain:** Code-fence-unaware-parsing heuristic → parse_brief uses
-finditer(content) without masking → tested with fenced header → confirmed
-false match
-
-**Acceptance Criteria:**
-- [ ] parse_brief masks code fences before applying header regex
-- [ ] Pattern headers inside code fences are not matched
-- [ ] Existing tests still pass
-
-**Validation Command:**
-```bash
-python -c "
-import sys; sys.path.insert(0, 'skills/holtz/scripts')
-from pattern_brief_compact import parse_brief
-brief = '## PAT-001: real (Run 1, 2026-03-20)\n**What to look for:** x\n**Detection heuristic:** y\n**Example:** z\n\n\`\`\`\n## PAT-999: fake (Run 99, 2099-01-01)\n\`\`\`\n'
-assert len(parse_brief(brief)) == 1, 'Code fence header matched as real entry'
-print('PASS')
-"
-```
-
-### BH-006: README line count phrasing is ambiguous
-<!-- Was: Justine BJ-001 -->
+### BH-002: Prediction accuracy claims stale
 **Severity:** MEDIUM
 **Category:** doc/drift
-**Location:** `README.md:172`
-**Status:** RESOLVED
+**Location:** `README.md:104`
+**Perspective:** public-contract
+**Status:** OPEN
+**Found by:** Holtz only
+<!-- Was: Holtz BH-003 -->
+
+**Problem:** Prediction accuracy claims 65%/38%/0% but living punchlist tracks ~69%/~45%/0%. Stale numbers from earlier research epoch.
+
+---
+
+### BH-003: Run count and LOC claims inconsistent
+**Severity:** LOW
+**Category:** doc/drift
+**Location:** `README.md:190,161`
+**Perspective:** public-contract
+**Status:** OPEN
+**Found by:** Holtz only
+<!-- Was: Holtz BH-002 -->
+
+**Problem:** Run count inconsistent: line 161 says twenty-seven, line 190 says 28, actual completed runs is 28 (run 29 in progress). LOC claim 19766 is stale, actual Python LOC ~23626.
+
+---
+
+### BH-004: _get_session_key_path bare except swallows programming bugs
+**Severity:** MEDIUM
+**Category:** bug/error-handling
+**Location:** `enforcement/hooks/_common.py:62`
+**Perspective:** error-propagation
+**Status:** OPEN
 **Found by:** Justine only
-**Lens:** contract
+<!-- Was: Justine BJ-004 -->
 
-**Problem:** README states "321 tests across 8,500 lines" which reads as "the
-test code spans 8,500 lines." The actual test file line count is 6,509. The
-8,500 figure matches the combined test + source + hook line count (8,545).
-The phrasing is misleading.
+**Problem:** `_get_session_key_path` uses `except Exception: pass` which swallows all exceptions including programming bugs (AttributeError, TypeError, NameError). If the code in lines 48-61 has a bug, it will be silently swallowed and the function falls back to the default path. The actual error surfaces later as a misleading FileNotFoundError when `compute_event_proof` tries to open the nonexistent default key file. This is the "error destruction" anti-pattern — the original error is destroyed and replaced with a downstream symptom.
 
-**Evidence:** `wc -l tests/*.py` yields 6,509 total. `wc -l tests/*.py
-skills/holtz/scripts/*.py hooks/*.py` yields 8,545 total. README claims 8,500.
-
-**Discovery Chain:** README review → "8,500 lines" claim → `wc -l tests/*.py`
-= 6,509 → total codebase = 8,545 → phrasing is ambiguous
+**Evidence:** Line 62: `except Exception: pass` — this catches AttributeError, TypeError, NameError, etc. The function is used by `compute_event_proof` and `record_authed_event` which are security-critical HMAC operations.
 
 **Acceptance Criteria:**
-- [ ] README "What's inside" line clarifies what "lines" refers to (e.g., "8,500 lines of code" or "across 8,500 total lines")
-- [ ] Line count is accurate for the chosen definition
+- [ ] Exception handler narrowed to (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, ImportError) or equivalent specific exceptions
+- [ ] Programming bugs (AttributeError, TypeError, etc.) propagate instead of being swallowed
+
+**Validation Command:**
+```bash
+python -m pytest tests/test_hmac_helpers.py -v --tb=short
+```
+
+---
+
+### BH-005: is_git_commit false negative for env-prefix commands
+**Severity:** LOW
+**Category:** bug/logic
+**Location:** `enforcement/hooks/_protocol_cache.py:159-178`
+**Perspective:** security
+**Status:** OPEN
+**Found by:** Justine only
+<!-- Was: Justine BJ-007 -->
+
+**Problem:** `is_git_commit()` splits on `[;&|]+` and checks each segment for `git commit` at the start. But `VAR=x git commit -m test` is a valid bash commit command (sets VAR in the environment for the git process). The regex `re.match(r"git\s+commit\b", seg)` requires "git" as the first token, so `VAR=x git commit` returns False. The commit tracker would miss this commit, leaving it unregistered in the enforcement cache.
+
+**Evidence:** `is_git_commit('VAR=x git commit -m test')` returns False. This is a valid bash command that performs a git commit.
+
+**Acceptance Criteria:**
+- [ ] `is_git_commit('VAR=x git commit -m test')` returns True
+- [ ] OR documented as a known limitation with rationale for not fixing
 
 **Validation Command:**
 ```bash
 python -c "
-from pathlib import Path
-total = sum(1 for f in list(Path('tests').glob('*.py')) + list(Path('skills/holtz/scripts').glob('*.py')) + list(Path('hooks').glob('*.py')) for _ in open(f))
-print(f'Total lines: {total}')
+import sys; sys.path.insert(0, 'enforcement/hooks')
+from _protocol_cache import is_git_commit
+print(is_git_commit('VAR=x git commit -m test'))
 "
 ```
 
-### BH-007: Hook path matching uses substring containment
-<!-- Was: Justine BJ-003 -->
+---
+
+### BH-006: is_sahjhan_cmd false negative for bare binary names
 **Severity:** LOW
-**Category:** design/inconsistency
-**Location:** `hooks/impact_graph_gate.py:35-37`
-**Status:** RESOLVED
+**Category:** bug/logic
+**Location:** `enforcement/hooks/_protocol_cache.py:197`
+**Perspective:** contract
+**Status:** OPEN
+**Found by:** Holtz only
+<!-- Was: Holtz BH-005 -->
+
+**Problem:** is_sahjhan_cmd fails for bare platform binary names (sahjhan-aarch64-apple-darwin without path prefix). Third condition checks for /sahjhan- but not sahjhan- at start. Low impact — binary is always invoked with path.
+
+---
+
+### BH-007: _sahjhan_bootstrap.py duplicates platform triple logic from _resolve.py
+**Severity:** MEDIUM
+**Category:** design/duplication
+**Location:** `enforcement/hooks/_sahjhan_bootstrap.py:66-76`
+**Perspective:** contract
+**Status:** OPEN
 **Found by:** Justine only
-**Lens:** security
-
-**Problem:** The impact graph gate checks paths using Python `in` operator
-for substring matching (e.g., `"docs/holtz/audit/" in normalized`). A path
-like `vendor/docs/holtz/audit/file.md` would theoretically match. Not
-practically exploitable because Claude Code provides clean cwd-relative paths.
-
-**Evidence:** `impact_graph_gate.py:35`: `any(p in normalized for p in
-justine_paths)`. `status_staleness_gate.py:39` has the same pattern.
-
-**Discovery Chain:** Security lens scan → hook uses `in` for path matching →
-`in` is substring not prefix → theoretical false match on embedded paths →
-Claude Code normalizes paths so not practically exploitable
-
-**Acceptance Criteria:**
-- [ ] Path matching documents the assumption that paths are clean cwd-relative
-- [ ] OR path matching uses startswith or pathlib for proper prefix checking
-
-**Validation Command:**
-```bash
-python -c "print('docs/holtz/audit/' in 'vendor/docs/holtz/audit/file.md')"
-```
-
-### BH-008: Stall detection message doesn't distinguish flat vs growing
 <!-- Was: Justine BJ-005 -->
-**Severity:** LOW
-**Category:** design/inconsistency
-**Location:** `skills/holtz/scripts/convergence_check.py:272-277`
-**Status:** RESOLVED
-**Found by:** Justine only
-**Lens:** contract
 
-**Problem:** The stall detection reports "STALLED" for both flat (3,3,3,3) and
-growing (3,4,5,6) open item counts. For a growing case, "STALLED" is
-misleading — the situation is regressing. The functional behavior is correct
-(returns False in both cases).
+**Problem:** `_sahjhan_bootstrap.py._platform_triple()` duplicates the platform triple logic from `_resolve.py.sahjhan_binary()`. Both independently map platform.machine() and platform.system() to a Rust target triple. If one is updated (e.g., to add Windows support), the other must be updated in lockstep or they diverge — producing a situation where the bootstrap hook protects a different binary path than the one `_resolve.py` returns.
 
-**Evidence:** Stall check uses `>=` which catches both flat and growing. Same
-message for both cases.
-
-**Discovery Chain:** Adversarial testing of convergence paths → stall detector
-fires on growing items → message says "STALLED" when "REGRESSING" more
-accurate → no test checks this distinction
+**Evidence:** `_resolve.py:14-21` and `_sahjhan_bootstrap.py:66-76` contain identical platform detection logic. `_sahjhan_bootstrap.py` does not import from `_resolve.py`.
 
 **Acceptance Criteria:**
-- [ ] Stall message distinguishes flat vs growing open items
-- [ ] OR documentation states "STALLED" covers both cases by design
+- [ ] Single source of truth for platform triple computation (either import from _resolve or share a helper)
+- [ ] OR explicit test that both implementations agree (equivalence test)
 
 **Validation Command:**
 ```bash
 python -c "
-import sys; sys.path.insert(0, 'skills/holtz/scripts')
-import convergence_check as cc
-snap = lambda n: {'timestamp': '2026-03-19T00:00:00', 'punchlist': {'OPEN': n, 'IN PROGRESS': 0, 'RESOLVED': 2, 'DEFERRED': 0, 'unknown': 0, 'total': n+2}, 'tests': {'passed': 10, 'failed': 0, 'skipped': 0}}
-_, msg = cc.check_convergence([snap(3), snap(4), snap(5), snap(6)])
-print(f'Growing: {msg}')
+import sys; sys.path.insert(0, 'enforcement/hooks')
+from _resolve import sahjhan_binary
+from _sahjhan_bootstrap import _platform_triple
+binary = sahjhan_binary()
+triple = _platform_triple()
+assert triple in binary, f'{triple} not in {binary}'
+print('OK: platform triple agrees')
 "
 ```
+
+---
+
+### BH-008: Quiz answer bypass via fence info string
+**Severity:** MEDIUM
+**Category:** bug/security
+**Location:** `enforcement/hooks/lens_quiz.py:48`
+**Perspective:** security
+**Status:** OPEN
+**Found by:** Holtz only
+<!-- Was: Holtz BH-004 -->
+
+**Problem:** Quiz answer bypass via fence info string. _ANSWERS_RE lacks ^ anchor, so LENS:...ANSWERS: on a code fence opener line survives mask_fenced_blocks and matches. A subagent could embed answers in a fence info string to bypass quiz scoring.
+
+---
+
+### BH-009: stop_gate hard-coded allow-list missing safe between-steps states
+**Severity:** HIGH
+**Category:** bug/logic
+**Location:** `enforcement/hooks/stop_gate.py:65`
+**Perspective:** integration
+**Status:** OPEN
+**Found by:** Justine only
+<!-- Was: Justine BJ-002 -->
+
+**Problem:** The stop_gate allows exit from terminal states + (awaiting_clear, idle, recon). The state machine defines 14 states. States like `converged`, `merge_ready`, `merge_done`, `perspective_clean`, `all_perspectives_clean`, and `final_sweep_clean` are all "between steps" states with no active work at risk, but the stop_gate blocks exit from them. Critically, `converged` blocks exit — an operator who has converged but hasn't finalized cannot stop without completing three more steps. The hard-coded allow-list was built incrementally rather than derived from a principled rule about the state machine.
+
+**Evidence:** stop_gate.py:65: `if is_terminal or current_state in ("awaiting_clear", "idle", "recon"):` — states.toml defines 14 states, only 4 are in the allow-list (finalized + 3). The `converged` state is reachable via confirm_convergence but is not terminal and not in the allow-list.
+
+**Acceptance Criteria:**
+- [ ] stop_gate allows exit from `converged` state (at minimum)
+- [ ] Decision about other between-steps states is explicit (allow or block with documented rationale)
+- [ ] Test covers the converged state specifically
+
+**Validation Command:**
+```bash
+python -m pytest tests/test_sahjhan_integration.py -k "stop_gate" -v --tb=short
+```
+
+---
+
+### BH-010: validate_merge_report.py is a Permissive Validator
+**Severity:** MEDIUM
+**Category:** test/bogus
+**Location:** `enforcement/scripts/validate_merge_report.py:20-35`
+**Perspective:** contract
+**Status:** OPEN
+**Found by:** Justine only
+<!-- Was: Justine BJ-008 -->
+
+**Problem:** `validate_merge_report.py` checks only that section headers exist (Agreement, Holtz-Only, Justine-Only, Blind Spot Analysis) via regex. It does not verify that sections contain any content. A merge report with four empty headers passes validation, gates the `merge_complete` transition, and allows the protocol to proceed to the fix loop with zero merge data. This is anti-pattern #12 (Permissive Validator) — overly broad validation accepting wrong answers.
+
+**Evidence:** `validate('file_with_only_headers.md')` returns `[]` (no missing sections) for a file containing just `## Agreement\n## Holtz-Only\n## Justine-Only\n## Blind Spot Analysis\n`.
+
+**Acceptance Criteria:**
+- [ ] Validator checks that at least one section has non-whitespace content below its header
+- [ ] Test covers the headers-only case and expects it to fail
+- [ ] OR validator checks for specific content patterns (e.g., table rows, finding IDs)
+
+**Validation Command:**
+```bash
+python -c "
+import sys; sys.path.insert(0, 'enforcement/scripts')
+from validate_merge_report import validate
+import tempfile, os
+with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+    f.write('## Agreement\n## Holtz-Only\n## Justine-Only\n## Blind Spot Analysis\n')
+    path = f.name
+missing = validate(path)
+os.unlink(path)
+assert len(missing) > 0, 'Headers-only report should not pass validation'
+"
+```
+
+---
+
+### BH-011: pricing.py duplicates longest-prefix matching logic
+**Severity:** MEDIUM
+**Category:** design/duplication
+**Location:** `scripts/token_profiler/pricing.py:51-80,115-136`
+**Perspective:** contract
+**Status:** OPEN
+**Found by:** Justine only
+<!-- Was: Justine BJ-006 -->
+
+**Problem:** `get_pricing()` (lines 51-80) and `_custom_pricing()` (lines 115-136) independently implement longest-prefix model name matching. Same algorithm, two copies. If one is updated without the other, they diverge on which pricing table entry matches a given model name.
+
+**Evidence:** Both functions contain: iterate PRICING keys skipping "unknown", check model.startswith(key), track best_len, return best match. The `_custom_pricing` closure captures a `merged` table but uses the same algorithm.
+
+**Acceptance Criteria:**
+- [ ] Single lookup function used by both code paths (extract the prefix-matching into a shared helper)
+- [ ] OR equivalence test that both paths produce same results for all known model names
+
+**Validation Command:**
+```bash
+python -m pytest tests/test_token_profiler_cli.py -v --tb=short
+```
+
+---
+
+### BH-012: README badge not covered by test_readme_metrics_match_actual
+**Severity:** HIGH
+**Category:** test/missing
+**Location:** `tests/test_integration.py:237`
+**Perspective:** contract
+**Status:** OPEN
+**Found by:** Justine only
+<!-- Was: Justine BJ-003 -->
+
+**Problem:** `test_readme_metrics_match_actual` checks the "What's inside" prose counts in the README body but does NOT check the shields.io badge URLs at the top of the file. The badge is the most visible metric element — the first thing a user sees — and it's the one that drifts most often (PAT-005). The test is supposed to prevent README drift but has a blind spot for the most prominent metric display.
+
+**Evidence:** Test regex at line 252 matches "N skills, N agents, N reference docs, N examples, N Python scripts, N seed patterns, N enforcement hooks, N tests across N lines" — this is the "What's inside" line. The badge at line 6 (`tests-869_total`) is not parsed or checked by any test.
+
+**Acceptance Criteria:**
+- [ ] A test verifies the badge URL test count matches `pytest --collect-only` output
+- [ ] A test verifies the badge URL coverage percentage matches actual coverage
+- [ ] Badge drift is caught automatically in CI
+
+**Validation Command:**
+```bash
+python -m pytest tests/test_integration.py -k "readme" -v --tb=short
+```
+
+---
+
+### BH-013: Choose Your Own Adventure anti-pattern in stop_gate test
+**Severity:** LOW
+**Category:** test/fragile
+**Location:** `tests/test_sahjhan_integration.py:516`
+**Perspective:** component
+**Status:** OPEN
+**Found by:** Holtz only
+<!-- Was: Holtz BH-006 -->
+
+**Problem:** Choose Your Own Adventure anti-pattern: or-disjunction lets test pass whether hook warned OR silently allowed a chained command. Should assert specifically for warning behavior.
+
+---
+
+### BH-014: Mystery Guest anti-pattern in token profiler integration test
+**Severity:** LOW
+**Category:** test/fragile
+**Location:** `tests/test_token_profiler_integration.py:30`
+**Perspective:** component
+**Status:** OPEN
+**Found by:** Holtz only
+<!-- Was: Holtz BH-007 -->
+
+**Problem:** Mystery Guest anti-pattern: hardcoded path to specific JSONL on one developer machine. Test skips if file absent but is a dead test in CI and for any other developer.

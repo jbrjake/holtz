@@ -12,7 +12,7 @@
 # Basic — profile most recent session for current project
 python -m token_profiler --latest -o token-profile/ --open
 
-# With Holtz plugin (adds phase detection, subagent naming)
+# With Holtz plugin (adds step detection, subagent naming)
 python -m token_profiler --latest --plugin skills/holtz/scripts/profiler_plugin.py -o token-profile/ --open
 
 # Cross-project
@@ -109,26 +109,26 @@ Read the "Heat Map — Top 20 Hottest Tools" table. This is aggregated across al
 
 ---
 
-## Step 6: Phase Breakdown — Which Phase Costs Most?
+## Step 6: Audit Step Breakdown — Which Step Costs Most?
 
-For Holtz sessions (or any workflow with a plugin that provides phase labels):
+For Holtz sessions (or any workflow with a plugin that provides step labels):
 
 **Run 14 baselines:**
 
-| Phase | Turns | Session Cost | % |
-|-------|-------|-------------|---|
-| recon | 63 | 22.3M | 39% |
-| convergence | 53 | 7.2M | 13% |
-| fix-loop | 45 | 4.4M | 8% |
-| phase-2 | 67 | 4.1M | 7% |
-| merge | 19 | 4.1M | 7% |
-| phase-1 | 11 | 3.6M | 6% |
-| phase-3 | 17 | 3.2M | 6% |
+| Step | Turns | Session Cost | % |
+|------|-------|-------------|---|
+| step-0-4 | 63 | 22.3M | 39% |
+| step-14-15 | 53 | 7.2M | 13% |
+| step-10 | 45 | 4.4M | 8% |
+| step-7 | 67 | 4.1M | 7% |
+| step-9 | 19 | 4.1M | 7% |
+| step-6 | 11 | 3.6M | 6% |
+| step-8 | 17 | 3.2M | 6% |
 
 **What to look for:**
-- Recon should be the costliest phase in a Holtz audit (it's the earliest and longest). If another phase exceeds it, something unusual happened.
-- Phases with few turns but high cost indicate large context additions per turn (e.g., merge reads Justine's full output).
-- The system prompt cost (turn 0, phase "unknown") is its own category — 15.2% in Run 14.
+- Recon should be the costliest step group in a Holtz audit (it's the earliest and longest). If another step exceeds it, something unusual happened.
+- Steps with few turns but high cost indicate large context additions per turn (e.g., merge reads Justine's full output).
+- The system prompt cost (turn 0, step "unknown") is its own category — 15.2% in Run 14.
 
 ---
 
@@ -195,7 +195,7 @@ For each optimization, resolve the tradeoff explicitly. Don't leave open questio
 
 **Decision rules:**
 - If content is written to disk AND never re-accessed in context: safe to clear/summarize.
-- If content is cross-referenced in later phases: keep in context or ensure the reference is available.
+- If content is cross-referenced in later steps: keep in context or ensure the reference is available.
 - If the optimization requires architectural changes: worth it only if savings >5% of session cost.
 - If the optimization is a config/env change: do it regardless of savings magnitude (zero risk).
 
@@ -228,7 +228,7 @@ python -m token_profiler --latest -o token-profile-after/
 # Compare key metrics
 # - Did total session cost decrease?
 # - Did Q1 percentage decrease? (if targeting early-session optimizations)
-# - Did the targeted tool/phase costs decrease?
+# - Did the targeted tool/step costs decrease?
 # - Did any other costs increase unexpectedly? (waterbed effect)
 ```
 

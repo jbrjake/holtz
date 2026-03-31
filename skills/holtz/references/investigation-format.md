@@ -1,6 +1,6 @@
 # Investigation File Format
 
-For complex punchlist items where the root cause is not obvious from the finding, create a per-item investigation file at `docs/holtz/investigations/BH-{NNN}.md`. The punchlist item links to it via the `**Investigation:**` field. Most punchlist items do not need this — only items that require the investigation protocol in Phase 4.
+For complex punchlist items where the root cause is not obvious from the finding, create a per-item investigation file at `docs/holtz/investigations/BH-{NNN}.md`. The punchlist item links to it via the `**Investigation:**` field. Most punchlist items do not need this — only items that require the investigation protocol in Step 10.
 
 ## When to create
 

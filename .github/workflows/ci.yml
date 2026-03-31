@@ -26,8 +26,8 @@ jobs:
       - name: Type check
         run: |
           source .venv/bin/activate
-          mypy skills/holtz/scripts/ hooks/
+          mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/
       - name: Test
         run: |
           source .venv/bin/activate
-          python -m pytest --tb=short -q
+          python -m pytest --cov=skills/holtz/scripts --cov=hooks --cov-report=term-missing --cov-fail-under=60 --tb=short -q

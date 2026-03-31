@@ -54,10 +54,19 @@ def parse_brief(content: str) -> list[PatternEntry]:
     )
     matches = list(header_re.finditer(masked))
 
+    # Use line-based extraction to avoid masked/original character offset
+    # divergence (BH-003 run 16, PAT-001).  mask_code_fences preserves line
+    # count, so line numbers are safe to map between masked and original.
+    original_lines = content.split('\n')
+
+    def _line_of(pos: int) -> int:
+        """Convert a character offset in masked to a line number."""
+        return masked[:pos].count('\n')
+
     for i, match in enumerate(matches):
-        start = match.end()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(masked)
-        block = content[start:end]
+        start_line = _line_of(match.end())
+        end_line = _line_of(matches[i + 1].start()) if i + 1 < len(matches) else len(original_lines)
+        block = '\n'.join(original_lines[start_line:end_line])
 
         def _extract(field: str, _block: str = block) -> str:
             m = re.search(
@@ -81,10 +90,11 @@ def parse_brief(content: str) -> list[PatternEntry]:
 
 
 def _truncate(text: str, max_len: int) -> str:
-    """Truncate text to max_len, preserving whole words."""
+    """Truncate text to max_len (including '...' suffix), preserving whole words."""
     if len(text) <= max_len:
         return text
-    truncated = text[:max_len].rsplit(' ', 1)[0]
+    limit = max(0, max_len - 3)
+    truncated = text[:limit].rsplit(' ', 1)[0]
     return truncated + "..."
 
 

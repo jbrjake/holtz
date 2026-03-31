@@ -119,3 +119,75 @@ def test_parse_brief_ignores_code_fenced_headers():
     ids = [e.pattern_id for e in entries]
     assert "PAT-999" not in ids, "Code fence header should not be matched as a real entry"
     assert ids == ["PAT-001", "PAT-002"], f"Expected only real entries, got: {ids}"
+
+
+# --- BH-003 (run 16): Masked offsets index original content after code fence ---
+
+def test_parse_brief_fields_correct_after_code_fence():
+    """Fields for entries AFTER a code fence must extract from the correct position.
+
+    parse_brief uses finditer(masked) to locate headers but content[start:end]
+    to extract fields. mask_code_fences replaces fenced lines with empty strings,
+    so character offsets diverge. This test verifies field values are correct,
+    not just that the right IDs are found.
+    BH-003 run 16, PAT-001.
+    """
+    brief = (
+        "## PAT-001: first-pattern (Run 1, 2026-03-20)\n"
+        "**What to look for:** First description\n"
+        "**Detection heuristic:** `grep first`\n"
+        "**Example:** First example\n"
+        "\n"
+        "```python\n"
+        "## PAT-999: fake (Run 99, 2099-01-01)\n"
+        "**What to look for:** This is inside a code fence\n"
+        "**Detection heuristic:** fake detection\n"
+        "some more fenced content here that pads the offset\n"
+        "```\n"
+        "\n"
+        "## PAT-002: second-pattern (Run 2, 2026-03-21)\n"
+        "**What to look for:** Second description\n"
+        "**Detection heuristic:** `grep second`\n"
+        "**Example:** Second example\n"
+    )
+    entries = pbc.parse_brief(brief)
+    assert len(entries) == 2, f"Expected 2 entries, got {len(entries)}"
+
+    # PAT-002's fields must come from the REAL entry, not the fenced content
+    pat2 = entries[1]
+    assert pat2.pattern_id == "PAT-002"
+    assert "Second description" in pat2.what_to_look_for, (
+        f"PAT-002 what_to_look_for is wrong: {pat2.what_to_look_for!r}"
+    )
+    assert "grep second" in pat2.detection_heuristic, (
+        f"PAT-002 detection_heuristic is wrong: {pat2.detection_heuristic!r}"
+    )
+    assert "Second example" in pat2.example, (
+        f"PAT-002 example is wrong: {pat2.example!r}"
+    )
+
+
+# --- BH-017 (run 26): _truncate output must not exceed max_len ---
+
+class TestTruncate:
+    """BH-017: _truncate must respect max_len including the '...' suffix."""
+
+    def test_short_text_unchanged(self):
+        assert pbc._truncate("short", 10) == "short"
+
+    def test_long_word_respects_limit(self):
+        result = pbc._truncate("verylongword", 5)
+        assert len(result) <= 5
+
+    def test_word_boundary_respects_limit(self):
+        result = pbc._truncate("abc def ghi jkl", 8)
+        assert len(result) <= 8
+        assert result.endswith("...")
+
+    def test_exact_length_unchanged(self):
+        assert pbc._truncate("exact", 5) == "exact"
+
+    def test_ellipsis_present_on_truncation(self):
+        result = pbc._truncate("a long sentence here", 10)
+        assert result.endswith("...")
+        assert len(result) <= 10

@@ -17,4 +17,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=skills/holtz/scripts --cov=hooks --cov-report=term-missing --cov-fail-under=0"
+addopts = "--tb=short -q"
+markers = [
+    "machine_specific: tests that depend on local file paths and are skipped on other machines",
+]

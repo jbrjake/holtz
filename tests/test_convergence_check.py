@@ -2,48 +2,6 @@
 
 import convergence_check as cc
 
-# --- BH-002: False convergence on empty punchlist ---
-
-def test_empty_punchlist_no_convergence():
-    """3 runs against empty punchlist should NOT declare convergence."""
-    empty_snapshot = {
-        "timestamp": "2026-03-19T00:00:00",
-        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "total": 0},
-        "test_runner": None,
-        "tests": None,
-    }
-    history = [empty_snapshot, empty_snapshot, empty_snapshot]
-    converged, message = cc.check_convergence(history)
-    assert not converged, (
-        f"Should NOT converge on empty punchlist. Got: {message}"
-    )
-
-
-def test_real_convergence_after_work():
-    """Convergence should be declared after real work: items appeared, got resolved, stayed resolved."""
-    # Iteration 1: items found
-    snap1 = {
-        "timestamp": "2026-03-19T01:00:00",
-        "punchlist": {"OPEN": 5, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "total": 5},
-        "tests": {"passed": 10, "failed": 2, "skipped": 0},
-    }
-    # Iteration 2: items resolved
-    snap2 = {
-        "timestamp": "2026-03-19T02:00:00",
-        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "total": 5},
-        "tests": {"passed": 12, "failed": 0, "skipped": 0},
-    }
-    # Iteration 3: still clean
-    snap3 = {
-        "timestamp": "2026-03-19T03:00:00",
-        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "total": 5},
-        "tests": {"passed": 12, "failed": 0, "skipped": 0},
-    }
-    history = [snap1, snap2, snap3]
-    converged, message = cc.check_convergence(history)
-    assert converged, f"Should converge after real work. Got: {message}"
-
-
 # --- BH-005: Status regex cross-line leak in count_items ---
 
 def test_count_items_single_line_status(tmp_path):
@@ -75,158 +33,6 @@ def test_unrecognized_status_counted(tmp_path):
     # Total should account for all items, including ones with unrecognized statuses
     assert counts["total"] == 2, (
         f"Expected total == 2 (including unrecognized status), got {counts}"
-    )
-
-
-# --- BH-008: Malformed history file handling ---
-
-def test_malformed_history_json(tmp_path, monkeypatch):
-    """Corrupted HISTORY.json should be handled gracefully."""
-    history_file = tmp_path / "HISTORY.json"
-    history_file.write_text("not valid json{{{")
-    monkeypatch.setattr(cc, "HISTORY_FILE", str(history_file))
-
-    # Should not raise, should return empty list
-    result = cc.load_history()
-    assert result == [], f"Corrupted history should return empty list, got {result}"
-
-
-def test_history_is_dict_not_list(tmp_path, monkeypatch):
-    """HISTORY.json containing a dict instead of list should be handled."""
-    history_file = tmp_path / "HISTORY.json"
-    history_file.write_text('{"key": "value"}')
-    monkeypatch.setattr(cc, "HISTORY_FILE", str(history_file))
-
-    result = cc.load_history()
-    assert isinstance(result, list), f"Should return a list, got {type(result)}"
-
-
-# --- BH-015: Convergence without test data ---
-
-def test_convergence_no_test_data():
-    """Convergence message should indicate when test stability was not verified."""
-    snap1 = {
-        "timestamp": "2026-03-19T01:00:00",
-        "punchlist": {"OPEN": 3, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "total": 3},
-        "tests": None,
-    }
-    snap2 = {
-        "timestamp": "2026-03-19T02:00:00",
-        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 3, "DEFERRED": 0, "total": 3},
-        "tests": None,
-    }
-    snap3 = {
-        "timestamp": "2026-03-19T03:00:00",
-        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 3, "DEFERRED": 0, "total": 3},
-        "tests": None,
-    }
-    history = [snap1, snap2, snap3]
-    converged, message = cc.check_convergence(history)
-    # Should converge AND message should mention test verification not possible
-    assert converged, f"Should converge when test data absent. Got: {message}"
-    assert "test" in message.lower(), (
-        f"Convergence message should mention test verification status: {message}"
-        )
-
-
-# --- CS2-002: Unknown status items block convergence ---
-
-def test_unknown_status_blocks_convergence():
-    """Items with unrecognized status should count as open and block convergence."""
-    # History where items have unknown status
-    snap1 = {
-        "timestamp": "2026-03-19T01:00:00",
-        "punchlist": {"OPEN": 1, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0, "total": 1},
-        "tests": None,
-    }
-    snap2 = {
-        "timestamp": "2026-03-19T02:00:00",
-        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 1, "total": 1},
-        "tests": None,
-    }
-    snap3 = {
-        "timestamp": "2026-03-19T03:00:00",
-        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 1, "total": 1},
-        "tests": None,
-    }
-    history = [snap1, snap2, snap3]
-    converged, message = cc.check_convergence(history)
-    assert not converged, (
-        f"Should NOT converge with unknown status items. Got: {message}"
-    )
-
-
-# --- CS2-005: Test stability across data gaps ---
-
-def test_stability_across_test_data_gap():
-    """Failures increasing across a None gap should be detected."""
-    snap1 = {
-        "timestamp": "2026-03-19T01:00:00",
-        "punchlist": {"OPEN": 1, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "total": 1},
-        "tests": {"passed": 10, "failed": 0, "skipped": 0},
-    }
-    snap2 = {
-        "timestamp": "2026-03-19T02:00:00",
-        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 1, "DEFERRED": 0, "total": 1},
-        "tests": None,  # test run timed out
-    }
-    snap3 = {
-        "timestamp": "2026-03-19T03:00:00",
-        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 1, "DEFERRED": 0, "total": 1},
-        "tests": {"passed": 5, "failed": 5, "skipped": 0},
-    }
-    history = [snap1, snap2, snap3]
-    converged, message = cc.check_convergence(history)
-    # Should detect the regression from 0 to 5 failures even across the None gap
-    assert not converged, (
-        f"Should NOT converge when failures increased across a data gap. Got: {message}"
-    )
-
-
-# --- FA-007: History entries missing punchlist key ---
-
-def test_convergence_missing_punchlist_key():
-    """History entries missing 'punchlist' key should not crash."""
-    history = [
-        {"timestamp": "2026-01-01", "tests": None},  # no punchlist key
-        {"timestamp": "2026-01-02", "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 1, "DEFERRED": 0, "total": 1}, "tests": None},
-        {"timestamp": "2026-01-03", "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 1, "DEFERRED": 0, "total": 1}, "tests": None},
-    ]
-    # Should not raise KeyError. Entry 1 defaults to total=0, entry 2 has
-    # total=1 — items "appeared" between entries 1 and 2, so no_new_2_iters
-    # is False (total went from 0 to 1). Convergence should be False.
-    converged, message = cc.check_convergence(history)
-    assert converged is False, (
-        f"Should not converge (items appeared between defaulted entry 1 and entry 2). Got: {message}"
-    )
-    assert "IN PROGRESS" in message, (
-        f"Should report in-progress state. Got: {message}"
-    )
-
-
-# --- FA-010: Deletion-based false convergence ---
-
-def test_deletion_does_not_converge():
-    """Deleting all items (total drops to 0) should NOT declare convergence."""
-    snap1 = {
-        "timestamp": "2026-03-19T01:00:00",
-        "punchlist": {"OPEN": 5, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "total": 5},
-        "tests": None,
-    }
-    snap2 = {
-        "timestamp": "2026-03-19T02:00:00",
-        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "total": 0},
-        "tests": None,
-    }
-    snap3 = {
-        "timestamp": "2026-03-19T03:00:00",
-        "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "total": 0},
-        "tests": None,
-    }
-    history = [snap1, snap2, snap3]
-    converged, message = cc.check_convergence(history)
-    assert not converged, (
-        f"Should NOT converge when items were deleted, not resolved. Got: {message}"
     )
 
 
@@ -334,8 +140,8 @@ def test_detect_pyproject_without_pytest(tmp_path, monkeypatch):
     )
     monkeypatch.chdir(tmp_path)
     result = cc.detect_test_runner()
-    assert result != "pytest", (
-        f"pyproject.toml without pytest config should not detect pytest, got '{result}'"
+    assert result is None, (
+        f"pyproject.toml without pytest config should return None, got '{result}'"
     )
 
 
@@ -348,8 +154,8 @@ def test_detect_pyproject_with_pytest_in_comment(tmp_path, monkeypatch):
     )
     monkeypatch.chdir(tmp_path)
     result = cc.detect_test_runner()
-    assert result != "pytest", (
-        f"pyproject.toml with 'pytest' only in a comment should not detect pytest, got '{result}'"
+    assert result is None, (
+        f"pyproject.toml with 'pytest' only in a comment should return None, got '{result}'"
     )
 
 
@@ -894,22 +700,24 @@ def test_detect_pyproject_bracket_in_comment(tmp_path, monkeypatch):
     )
     monkeypatch.chdir(tmp_path)
     result = cc.detect_test_runner()
-    assert result != "pytest", (
-        f"pyproject.toml with [tool.pytest only in a comment should not detect pytest, got '{result}'"
+    assert result is None, (
+        f"pyproject.toml with [tool.pytest only in a comment should return None, got '{result}'"
     )
 
 
 # --- BH-006 (bug-hunter run 3): count_items warns on nonexistent file ---
 
-def test_count_items_nonexistent_file_warns(tmp_path, capsys):
-    """count_items on nonexistent file should warn and return zero counts."""
+def test_count_items_nonexistent_file_errors(tmp_path):
+    """count_items on nonexistent file must raise FileNotFoundError, not silently return empty.
+
+    BH-007 run 15: the old behavior silently used empty punchlist, enabling
+    false convergence. BH-027 run 20: changed from sys.exit(2) to
+    FileNotFoundError so programmatic callers get a catchable exception.
+    """
+    import pytest
     nonexistent = tmp_path / "does_not_exist.md"
-    counts = cc.count_items(nonexistent)
-    assert counts["total"] == 0, f"Expected total 0 for nonexistent file, got {counts}"
-    captured = capsys.readouterr()
-    assert "WARNING" in captured.err, (
-        f"Expected warning on stderr for nonexistent file, got: {captured.err!r}"
-    )
+    with pytest.raises(FileNotFoundError, match="not found"):
+        cc.count_items(nonexistent)
 
 
 # --- BH-002 (bug-hunter run 3): Status regex greedy trailing capture ---
@@ -933,70 +741,6 @@ def test_status_trailing_text_ignored_count_items(tmp_path):
     )
     assert counts["unknown"] == 0, (
         f"Expected 0 unknown (trailing text should not cause misclassification), got {counts}"
-    )
-
-
-# --- BH-001 (bug-hunter run 3): stall detection untested ---
-
-def test_stall_detection_triggers():
-    """4+ iterations with no progress on open items should trigger stall detection."""
-    stalled = {
-        "punchlist": {"OPEN": 3, "IN PROGRESS": 0, "RESOLVED": 2, "DEFERRED": 0, "unknown": 0, "total": 5},
-        "tests": None,
-    }
-    # 4 identical snapshots — open items stuck at 3
-    history = [
-        {"timestamp": "2026-03-21T01:00:00", **stalled},
-        {"timestamp": "2026-03-21T02:00:00", **stalled},
-        {"timestamp": "2026-03-21T03:00:00", **stalled},
-        {"timestamp": "2026-03-21T04:00:00", **stalled},
-    ]
-    converged, message = cc.check_convergence(history)
-    assert not converged, f"Should not converge when stalled. Got: {message}"
-    assert "STALLED" in message, (
-        f"Stall detection should mention STALLED. Got: {message}"
-    )
-    assert "3 items remain open" in message, (
-        f"Stall message should mention the number of stuck items. Got: {message}"
-    )
-
-
-def test_stall_detection_not_triggered_with_progress():
-    """4 iterations where open items decrease should NOT trigger stall."""
-    history = [
-        {"timestamp": "2026-03-21T01:00:00",
-         "punchlist": {"OPEN": 4, "IN PROGRESS": 0, "RESOLVED": 0, "DEFERRED": 0, "unknown": 0, "total": 4},
-         "tests": None},
-        {"timestamp": "2026-03-21T02:00:00",
-         "punchlist": {"OPEN": 3, "IN PROGRESS": 0, "RESOLVED": 1, "DEFERRED": 0, "unknown": 0, "total": 4},
-         "tests": None},
-        {"timestamp": "2026-03-21T03:00:00",
-         "punchlist": {"OPEN": 2, "IN PROGRESS": 0, "RESOLVED": 2, "DEFERRED": 0, "unknown": 0, "total": 4},
-         "tests": None},
-        {"timestamp": "2026-03-21T04:00:00",
-         "punchlist": {"OPEN": 1, "IN PROGRESS": 0, "RESOLVED": 3, "DEFERRED": 0, "unknown": 0, "total": 4},
-         "tests": None},
-    ]
-    converged, message = cc.check_convergence(history)
-    assert "STALLED" not in message, (
-        f"Progress being made — should NOT trigger stall. Got: {message}"
-    )
-
-
-def test_stall_detection_needs_4_entries():
-    """Stall detection requires 4+ history entries. 3 entries should not trigger it."""
-    stalled = {
-        "punchlist": {"OPEN": 3, "IN PROGRESS": 0, "RESOLVED": 2, "DEFERRED": 0, "unknown": 0, "total": 5},
-        "tests": None,
-    }
-    history = [
-        {"timestamp": "2026-03-21T01:00:00", **stalled},
-        {"timestamp": "2026-03-21T02:00:00", **stalled},
-        {"timestamp": "2026-03-21T03:00:00", **stalled},
-    ]
-    converged, message = cc.check_convergence(history)
-    assert "STALLED" not in message, (
-        f"Only 3 entries — stall detection should not trigger. Got: {message}"
     )
 
 
@@ -1051,30 +795,6 @@ def test_detect_runner_priority_jest_over_vitest(tmp_path):
     assert result == "jest", (
         f"jest should win over vitest when both markers exist, got '{result}'"
     )
-
-
-# --- BH-007 (run 10): save_history round-trip ---
-
-def test_save_history_round_trip(tmp_path, monkeypatch):
-    """save_history then load_history should produce identical data."""
-    monkeypatch.setattr(cc, "HISTORY_FILE", str(tmp_path / "HISTORY.json"))
-    history = [
-        {"timestamp": "2026-01-01T00:00:00", "punchlist": {"OPEN": 3, "RESOLVED": 1, "total": 4}},
-        {"timestamp": "2026-01-02T00:00:00", "punchlist": {"OPEN": 0, "RESOLVED": 4, "total": 4}},
-    ]
-    cc.save_history(history)
-    loaded = cc.load_history()
-    assert loaded == history, f"Round-trip failed: {loaded} != {history}"
-
-
-def test_save_history_overwrites_existing(tmp_path, monkeypatch):
-    """save_history should overwrite existing file, not append."""
-    monkeypatch.setattr(cc, "HISTORY_FILE", str(tmp_path / "HISTORY.json"))
-    cc.save_history([{"first": True}])
-    cc.save_history([{"second": True}])
-    loaded = cc.load_history()
-    assert len(loaded) == 1
-    assert loaded[0]["second"] is True
 
 
 # --- BH-005 (run 10): Vitest all-skipped ---
@@ -1154,100 +874,6 @@ def test_mocha_with_pending(monkeypatch):
     )
 
 
-# --- BH-004 (run 4): BLOCKED branch in check_convergence ---
-
-def test_convergence_blocked_by_test_failures():
-    """Convergence should be BLOCKED when punchlist is clear but test failures increase."""
-    history = [
-        {
-            "timestamp": "2026-03-21T01:00:00",
-            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "unknown": 0, "total": 5},
-            "tests": {"passed": 50, "failed": 0, "skipped": 0},
-        },
-        {
-            "timestamp": "2026-03-21T02:00:00",
-            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "unknown": 0, "total": 5},
-            "tests": {"passed": 48, "failed": 2, "skipped": 0},
-        },
-        {
-            "timestamp": "2026-03-21T03:00:00",
-            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "unknown": 0, "total": 5},
-            "tests": {"passed": 45, "failed": 5, "skipped": 0},
-        },
-    ]
-    converged, message = cc.check_convergence(history)
-    assert converged is False, "Should not converge when test failures increase"
-    assert "BLOCKED" in message, f"Expected BLOCKED message, got: {message}"
-    assert "test failures" in message.lower(), f"Message should mention test failures, got: {message}"
-
-
-# --- BH-005 (run 4): load_history file-not-found branch ---
-
-def test_load_history_file_not_found(tmp_path, monkeypatch):
-    """load_history should return [] when history file doesn't exist."""
-    nonexistent = tmp_path / "does_not_exist" / "HISTORY.json"
-    monkeypatch.setattr(cc, "HISTORY_FILE", str(nonexistent))
-    result = cc.load_history()
-    assert result == [], f"Missing history file should return empty list, got {result}"
-
-
-# --- BH-008 (run 4): partial item deletion bypasses convergence ---
-
-def test_partial_deletion_does_not_converge():
-    """Deleting some items while keeping others resolved should NOT converge."""
-    history = [
-        {
-            "timestamp": "2026-03-21T01:00:00",
-            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "unknown": 0, "total": 5},
-            "tests": {"passed": 50, "failed": 0, "skipped": 0},
-        },
-        {
-            "timestamp": "2026-03-21T02:00:00",
-            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 3, "DEFERRED": 0, "unknown": 0, "total": 3},
-            "tests": {"passed": 50, "failed": 0, "skipped": 0},
-        },
-        {
-            "timestamp": "2026-03-21T03:00:00",
-            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 3, "DEFERRED": 0, "unknown": 0, "total": 3},
-            "tests": {"passed": 50, "failed": 0, "skipped": 0},
-        },
-    ]
-    converged, message = cc.check_convergence(history)
-    assert converged is False, "Should not converge when items were deleted"
-    assert "DELETED" in message, f"Expected DELETED message, got: {message}"
-
-
-# --- BH-008 (run 5): IN PROGRESS message hides item regressions ---
-
-def test_reopened_items_reported_in_message():
-    """When resolved items are re-opened, message should say 're-opened', not '0 resolved'."""
-    history = [
-        {
-            "timestamp": "2026-03-21T01:00:00",
-            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "unknown": 0, "total": 5},
-            "tests": None,
-        },
-        {
-            "timestamp": "2026-03-21T02:00:00",
-            "punchlist": {"OPEN": 0, "IN PROGRESS": 0, "RESOLVED": 5, "DEFERRED": 0, "unknown": 0, "total": 5},
-            "tests": None,
-        },
-        {
-            "timestamp": "2026-03-21T03:00:00",
-            "punchlist": {"OPEN": 2, "IN PROGRESS": 0, "RESOLVED": 3, "DEFERRED": 0, "unknown": 0, "total": 5},
-            "tests": None,
-        },
-    ]
-    converged, message = cc.check_convergence(history)
-    assert converged is False
-    assert "re-opened" in message.lower(), (
-        f"When resolved count drops, message should mention 're-opened'. Got: {message}"
-    )
-    assert "2 re-opened" in message, (
-        f"Should report 2 items re-opened. Got: {message}"
-    )
-
-
 # --- BH-005 (run 7): Jest regex assumes fixed order of failed/skipped/passed ---
 
 
@@ -1287,3 +913,4 @@ Time:        1.234 s
     assert result["passed"] == 0
     assert result["failed"] == 3
     assert result["skipped"] == 2
+

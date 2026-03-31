@@ -1,0 +1,227 @@
+[[ledgers]]
+name = "default"
+path = "ledger.jsonl"
+mode = "stateful"
+created = "2026-03-26T20:39:07Z"
+
+[[ledgers]]
+name = "run-12"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/12/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:14Z"
+
+[[ledgers]]
+name = "run-13"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/13/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:14Z"
+
+[[ledgers]]
+name = "run-14"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/14/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:15Z"
+
+[[ledgers]]
+name = "run-15"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/15/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:15Z"
+
+[[ledgers]]
+name = "run-16"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/16/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:15Z"
+
+[[ledgers]]
+name = "run-21"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/21/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:15Z"
+
+[[ledgers]]
+name = "run-22"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/22/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:15Z"
+
+[[ledgers]]
+name = "run-17"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/17/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:15Z"
+
+[[ledgers]]
+name = "run-18"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/18/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:15Z"
+
+[[ledgers]]
+name = "run-19"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/19/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:16Z"
+
+[[ledgers]]
+name = "run-20"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/20/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:16Z"
+
+[[ledgers]]
+name = "run-23"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/23/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:16Z"
+
+[[ledgers]]
+name = "run-24"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/24/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:16Z"
+
+[[ledgers]]
+name = "run-25"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/25/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:16Z"
+
+[[ledgers]]
+name = "run-26"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/26/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:16Z"
+
+[[ledgers]]
+name = "run-27"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/27/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:16Z"
+
+[[ledgers]]
+name = "run-28"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/28/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:17Z"
+
+[[ledgers]]
+name = "run-29"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/29/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:17Z"
+
+[[ledgers]]
+name = "run-30"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/30/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:17Z"
+
+[[ledgers]]
+name = "run-1"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/1/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:17Z"
+
+[[ledgers]]
+name = "run-3"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/3/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:17Z"
+
+[[ledgers]]
+name = "run-4"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/4/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:17Z"
+
+[[ledgers]]
+name = "run-5"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/5/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:17Z"
+
+[[ledgers]]
+name = "run-6"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/6/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:18Z"
+
+[[ledgers]]
+name = "run-7"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/7/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:18Z"
+
+[[ledgers]]
+name = "run-8"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/8/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:18Z"
+
+[[ledgers]]
+name = "run-2"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/2/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:18Z"
+
+[[ledgers]]
+name = "run-10"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/10/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:18Z"
+
+[[ledgers]]
+name = "run-9"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/9/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:18Z"
+
+[[ledgers]]
+name = "run-11"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/11/ledger.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:19Z"
+
+[[ledgers]]
+name = "run-22-justine"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/22/justine.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:27Z"
+
+[[ledgers]]
+name = "run-19-justine"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/19/justine.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:28Z"
+
+[[ledgers]]
+name = "run-23-justine"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/23/justine.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:28Z"
+
+[[ledgers]]
+name = "run-25-justine"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/25/justine.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:28Z"
+
+[[ledgers]]
+name = "run-30-justine"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/30/justine.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:28Z"
+
+[[ledgers]]
+name = "run-28-justine"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/28/justine.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:28Z"
+
+[[ledgers]]
+name = "project"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/project.jsonl"
+mode = "event-only"
+created = "2026-03-26T20:39:35Z"

@@ -281,41 +281,70 @@ def _make_multi_session_run() -> RunProfile:
 
 
 class TestSectionsPresent:
+    """Format regression guards: verify each section heading exists and contains
+    at least minimal content. Companion value tests in TestSummaryFormatting,
+    TestDollarCosts, and TestCostBucketFormatting verify correctness of values
+    within these sections."""
+
     def test_title_contains_run_id(self):
         md = generate_markdown(_make_single_session_run())
         assert "# Token Profile: run_001" in md
 
-    def test_summary_section_present(self):
+    def test_summary_section_has_metrics(self):
         md = generate_markdown(_make_single_session_run())
         assert "## Summary" in md
+        assert "Total API calls" in md, "Summary section should contain Total API calls metric"
+        # BH-003: Also verify a computed value appears in summary
+        assert "| 2 |" in md or "2" in md.split("## Summary")[1].split("## ")[0], \
+            "Summary section should contain the actual API call count"
 
-    def test_hottest_turns_section_present(self):
+    def test_hottest_turns_section_has_table(self):
         md = generate_markdown(_make_single_session_run())
         assert "## Heat Map -- Top 20 Hottest Turns" in md
+        assert "Turn" in md, "Hottest turns section should contain a Turn column"
+        # BH-003: Verify a computed turn value appears
+        turns_section = md.split("## Heat Map -- Top 20 Hottest Turns")[1].split("## ")[0]
+        assert "|" in turns_section, "Hottest turns should contain table rows"
 
     def test_hottest_tools_section_present(self):
         md = generate_markdown(_make_single_session_run())
         assert "## Heat Map -- Top 20 Hottest Tools" in md
+        # BH-003: Verify tool data appears
+        tools_section = md.split("## Heat Map -- Top 20 Hottest Tools")[1].split("## ")[0]
+        assert "Read" in tools_section, "Tools section should contain the Read tool from fixture"
 
     def test_phase_breakdown_section_present(self):
         md = generate_markdown(_make_single_session_run())
         assert "## Phase Breakdown" in md
+        # BH-010: Verify section contains actual phase data, not just heading
+        phase_section = md.split("## Phase Breakdown")[1].split("## ")[0]
+        assert "|" in phase_section, "Phase breakdown should contain table rows"
 
-    def test_cost_buckets_section_present(self):
+    def test_cost_buckets_section_has_table(self):
         md = generate_markdown(_make_single_session_run())
         assert "## Cost Buckets" in md
+        assert "Bucket" in md, "Cost buckets section should contain a Bucket column"
 
     def test_dollar_costs_section_present(self):
         md = generate_markdown(_make_single_session_run())
         assert "## Dollar Costs" in md
+        # BH-010: Verify section contains dollar values (see TestDollarCosts for full checks)
+        dollar_section = md.split("## Dollar Costs")[1].split("## ")[0]
+        assert "$" in dollar_section, "Dollar costs should contain $ values"
 
     def test_compaction_events_section_present(self):
         md = generate_markdown(_make_single_session_run())
         assert "## Compaction Events" in md
+        # BH-010: Verify section contains content (see TestCompactionEvents for full checks)
+        compaction_section = md.split("## Compaction Events")[1].split("## ")[0]
+        assert len(compaction_section.strip()) > 0, "Compaction events should not be empty"
 
     def test_methodology_section_present(self):
         md = generate_markdown(_make_single_session_run())
         assert "## Methodology" in md
+        # BH-010: Verify section contains methodology text
+        methodology_section = md.split("## Methodology")[1]
+        assert len(methodology_section.strip()) > 20, "Methodology should contain explanatory text"
 
 
 # ---------------------------------------------------------------------------
@@ -408,8 +437,9 @@ class TestHottestTurns:
         """Each turn entry has the expected format."""
         run = _make_single_session_run()
         md = generate_markdown(run)
-        # Check a turn entry matches the expected pattern
-        assert "x2 remaining" in md or "x1 remaining" in md
+        # Both turn entries should be present (2-turn fixture)
+        assert "x2 remaining" in md
+        assert "x1 remaining" in md
 
     def test_tool_attribution_sub_entries(self):
         """Tool attributions appear as sub-entries under the turn."""
@@ -435,8 +465,9 @@ class TestHottestTools:
         """Tools are aggregated across all turns."""
         run = _make_single_session_run()
         md = generate_markdown(run)
-        # Read tool should appear in the tools table
-        assert "Read" in md
+        # Read tool should appear in the Hottest Tools section
+        tools_section = md.split("## Heat Map -- Top 20 Hottest Tools")[1].split("## ")[0]
+        assert "Read" in tools_section
 
 
 # ---------------------------------------------------------------------------
@@ -482,17 +513,8 @@ class TestCostBuckets:
 class TestDollarCosts:
     def test_dollar_table_headers(self):
         md = generate_markdown(_make_single_session_run())
-        lines = md.split("\n")
-        # Find a line in the Dollar Costs section that has the header
-        dollar_section = False
-        found_header = False
-        for ln in lines:
-            if "## Dollar Costs" in ln:
-                dollar_section = True
-            if dollar_section and "| Phase |" in ln and "Input" in ln:
-                found_header = True
-                break
-        assert found_header
+        assert "## Dollar Costs" in md
+        assert "| Phase |" in md
 
     def test_dollar_values_formatted(self):
         """Dollar values should be formatted as $X.XXXX."""

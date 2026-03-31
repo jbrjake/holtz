@@ -1,0 +1,11 @@
+{
+  "active": false,
+  "state": "finalized",
+  "unregistered_commits": [],
+  "fixes_since_pattern": 3,
+  "perspective": "",
+  "perspectives_done": 13,
+  "perspectives_total": 13,
+  "stall": 4,
+  "last_refresh": "2026-03-28T10:41:36.575578+00:00"
+}

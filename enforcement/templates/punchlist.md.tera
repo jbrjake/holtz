@@ -1,0 +1,25 @@
+{# enforcement/templates/punchlist.md.tera — uses sahjhan v0.6.1 render context
+   Uses where_eq filter for cleaner event filtering. #}
+# Punchlist
+
+**Protocol:** {{ protocol.name }} v{{ protocol.version }}
+**Run:** {{ template_instance_id | default(value="?") }}
+**State:** {{ state.label }}
+**Ledger:** {{ ledger_len }} events
+
+{% set findings = events | where_eq(attribute="event_type", value="finding") -%}
+{% set resolved_ids = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
+
+{% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
+{% set sev_findings = findings | where_eq(attribute="fields.severity", value=severity) -%}
+{% if sev_findings | length > 0 -%}
+
+## {{ severity }}
+
+| ID | Category | Location | Perspective | Description | Status |
+|----|----------|----------|-------------|-------------|--------|
+{% for e in sev_findings -%}
+| {{ e.fields.id }} | {{ e.fields.category }} | {{ e.fields.location }} | {{ e.fields.perspective }} | {{ e.fields.description }} | {% if resolved_ids is containing(e.fields.id) %}RESOLVED{% else %}OPEN{% endif %} |
+{% endfor -%}
+{% endif -%}
+{% endfor %}

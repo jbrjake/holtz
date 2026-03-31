@@ -20,6 +20,7 @@ from types import ModuleType
 from token_profiler.analyze import build_run_profile, build_session_profile
 from token_profiler.extract import discover_subagents, extract_session, find_project_dir
 from token_profiler.plugin_protocol import ProfilerPlugin
+from token_profiler.pricing import make_pricing_fn
 from token_profiler.report import generate_markdown
 
 # ---------------------------------------------------------------------------
@@ -121,7 +122,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--pricing",
         default=None,
         metavar="FILE",
-        help="Pricing override JSON file",
+        help="Custom pricing override JSON file",
     )
     analysis_group.add_argument(
         "--run-id",
@@ -137,17 +138,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 # Plugin loading
 # ---------------------------------------------------------------------------
 
-# Methods that a plugin class must have to qualify as a ProfilerPlugin
-_PLUGIN_METHODS = {"detect", "label_phases", "name_subagent", "enrich_profile", "optimization_patterns"}
-
-
 def load_plugins(paths: list[str], check_env: bool = False) -> list[ProfilerPlugin]:
     """Load plugin Python files and return instantiated plugin objects.
 
-    Scans each module for classes that have all ProfilerPlugin methods
-    plus a ``name`` attribute.  If *check_env* is True and *paths* is
-    empty, falls back to the ``TOKEN_PROFILER_PLUGINS`` environment
-    variable (colon-separated).
+    Scans each module for classes that satisfy the ProfilerPlugin Protocol
+    (runtime-checkable).  If *check_env* is True and *paths* is empty,
+    falls back to the ``TOKEN_PROFILER_PLUGINS`` environment variable
+    (colon-separated).
     """
     if not paths and check_env:
         env_val = os.environ.get("TOKEN_PROFILER_PLUGINS", "")
@@ -179,20 +176,32 @@ def _load_module_from_path(path: str) -> ModuleType | None:
         print(f"warning: could not load plugin: {path}", file=sys.stderr)
         return None
     mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception as exc:
+        print(f"warning: plugin {path} failed to load: {exc}", file=sys.stderr)
+        return None
     return mod
 
 
 def _is_plugin_class(cls: type) -> bool:
-    """Check if a class has all ProfilerPlugin methods and a name attribute."""
-    if not hasattr(cls, "name"):
-        return False
-    for method_name in _PLUGIN_METHODS:
-        if not hasattr(cls, method_name):
+    """Check if an instance of cls would satisfy the ProfilerPlugin Protocol (BH-015).
+
+    Uses isinstance on a sentinel instance for @runtime_checkable Protocols,
+    with hasattr fallback for classes that can't be instantiated without args.
+    """
+    # Try Protocol-based check first (BH-015: use @runtime_checkable instead of manual set)
+    try:
+        sentinel = cls.__new__(cls)
+        return isinstance(sentinel, ProfilerPlugin)
+    except TypeError:
+        # Fallback: class can't be instantiated — check structural conformance
+        if not hasattr(cls, "name"):
             return False
-        if not callable(getattr(cls, method_name)):
-            return False
-    return True
+        for method in ("detect", "label_phases", "name_subagent", "enrich_profile", "optimization_patterns"):
+            if not callable(getattr(cls, method, None)):
+                return False
+        return True
 
 
 # ---------------------------------------------------------------------------
@@ -210,12 +219,15 @@ def list_sessions(project_dir: Path) -> list[dict]:
         size = f.stat().st_size
         first_ts = last_ts = ""
         turns = 0
-        with open(f) as fh:
+        with open(f, encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()
                 if not line:
                     continue
-                obj = json.loads(line)
+                try:
+                    obj = json.loads(line)
+                except json.JSONDecodeError:
+                    continue  # Skip malformed lines (BH-010)
                 if obj.get("type") == "assistant":
                     turns += 1
                     ts = obj.get("timestamp", "")
@@ -286,6 +298,31 @@ def _json_default(obj: object) -> str:
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
+def _inject_computed_properties(data: dict) -> dict:
+    """Post-process asdict() output to include @property computed values.
+
+    dataclasses.asdict() skips @property methods. This injects them so
+    profile.json consumers see total/total_cost fields (BH-020).
+    """
+    for session in data.get("sessions", []):
+        for phase in session.get("phases", []):
+            # BucketBreakdown.total
+            bucket = phase.get("bucket_breakdown")
+            if isinstance(bucket, dict) and "total" not in bucket:
+                bucket["total"] = sum(bucket.get(k, 0) for k in
+                                      ("input_tokens", "cache_creation_tokens",
+                                       "cache_read_tokens", "output_tokens")
+                                      if k in bucket)
+            # DollarCost.total_cost
+            dollars = phase.get("dollar_cost")
+            if isinstance(dollars, dict) and "total_cost" not in dollars:
+                dollars["total_cost"] = sum(dollars.get(k, 0.0) for k in
+                                            ("input_cost", "cache_creation_cost",
+                                             "cache_read_cost", "output_cost")
+                                            if k in dollars)
+    return data
+
+
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
@@ -320,20 +357,25 @@ def main(argv: list[str] | None = None) -> int:
     # Load milestones
     milestones: list[dict] | None = None
     if args.milestones:
-        with open(args.milestones) as f:
+        with open(args.milestones, encoding="utf-8") as f:
             milestones = json.load(f)
 
-    # Load custom pricing (not yet integrated into full pipeline, but load it)
+    # Load custom pricing and build pricing function
     custom_pricing: dict | None = None
     if args.pricing:
-        with open(args.pricing) as f:
+        with open(args.pricing, encoding="utf-8") as f:
             custom_pricing = json.load(f)
+    pricing_fn = make_pricing_fn(custom_pricing)
 
     # Determine run ID
     run_id = args.run_id or session_path.stem
 
     # Pick the first detecting plugin (if any)
-    raw_turns_main = extract_session(session_path)
+    try:
+        raw_turns_main = extract_session(session_path)
+    except (ValueError, json.JSONDecodeError) as exc:
+        print(f"error: could not parse session file: {session_path}: {exc}", file=sys.stderr)
+        return 1
     active_plugin = None
     for plugin in plugins:
         if plugin.detect(raw_turns_main):
@@ -347,7 +389,10 @@ def main(argv: list[str] | None = None) -> int:
         session_type="main",
         milestones=milestones,
         plugin=active_plugin,
+        pricing_fn=pricing_fn,
     )
+    if active_plugin:
+        active_plugin.enrich_profile(main_profile)
 
     all_sessions = [main_profile]
 
@@ -355,13 +400,22 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_subagents:
         subagent_paths = discover_subagents(session_path)
         for sub_path in subagent_paths:
-            sub_turns = extract_session(sub_path)
+            try:
+                sub_turns = extract_session(sub_path)
+            except (ValueError, json.JSONDecodeError) as exc:
+                print(f"warning: skipping malformed subagent session {sub_path}: {exc}", file=sys.stderr)
+                continue
             sub_profile = build_session_profile(
                 session_id=sub_path.stem,
                 raw_turns=sub_turns,
                 session_type="subagent",
+                milestones=milestones,
                 plugin=active_plugin,
+                pricing_fn=pricing_fn,
             )
+            if active_plugin:
+                sub_profile.subagent_name = active_plugin.name_subagent(sub_turns)
+                active_plugin.enrich_profile(sub_profile)
             all_sessions.append(sub_profile)
 
     # Build run profile
@@ -384,16 +438,16 @@ def main(argv: list[str] | None = None) -> int:
 
     # Write profile.json (Errata E9)
     if emit_json:
-        profile_data = asdict(run_profile)
+        profile_data = _inject_computed_properties(asdict(run_profile))
         json_path = out_dir / "profile.json"
-        with open(json_path, "w") as f:
+        with open(json_path, "w", encoding="utf-8") as f:
             json.dump(profile_data, f, indent=2, default=_json_default)
 
     # Write profile.md
     if emit_md:
         md_content = generate_markdown(run_profile)
         md_path = out_dir / "profile.md"
-        with open(md_path, "w") as f:
+        with open(md_path, "w", encoding="utf-8") as f:
             f.write(md_content)
 
     # Write profile.html (stub — skip if viewer module not importable)
@@ -402,16 +456,16 @@ def main(argv: list[str] | None = None) -> int:
             from token_profiler.viewer import generate_html
             html_content = generate_html(run_profile)
             html_path = out_dir / "profile.html"
-            with open(html_path, "w") as f:
+            with open(html_path, "w", encoding="utf-8") as f:
                 f.write(html_content)
 
             if args.open:
                 webbrowser.open(str(html_path))
         except ImportError:
-            # Viewer module not yet implemented — skip HTML silently
+            # Viewer module not importable — skip HTML silently
             pass
-
-    # Suppress unused variable warning for custom_pricing
-    _ = custom_pricing
+        except FileNotFoundError:
+            # Template file missing — warn but don't crash (BH-017)
+            print("warning: viewer template not found, skipping HTML output", file=sys.stderr)
 
     return 0

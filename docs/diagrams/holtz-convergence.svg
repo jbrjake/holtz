@@ -18,16 +18,16 @@
 <!-- fix_loop -->
 <g id="node2" class="node">
 <title>fix_loop</title>
-<ellipse fill="#f0f4f8" stroke="#4a5568" stroke-width="1.5" cx="261" cy="-1171.16" rx="99.6" ry="40.41"/>
-<text xml:space="preserve" text-anchor="middle" x="261" y="-1181.14" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">Phase 4 (next batch)</text>
-<text xml:space="preserve" text-anchor="middle" x="261" y="-1168.39" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">→ Phase 5 (every 3&#45;5)</text>
-<text xml:space="preserve" text-anchor="middle" x="261" y="-1153.39" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">→ full suite + linters</text>
+<ellipse fill="#f0f4f8" stroke="#4a5568" stroke-width="1.5" cx="264" cy="-1171.16" rx="96.41" ry="40.41"/>
+<text xml:space="preserve" text-anchor="middle" x="264" y="-1181.14" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">Step 10 (next batch)</text>
+<text xml:space="preserve" text-anchor="middle" x="264" y="-1168.39" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">→ Step 11 (every 3&#45;5)</text>
+<text xml:space="preserve" text-anchor="middle" x="264" y="-1153.39" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">→ full suite + linters</text>
 </g>
 <!-- recover&#45;&gt;fix_loop -->
 <g id="edge1" class="edge">
 <title>recover&#45;&gt;fix_loop</title>
-<path fill="none" stroke="#718096" stroke-width="1.2" d="M380.91,-1264.2C360.52,-1248.54 336.25,-1229.92 314.9,-1213.53"/>
-<polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="316.67,-1211.36 308.62,-1208.71 313.26,-1215.81 316.67,-1211.36"/>
+<path fill="none" stroke="#718096" stroke-width="1.2" d="M381.73,-1264.2C361.62,-1248.48 337.69,-1229.77 316.66,-1213.33"/>
+<polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="318.52,-1211.23 310.49,-1208.51 315.07,-1215.64 318.52,-1211.23"/>
 </g>
 <!-- breaker -->
 <g id="node3" class="node">
@@ -39,8 +39,8 @@
 <!-- fix_loop&#45;&gt;breaker -->
 <g id="edge2" class="edge">
 <title>fix_loop&#45;&gt;breaker</title>
-<path fill="none" stroke="#718096" stroke-width="1.2" d="M261,-1130.14C261,-1111.33 261,-1088.72 261,-1068.84"/>
-<polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="263.8,-1068.85 261,-1060.85 258.2,-1068.85 263.8,-1068.85"/>
+<path fill="none" stroke="#718096" stroke-width="1.2" d="M263.2,-1130.14C262.83,-1111.1 262.37,-1088.15 261.97,-1068.1"/>
+<polygon fill="#718096" stroke="#718096" stroke-width="1.2" points="264.77,-1068.27 261.82,-1060.33 259.17,-1068.38 264.77,-1068.27"/>
 </g>
 <!-- stop -->
 <g id="node4" class="node">
@@ -114,7 +114,7 @@
 <ellipse fill="#f0f4f8" stroke="#4a5568" stroke-width="1.5" cx="459" cy="-404.93" rx="145.73" ry="46.24"/>
 <text xml:space="preserve" text-anchor="middle" x="459" y="-419.03" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">Select next lens from registry</text>
 <text xml:space="preserve" text-anchor="middle" x="459" y="-406.28" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">Update Active Lens in STATUS.md</text>
-<text xml:space="preserve" text-anchor="middle" x="459" y="-393.53" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">Run Phases 1&#45;3 scoped to</text>
+<text xml:space="preserve" text-anchor="middle" x="459" y="-393.53" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">Run Steps 6&#45;8 scoped to</text>
 <text xml:space="preserve" text-anchor="middle" x="459" y="-380.78" font-family="Helvetica,sans-Serif" font-size="12.00" fill="#1a202c">new lens focus + entry point</text>
 </g>
 <!-- switch&#45;&gt;next_lens -->

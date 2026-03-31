@@ -1,0 +1,27 @@
+[[ledgers]]
+name = "default"
+path = "ledger.jsonl"
+mode = "stateful"
+created = "2026-03-29T14:14:15Z"
+
+[[ledgers]]
+name = "run-26"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/26/ledger.jsonl"
+mode = "stateful"
+created = "2026-03-29T14:14:01Z"
+template = "run"
+instance_id = "26"
+
+[[ledgers]]
+name = "justine-26"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/26/justine-ledger.jsonl"
+mode = "stateful"
+created = "2026-03-29T14:23:23Z"
+
+[[ledgers]]
+name = "run-27"
+path = "/Users/jonr/Documents/non-nitro-repos/holtz/docs/holtz/runs/{run}/ledger.jsonl"
+mode = "stateful"
+created = "2026-03-29T22:36:28Z"
+template = "run"
+instance_id = "27"

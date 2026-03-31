@@ -519,7 +519,7 @@ def main() -> None:
         print(f"ERROR: {path} not found")
         sys.exit(1)
 
-    content = path.read_text()
+    content = path.read_text(encoding="utf-8")
     precomputed = mask_code_fences(content)
     items = parse_punchlist(content, _masked=precomputed)
 

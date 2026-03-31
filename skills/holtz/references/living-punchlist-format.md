@@ -179,7 +179,7 @@ The living punchlist is updated at specific points in the Holtz workflow — nev
 | When | Action |
 |------|--------|
 | End of each converged run | Update all sections: refresh hotspots from impact graph, add new patterns from pattern briefs, update architectural risks from drift log, record prediction accuracy from 0h predictions vs. actual findings, derive new proactive checks from any new model entries, append History entry |
-| Start of each run (Phase 0) | Read living punchlist. Proactive checks feed into 0h predictions as HIGH-confidence items. Known patterns and hotspots inform where to focus the audit |
+| Start of each run (Steps 0-4) | Read living punchlist. Proactive checks feed into 0h predictions as HIGH-confidence items. Known patterns and hotspots inform where to focus the audit |
 | Risk hotspot cools (risk_score drops below 0.3 for two consecutive clean runs) | Move from Risk Hotspots table to History: "resolved after {N} clean audits" |
 | Pattern addressed architecturally | Move from Patterns to History: "addressed by {architectural change}" |
 | Architectural risk resolved | Move from Architectural Risks to History: "resolved — {what changed}" |
@@ -188,14 +188,14 @@ The living punchlist is updated at specific points in the Holtz workflow — nev
 
 ## Persistence Rules
 
-The living punchlist and the architecture baseline are the two documents that persist across runs. All other Holtz artifacts (per-run punchlist, STATUS.md, investigation files, 0h-predictions.md, etc.) get archived to `docs/holtz/archive/` at the start of each new run.
+The living punchlist and the architecture baseline are the two documents that persist across runs. All other Holtz artifacts (per-run punchlist, STATUS.md, investigation files, step4-predictions.md, etc.) get archived to `docs/holtz/archive/` at the start of each new run.
 
 - **Living punchlist persists across runs.** It is never archived to `docs/holtz/archive/`.
 - **Architecture baseline persists across runs.** It is never archived.
-- **Living punchlist is updated at the end of each converged run, not during the run.** The auditor reads it during Phase 0 but does not modify it until the run has converged and findings are finalized.
-- **Architecture baseline drift log is appended during Phase 0** as drift is detected (step 0a.1). The baseline's Structural Snapshot and Documented Intent sections are updated only at convergence when drift is accepted. This distinction matters: drift log entries are raw observations (safe to write immediately), while snapshot/intent updates are acceptance decisions (deferred until findings are confirmed).
+- **Living punchlist is updated at the end of each converged run, not during the run.** The auditor reads it during Steps 0-4 but does not modify it until the run has converged and findings are finalized.
+- **Architecture baseline drift log is appended during Steps 0-4** as drift is detected (Step 0). The baseline's Structural Snapshot and Documented Intent sections are updated only at convergence when drift is accepted. This distinction matters: drift log entries are raw observations (safe to write immediately), while snapshot/intent updates are acceptance decisions (deferred until findings are confirmed).
 - **History sections are append-only.** Entries are never deleted or edited. The history is the audit trail.
-- **Justine reads both documents during Phase 0 but does not update them.** Updates happen post-merge by Holtz. This prevents the living punchlist from being modified by in-flight work that might not converge.
+- **Justine reads both documents during Steps 0-4 but does not update them.** Updates happen post-merge by Holtz. This prevents the living punchlist from being modified by in-flight work that might not converge.
 
 ## First-Run Behavior
 
@@ -216,7 +216,7 @@ If no `docs/holtz/LIVING-PUNCHLIST.md` exists when a run starts:
 
 If `docs/holtz/LIVING-PUNCHLIST.md` exists when a run starts:
 
-1. **Read it during Phase 0.** Use proactive checks as HIGH-confidence inputs to 0h predictions. Use known patterns and hotspots to focus the audit.
+1. **Read it during Steps 0-4.** Use proactive checks as HIGH-confidence inputs to 0h predictions. Use known patterns and hotspots to focus the audit.
 2. **Do not modify it during the run.**
 3. **At end of converged run, update all sections:**
    - Add new patterns, hotspots, risks, and gaps discovered this run

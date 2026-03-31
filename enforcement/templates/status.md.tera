@@ -1,0 +1,24 @@
+{# enforcement/templates/status.md.tera — uses sahjhan v0.6.1 render context #}
+# Holtz Status
+
+**Project:** {{ protocol.name }} v{{ protocol.version }}
+**State:** {{ state.label }}
+**Ledger:** {{ ledger_len }} events
+**Violations:** {{ violations }}
+**Run:** {{ template_instance_id | default(value="?") }}
+**Auditor:** holtz
+
+## State Transitions
+{% for e in events | where_eq(attribute="event_type", value="state_transition") -%}
+- [x] {{ e.fields.from }} → **{{ e.fields.to }}** ({{ e.fields.command }})
+{% endfor %}
+
+## Perspectives ({{ sets.perspective.completed }}/{{ sets.perspective.total }})
+{% for m in sets.perspective.members -%}
+- [{% if m.done %}x{% else %} {% endif %}] {{ m.name }}
+{% endfor %}
+
+## Findings
+{% set finding_count = events | where_eq(attribute="event_type", value="finding") | length -%}
+{% set resolved_count = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") | length -%}
+**Open:** {{ finding_count - resolved_count }} | **Resolved:** {{ resolved_count }} | **Total:** {{ finding_count }}

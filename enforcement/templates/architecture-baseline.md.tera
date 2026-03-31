@@ -1,0 +1,11 @@
+{# enforcement/templates/architecture-baseline.md.tera — reads from project ledger #}
+# Architecture Baseline
+
+{% set checkpoints = events | filter(attribute="event_type", value="_checkpoint") -%}
+{% set latest = checkpoints | last -%}
+
+{% if latest -%}
+{{ latest.fields.baseline_content | default(value="No baseline recorded yet.") }}
+{% else -%}
+No checkpoint data available yet.
+{% endif %}
