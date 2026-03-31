@@ -90,7 +90,31 @@ After each fix: impact graph 2-hop query. Check downstream assumptions. If an as
 
 Read [references/lens-registry.md](references/lens-registry.md) for the full set of analytical lenses. The convergence loop rotates through lenses. True convergence requires ALL lenses clean in the same final sweep.
 
-Re-run Steps 6-8 scoped to the current analytical lens. After completing, return to Step 10 (fix loop) for any new findings. When a perspective passes clean, run `sahjhan set complete perspective`. Then `sahjhan transition lens_rotate` to switch to the next perspective.
+**Determine sweep strategy per lens.** Run `python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/parse_lens_registry.py` and read `docs/holtz/audit/lens-coverage.md` (written after Steps 7-8). The sweep strategy depends on lens scope and initial audit coverage:
+
+| Scope | Initial Coverage | Sweep Strategy |
+|-------|-----------------|----------------|
+| per-file | covered | **Gap-fill:** Audit only files not covered in initial audit (new files, files changed by fixes, files missed by subagent batching). Record `sweep_type=gap-fill`. |
+| per-file | not covered | **Full:** Standard Steps 6-8 scoped to this lens. Record `sweep_type=full`. |
+| cross-file | covered | **Focused:** Re-trace entry points from lens registry using updated impact graph. Focus on paths affected by fixes since initial audit. Record `sweep_type=cross-file-focused`. |
+| cross-file | not covered | **Full:** Standard Steps 6-8 scoped to this lens entry point. Record `sweep_type=full`. |
+
+For each lens sweep, record: `sahjhan event lens_sweep_started --field perspective={lens} --field sweep_type={type}`
+
+**Gap-fill sweep procedure (per-file lenses with initial coverage):**
+1. Read `docs/holtz/audit/lens-coverage.md` for which files were covered
+2. Identify gaps: files created/modified since initial audit (`git diff --name-only` from audit commit), plus any files not in subagent batches
+3. Dispatch a subagent with the gap files and the lens's audit priorities
+4. Write findings to `docs/holtz/audit/lens-{name}.md`
+
+**Focused sweep procedure (cross-file lenses with initial coverage):**
+1. Read the lens's initial audit output at `docs/holtz/audit/lens-{name}.md`
+2. Query impact graph for edges relevant to this lens's entry point
+3. Focus on paths that include nodes modified by fixes since the initial audit
+4. Dispatch a subagent with the focused path list and lens audit priorities
+5. Write findings to `docs/holtz/audit/lens-{name}.md` (append or replace)
+
+After completing a lens sweep (any type), return to Step 10 (fix loop) for any new findings. When a perspective passes clean, run `sahjhan set complete perspective`. Then `sahjhan transition lens_rotate` to switch to the next perspective.
 
 **Circuit Breakers:**
 - **MAX_ITERATIONS:** 15 total fix-loop iterations. Enforced by Sahjhan's `fix_commit` gate (`max_count = 15`). After 15, the gate blocks — report remaining items to the user.
@@ -110,7 +134,11 @@ digraph {
   lens_clean [label="Current lens:\nzero OPEN items AND\nno new items (2 iters)\nAND suite stable?" shape=diamond]
   mark [label="sahjhan set complete\nperspective"]
   switch [label="Switch lens?\n(COMPLETE OR\n3 consecutive LOW)" shape=diamond]
-  next_lens [label="sahjhan transition lens_rotate\nRun Steps 6-8 scoped to\nnew lens focus + entry point"]
+  scope_check [label="Lens scope?\n(parse_lens_registry.py)" shape=diamond]
+  gap_fill [label="Gap-fill sweep:\nper-file lens,\ncovered areas only"]
+  focused [label="Focused sweep:\ncross-file lens,\naffected paths only"]
+  full_sweep [label="Full sweep:\nSteps 6-8 scoped\nto lens"]
+  coverage [label="Initial audit\ncoverage?" shape=diamond]
   all_done [label="All lenses\nCOMPLETE?" shape=diamond]
   final [label="Final sweep:\nALL lenses simultaneously"]
   clean [label="Clean?" shape=diamond]
@@ -125,9 +153,16 @@ digraph {
   lens_clean -> mark [label="yes"]
   lens_clean -> boundary [label="no\n(iteration boundary)"]
   mark -> switch
-  switch -> next_lens [label="yes"]
+  switch -> scope_check [label="yes"]
   switch -> all_done [label="no"]
-  next_lens -> boundary
+  scope_check -> coverage [label="per-file"]
+  scope_check -> coverage [label="cross-file"]
+  coverage -> gap_fill [label="per-file\ncovered"]
+  coverage -> focused [label="cross-file\ncovered"]
+  coverage -> full_sweep [label="not covered"]
+  gap_fill -> boundary
+  focused -> boundary
+  full_sweep -> boundary
   all_done -> final [label="yes"]
   all_done -> boundary [label="no"]
   final -> clean
