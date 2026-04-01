@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Sahjhan stop hook — blocks stop in active audit states.
+"""Sahjhan stop hook — blocks stop in non-terminal audit states.
 
 Stop hook. Replaces stop_gate.py. Two enforcement layers:
-1. State-based blocking: blocks stop in active work states
-   (audit, fix_loop, pattern_analysis, final_sweep)
+1. State-based blocking: blocks stop in all non-terminal,
+   non-idle states (see issue #22 — whitelist approach missed states)
 2. Output pattern matching: delegates to `sahjhan hook eval`
    to catch premature completion claims via hooks.toml rules
 
@@ -31,7 +31,7 @@ from _common import (  # noqa: E402
     resolve_config_dir,
 )
 
-_ACTIVE_WORK_STATES = {"audit", "fix_loop", "pattern_analysis", "final_sweep"}
+_STOP_ALLOWED_STATES = {"idle", ""}
 
 
 def _has_active_audit(cwd: str) -> bool:
@@ -91,8 +91,8 @@ def main() -> None:
     current_state = status.get("current_state", "")
     is_terminal = status.get("terminal", False)
 
-    # Allow stop in terminal or non-active states
-    if is_terminal or current_state not in _ACTIVE_WORK_STATES:
+    # Allow stop only in terminal or idle states (issue #22)
+    if is_terminal or current_state in _STOP_ALLOWED_STATES:
         exit_stop_allow()
 
     # In active work state — try hook eval for more specific blocking

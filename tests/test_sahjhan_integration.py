@@ -893,6 +893,75 @@ class TestStopHook:
         binary_path.chmod(0o755)
         assert code == 0
 
+    @staticmethod
+    def _setup_active_audit(tmp_path, state_name):
+        """Create mock binary + active audit that reports given state."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "enforcement").mkdir(parents=True)
+        (tmp_path / "enforcement" / "protocol.toml").write_text("")
+        _create_mock_binary(
+            tmp_path,
+            f'echo "state: {state_name} (1 events, chain valid)"',
+        )
+
+    @pytest.mark.parametrize("state", [
+        "recon", "merge_ready", "merge_done", "awaiting_clear",
+        "perspective_clean", "all_perspectives_clean",
+        "final_sweep_clean", "converged",
+    ])
+    def test_blocks_in_non_terminal_non_active_states(self, tmp_path, state):
+        """Issue #22: stop hook must block ALL non-terminal states, not just _ACTIVE_WORK_STATES."""
+        self._setup_active_audit(tmp_path, state)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        decision = output.get("decision")
+        assert decision == "block", (
+            f"State '{state}' should be blocked but got decision={decision!r}. "
+            f"Full output: {output}"
+        )
+
+    @pytest.mark.parametrize("state", [
+        "audit", "fix_loop", "pattern_analysis", "final_sweep",
+    ])
+    def test_blocks_in_active_work_states(self, tmp_path, state):
+        """Active work states must also be blocked (pre-existing behavior)."""
+        self._setup_active_audit(tmp_path, state)
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output.get("decision") == "block", (
+            f"Active state '{state}' should be blocked but got: {output}"
+        )
+
+    def test_allows_in_idle_state(self, tmp_path):
+        """Idle state should allow stop (no audit in progress)."""
+        self._setup_active_audit(tmp_path, "idle")
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output.get("decision") != "block", (
+            f"Idle state should allow stop but got: {output}"
+        )
+
+    def test_allows_in_finalized_state(self, tmp_path):
+        """Terminal (finalized) state should allow stop."""
+        self._setup_active_audit(tmp_path, "finalized")
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output.get("decision") != "block", (
+            f"Finalized state should allow stop but got: {output}"
+        )
+
 
 # --- post_tool_hook.py (PostToolUse) ---
 
