@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _resolve import ensure_sahjhan  # noqa: E402
 
-from _common import _active_ledger, exit_ok, exit_warn, read_event  # noqa: E402
+from _common import _active_ledger, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
 
 
 def _enrich_auto_record(
@@ -108,8 +108,8 @@ def main() -> None:
     if binary is None:
         exit_ok()
 
-    config_dir = os.path.join(cwd, "enforcement")
-    if not os.path.isdir(config_dir):
+    config_dir, config_found = resolve_config_dir(cwd)
+    if not config_found:
         exit_ok()
 
     ledger = _active_ledger(cwd)

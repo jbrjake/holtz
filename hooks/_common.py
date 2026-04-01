@@ -152,6 +152,21 @@ def mask_fenced_blocks(text: str) -> str:
     return "\n".join(result)
 
 
+def exit_stop_warn(message: str) -> None:
+    """Allow a Stop event but surface a warning message.
+
+    Used when enforcement is degraded (e.g., config not found) — the
+    stop proceeds but the agent sees the warning. Outputs the warning
+    as a stop-format JSON with decision "allow" so Claude Code shows
+    the message (hasOutput=true) without blocking continuation.
+    """
+    print(json.dumps({
+        "decision": "allow",
+        "reason": message,
+    }))
+    sys.exit(0)
+
+
 def exit_stop_block(reason: str) -> None:
     """Block a Stop event. Stop-format JSON on stdout, exit 0.
 

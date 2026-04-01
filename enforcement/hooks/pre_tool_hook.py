@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from _resolve import ensure_sahjhan  # noqa: E402
 from _sahjhan_bootstrap import MANAGED_DOCS  # noqa: E402
 
-from _common import exit_block, exit_ok, exit_warn, read_event  # noqa: E402
+from _common import exit_block, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
 
 
 def main() -> None:
@@ -50,8 +50,8 @@ def main() -> None:
     if binary is None:
         exit_ok("PreToolUse")
 
-    config_dir = os.path.join(cwd, "enforcement")
-    if not os.path.isdir(config_dir):
+    config_dir, config_found = resolve_config_dir(cwd)
+    if not config_found:
         exit_ok("PreToolUse")
 
     # Detect active ledger
