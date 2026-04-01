@@ -10,11 +10,13 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _protocol_cache import (  # noqa: E402
     empty_cache,
+    is_enforcement_fresh,
     is_git_commit,
     is_sahjhan_cmd,
     parse_status_text,
@@ -114,6 +116,7 @@ def main() -> None:
         if cache is None:
             cache = empty_cache()
         cache = _refresh_from_sahjhan(cwd, cache)
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         # BH-017: match subcommand tokens, not substrings of full command
         tokens = cmd.split()
         if "fix_commit" in tokens:
@@ -125,6 +128,10 @@ def main() -> None:
         exit_ok()
 
     if cache is None:
+        exit_ok()
+
+    # Stale enforcement: don't track stall for abandoned audits
+    if not is_enforcement_fresh(cache):
         exit_ok()
 
     if is_git_commit(cmd) and exit_code == 0:

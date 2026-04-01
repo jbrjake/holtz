@@ -236,9 +236,12 @@ class TestProtocolTracker:
 
     def test_detects_git_commit(self, tmp_path):
         """Git commit updates cache with unregistered commit."""
+        from datetime import datetime, timezone  # noqa: UP017
+
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         event = {
@@ -256,10 +259,13 @@ class TestProtocolTracker:
 
     def test_increments_stall_counter(self, tmp_path):
         """Non-git, non-sahjhan, non-TDD commands increment stall."""
+        from datetime import datetime, timezone  # noqa: UP017
+
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["stall"] = 5
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         event = {
@@ -328,6 +334,104 @@ class TestProtocolTracker:
         }
         code, output, _ = run_enforcement_hook("protocol_tracker.py", event)
         assert code == 0
+
+    def test_sahjhan_cmd_updates_last_sahjhan_cmd(self, tmp_path):
+        """Sahjhan commands update last_sahjhan_cmd timestamp."""
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan status"},
+            "tool_response": {"exit_code": 0, "output": "state: fix_loop (10 events, chain valid)"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert updated is not None
+        assert updated.get("last_sahjhan_cmd"), "last_sahjhan_cmd should be set"
+        from datetime import datetime
+        datetime.fromisoformat(updated["last_sahjhan_cmd"])
+
+    def test_non_sahjhan_cmd_does_not_update_last_sahjhan_cmd(self, tmp_path):
+        """Regular bash commands do NOT update last_sahjhan_cmd."""
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2026-01-01T00:00:00+00:00"
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "ls -la"},
+            "tool_response": {"exit_code": 0, "output": "total 0"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert updated["last_sahjhan_cmd"] == "2026-01-01T00:00:00+00:00"
+
+    def test_git_commit_does_not_update_last_sahjhan_cmd(self, tmp_path):
+        """Git commits do NOT update last_sahjhan_cmd."""
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2026-01-01T00:00:00+00:00"
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "git commit -m 'fix: stuff'"},
+            "tool_response": {"exit_code": 0, "output": "[dev abc1234] fix: stuff"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert updated["last_sahjhan_cmd"] == "2026-01-01T00:00:00+00:00"
+
+    def test_stale_enforcement_skips_stall(self, tmp_path):
+        """When enforcement is stale, protocol_tracker does not increment stall."""
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["stall"] = 5
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "cat some_file.py"},
+            "tool_response": {"exit_code": 0, "output": "contents"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert updated["stall"] == 5, "Stall should not increment when enforcement is stale"
+
+    def test_stale_enforcement_still_allows_sahjhan(self, tmp_path):
+        """Even with stale enforcement, sahjhan commands reactivate tracking."""
+        from _protocol_cache import empty_cache, is_enforcement_fresh, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan status"},
+            "tool_response": {"exit_code": 0, "output": "state: fix_loop (10 events, chain valid)"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert is_enforcement_fresh(updated), "Sahjhan command should reactivate freshness"
 
 
 class TestCommitGate:
@@ -514,12 +618,15 @@ class TestEnforcementIntegration:
 
     def test_commit_blocked_after_unregistered(self, tmp_path):
         """Full flow: tracker detects commit, gate blocks next commit."""
+        from datetime import datetime, timezone  # noqa: UP017
+
         from _protocol_cache import empty_cache, write_cache
 
         # Seed cache as if we're in an active fix loop
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["perspective"] = "component"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         # Simulate: git commit succeeds (tracker fires)
@@ -575,12 +682,15 @@ class TestEnforcementIntegration:
 
     def test_tracker_then_gate_full_cycle(self, tmp_path):
         """Full cycle: commit -> blocked -> sahjhan fix_commit -> tracker clears -> allowed."""
+        from datetime import datetime, timezone  # noqa: UP017
+
         from _protocol_cache import empty_cache, read_cache, write_cache
 
         # Start with active fix loop
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["perspective"] = "component"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         # 1. Git commit (tracker records it)
