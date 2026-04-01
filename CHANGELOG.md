@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.90.5] - 2026-04-01
+
+_Changes since v0.90.3_
+
+### Fixed
+- **hooks:** block stop in all non-terminal states, not just active work states
+- **hooks:** upgrade sahjhan to v0.7.1, fixes concurrent ledger corruption
+
 ## [0.90.3] - 2026-04-01
 
 _Changes since v0.90.1_
