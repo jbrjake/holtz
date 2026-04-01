@@ -367,6 +367,16 @@ class TestBashGuard:
         # Set up mock binary that fails manifest verify and captures violation cmd
         (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
         (tmp_path / "enforcement").mkdir(parents=True)
+        # Write enforcement cache with fresh timestamp for freshness gate
+        import sys
+        sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        _cache = empty_cache()
+        _cache["state"] = "fix_loop"
+        _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), _cache)
         log_file = tmp_path / "violation_cmd.log"
         _create_mock_binary(tmp_path, (
             'case "$*" in\n'
@@ -421,6 +431,16 @@ class TestBashGuard:
         """BH-019: Chained commands with non-sahjhan segments still get checked."""
         (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
         (tmp_path / "enforcement").mkdir(parents=True)
+        # Write enforcement cache with fresh timestamp for freshness gate
+        import sys
+        sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        _cache = empty_cache()
+        _cache["state"] = "fix_loop"
+        _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), _cache)
         _create_mock_binary(tmp_path, (
             'case "$*" in\n'
             '  *verify*)\n'
@@ -503,6 +523,16 @@ class TestPrimer:
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
         (tmp_path / "enforcement").mkdir(parents=True)
+        # Write enforcement cache with fresh timestamp for freshness gate
+        import sys
+        sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        _cache = empty_cache()
+        _cache["state"] = "fix_loop"
+        _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), _cache)
         # Create a session key so compute_event_proof can read it
         key_path = sahjhan_dir / "session.key"
         key_path.write_bytes(b"test-session-key-for-primer-test")
@@ -651,6 +681,16 @@ class TestBashGuardWithMockBinary:
     def _setup(self, tmp_path, verify_exit=0, verify_stderr=""):
         (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
         (tmp_path / "enforcement").mkdir(parents=True)
+        # Write enforcement cache with fresh timestamp for freshness gate
+        import sys
+        sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        _cache = empty_cache()
+        _cache["state"] = "fix_loop"
+        _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), _cache)
         _create_mock_binary(tmp_path, (
             f'if echo "$@" | grep -q "verify"; then\n'
             f'  echo "{verify_stderr}" >&2\n'
@@ -687,6 +727,16 @@ class TestPrimerWithMockBinary:
     def _setup(self, tmp_path, status_lines):
         (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
         (tmp_path / "enforcement").mkdir(parents=True)
+        # Write enforcement cache with fresh timestamp for freshness gate
+        import sys
+        sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        _cache = empty_cache()
+        _cache["state"] = "fix_loop"
+        _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), _cache)
         # Write status to a file so the mock binary can cat it
         status_file = tmp_path / "mock_status.txt"
         status_file.write_text("\n".join(status_lines) + "\n")
@@ -903,6 +953,16 @@ class TestStopHook:
             tmp_path,
             f'echo "state: {state_name} (1 events, chain valid)"',
         )
+        # Write enforcement cache with fresh timestamp for freshness gate
+        import sys
+        sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = state_name
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
 
     @pytest.mark.parametrize("state", [
         "recon", "merge_ready", "merge_done", "awaiting_clear",
