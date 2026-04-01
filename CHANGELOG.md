@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.90.3] - 2026-04-01
+
+_Changes since v0.90.1_
+
+### Fixed
+- **hooks:** use schema-valid "approve" for stop warn decision field
+- **hooks:** resolve enforcement config via CLAUDE_PLUGIN_ROOT, warn on failure
+
 ## [0.90.1] - 2026-03-31
 
 _Changes since v0.73.6_
