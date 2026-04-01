@@ -178,11 +178,11 @@ class TestExitStopWarn:
             output = {}
         return result.returncode, output
 
-    def test_outputs_allow_decision(self):
-        """exit_stop_warn outputs decision=allow so stop proceeds."""
+    def test_outputs_approve_decision(self):
+        """exit_stop_warn outputs decision=approve so stop proceeds."""
         code, output = self._run_func("exit_stop_warn", "test warning")
         assert code == 0
-        assert output.get("decision") == "allow"
+        assert output.get("decision") == "approve"
 
     def test_includes_reason(self):
         """exit_stop_warn includes the warning message as reason."""
@@ -272,24 +272,21 @@ class TestStopHookDegradedEnforcement:
         sahjhan = project / "docs" / "holtz" / ".sahjhan"
         sahjhan.mkdir(parents=True)
 
-        # Create plugin dir with enforcement config
-        plugin = tmp_path / "plugin"
-        enforcement = plugin / "enforcement"
-        enforcement.mkdir(parents=True)
-        (enforcement / "protocol.toml").write_text("[protocol]")
-
+        # Use the REAL repo root as plugin dir so the binary is findable
+        # but point enforcement config to a custom location
+        plugin = REPO_ROOT
+        # The real enforcement/ dir has protocol.toml, so config resolution
+        # will succeed. Sahjhan status will still fail (no real .sahjhan state)
+        # but the error won't be about missing config.
         event = {"cwd": str(project)}
-        # With CLAUDE_PLUGIN_ROOT set, the hook will find config but
-        # sahjhan binary won't work (no real sahjhan). That's OK —
-        # the point is it doesn't silently fail on config resolution.
         code, output = self._run_stop_hook(
             event,
             cwd=str(project),
             env_override={"CLAUDE_PLUGIN_ROOT": str(plugin)},
         )
         assert code == 0
-        # If it got past config resolution, it tried sahjhan status
-        # and the error won't be about config being missing
+        # If it got past config resolution, the error won't be about
+        # config not being found
         reason = output.get("reason", "")
         if reason:
             assert "config not found" not in reason.lower()

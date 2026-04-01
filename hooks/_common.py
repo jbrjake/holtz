@@ -156,12 +156,12 @@ def exit_stop_warn(message: str) -> None:
     """Allow a Stop event but surface a warning message.
 
     Used when enforcement is degraded (e.g., config not found) — the
-    stop proceeds but the agent sees the warning. Outputs the warning
-    as a stop-format JSON with decision "allow" so Claude Code shows
-    the message (hasOutput=true) without blocking continuation.
+    stop proceeds but the agent sees the warning. Uses decision="approve"
+    (the schema-valid allow value) so Claude Code shows the message
+    (hasOutput=true) without blocking continuation.
     """
     print(json.dumps({
-        "decision": "allow",
+        "decision": "approve",
         "reason": message,
     }))
     sys.exit(0)
