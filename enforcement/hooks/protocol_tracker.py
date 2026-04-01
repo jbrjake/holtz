@@ -23,7 +23,7 @@ from _protocol_cache import (  # noqa: E402
 )
 from _resolve import ensure_sahjhan  # noqa: E402
 
-from _common import _active_ledger, exit_ok, read_event  # noqa: E402
+from _common import _active_ledger, exit_ok, read_event, resolve_config_dir  # noqa: E402
 
 
 def _is_tdd_cmd(cmd: str) -> bool:
@@ -68,7 +68,7 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     binary = ensure_sahjhan()
     if binary is None:
         return cache
-    config_dir = os.path.join(cwd, "enforcement")
+    config_dir, _ = resolve_config_dir(cwd)
     ledger = _active_ledger(cwd)
     try:
         cmd = [binary, "--config-dir", config_dir]

@@ -22,7 +22,14 @@ from _protocol_cache import format_state_line, parse_status_text  # noqa: E402
 from _protocol_cache import read_cache as read_enforcement_cache
 from _resolve import ensure_sahjhan  # noqa: E402
 
-from _common import _active_ledger, exit_ok, exit_warn, read_event, record_authed_event  # noqa: E402
+from _common import (  # noqa: E402
+    _active_ledger,
+    exit_ok,
+    exit_warn,
+    read_event,
+    record_authed_event,
+    resolve_config_dir,
+)
 
 
 def main() -> None:
@@ -33,7 +40,7 @@ def main() -> None:
         exit_ok()
 
     cwd = event.get("cwd", os.getcwd())
-    config_dir = os.path.join(cwd, "enforcement")
+    config_dir, _ = resolve_config_dir(cwd)
 
     # No active run — nothing to inject
     data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")

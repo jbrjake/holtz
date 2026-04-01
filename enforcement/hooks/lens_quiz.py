@@ -34,6 +34,7 @@ from _common import (  # noqa: E402
     mask_fenced_blocks,
     read_event,
     record_authed_event,
+    resolve_config_dir,
 )
 
 # ── Constants ──
@@ -360,8 +361,8 @@ def main() -> None:
     # Setup
     cwd = event.get("cwd", os.getcwd())
     binary = ensure_sahjhan()
-    config_dir = os.path.join(cwd, "enforcement")
-    quiz_bank_path = os.path.join(cwd, "enforcement", "quiz-bank.json")
+    config_dir, _ = resolve_config_dir(cwd)
+    quiz_bank_path = os.path.join(config_dir, "quiz-bank.json")
 
     # Graceful degradation: no binary → allow
     if binary is None:

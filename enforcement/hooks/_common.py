@@ -1,8 +1,12 @@
-"""Bridge to hooks/_common.py shared utilities.
+"""Bridge to hooks/_common.py shared utilities + enforcement-specific helpers.
 
 Enforcement hooks live in enforcement/hooks/ but need access to the
 shared exit helpers in hooks/_common.py. Uses importlib to avoid
 self-import (both files are named _common.py).
+
+Also provides enforcement-specific utilities:
+- resolve_config_dir(): Find the enforcement config directory correctly
+  regardless of whether running as a plugin or in local dev.
 """
 from __future__ import annotations
 
@@ -25,8 +29,76 @@ exit_ok = _mod.exit_ok
 exit_warn = _mod.exit_warn
 exit_block = _mod.exit_block
 exit_stop_allow = _mod.exit_stop_allow
+exit_stop_warn = _mod.exit_stop_warn
 exit_stop_block = _mod.exit_stop_block
 mask_fenced_blocks = _mod.mask_fenced_blocks
+
+
+def _enforcement_root() -> str:
+    """Return the root directory containing enforcement/.
+
+    Uses CLAUDE_PLUGIN_ROOT if set (plugin context), otherwise resolves
+    relative to this file's location (enforcement/hooks/ → repo root).
+    """
+    return os.environ.get(
+        "CLAUDE_PLUGIN_ROOT",
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    )
+
+
+def resolve_config_dir(cwd: str) -> tuple[str, bool]:
+    """Resolve the enforcement config directory.
+
+    Returns (config_dir_path, config_found) where config_found indicates
+    whether protocol.toml actually exists at the resolved path.
+
+    Search order:
+    1. Persisted config-dir from {cwd}/docs/holtz/.sahjhan/config-dir
+       (written by future sahjhan versions after ``sahjhan init --config-dir``)
+    2. CLAUDE_PLUGIN_ROOT/enforcement (plugin context — the normal case)
+    3. File-relative fallback (local dev — enforcement/ is in the repo root)
+    4. {cwd}/enforcement (legacy fallback — configs copied into project)
+
+    The persisted path takes priority because it reflects the explicit
+    --config-dir the user passed to ``sahjhan init``, which may differ
+    from both the plugin root and cwd.
+    """
+    def _has_config(path: str) -> bool:
+        return os.path.isfile(os.path.join(path, "protocol.toml"))
+
+    # 1. Persisted config-dir (future sahjhan feature, see jbrjake/sahjhan#20)
+    persisted = os.path.join(cwd, "docs", "holtz", ".sahjhan", "config-dir")
+    try:
+        with open(persisted, encoding="utf-8") as f:
+            path = f.read().strip()
+        if path and _has_config(path):
+            return path, True
+    except OSError:
+        pass
+
+    # 2. CLAUDE_PLUGIN_ROOT/enforcement (plugin context)
+    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
+    if plugin_root:
+        candidate = os.path.join(plugin_root, "enforcement")
+        if _has_config(candidate):
+            return candidate, True
+
+    # 3. File-relative (local dev: this file is enforcement/hooks/_common.py)
+    file_relative = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    )
+    if _has_config(file_relative):
+        return file_relative, True
+
+    # 4. {cwd}/enforcement (legacy: configs copied into project root)
+    cwd_candidate = os.path.join(cwd, "enforcement")
+    if _has_config(cwd_candidate):
+        return cwd_candidate, True
+
+    # Nothing found — return the best-guess path with found=False
+    if plugin_root:
+        return os.path.join(plugin_root, "enforcement"), False
+    return cwd_candidate, False
 
 
 def _active_ledger(cwd: str) -> str | None:
@@ -49,7 +121,8 @@ def _get_session_key_path(cwd: str | None = None, ledger: str | None = None) -> 
         binary = ensure_sahjhan()
         if binary is not None:
             import subprocess
-            cmd = [binary, "--config-dir", os.path.join(cwd, "enforcement")]
+            config_dir, _ = resolve_config_dir(cwd)
+            cmd = [binary, "--config-dir", config_dir]
             if ledger:
                 cmd.extend(["--ledger", ledger])
             cmd.extend(["config", "session-key-path"])
@@ -117,7 +190,8 @@ def record_authed_event(
     binary = ensure_sahjhan()
     if binary is None:
         raise OSError("Sahjhan binary unavailable")
-    cmd = [binary, "--config-dir", os.path.join(cwd, "enforcement")]
+    config_dir, _ = resolve_config_dir(cwd)
+    cmd = [binary, "--config-dir", config_dir]
     if ledger:
         cmd.extend(["--ledger", ledger])
     cmd.extend(["authed-event", event_type, "--proof", proof])
