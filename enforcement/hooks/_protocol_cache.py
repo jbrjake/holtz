@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 CACHE_FILENAME = "enforcement-cache.json"
+_ENFORCEMENT_FRESHNESS_MINUTES = 30
 
 
 def _cache_path(cwd: str) -> str:
@@ -47,6 +48,7 @@ def empty_cache() -> dict[str, Any]:
         "perspectives_total": _read_perspectives_total(),
         "stall": 0,
         "last_refresh": "",
+        "last_sahjhan_cmd": "",
     }
 
 
@@ -77,6 +79,32 @@ def write_cache(cwd: str, cache: dict[str, Any]) -> None:
         with contextlib.suppress(OSError):
             os.unlink(tmp)
         raise
+
+
+def is_enforcement_fresh(
+    cache: dict[str, Any] | None,
+    threshold_minutes: int = _ENFORCEMENT_FRESHNESS_MINUTES,
+) -> bool:
+    """Check if enforcement should be active based on sahjhan command recency.
+
+    Returns True if a sahjhan command was run within the threshold window,
+    indicating an active audit session. Returns False if the cache is
+    missing, the timestamp is absent/unparseable, or the timestamp is stale.
+    """
+    if cache is None:
+        return False
+    ts = cache.get("last_sahjhan_cmd", "")
+    if not ts:
+        return False
+    try:
+        from datetime import timedelta
+        last = datetime.fromisoformat(ts)
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)  # noqa: UP017
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=threshold_minutes)  # noqa: UP017
+        return last >= cutoff
+    except (ValueError, TypeError):
+        return False
 
 
 def parse_status_text(text: str) -> dict[str, Any]:

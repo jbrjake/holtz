@@ -647,6 +647,70 @@ class TestEnforcementIntegration:
         )
 
 
+class TestEnforcementFreshness:
+    """Tests for is_enforcement_fresh() — sahjhan activity freshness check."""
+
+    def test_none_cache_is_not_fresh(self):
+        from _protocol_cache import is_enforcement_fresh
+        assert is_enforcement_fresh(None) is False
+
+    def test_missing_field_is_not_fresh(self):
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        assert is_enforcement_fresh(cache) is False
+
+    def test_recent_timestamp_is_fresh(self):
+        from datetime import datetime, timezone  # noqa: UP017
+
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        assert is_enforcement_fresh(cache) is True
+
+    def test_stale_timestamp_is_not_fresh(self):
+        from datetime import datetime, timedelta, timezone  # noqa: UP017
+
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        cache["last_sahjhan_cmd"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=45)  # noqa: UP017
+        ).isoformat()
+        assert is_enforcement_fresh(cache) is False
+
+    def test_exactly_at_threshold_is_fresh(self):
+        from datetime import datetime, timedelta, timezone  # noqa: UP017
+
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        cache["last_sahjhan_cmd"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=29)  # noqa: UP017
+        ).isoformat()
+        assert is_enforcement_fresh(cache) is True
+
+    def test_custom_threshold(self):
+        from datetime import datetime, timedelta, timezone  # noqa: UP017
+
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        cache["last_sahjhan_cmd"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=10)  # noqa: UP017
+        ).isoformat()
+        assert is_enforcement_fresh(cache, threshold_minutes=5) is False
+        assert is_enforcement_fresh(cache, threshold_minutes=15) is True
+
+    def test_garbage_timestamp_is_not_fresh(self):
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        cache["last_sahjhan_cmd"] = "not-a-timestamp"
+        assert is_enforcement_fresh(cache) is False
+
+    def test_empty_string_is_not_fresh(self):
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        cache["last_sahjhan_cmd"] = ""
+        assert is_enforcement_fresh(cache) is False
+
+
 class TestPreToolHookExists:
     """pre_tool_hook.py must exist as write_guard replacement."""
 
