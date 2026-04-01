@@ -821,6 +821,100 @@ class TestEnforcementFreshness:
         assert is_enforcement_fresh(cache) is False
 
 
+class TestStopHookFreshness:
+    """Tests for stop_hook.py freshness-gated enforcement (issue #24)."""
+
+    def test_allows_stop_when_no_sahjhan_dir(self):
+        """No .sahjhan directory → allow stop immediately."""
+        event = {"cwd": "/tmp/no-audit-here"}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert code == 0
+        assert output == {}  # no output = allow
+
+    def test_blocks_stop_in_active_audit(self, tmp_path):
+        """Active audit (fresh enforcement, non-terminal state) → block."""
+        from _protocol_cache import empty_cache, write_cache
+        from datetime import datetime, timezone
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()
+        write_cache(str(tmp_path), cache)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert code == 0
+        assert output.get("decision") == "block"
+        assert "fix_loop" in output.get("reason", "")
+
+    def test_warns_stop_in_stale_audit(self, tmp_path):
+        """Stale audit (old last_sahjhan_cmd, non-terminal state) → warn, allow."""
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
+        write_cache(str(tmp_path), cache)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert code == 0
+        assert output.get("decision") == "approve"
+        assert "stale" in output.get("reason", "").lower() or "abandoned" in output.get("reason", "").lower()
+
+    def test_allows_stop_in_terminal_state(self, tmp_path):
+        """Terminal state (finalized) → allow stop regardless of freshness."""
+        from _protocol_cache import empty_cache, write_cache
+        from datetime import datetime, timezone
+        cache = empty_cache()
+        cache["state"] = "finalized"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()
+        write_cache(str(tmp_path), cache)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert code == 0
+        assert output == {}  # no output = allow
+
+    def test_allows_stop_in_idle_state(self, tmp_path):
+        """Idle state → allow stop regardless of freshness."""
+        from _protocol_cache import empty_cache, write_cache
+        from datetime import datetime, timezone
+        cache = empty_cache()
+        cache["state"] = "idle"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()
+        write_cache(str(tmp_path), cache)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert code == 0
+        assert output == {}
+
+    def test_warns_when_no_cache_but_sahjhan_dir_exists(self, tmp_path):
+        """Has .sahjhan dir but no enforcement cache → warn (not block)."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert code == 0
+        assert output.get("decision") == "approve"
+
+    def test_block_message_includes_state(self, tmp_path):
+        """Block message should include current state name."""
+        from _protocol_cache import empty_cache, write_cache
+        from datetime import datetime, timezone
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()
+        write_cache(str(tmp_path), cache)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert output.get("decision") == "block"
+        reason = output.get("reason", "")
+        assert "fix_loop" in reason
+        assert "not terminal" in reason.lower() or "complete" in reason.lower()
+
+
 class TestPreToolHookExists:
     """pre_tool_hook.py must exist as write_guard replacement."""
 
