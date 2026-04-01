@@ -18,7 +18,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _protocol_cache import format_state_line, parse_status_text  # noqa: E402
+from _protocol_cache import format_state_line, is_enforcement_fresh, parse_status_text  # noqa: E402
 from _protocol_cache import read_cache as read_enforcement_cache
 from _resolve import ensure_sahjhan  # noqa: E402
 
@@ -45,6 +45,11 @@ def main() -> None:
     # No active run — nothing to inject
     data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
     if not os.path.isdir(data_dir):
+        exit_ok()
+
+    # Stale enforcement: don't inject context for abandoned audits
+    enforcement_cache = read_enforcement_cache(cwd)
+    if not is_enforcement_fresh(enforcement_cache):
         exit_ok()
 
     # Get current status

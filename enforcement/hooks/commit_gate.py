@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from _protocol_cache import (  # noqa: E402
     compute_obligations,
     format_injection,
+    is_enforcement_fresh,
     is_fix_loop_state,
     is_git_commit,
     is_sahjhan_cmd,
@@ -44,6 +45,10 @@ def main() -> None:
 
     # Sahjhan commands are always allowed
     if is_sahjhan_cmd(cmd):
+        exit_ok("PreToolUse")
+
+    # Stale enforcement: pass through without blocking
+    if not is_enforcement_fresh(cache):
         exit_ok("PreToolUse")
 
     # Unconditional: in fix_loop, git commit requires prior fix_commit registration
