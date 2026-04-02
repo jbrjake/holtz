@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.93.1] - 2026-04-02
+
+_Changes since v0.93.0_
+
+### Fixed
+- **hooks:** use wildcard matchers so enforcement hooks actually fire
+
 ## [0.93.0] - 2026-04-01
 
 _Changes since v0.90.5_
