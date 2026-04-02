@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.93.0] - 2026-04-01
+
+_Changes since v0.90.5_
+
+### Added
+- **hooks:** gate commit_gate, primer, pre/post_tool_hook, bash_guard on enforcement freshness
+- **hooks:** track last_sahjhan_cmd timestamp, skip stall on stale enforcement
+- **hooks:** add is_enforcement_fresh() and last_sahjhan_cmd field
+
+### Fixed
+- **hooks:** rewrite stop_hook to use cache + freshness gate (fixes #24)
+
+### Documentation
+- update test badge count to 959
+- add freshness-gated enforcement implementation plan
+- add freshness-gated enforcement design spec
+
+### Infrastructure
+- **hooks:** update sahjhan integration tests for freshness-gated enforcement
+
 ## [0.90.5] - 2026-04-01
 
 _Changes since v0.90.3_

@@ -236,9 +236,12 @@ class TestProtocolTracker:
 
     def test_detects_git_commit(self, tmp_path):
         """Git commit updates cache with unregistered commit."""
+        from datetime import datetime, timezone  # noqa: UP017
+
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         event = {
@@ -256,10 +259,13 @@ class TestProtocolTracker:
 
     def test_increments_stall_counter(self, tmp_path):
         """Non-git, non-sahjhan, non-TDD commands increment stall."""
+        from datetime import datetime, timezone  # noqa: UP017
+
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["stall"] = 5
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         event = {
@@ -329,6 +335,104 @@ class TestProtocolTracker:
         code, output, _ = run_enforcement_hook("protocol_tracker.py", event)
         assert code == 0
 
+    def test_sahjhan_cmd_updates_last_sahjhan_cmd(self, tmp_path):
+        """Sahjhan commands update last_sahjhan_cmd timestamp."""
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan status"},
+            "tool_response": {"exit_code": 0, "output": "state: fix_loop (10 events, chain valid)"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert updated is not None
+        assert updated.get("last_sahjhan_cmd"), "last_sahjhan_cmd should be set"
+        from datetime import datetime
+        datetime.fromisoformat(updated["last_sahjhan_cmd"])
+
+    def test_non_sahjhan_cmd_does_not_update_last_sahjhan_cmd(self, tmp_path):
+        """Regular bash commands do NOT update last_sahjhan_cmd."""
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2026-01-01T00:00:00+00:00"
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "ls -la"},
+            "tool_response": {"exit_code": 0, "output": "total 0"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert updated["last_sahjhan_cmd"] == "2026-01-01T00:00:00+00:00"
+
+    def test_git_commit_does_not_update_last_sahjhan_cmd(self, tmp_path):
+        """Git commits do NOT update last_sahjhan_cmd."""
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2026-01-01T00:00:00+00:00"
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "git commit -m 'fix: stuff'"},
+            "tool_response": {"exit_code": 0, "output": "[dev abc1234] fix: stuff"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert updated["last_sahjhan_cmd"] == "2026-01-01T00:00:00+00:00"
+
+    def test_stale_enforcement_skips_stall(self, tmp_path):
+        """When enforcement is stale, protocol_tracker does not increment stall."""
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["stall"] = 5
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "cat some_file.py"},
+            "tool_response": {"exit_code": 0, "output": "contents"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert updated["stall"] == 5, "Stall should not increment when enforcement is stale"
+
+    def test_stale_enforcement_still_allows_sahjhan(self, tmp_path):
+        """Even with stale enforcement, sahjhan commands reactivate tracking."""
+        from _protocol_cache import empty_cache, is_enforcement_fresh, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan status"},
+            "tool_response": {"exit_code": 0, "output": "state: fix_loop (10 events, chain valid)"},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event)
+
+        updated = read_cache(str(tmp_path))
+        assert is_enforcement_fresh(updated), "Sahjhan command should reactivate freshness"
+
 
 class TestCommitGate:
     """Tests for commit_gate.py PreToolUse hook."""
@@ -346,11 +450,14 @@ class TestCommitGate:
 
     def test_blocks_commit_with_unregistered(self, tmp_path):
         """Blocks git commit when prior commits unregistered."""
+        from datetime import datetime, timezone  # noqa: UP017
+
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["unregistered_commits"] = ["abc1234"]
         cache["perspective"] = "component"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         event = {
@@ -400,10 +507,13 @@ class TestCommitGate:
 
     def test_blocks_on_stall(self, tmp_path):
         """Blocks all non-sahjhan Bash after stall threshold."""
+        from datetime import datetime, timezone  # noqa: UP017
+
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["stall"] = 16
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         event = {
@@ -417,10 +527,13 @@ class TestCommitGate:
 
     def test_blocks_commit_when_pattern_overdue(self, tmp_path):
         """Pattern check overdue hard-blocks git commit after 3+ fixes."""
+        from datetime import datetime, timezone  # noqa: UP017
+
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["fixes_since_pattern"] = 4
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         event = {
@@ -436,10 +549,13 @@ class TestCommitGate:
 
     def test_injects_soft_obligation_non_commit_cmd(self, tmp_path):
         """Pattern check due: non-commit commands still get soft injection (not blocked)."""
+        from datetime import datetime, timezone  # noqa: UP017
+
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["fixes_since_pattern"] = 4
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         event = {
@@ -514,12 +630,15 @@ class TestEnforcementIntegration:
 
     def test_commit_blocked_after_unregistered(self, tmp_path):
         """Full flow: tracker detects commit, gate blocks next commit."""
+        from datetime import datetime, timezone  # noqa: UP017
+
         from _protocol_cache import empty_cache, write_cache
 
         # Seed cache as if we're in an active fix loop
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["perspective"] = "component"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         # Simulate: git commit succeeds (tracker fires)
@@ -551,11 +670,14 @@ class TestEnforcementIntegration:
 
     def test_stall_blocks_all(self, tmp_path):
         """Stall counter blocks everything except sahjhan."""
+        from datetime import datetime, timezone  # noqa: UP017
+
         from _protocol_cache import empty_cache, write_cache
 
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["stall"] = 16
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         # Regular command blocked
@@ -575,12 +697,15 @@ class TestEnforcementIntegration:
 
     def test_tracker_then_gate_full_cycle(self, tmp_path):
         """Full cycle: commit -> blocked -> sahjhan fix_commit -> tracker clears -> allowed."""
+        from datetime import datetime, timezone  # noqa: UP017
+
         from _protocol_cache import empty_cache, read_cache, write_cache
 
         # Start with active fix loop
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["perspective"] = "component"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         # 1. Git commit (tracker records it)
@@ -645,6 +770,301 @@ class TestEnforcementIntegration:
         assert updated["unregistered_commits"] == ["abc123"], (
             "fix_commit as part of a flag value should not clear unregistered_commits"
         )
+
+
+class TestEnforcementFreshness:
+    """Tests for is_enforcement_fresh() — sahjhan activity freshness check."""
+
+    def test_none_cache_is_not_fresh(self):
+        from _protocol_cache import is_enforcement_fresh
+        assert is_enforcement_fresh(None) is False
+
+    def test_missing_field_is_not_fresh(self):
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        assert is_enforcement_fresh(cache) is False
+
+    def test_recent_timestamp_is_fresh(self):
+        from datetime import datetime, timezone  # noqa: UP017
+
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        assert is_enforcement_fresh(cache) is True
+
+    def test_stale_timestamp_is_not_fresh(self):
+        from datetime import datetime, timedelta, timezone  # noqa: UP017
+
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        cache["last_sahjhan_cmd"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=45)  # noqa: UP017
+        ).isoformat()
+        assert is_enforcement_fresh(cache) is False
+
+    def test_exactly_at_threshold_is_fresh(self):
+        from datetime import datetime, timedelta, timezone  # noqa: UP017
+
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        cache["last_sahjhan_cmd"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=29)  # noqa: UP017
+        ).isoformat()
+        assert is_enforcement_fresh(cache) is True
+
+    def test_custom_threshold(self):
+        from datetime import datetime, timedelta, timezone  # noqa: UP017
+
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        cache["last_sahjhan_cmd"] = (
+            datetime.now(timezone.utc) - timedelta(minutes=10)  # noqa: UP017
+        ).isoformat()
+        assert is_enforcement_fresh(cache, threshold_minutes=5) is False
+        assert is_enforcement_fresh(cache, threshold_minutes=15) is True
+
+    def test_garbage_timestamp_is_not_fresh(self):
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        cache["last_sahjhan_cmd"] = "not-a-timestamp"
+        assert is_enforcement_fresh(cache) is False
+
+    def test_empty_string_is_not_fresh(self):
+        from _protocol_cache import empty_cache, is_enforcement_fresh
+        cache = empty_cache()
+        cache["last_sahjhan_cmd"] = ""
+        assert is_enforcement_fresh(cache) is False
+
+
+class TestStopHookFreshness:
+    """Tests for stop_hook.py freshness-gated enforcement (issue #24)."""
+
+    def test_allows_stop_when_no_sahjhan_dir(self):
+        """No .sahjhan directory → allow stop immediately."""
+        event = {"cwd": "/tmp/no-audit-here"}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert code == 0
+        assert output == {}  # no output = allow
+
+    def test_blocks_stop_in_active_audit(self, tmp_path):
+        """Active audit (fresh enforcement, non-terminal state) → block."""
+        from datetime import datetime, timezone  # noqa: UP017
+
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert code == 0
+        assert output.get("decision") == "block"
+        assert "fix_loop" in output.get("reason", "")
+
+    def test_warns_stop_in_stale_audit(self, tmp_path):
+        """Stale audit (old last_sahjhan_cmd, non-terminal state) → warn, allow."""
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
+        write_cache(str(tmp_path), cache)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert code == 0
+        assert output.get("decision") == "approve"
+        assert "stale" in output.get("reason", "").lower() or "abandoned" in output.get("reason", "").lower()
+
+    def test_allows_stop_in_terminal_state(self, tmp_path):
+        """Terminal state (finalized) → allow stop regardless of freshness."""
+        from datetime import datetime, timezone  # noqa: UP017
+
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "finalized"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert code == 0
+        assert output == {}  # no output = allow
+
+    def test_allows_stop_in_idle_state(self, tmp_path):
+        """Idle state → allow stop regardless of freshness."""
+        from datetime import datetime, timezone  # noqa: UP017
+
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "idle"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert code == 0
+        assert output == {}
+
+    def test_warns_when_no_cache_but_sahjhan_dir_exists(self, tmp_path):
+        """Has .sahjhan dir but no enforcement cache → warn (not block)."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert code == 0
+        assert output.get("decision") == "approve"
+
+    def test_block_message_includes_state(self, tmp_path):
+        """Block message should include current state name."""
+        from datetime import datetime, timezone  # noqa: UP017
+
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert output.get("decision") == "block"
+        reason = output.get("reason", "")
+        assert "fix_loop" in reason
+        assert "not terminal" in reason.lower() or "complete" in reason.lower()
+
+
+class TestCommitGateFreshness:
+    """Tests for commit_gate.py freshness gate."""
+
+    def test_allows_commit_when_enforcement_stale(self, tmp_path):
+        """Stale enforcement → commit gate passes through, no blocking."""
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["unregistered_commits"] = ["abc1234"]
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_input": {"command": "git commit -m 'fix: next'"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("commit_gate.py", event)
+        assert code == 0
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "allow"
+
+    def test_allows_all_bash_when_enforcement_stale(self, tmp_path):
+        """Stale enforcement → even stall > 15 doesn't block."""
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["stall"] = 20
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_input": {"command": "ls -la"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("commit_gate.py", event)
+        assert code == 0
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "allow"
+
+
+class TestPrimerFreshness:
+    """Tests for primer.py freshness gate."""
+
+    def test_primer_exits_early_when_stale(self, tmp_path):
+        """Stale enforcement → primer does not inject context."""
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
+        write_cache(str(tmp_path), cache)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("primer.py", event)
+        assert code == 0
+        # Should pass through silently — no context injection
+        assert output.get("continue") is True
+        assert output.get("suppressOutput") is True
+
+
+class TestRemainingHooksFreshness:
+    """Tests for freshness gate on pre_tool_hook, post_tool_hook, bash_guard."""
+
+    def test_pre_tool_hook_skips_eval_when_stale(self, tmp_path):
+        """Stale enforcement → pre_tool_hook skips hook eval."""
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(tmp_path / "src" / "main.py")},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("pre_tool_hook.py", event)
+        assert code == 0
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "allow"
+
+    def test_pre_tool_hook_still_guards_managed_paths_when_stale(self, tmp_path):
+        """Managed-path guard is always active, even when stale."""
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(tmp_path / "docs" / "holtz" / "STATUS.md")},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("pre_tool_hook.py", event)
+        assert code == 0
+        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert perm == "block"
+
+    def test_post_tool_hook_exits_early_when_stale(self, tmp_path):
+        """Stale enforcement → post_tool_hook does nothing."""
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "src/main.py"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("post_tool_hook.py", event)
+        assert code == 0
+        assert output.get("continue") is True
+
+    def test_bash_guard_exits_early_when_stale(self, tmp_path):
+        """Stale enforcement → bash_guard does not verify manifest."""
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "ls -la"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("bash_guard.py", event)
+        assert code == 0
+        assert output.get("continue") is True
 
 
 class TestPreToolHookExists:

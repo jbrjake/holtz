@@ -17,6 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
 from _sahjhan_bootstrap import MANAGED_DOCS  # noqa: E402
 
@@ -45,6 +46,11 @@ def main() -> None:
                     "Use `sahjhan finding`, `sahjhan resolve`, or other CLI commands "
                     "to modify managed files. Direct writes are not allowed."
                 )
+
+    # Stale enforcement: skip hook eval for abandoned audits
+    cache = read_cache(cwd)
+    if not is_enforcement_fresh(cache):
+        exit_ok("PreToolUse")
 
     binary = ensure_sahjhan()
     if binary is None:

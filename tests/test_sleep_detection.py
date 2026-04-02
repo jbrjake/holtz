@@ -43,13 +43,16 @@ def _load_tracker_module() -> ModuleType:
     stubs: dict[str, list[str]] = {
         "_protocol_cache": ["empty_cache", "is_git_commit", "is_sahjhan_cmd",
                             "parse_status_text", "read_cache", "write_cache"],
-        "_resolve": ["sahjhan_binary"],
+        "_resolve": ["sahjhan_binary", "ensure_sahjhan"],
     }
     for mod_name, attrs in stubs.items():
         if mod_name not in sys.modules:
             stub = ModuleType(mod_name)
             for attr in attrs:
                 setattr(stub, attr, None)
+            # is_enforcement_fresh must be callable (returns True = active enforcement)
+            if mod_name == "_protocol_cache":
+                stub.is_enforcement_fresh = lambda _cache, **_kw: True  # type: ignore[attr-defined]
             sys.modules[mod_name] = stub
             saved[mod_name] = None  # mark as not previously present
 

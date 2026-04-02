@@ -23,6 +23,7 @@ from typing import Any
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
 
 from _common import _active_ledger, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
@@ -103,6 +104,11 @@ def main() -> None:
     tool_input = event.get("tool_input", {})
     file_path = tool_input.get("file_path", "")
     cwd = event.get("cwd", os.getcwd())
+
+    # Stale enforcement: skip event recording for abandoned audits
+    cache = read_cache(cwd)
+    if not is_enforcement_fresh(cache):
+        exit_ok()
 
     binary = ensure_sahjhan()
     if binary is None:

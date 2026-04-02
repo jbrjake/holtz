@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _protocol_cache import is_sahjhan_cmd  # noqa: E402
+from _protocol_cache import is_enforcement_fresh, is_sahjhan_cmd, read_cache  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
 
 from _common import _active_ledger, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
@@ -46,6 +46,11 @@ def main() -> None:
     # Check if there's an active Sahjhan run (data dir exists)
     data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
     if not os.path.isdir(data_dir):
+        exit_ok()
+
+    # Stale enforcement: skip manifest verification for abandoned audits
+    cache = read_cache(cwd)
+    if not is_enforcement_fresh(cache):
         exit_ok()
 
     ledger = _active_ledger(cwd)
