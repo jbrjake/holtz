@@ -39,7 +39,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
@@ -63,7 +63,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
@@ -78,7 +78,7 @@
     ],
     "Stop": [
       {
-        "matcher": "",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
@@ -89,7 +89,7 @@
     ],
     "UserPromptSubmit": [
       {
-        "matcher": "",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
