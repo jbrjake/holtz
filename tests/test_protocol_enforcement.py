@@ -1107,7 +1107,7 @@ class TestPreToolHookExists:
         assert spec is not None, "pre_tool_hook.py must exist"
 
 
-class TestPrimerFreshness:
+class TestPrimerNoFreshnessGate:
     """Tests for primer.py freshness behavior (issue #29 R6)."""
 
     def test_primer_has_no_freshness_gate(self):
@@ -1121,3 +1121,30 @@ class TestPrimerFreshness:
         assert "is_enforcement_fresh" not in source, (
             "primer.main() still contains is_enforcement_fresh gate — issue #29 R6 not fixed"
         )
+
+
+class TestTransitionsToml:
+    """Validate transitions.toml doesn't contain Holtz-specific paths."""
+
+    def test_no_holtz_paths_in_command_gates(self):
+        """Issue #29 R9: command_succeeds gates must not reference Holtz plugin paths."""
+        try:
+            import tomllib
+        except ModuleNotFoundError:
+            import tomli as tomllib  # type: ignore[no-redef]
+        toml_path = os.path.join(REPO_ROOT, "enforcement", "transitions.toml")
+        with open(toml_path, "rb") as f:
+            data = tomllib.load(f)
+
+        holtz_paths = ["skills/holtz/", "enforcement/hooks/", "enforcement/scripts/"]
+        for transition in data.get("transitions", []):
+            for gate in transition.get("gates", []):
+                if gate.get("type") != "command_succeeds":
+                    continue
+                cmd = gate.get("cmd", "")
+                for path in holtz_paths:
+                    assert path not in cmd, (
+                        f"Gate command references Holtz path '{path}': {cmd}\n"
+                        f"Transition: {transition.get('command')} "
+                        f"({transition.get('from')} -> {transition.get('to')})"
+                    )
