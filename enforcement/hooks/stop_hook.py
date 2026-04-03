@@ -47,10 +47,11 @@ def main() -> None:
     cache = read_cache(cwd)
 
     if cache is None:
-        # .sahjhan dir exists but no enforcement cache — can't determine state
-        exit_stop_warn(
-            "WARNING: Sahjhan data directory exists but enforcement cache is missing. "
-            "Enforcement state unknown. Run `sahjhan status` manually to check."
+        # .sahjhan dir exists but no enforcement cache — audit state unknown.
+        # Block to prevent silent enforcement bypass (issue #29 R5).
+        exit_stop_block(
+            "Sahjhan data directory exists but enforcement cache is missing. "
+            "Run `sahjhan status` to check audit state before stopping."
         )
 
     current_state = cache.get("state", "")

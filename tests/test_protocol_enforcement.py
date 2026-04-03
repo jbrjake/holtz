@@ -89,6 +89,32 @@ class TestProtocolCache:
         assert is_sahjhan_cmd("sahjhan-aarch64-apple-darwin status")
         assert is_sahjhan_cmd("sahjhan-x86_64-unknown-linux-gnu transition run_start")
 
+    def test_sahjhan_cmd_with_redirect(self):
+        """Issue #29 R1: 2>&1 must not break sahjhan detection."""
+        from _protocol_cache import is_sahjhan_cmd
+        assert is_sahjhan_cmd("sahjhan status 2>&1")
+        assert is_sahjhan_cmd("./bin/sahjhan-aarch64-apple-darwin status 2>&1")
+        assert is_sahjhan_cmd("sahjhan status 2>&1 && sahjhan transition fix_commit 2>&1")
+        # Non-sahjhan with redirect still false
+        assert not is_sahjhan_cmd("git status 2>&1")
+
+    def test_sahjhan_cmd_with_export_prefix(self):
+        """Issue #29 R2: export/env prefix must not break sahjhan detection."""
+        from _protocol_cache import is_sahjhan_cmd
+        assert is_sahjhan_cmd("export PATH=/usr/bin:$PATH && sahjhan status")
+        assert is_sahjhan_cmd("PATH=/foo:$PATH sahjhan status")
+        assert is_sahjhan_cmd("export FOO=bar && sahjhan status && sahjhan transition fix_commit")
+        # Mixed with non-sahjhan still false
+        assert not is_sahjhan_cmd("export PATH=/usr/bin:$PATH && git commit -m 'fix'")
+
+    def test_git_commit_with_redirect(self):
+        """Issue #29 R1: 2>&1 must not break git commit detection."""
+        from _protocol_cache import is_git_commit
+        assert is_git_commit("git commit -m 'fix: stuff' 2>&1")
+        assert is_git_commit("git add . && git commit -m 'feat: x' 2>&1")
+        # Amend with redirect still correctly rejected
+        assert not is_git_commit("git commit --amend 2>&1")
+
     def test_compute_obligations_no_cache(self):
         """No obligations when no cache."""
         from _protocol_cache import compute_obligations
@@ -906,15 +932,16 @@ class TestStopHookFreshness:
         assert code == 0
         assert output == {}
 
-    def test_warns_when_no_cache_but_sahjhan_dir_exists(self, tmp_path):
-        """Has .sahjhan dir but no enforcement cache → warn (not block)."""
+    def test_blocks_when_no_cache_but_sahjhan_dir_exists(self, tmp_path):
+        """Issue #29 R5: Has .sahjhan dir but no enforcement cache → block."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("stop_hook.py", event)
         assert code == 0
-        assert output.get("decision") == "approve"
+        assert output.get("decision") == "block"
+        assert "missing" in output.get("reason", "").lower() or "cache" in output.get("reason", "").lower()
 
     def test_block_message_includes_state(self, tmp_path):
         """Block message should include current state name."""
@@ -1078,3 +1105,46 @@ class TestPreToolHookExists:
             os.path.join(REPO_ROOT, "enforcement", "hooks", "pre_tool_hook.py"),
         )
         assert spec is not None, "pre_tool_hook.py must exist"
+
+
+class TestPrimerNoFreshnessGate:
+    """Tests for primer.py freshness behavior (issue #29 R6)."""
+
+    def test_primer_has_no_freshness_gate(self):
+        """Issue #29 R6: Primer must not gate on enforcement freshness."""
+        import importlib
+        import inspect
+        if "primer" in sys.modules:
+            importlib.reload(sys.modules["primer"])
+        import primer
+        source = inspect.getsource(primer.main)
+        assert "is_enforcement_fresh" not in source, (
+            "primer.main() still contains is_enforcement_fresh gate — issue #29 R6 not fixed"
+        )
+
+
+class TestTransitionsToml:
+    """Validate transitions.toml doesn't contain Holtz-specific paths."""
+
+    def test_no_holtz_paths_in_command_gates(self):
+        """Issue #29 R9: command_succeeds gates must not reference Holtz plugin paths."""
+        try:
+            import tomllib
+        except ModuleNotFoundError:
+            import tomli as tomllib  # type: ignore[no-redef]
+        toml_path = os.path.join(REPO_ROOT, "enforcement", "transitions.toml")
+        with open(toml_path, "rb") as f:
+            data = tomllib.load(f)
+
+        holtz_paths = ["skills/holtz/", "enforcement/hooks/", "enforcement/scripts/"]
+        for transition in data.get("transitions", []):
+            for gate in transition.get("gates", []):
+                if gate.get("type") != "command_succeeds":
+                    continue
+                cmd = gate.get("cmd", "")
+                for path in holtz_paths:
+                    assert path not in cmd, (
+                        f"Gate command references Holtz path '{path}': {cmd}\n"
+                        f"Transition: {transition.get('command')} "
+                        f"({transition.get('from')} -> {transition.get('to')})"
+                    )

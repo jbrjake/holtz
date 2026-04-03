@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.93.5] - 2026-04-02
+
+_Changes since v0.93.1_
+
+### Fixed
+- **hooks:** remove Holtz-specific paths from transition gates
+- **hooks:** primer injects context regardless of cache freshness
+- **hooks:** stop hook blocks on missing enforcement cache
+- **hooks:** handle shell redirects and export prefixes in command parsing
+
+### Infrastructure
+- upgrade sahjhan to 0.8.0
+
 ## [0.93.1] - 2026-04-02
 
 _Changes since v0.93.0_

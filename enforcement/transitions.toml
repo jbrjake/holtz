@@ -126,7 +126,6 @@ gates = [
     { type = "min_elapsed", event = "iteration_complete", seconds = 120, intent = "prevent rapid-fire gaming of iteration count" },
     { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120, intent = "tests must pass" },
     { type = "command_succeeds", cmd = "ruff check .", timeout = 30, intent = "no lint violations" },
-    { type = "command_succeeds", cmd = "mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/", timeout = 60, intent = "no type errors" },
     { type = "no_violations", intent = "no unresolved protocol violations" },
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='quiz_answered' AND pass='true' AND perspective='{{current_perspective}}'", expect = "true", intent = "lens quiz must be passed" },
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='quiz_posed' AND perspective='{{current_perspective}}'", expect = "true", intent = "quiz must be posed by enforcement hook before completion" },
@@ -166,11 +165,9 @@ gates = [
     { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member", intent = "all lenses must be complete" },
     { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120, intent = "tests must pass" },
     { type = "command_succeeds", cmd = "ruff check .", timeout = 30, intent = "no lint violations" },
-    { type = "command_succeeds", cmd = "mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/", timeout = 60, intent = "no type errors" },
     { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')", expect = "0", intent = "all findings must be resolved" },
     { type = "no_violations", intent = "no unresolved protocol violations" },
     { type = "query", sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')", expect = "true", intent = "no unresolved quiz exhaustions" },
-    { type = "command_succeeds", cmd = "python enforcement/scripts/check_sweep_evidence.py --min-reads 30", timeout = 15, intent = "final sweep must demonstrate substantive code reading" },
 ]
 
 [[transitions]]
