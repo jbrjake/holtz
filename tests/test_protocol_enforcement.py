@@ -932,15 +932,16 @@ class TestStopHookFreshness:
         assert code == 0
         assert output == {}
 
-    def test_warns_when_no_cache_but_sahjhan_dir_exists(self, tmp_path):
-        """Has .sahjhan dir but no enforcement cache → warn (not block)."""
+    def test_blocks_when_no_cache_but_sahjhan_dir_exists(self, tmp_path):
+        """Issue #29 R5: Has .sahjhan dir but no enforcement cache → block."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("stop_hook.py", event)
         assert code == 0
-        assert output.get("decision") == "approve"
+        assert output.get("decision") == "block"
+        assert "missing" in output.get("reason", "").lower() or "cache" in output.get("reason", "").lower()
 
     def test_block_message_includes_state(self, tmp_path):
         """Block message should include current state name."""
