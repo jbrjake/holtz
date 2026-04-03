@@ -89,6 +89,32 @@ class TestProtocolCache:
         assert is_sahjhan_cmd("sahjhan-aarch64-apple-darwin status")
         assert is_sahjhan_cmd("sahjhan-x86_64-unknown-linux-gnu transition run_start")
 
+    def test_sahjhan_cmd_with_redirect(self):
+        """Issue #29 R1: 2>&1 must not break sahjhan detection."""
+        from _protocol_cache import is_sahjhan_cmd
+        assert is_sahjhan_cmd("sahjhan status 2>&1")
+        assert is_sahjhan_cmd("./bin/sahjhan-aarch64-apple-darwin status 2>&1")
+        assert is_sahjhan_cmd("sahjhan status 2>&1 && sahjhan transition fix_commit 2>&1")
+        # Non-sahjhan with redirect still false
+        assert not is_sahjhan_cmd("git status 2>&1")
+
+    def test_sahjhan_cmd_with_export_prefix(self):
+        """Issue #29 R2: export/env prefix must not break sahjhan detection."""
+        from _protocol_cache import is_sahjhan_cmd
+        assert is_sahjhan_cmd("export PATH=/usr/bin:$PATH && sahjhan status")
+        assert is_sahjhan_cmd("PATH=/foo:$PATH sahjhan status")
+        assert is_sahjhan_cmd("export FOO=bar && sahjhan status && sahjhan transition fix_commit")
+        # Mixed with non-sahjhan still false
+        assert not is_sahjhan_cmd("export PATH=/usr/bin:$PATH && git commit -m 'fix'")
+
+    def test_git_commit_with_redirect(self):
+        """Issue #29 R1: 2>&1 must not break git commit detection."""
+        from _protocol_cache import is_git_commit
+        assert is_git_commit("git commit -m 'fix: stuff' 2>&1")
+        assert is_git_commit("git add . && git commit -m 'feat: x' 2>&1")
+        # Amend with redirect still correctly rejected
+        assert not is_git_commit("git commit --amend 2>&1")
+
     def test_compute_obligations_no_cache(self):
         """No obligations when no cache."""
         from _protocol_cache import compute_obligations

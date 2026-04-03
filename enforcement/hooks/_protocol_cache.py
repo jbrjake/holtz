@@ -184,6 +184,32 @@ def parse_status_text(text: str) -> dict[str, Any]:
     return result
 
 
+def _split_shell_segments(cmd: str) -> list[str]:
+    """Split a shell command on operators (&&, ||, ;, |) but not redirects.
+
+    Strips shell redirections like 2>&1, >&2, 2>/dev/null before splitting,
+    so they don't produce spurious segments. Also strips leading export
+    statements and variable assignments from each segment.
+    """
+    # Strip shell redirections: 2>&1, >&2, 2>/dev/null, etc.
+    cleaned = re.sub(r'\d*>&?\d+', '', cmd)
+    cleaned = re.sub(r'\d*>/dev/null', '', cleaned)
+    # Split on actual shell operators: &&, ||, ;, |
+    # Use specific multi-char operators first to avoid splitting on single &
+    segments = re.split(r'&&|\|\||[;|]', cleaned)
+    result = []
+    for seg in segments:
+        seg = seg.strip()
+        if not seg:
+            continue
+        # Strip leading export and variable assignments
+        seg = re.sub(r'^(?:export\s+)?\w+=\S*\s*', '', seg).strip()
+        # May need multiple rounds for "export FOO=bar" (export stripped, then nothing left)
+        if seg:
+            result.append(seg)
+    return result
+
+
 def is_git_commit(cmd: str) -> bool:
     """Detect git commit commands (not amend).
 
@@ -194,8 +220,7 @@ def is_git_commit(cmd: str) -> bool:
     Checks for ``--amend`` as a CLI flag (word boundary), not as a
     substring of the commit message.
     """
-    # Split into shell segments and check each one
-    for segment in re.split(r"[;&|]+", cmd):
+    for segment in _split_shell_segments(cmd):
         seg = segment.strip()
         # Strip leading env var assignments (VAR=x git commit ...)
         stripped_seg = re.sub(r"^\s*(?:\w+=\S*\s+)*", "", seg)
@@ -214,15 +239,14 @@ def is_sahjhan_cmd(cmd: str) -> bool:
     Returns True only when ALL non-empty segments are sahjhan commands.
     A chained command like ``git commit; sahjhan status`` returns False
     because the git-commit segment is not a sahjhan invocation.
+
+    Handles shell redirections (2>&1) and leading export/env-var prefixes
+    by stripping them before segment analysis.
     """
-    stripped = cmd.strip()
-    segments = re.split(r"[;&|]+", stripped)
-    has_segment = False
-    for segment in segments:
-        seg = segment.strip()
-        if not seg:
-            continue
-        has_segment = True
+    segments = _split_shell_segments(cmd)
+    if not segments:
+        return False
+    for seg in segments:
         parts = seg.split()
         p0 = parts[0] if parts else ""
         is_sahjhan = (
@@ -233,7 +257,7 @@ def is_sahjhan_cmd(cmd: str) -> bool:
         )
         if not (parts and is_sahjhan):
             return False
-    return has_segment
+    return True
 
 
 def is_fix_loop_state(cache: dict[str, Any] | None) -> bool:
