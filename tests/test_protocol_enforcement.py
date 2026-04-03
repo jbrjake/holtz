@@ -1105,3 +1105,19 @@ class TestPreToolHookExists:
             os.path.join(REPO_ROOT, "enforcement", "hooks", "pre_tool_hook.py"),
         )
         assert spec is not None, "pre_tool_hook.py must exist"
+
+
+class TestPrimerFreshness:
+    """Tests for primer.py freshness behavior (issue #29 R6)."""
+
+    def test_primer_has_no_freshness_gate(self):
+        """Issue #29 R6: Primer must not gate on enforcement freshness."""
+        import importlib
+        import inspect
+        if "primer" in sys.modules:
+            importlib.reload(sys.modules["primer"])
+        import primer
+        source = inspect.getsource(primer.main)
+        assert "is_enforcement_fresh" not in source, (
+            "primer.main() still contains is_enforcement_fresh gate — issue #29 R6 not fixed"
+        )
