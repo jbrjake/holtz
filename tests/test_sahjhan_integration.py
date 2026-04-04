@@ -350,6 +350,71 @@ class TestBootstrapHook:
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_allowed(code, output)
 
+    def test_blocks_rm_enforcement_directory(self):
+        """Issue #33: rm -rf targeting enforcement/ must be blocked."""
+        event = {
+            "tool_input": {"command": "rm -rf enforcement/hooks"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "protected")
+
+    def test_blocks_rm_sahjhan_data_dir(self):
+        """Issue #33: rm -rf targeting .sahjhan/ data dir must be blocked."""
+        event = {
+            "tool_input": {"command": "rm -rf docs/holtz/.sahjhan"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "protected")
+
+    def test_blocks_rm_single_file_in_sahjhan(self):
+        """Issue #33: rm targeting a single file inside .sahjhan/ must be blocked."""
+        event = {
+            "tool_input": {"command": "rm docs/holtz/.sahjhan/enforcement-cache.json"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "protected")
+
+    def test_blocks_rmdir_enforcement(self):
+        """Issue #33: rmdir targeting enforcement/ must be blocked."""
+        event = {
+            "tool_input": {"command": "rmdir enforcement/hooks"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "protected")
+
+    def test_blocks_rm_chained_after_ls(self):
+        """Issue #33: rm after shell operator must still be caught."""
+        event = {
+            "tool_input": {"command": "ls && rm -rf docs/holtz/.sahjhan"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "protected")
+
+    def test_allows_rm_non_protected(self):
+        """rm targeting non-protected paths must be allowed."""
+        event = {
+            "tool_input": {"command": "rm /tmp/scratch.txt"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_allowed(code, output)
+
+    def test_blocks_python_write_to_sahjhan_cache(self):
+        """Issue #33: python3 -c writing to enforcement-cache.json must be blocked."""
+        event = {
+            "tool_input": {
+                "command": 'python3 -c "import json; open(\'docs/holtz/.sahjhan/enforcement-cache.json\',\'w\').write(\'{}\')"'
+            },
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "protected")
+
 
 # --- bash_guard.py (PostToolUse) ---
 

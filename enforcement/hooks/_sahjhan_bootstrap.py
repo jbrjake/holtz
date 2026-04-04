@@ -32,8 +32,14 @@ MANAGED_DOCS = [
     "docs/holtz/PUNCHLIST-MERGED.md",
 ]
 
+# Issue #33: The .sahjhan data directory contains enforcement state (cache,
+# ledger, active-run marker). Writes and deletes must be blocked.
+MANAGED_DATA = [
+    "docs/holtz/.sahjhan/",
+]
+
 # Combined set of all paths that must be protected from Bash writes.
-ALL_PROTECTED = PROTECTED + MANAGED_DOCS
+ALL_PROTECTED = PROTECTED + MANAGED_DOCS + MANAGED_DATA
 
 # Privileged sahjhan subcommands that the agent must not invoke directly.
 # Defense-in-depth: the daemon's caller authentication is the primary boundary.
@@ -80,6 +86,21 @@ def _check_bash_write(command: str) -> str | None:
     Splits on shell operators (&&, ||, ;, |, newline) and checks each segment.
     """
     import re
+
+    # Issue #33: Pre-split interpreter check — python3 -c commands with
+    # semicolons inside the string argument get split by the segment splitter,
+    # causing the interpreter prefix and the path reference to appear in
+    # different segments. Check the full command first.
+    cmd_stripped = command.lstrip()
+    for interp in ("python ", "python3 ", "ruby ", "node "):
+        if cmd_stripped.startswith(interp) and " -" in cmd_stripped:
+            for p in ALL_PROTECTED:
+                if p in command:
+                    return (
+                        f"BLOCKED: Bash command uses interpreter to write to protected path '{p}'. "
+                        "This path cannot be modified during an audit session."
+                    )
+
     # Split on shell operators to handle chained commands (BH-004 run 27)
     # BH-005 run 28: bare newline is a valid shell command separator — include \n
     segments = re.split(r'\s*(?:&&|\|\||[;|\n])\s*', command)
@@ -133,6 +154,18 @@ def _check_bash_write(command: str) -> str | None:
                             f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
                             "This path cannot be modified during an audit session."
                         )
+
+            # Issue #33: rm/rmdir check — destructive operations on protected paths
+            # Also match trailing-slash-stripped form so that
+            # "rm -rf docs/holtz/.sahjhan" matches "docs/holtz/.sahjhan/".
+            if any(seg_stripped.startswith(c) for c in ("rm ", "rm\t", "rmdir ")):
+                p_stripped = p.rstrip("/")
+                ref = _segment_references_protected(seg, [p, p_stripped])
+                if ref:
+                    return (
+                        f"BLOCKED: Bash command removes protected path '{p}'. "
+                        "This path cannot be deleted during an audit session."
+                    )
 
             # In-place modification tools: sed -i, perl -pi, patch
             for prefix in ("sed ", "perl "):
