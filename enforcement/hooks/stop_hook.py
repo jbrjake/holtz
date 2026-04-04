@@ -27,7 +27,7 @@ from _common import (  # noqa: E402
     read_event,
 )
 
-_STOP_ALLOWED_STATES = {"idle", "finalized", ""}
+_STOP_ALLOWED_STATES = {"idle", "finalized", "awaiting_clear", ""}
 
 
 def _has_active_audit(cwd: str) -> bool:

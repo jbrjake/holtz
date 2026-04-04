@@ -1014,7 +1014,7 @@ class TestStopHook:
         write_cache(str(tmp_path), cache)
 
     @pytest.mark.parametrize("state", [
-        "recon", "merge_ready", "merge_done", "awaiting_clear",
+        "recon", "merge_ready", "merge_done",
         "perspective_clean", "all_perspectives_clean",
         "final_sweep_clean", "converged",
     ])
@@ -1030,6 +1030,18 @@ class TestStopHook:
         assert decision == "block", (
             f"State '{state}' should be blocked but got decision={decision!r}. "
             f"Full output: {output}"
+        )
+
+    def test_allows_in_awaiting_clear_state(self, tmp_path):
+        """Issue #32: awaiting_clear is designed for agent stop — must be allowed."""
+        self._setup_active_audit(tmp_path, "awaiting_clear")
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "stop_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert code == 0
+        assert output.get("decision") != "block", (
+            f"awaiting_clear should allow stop but got: {output}"
         )
 
     @pytest.mark.parametrize("state", [
