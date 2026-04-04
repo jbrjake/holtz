@@ -967,7 +967,7 @@ class TestStopHookFreshness:
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "awaiting_clear"
-        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         event = {"cwd": str(tmp_path)}
