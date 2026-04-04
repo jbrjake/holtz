@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.96.3] - 2026-04-04
+
+_Changes since v0.96.1_
+
+### Fixed
+- **enforcement:** block rm/rmdir and .sahjhan writes via Bash
+- **enforcement:** add awaiting_clear to stop-allowed states
+
+### Infrastructure
+- fix ruff UP017 lint and update test badge count
+
 ## [0.96.1] - 2026-04-04
 
 _Changes since v0.93.5_
