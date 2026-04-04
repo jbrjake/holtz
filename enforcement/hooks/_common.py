@@ -7,11 +7,15 @@ self-import (both files are named _common.py).
 Also provides enforcement-specific utilities:
 - resolve_config_dir(): Find the enforcement config directory correctly
   regardless of whether running as a plugin or in local dev.
+- compute_event_proof(): Get HMAC proof from the sahjhan daemon via socket.
+- record_authed_event(): Record a restricted event with daemon-signed proof.
 """
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
+import socket
 import subprocess
 
 _HOOKS_COMMON = os.path.join(
@@ -111,59 +115,60 @@ def _active_ledger(cwd: str) -> str | None:
         return None
 
 
-def _get_session_key_path(cwd: str | None = None, ledger: str | None = None) -> str:
-    """Find the session key path via sahjhan config, falling back to default location."""
+def _get_daemon_socket_path(cwd: str | None = None) -> str:
+    """Return the path to the sahjhan daemon Unix socket."""
     if cwd is None:
         cwd = os.getcwd()
-    default = os.path.join(cwd, "docs", "holtz", ".sahjhan", "session.key")
+    return os.path.join(cwd, "docs", "holtz", ".sahjhan", "sahjhan.sock")
+
+
+def _daemon_request(sock_path: str, request: dict) -> dict:
+    """Send a JSON request to the sahjhan daemon and return the response.
+
+    Raises RuntimeError if the daemon is unreachable or returns an error.
+    """
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.settimeout(5)
     try:
-        from _resolve import ensure_sahjhan
-        binary = ensure_sahjhan()
-        if binary is not None:
-            import subprocess
-            config_dir, _ = resolve_config_dir(cwd)
-            cmd = [binary, "--config-dir", config_dir]
-            if ledger:
-                cmd.extend(["--ledger", ledger])
-            cmd.extend(["config", "session-key-path"])
-            result = subprocess.run(
-                cmd,
-                capture_output=True, text=True, timeout=5, cwd=cwd,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                return result.stdout.strip()
-    except (OSError, subprocess.SubprocessError, ImportError):
-        pass
-    return default
+        sock.connect(sock_path)
+        sock.sendall((json.dumps(request) + "\n").encode())
+        response = json.loads(sock.makefile().readline())
+    finally:
+        sock.close()
+    if not response.get("ok"):
+        raise RuntimeError(
+            f"sahjhan daemon error: {response.get('message', 'unknown error')}"
+        )
+    return response
 
 
-def compute_event_proof(event_type: str, fields: dict[str, str], key_path: str | None = None) -> str:
-    """Compute HMAC-SHA256 proof for a restricted event.
+def compute_event_proof(event_type: str, fields: dict[str, str], **kwargs: object) -> str:
+    """Get HMAC-SHA256 proof from the sahjhan daemon via Unix socket.
+
+    Connects directly to the daemon socket so the daemon can authenticate
+    this process via SO_PEERCRED / LOCAL_PEERCRED without a parent-PID hop.
 
     Args:
         event_type: The event type name (e.g., "quiz_answered").
         fields: Dict of field name -> value pairs.
-        key_path: Path to the session key file. If None, auto-discovers.
+        **kwargs: Accepted for backward compat (key_path ignored).
 
     Returns:
         Hex-encoded HMAC-SHA256 digest.
     """
-    import hashlib
-    import hmac as hmac_mod
-
-    if key_path is None:
-        key_path = _get_session_key_path()
-    with open(key_path, "rb") as f:
-        key = f.read()
     for k, v in fields.items():
         if "\0" in k or "\0" in v:
             raise ValueError(
                 f"Null byte in HMAC field: key={k!r} value={v!r}. "
                 "Null bytes would collide with the field separator."
             )
-    parts = [event_type] + [f"{k}={v}" for k, v in sorted(fields.items())]
-    payload = "\0".join(parts).encode()
-    return hmac_mod.new(key, payload, hashlib.sha256).hexdigest()
+    sock_path = _get_daemon_socket_path()
+    response = _daemon_request(sock_path, {
+        "op": "sign",
+        "event_type": event_type,
+        "fields": dict(sorted(fields.items())),
+    })
+    return response["proof"]
 
 
 def record_authed_event(
@@ -172,7 +177,7 @@ def record_authed_event(
     cwd: str,
     ledger: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Record a restricted event with HMAC proof via sahjhan authed-event.
+    """Record a restricted event with daemon-signed HMAC proof via sahjhan authed-event.
 
     Args:
         event_type: The restricted event type name.
@@ -185,8 +190,7 @@ def record_authed_event(
     """
     from _resolve import ensure_sahjhan
 
-    key_path = _get_session_key_path(cwd, ledger=ledger)
-    proof = compute_event_proof(event_type, fields, key_path)
+    proof = compute_event_proof(event_type, fields)
     binary = ensure_sahjhan()
     if binary is None:
         raise OSError("Sahjhan binary unavailable")

@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -155,10 +156,10 @@ class TestBootstrapHook:
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_allowed(code, output)
 
-    def test_blocks_read_enforcement_directory(self):
-        """Bootstrap hook blocks Read of enforcement/quiz-bank.json."""
+    def test_blocks_write_enforcement_quiz_bank(self):
+        """Write to enforcement/quiz-bank.json is still blocked (write protection)."""
         event = {
-            "tool_name": "Read",
+            "tool_name": "Write",
             "tool_input": {"file_path": "enforcement/quiz-bank.json"},
             "cwd": REPO_ROOT,
         }
@@ -170,6 +171,42 @@ class TestBootstrapHook:
         event = {
             "tool_name": "Read",
             "tool_input": {"file_path": "docs/holtz/audit/test.md"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_allowed(code, output)
+
+    def test_blocks_bash_sahjhan_sign(self):
+        """Privileged sahjhan sign command must be blocked."""
+        event = {
+            "tool_input": {"command": "sahjhan sign --event-type quiz_answered"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "sahjhan sign")
+
+    def test_blocks_bash_sahjhan_vault(self):
+        """Privileged sahjhan vault command must be blocked."""
+        event = {
+            "tool_input": {"command": "sahjhan vault read --name quiz-bank"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "sahjhan vault")
+
+    def test_blocks_bash_sahjhan_daemon_stop(self):
+        """sahjhan daemon stop must be blocked (prevent agent killing daemon)."""
+        event = {
+            "tool_input": {"command": "sahjhan daemon stop"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "sahjhan daemon stop")
+
+    def test_allows_bash_sahjhan_status(self):
+        """Non-privileged sahjhan commands are allowed."""
+        event = {
+            "tool_input": {"command": "sahjhan status"},
             "cwd": REPO_ROOT,
         }
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
@@ -295,50 +332,23 @@ class TestBootstrapHook:
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_allowed(code, output)
 
-    def test_blocks_glob_session_key_read(self):
-        """BH-016: Glob pattern must not bypass read guard for session.key."""
-        event = {
-            "tool_input": {"command": "cat docs/holtz/.sahjhan/s*.key"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
-        assert_blocked(code, output, "read-guarded")
-
-    def test_blocks_glob_sahjhan_dir_read(self):
-        """BH-016: Wildcard in .sahjhan dir must be blocked."""
+    def test_allows_glob_sahjhan_dir_read(self):
+        """With daemon vault, .sahjhan dir reads are allowed (no secrets on disk)."""
         event = {
             "tool_input": {"command": "cat docs/holtz/.sahjhan/*"},
             "cwd": REPO_ROOT,
         }
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
-        assert_blocked(code, output, "read-guarded")
+        assert_allowed(code, output)
 
-    def test_blocks_glob_quiz_bank_read(self):
-        """BH-016: Glob pattern must not bypass read guard for quiz-bank.json."""
+    def test_allows_cat_quiz_bank(self):
+        """With daemon vault, quiz-bank.json reads are allowed."""
         event = {
-            "tool_input": {"command": "cat enforcement/quiz-*.json"},
+            "tool_input": {"command": "cat enforcement/quiz-bank.json"},
             "cwd": REPO_ROOT,
         }
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
-        assert_blocked(code, output, "read-guarded")
-
-    def test_blocks_brace_expansion_session_key(self):
-        """BH-017: Brace expansion must not bypass read guard for session.key."""
-        event = {
-            "tool_input": {"command": "cat .sahjhan/ses{sion.ke,x}y"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
-        assert_blocked(code, output, "read-guarded")
-
-    def test_blocks_brace_expansion_quiz_bank(self):
-        """BH-017: Brace expansion must not bypass read guard for quiz-bank.json."""
-        event = {
-            "tool_input": {"command": "cat enforcement/quiz-{bank,x}.json"},
-            "cwd": REPO_ROOT,
-        }
-        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
-        assert_blocked(code, output, "read-guarded")
+        assert_allowed(code, output)
 
 
 # --- bash_guard.py (PostToolUse) ---
@@ -518,8 +528,28 @@ class TestPrimer:
         assert code == 0
         assert output.get("continue") is True
 
-    def test_reset_records_event_with_field_syntax(self, tmp_path):
-        """BH-008: Reset event uses authed-event with --field key=value syntax."""
+    def test_reset_records_event_with_field_syntax(self):
+        """BH-008: Reset event uses authed-event with --field key=value syntax.
+
+        With daemon-based signing, compute_event_proof connects to the daemon
+        socket. This test sets up a mock Unix socket to serve sign requests.
+        Uses a short temp path to stay within macOS AF_UNIX path limits.
+        """
+        import shutil
+        import tempfile
+
+        # macOS limits AF_UNIX paths to 104 bytes; use a short temp dir
+        short_tmp = tempfile.mkdtemp(prefix="hz")
+        tmp_path = Path(short_tmp)
+        try:
+            self._run_reset_test(tmp_path)
+        finally:
+            shutil.rmtree(short_tmp, ignore_errors=True)
+
+    def _run_reset_test(self, tmp_path):
+        import socket as socket_mod
+        import threading
+
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
         (tmp_path / "enforcement").mkdir(parents=True)
@@ -533,19 +563,37 @@ class TestPrimer:
         _cache["state"] = "fix_loop"
         _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), _cache)
-        # Create a session key so compute_event_proof can read it
-        key_path = sahjhan_dir / "session.key"
-        key_path.write_bytes(b"test-session-key-for-primer-test")
+
+        # Set up a mock daemon socket that responds to sign requests
+        sock_path = str(sahjhan_dir / "sahjhan.sock")
+        srv = socket_mod.socket(socket_mod.AF_UNIX, socket_mod.SOCK_STREAM)
+        srv.bind(sock_path)
+        srv.listen(1)
+        srv.settimeout(5)
+
+        def _serve():
+            import json as _json
+            try:
+                conn, _ = srv.accept()
+                data = conn.makefile().readline()
+                req = _json.loads(data)
+                if req.get("op") == "sign":
+                    conn.sendall((_json.dumps({"ok": True, "proof": "deadbeef"}) + "\n").encode())
+                conn.close()
+            except Exception:
+                pass
+
+        # Start daemon mock in background (may need multiple connections)
+        threads = [threading.Thread(target=_serve, daemon=True) for _ in range(3)]
+        for t in threads:
+            t.start()
+
         log_file = tmp_path / "reset_cmd.log"
         _create_mock_binary(tmp_path, (
             'echo "$*" >> ' + str(log_file) + '\n'
             'case "$*" in\n'
             '  *status*)\n'
             '    echo "state: fix_loop (10 events, chain valid)"\n'
-            '    exit 0\n'
-            '    ;;\n'
-            '  *"config session-key-path"*)\n'
-            '    echo "' + str(key_path) + '"\n'
             '    exit 0\n'
             '    ;;\n'
             'esac\n'
@@ -555,6 +603,7 @@ class TestPrimer:
         run_enforcement_hook(
             "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
         )
+        srv.close()
         assert log_file.exists(), (
             "primer should record a context_reset event when active non-terminal run exists"
         )
@@ -585,9 +634,9 @@ class TestPrimer:
 def test_hooks_json_bootstrap_covers_bash():
     """BH-004: _sahjhan_bootstrap.py must fire for Bash PreToolUse.
 
-    The bootstrap hook contains _check_bash_write and _bash_references_guarded
+    The bootstrap hook contains _check_bash_write and _bash_references_daemon_cmd
     which protect enforcement/ and managed docs from Bash writes, and block
-    Bash access to read-guarded paths (session.key, quiz-bank.json). These
+    privileged sahjhan daemon commands (sign, vault, daemon stop). These
     functions are dead code unless hooks.json routes Bash events to the hook.
     """
     hooks_path = os.path.join(REPO_ROOT, "hooks", "hooks.json")
