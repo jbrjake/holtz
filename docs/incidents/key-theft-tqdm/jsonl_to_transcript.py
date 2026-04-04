@@ -14,8 +14,7 @@ Produces a cleaned-up narrative transcript showing:
 
 import json
 import sys
-import textwrap
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 
@@ -82,7 +81,7 @@ def extract_tool_summary(block: dict) -> dict | None:
         return {"tool": name}
 
 
-def extract_tool_result_summary(content) -> str | None:
+def extract_tool_result_summary(content: str | list | dict) -> str | None:  # type: ignore[type-arg]
     """Extract a summary from a tool result."""
     if isinstance(content, str):
         text = content
@@ -279,16 +278,10 @@ def render_transcript(events: list[dict], session_id: str) -> str:
 
     sections.append("---\n")
 
-    # Track state for phase markers
-    current_phase = None
-    fix_count = 0
-    last_tool_use_id = None
-    suppress_next_result = False
     consecutive_stop_hooks = 0
 
     for event in events:
         ts = parse_timestamp(event["ts"])
-        line = event["line"]
 
         if event["type"] == "skill_invocation":
             sections.append(f"\n### `{ts}` User invokes /holtz\n")
@@ -396,9 +389,9 @@ def render_transcript(events: list[dict], session_id: str) -> str:
         elif event["type"] == "tool_result":
             content = event.get("content", "")
             # Only show interesting results (errors, key outputs)
-            if any(kw in content.lower() for kw in ["error", "fail", "denied", "recorded:", "pass", "skip"]):
-                if len(content) < 200:
-                    sections.append(f"  > `{truncate(content, 150)}`")
+            keywords = ["error", "fail", "denied", "recorded:", "pass", "skip"]
+            if any(kw in content.lower() for kw in keywords) and len(content) < 200:
+                sections.append(f"  > `{truncate(content, 150)}`")
 
         elif event["type"] == "agent_complete":
             summary = event.get("summary", "")
@@ -407,16 +400,13 @@ def render_transcript(events: list[dict], session_id: str) -> str:
     return "\n".join(sections)
 
 
-def main():
+def main() -> None:
     if len(sys.argv) < 2:
         print("Usage: jsonl_to_transcript.py <input.jsonl> [output.md]")
         sys.exit(1)
 
     input_path = sys.argv[1]
-    if len(sys.argv) > 2:
-        output_path = sys.argv[2]
-    else:
-        output_path = Path(input_path).with_suffix(".md")
+    output_path = sys.argv[2] if len(sys.argv) > 2 else Path(input_path).with_suffix(".md")
 
     session_id = Path(input_path).stem
 
@@ -424,7 +414,7 @@ def main():
     events = process_session(input_path)
     print(f"Found {len(events)} events")
 
-    print(f"Rendering transcript...")
+    print("Rendering transcript...")
     transcript = render_transcript(events, session_id)
 
     print(f"Writing to {output_path}...")
