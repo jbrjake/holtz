@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.96.1] - 2026-04-04
+
+_Changes since v0.93.5_
+
+### Added
+- organize case studies and incidents into separate doc collections
+- add ARCHITECTURE.md capability inventory and SPEC-STATUS.md
+- **enforcement:** upgrade to sahjhan 0.9.0 daemon-based vault and signing
+
+### Fixed
+- resolve ruff lint errors in jsonl_to_transcript.py
+
+### Documentation
+- add incident report for 2026-04-03 enforcement key theft
+
 ## [0.93.5] - 2026-04-02
 
 _Changes since v0.93.1_
