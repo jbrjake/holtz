@@ -960,6 +960,21 @@ class TestStopHookFreshness:
         assert "fix_loop" in reason
         assert "not terminal" in reason.lower() or "complete" in reason.lower()
 
+    def test_allows_stop_in_awaiting_clear_state(self, tmp_path):
+        """Issue #32: awaiting_clear is a stop-allowed state — agent must be able to stop."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "awaiting_clear"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert code == 0
+        assert output == {}  # no output = allow
+
 
 class TestCommitGateFreshness:
     """Tests for commit_gate.py freshness gate."""
