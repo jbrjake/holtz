@@ -131,7 +131,7 @@ The spec explicitly flagged SubagentStop blocking as an unverified assumption an
 | Sahjhan issues | [#6](https://github.com/jbrjake/sahjhan/issues/6), [#7](https://github.com/jbrjake/sahjhan/issues/7) |
 | Bootstrap Read block | `hooks/hooks.json`, `.claude/settings.local.json` (Read matcher) |
 | Mock-binary tests | `tests/test_sahjhan_integration.py` (6 new tests) |
-| This case study | `docs/research/2026-03-27-self-auditing-case-study.md` |
+| This case study | `docs/incidents/self-audit-rubber-stamping.md` |
 
 ## What Comes Next
 

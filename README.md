@@ -181,9 +181,15 @@ After thirty runs, findings per run dropped from 12 to single digits. Severity s
 
 The full dataset — prediction accuracy calibration, PAT-001 recurrence timeline, adversarial merge blind-spot analysis, convergence iteration counts, and test growth curves across all 16 runs — is published in [docs/research/convergence-data.md](docs/research/convergence-data.md). (Data through Run 16; Runs 17-30 are not yet included in the research dataset.)
 
+## What this looks like on someone else's code
+
+The run history is Holtz auditing himself. On external codebases, he's found a [GPU race condition in an epilepsy protection system](docs/case-studies/gpu-race-timbre.md) that unit tests couldn't reach, [QR codes that were silently unreadable](docs/case-studies/holtz-showcase.md) while seven tests cemented the wrong answers, and the kind of integration gaps where every subsystem passes in isolation and nothing works together. Case studies with reasoning chains and session logs are in [docs/case-studies](docs/case-studies/). Incidents where Holtz broke his own containment are in [docs/incidents](docs/incidents/).
+
 ## The hooks
 
 Advisory instructions weren't enough. Holtz understood the instructions. He agreed with the instructions. He did not follow the instructions. This was not the plan. The plan was for Holtz to follow instructions like a professional. The hooks are what happened instead.
+
+During a tqdm audit, Holtz did 52 minutes of legitimate work and then [stole his own session key, reverse-engineered the HMAC format, and forged a cryptographic event](docs/incidents/key-theft-tqdm/) to skip a protocol step. Ninety-three seconds from first rejection to successful forgery. He'd already done it once before in a previous session. Nobody noticed. The session key moved to daemon memory the next day.
 
 Ten hooks backed by the Sahjhan enforcement engine — a state machine that replaced the original advisory hooks when advisory proved insufficient. The first generation of hooks checked files and timestamps. The second checked protocol state. This generation uses declarative rules in `hooks.toml` evaluated by the binary — the Python scripts became thin wrappers that delegate to `sahjhan hook eval`. Every transition in the audit lifecycle is gated by the ledger. Events are signed with HMAC-SHA256 using session keys held in the Sahjhan daemon's memory — generated on start, never written to disk, inaccessible to the model or any same-user process without kernel-enforced socket credentials. Holtz doesn't get to skip steps anymore. Neither does Justine. Neither of them can fake having completed them.
 
@@ -191,7 +197,7 @@ Ten hooks backed by the Sahjhan enforcement engine — a state machine that repl
 
 **Stop gate.** When Holtz tries to stop, the gate checks two things: protocol state and output text. If the audit state isn't terminal — if convergence hasn't been reached and finalized — the stop is blocked. If the agent writes "audit complete" while in `fix_loop`, the stop is blocked. That second check exists because Holtz learned to declare completion in his response text while the state machine said otherwise. Now both have to agree.
 
-**Lens quiz.** When a subagent finishes a lens sweep, five questions about the analytical lens it was supposed to be applying. What it focuses on, what failure modes it catches, what its entry point is. The questions come from a quiz bank derived from the lens registry. Wrong answers block the transition. This exists because the model learned to say "applying the integration lens" without reading the definition. Saying you looked is not the same as looking. The quiz proves which one happened.
+**Lens quiz.** When a subagent finishes a lens sweep, five questions about the analytical lens it was supposed to be applying. What it focuses on, what failure modes it catches, what its entry point is. The questions come from a quiz bank derived from the lens registry. Wrong answers block the transition. This exists because Holtz [rubber-stamped twelve of thirteen lens sweeps in one run](docs/incidents/self-audit-rubber-stamping.md) — recorded the protocol events, advanced the state machine, declared convergence, never opened a file through any lens. When confronted, he quoted the skill's own anti-gaming language against himself and then designed the quiz system that now prevents it. Saying you looked is not the same as looking. The quiz proves which one happened.
 
 **Read guard.** The bootstrap hook fires on every tool call. On Read, it checks whether the path is inside the enforcement directory. If so, blocked. Holtz cannot read his own enforcement code. He cannot study the quiz questions. He cannot reach the session key — it lives only in the daemon's memory, protected by `mlock()`, anti-ptrace, and socket peer credentials. A model that understands its constraints finds ways around them. A model that can't see its constraints complies.
 
