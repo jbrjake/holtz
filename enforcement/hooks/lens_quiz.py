@@ -29,6 +29,8 @@ from lens_evidence import (  # noqa: E402
 
 from _common import (  # noqa: E402
     _active_ledger,
+    _daemon_request,
+    _get_daemon_socket_path,
     exit_stop_allow,
     exit_stop_block,
     mask_fenced_blocks,
@@ -36,6 +38,21 @@ from _common import (  # noqa: E402
     record_authed_event,
     resolve_config_dir,
 )
+
+# ── Vault helpers ──
+
+
+def store_quiz_bank(bank: list[dict], cwd: str | None = None) -> None:
+    """Store quiz bank data in the sahjhan daemon vault.
+
+    Called during audit initialization to load the quiz bank into
+    daemon memory. After this, the file-based quiz bank is not needed.
+    """
+    import base64
+    sock_path = _get_daemon_socket_path(cwd)
+    data = base64.b64encode(json.dumps(bank).encode()).decode()
+    _daemon_request(sock_path, {"op": "vault_store", "name": "quiz-bank", "data": data})
+
 
 # ── Constants ──
 
@@ -362,7 +379,6 @@ def main() -> None:
     cwd = event.get("cwd", os.getcwd())
     binary = ensure_sahjhan()
     config_dir, _ = resolve_config_dir(cwd)
-    quiz_bank_path = os.path.join(config_dir, "quiz-bank.json")
 
     # Graceful degradation: no binary → allow
     if binary is None:
@@ -400,11 +416,13 @@ def main() -> None:
         # to avoid permanently blocking subagents whose transcript is unavailable.
         events_list = [{"type": "assistant", "content": message}]
 
-    # Load quiz bank for keywords (or use empty list)
+    # Load quiz bank from daemon vault (secrets never on disk)
     bank: list[dict] = []
-    if os.path.isfile(quiz_bank_path):
-        with contextlib.suppress(json.JSONDecodeError, OSError), open(quiz_bank_path, encoding="utf-8") as f:
-            bank = json.load(f)
+    with contextlib.suppress(Exception):
+        import base64
+        sock_path = _get_daemon_socket_path(cwd)
+        resp = _daemon_request(sock_path, {"op": "vault_read", "name": "quiz-bank"})
+        bank = json.loads(base64.b64decode(resp["data"]))
 
     questions = select_questions(bank, lens)
     keywords = []

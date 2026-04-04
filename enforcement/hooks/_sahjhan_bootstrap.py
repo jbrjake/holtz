@@ -3,9 +3,11 @@
 
 DO NOT MODIFY. This hook protects itself.
 
-PreToolUse hook that blocks Write/Edit to enforcement/, bin/sahjhan*,
-hooks/hooks.json, and this file. Uses correct PreToolUse output protocol
-(hookSpecificOutput with permissionDecision).
+PreToolUse hook that:
+- Blocks Write/Edit to enforcement/, bin/sahjhan*, hooks/hooks.json, and this file
+- Blocks Bash commands that write to protected or managed paths
+- Blocks Bash commands that invoke privileged sahjhan daemon commands
+- Provides defense-in-depth guards for Grep/Glob tools on enforcement paths
 """
 from __future__ import annotations
 
@@ -33,6 +35,15 @@ MANAGED_DOCS = [
 # Combined set of all paths that must be protected from Bash writes.
 ALL_PROTECTED = PROTECTED + MANAGED_DOCS
 
+# Privileged sahjhan subcommands that the agent must not invoke directly.
+# Defense-in-depth: the daemon's caller authentication is the primary boundary.
+BLOCKED_DAEMON_CMDS = [
+    "sahjhan sign",
+    "sahjhan verify",
+    "sahjhan vault",
+    "sahjhan daemon stop",
+]
+
 # Resolve plugin root: enforcement/hooks/ -> enforcement/ -> repo root
 _PLUGIN_ROOT = os.environ.get(
     "CLAUDE_PLUGIN_ROOT",
@@ -40,84 +51,15 @@ _PLUGIN_ROOT = os.environ.get(
 )
 
 
-def _load_read_guards() -> list[str]:
-    """Load read-guarded paths from sahjhan guards command.
+def _bash_references_daemon_cmd(command: str) -> str | None:
+    """Check if a Bash command invokes a privileged sahjhan daemon command.
 
-    Falls back to hardcoded defaults if the binary is unavailable.
-    Triggers self-bootstrap if binary is missing.
-    """
-    import subprocess
-    try:
-        from _resolve import ensure_sahjhan
-        binary = ensure_sahjhan()
-        if binary is not None:
-            result = subprocess.run(
-                [binary, "--config-dir", os.path.join(_PLUGIN_ROOT, "enforcement"), "guards"],
-                capture_output=True, text=True, timeout=5,
-            )
-            if result.returncode == 0:
-                data = json.loads(result.stdout)
-                guards = data.get("read_blocked", [])
-                if guards:
-                    return guards
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, KeyError, ImportError):
-        pass
-    return [".sahjhan/session.key", "enforcement/quiz-bank.json"]
-
-
-READ_GUARDED = _load_read_guards()
-
-
-def _is_read_guarded(path: str, cwd: str) -> str | None:
-    """Check if a resolved path matches any read-guarded path. Returns the guard or None."""
-    resolved = os.path.realpath(path) if os.path.isabs(path) else os.path.realpath(os.path.join(cwd, path))
-
-    # Structural guard: any session.key under a .sahjhan directory tree
-    parts = resolved.replace("\\", "/").split("/")
-    if "session.key" in parts and ".sahjhan" in parts:
-        sahjhan_idx = parts.index(".sahjhan")
-        key_idx = parts.index("session.key")
-        if key_idx > sahjhan_idx:
-            return ".sahjhan/**/session.key"
-
-    for g in READ_GUARDED:
-        for base in (os.path.join(cwd, "docs", "holtz"), _PLUGIN_ROOT, cwd):
-            full = os.path.realpath(os.path.join(base, g))
-            if resolved == full or resolved.startswith(full + os.sep):
-                return g
-    return None
-
-
-def _bash_references_guarded(command: str, cwd: str) -> str | None:
-    """Check if a Bash command references any read-guarded path.
-
-    BH-016: Also blocks glob patterns that could expand to guarded paths.
-    Checks parent directory references (.sahjhan/, enforcement/) with
-    wildcard characters to catch glob-based bypass attempts.
+    Returns the blocked command pattern if found, None otherwise.
     """
     cmd_lower = command.lower()
-    # Structural guard: any command referencing session.key in a .sahjhan context
-    if "session.key" in cmd_lower and ".sahjhan" in cmd_lower:
-        return ".sahjhan/**/session.key"
-
-    # BH-016: Block glob patterns targeting guarded directories.
-    # If the command references a guarded parent dir AND contains glob chars,
-    # treat it as a potential bypass.
-    _GLOB_CHARS = ("*", "?", "[", "{")
-    if ".sahjhan" in cmd_lower and any(c in command for c in _GLOB_CHARS):
-        return ".sahjhan/**/session.key"
-
-    for g in READ_GUARDED:
-        if g.lower() in cmd_lower:
-            return g
-        if g.startswith(".sahjhan/"):
-            full_rel = os.path.join("docs", "holtz", g)
-            if full_rel.lower() in cmd_lower:
-                return g
-        # BH-016: Check parent directory of guarded path with glob chars
-        parent = os.path.dirname(g)
-        if parent and parent.lower() in cmd_lower and any(c in command for c in _GLOB_CHARS):
-            return g
+    for blocked in BLOCKED_DAEMON_CMDS:
+        if blocked in cmd_lower:
+            return blocked
     return None
 
 
@@ -271,34 +213,26 @@ def main() -> None:
     cwd = event.get("cwd", os.getcwd())
     tool_name = event.get("tool_name", "")
 
-    # Read guard: block Read tool on guarded paths
-    if tool_name == "Read" and path:
-        guard = _is_read_guarded(path, cwd)
-        if guard:
-            _block(
-                f"BLOCKED: Cannot read '{guard}'. "
-                "This file is protected enforcement infrastructure."
-            )
-            return
-
-    # Read guard: block Bash commands that reference guarded paths
-    if command:
-        guard = _bash_references_guarded(command, cwd)
-        if guard:
-            _block(
-                f"BLOCKED: Bash command references read-guarded path '{guard}'. "
-                "This file cannot be accessed during an audit session."
-            )
-            return
-
-    # BH-016, BH-011, BH-008, BH-001/002/004 (run 27): Check Bash commands
-    # for write operations targeting protected or managed paths.
-    # Split on shell operators first, then check each segment independently.
+    # Bash tool: check for write operations and privileged daemon commands
     if command and not path:
+        # Block privileged sahjhan daemon commands (defense-in-depth)
+        daemon_cmd = _bash_references_daemon_cmd(command)
+        if daemon_cmd:
+            _block(
+                f"BLOCKED: Bash command invokes privileged sahjhan command '{daemon_cmd}'. "
+                "Only trusted hook scripts may call sahjhan sign/vault/daemon commands."
+            )
+            return
         result = _check_bash_write(command)
         if result:
             _block(result)
             return
+        _allow()
+        return
+
+    # Grep/Glob tools: defense-in-depth write protection
+    # (no read guards needed — secrets live in daemon memory, not on disk)
+    if tool_name in ("Grep", "Glob") and not path:
         _allow()
         return
 

@@ -15,15 +15,6 @@
         ]
       },
       {
-        "matcher": "Read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/_sahjhan_bootstrap.py\""
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -33,6 +24,15 @@
           {
             "type": "command",
             "command": "python \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/commit_gate.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/_sahjhan_bootstrap.py\""
           }
         ]
       }

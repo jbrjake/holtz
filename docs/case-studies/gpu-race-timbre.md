@@ -1,5 +1,10 @@
 # Case study: How an AI bug hunter found a GPU race condition in an epilepsy protection system
 
+**Date:** 2026-03-22
+**Project:** Timbre (real-time macOS music visualizer)
+**Holtz version:** Pre-enforcement (no Sahjhan)
+**Discovery:** Phase 3 adversarial subagent, lateral pivot off priority list
+
 ## What happened before
 
 Three days before this audit, the developer had been running AI-assisted sprint

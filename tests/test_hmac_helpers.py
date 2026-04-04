@@ -1,11 +1,11 @@
-"""Tests for HMAC event provenance helpers."""
+"""Tests for daemon-based event provenance helpers."""
 from __future__ import annotations
 
-import hashlib
-import hmac
 import importlib.util
+import json
 from pathlib import Path
 from types import ModuleType
+from unittest import mock
 
 # Load enforcement/hooks/_common.py directly by path to avoid sys.path conflicts
 # with hooks/_common.py (same filename, different directories).
@@ -26,103 +26,151 @@ def _load_enforcement_common() -> ModuleType:
 _enforcement_common = _load_enforcement_common()
 
 
-def test_compute_event_proof_deterministic(tmp_path):
-    """Same inputs produce same proof."""
-    key = b"test-key-32-bytes-exactly-here!!"
-    key_path = tmp_path / "session.key"
-    key_path.write_bytes(key)
-
-    compute_event_proof = _enforcement_common.compute_event_proof
-
-    fields = {"project": "holtz", "run": "25", "auditor": "holtz", "perspective": "component"}
-    proof1 = compute_event_proof("quiz_answered", fields, str(key_path))
-    proof2 = compute_event_proof("quiz_answered", fields, str(key_path))
-    assert proof1 == proof2
-    assert len(proof1) == 64  # SHA-256 hex digest
+def _mock_daemon_sign(expected_proof: str = "abc123def456"):
+    """Create a mock for _daemon_request that returns a sign response."""
+    def _fake_request(sock_path, request):
+        assert request["op"] == "sign"
+        return {"ok": True, "proof": expected_proof}
+    return mock.patch.object(_enforcement_common, '_daemon_request', side_effect=_fake_request)
 
 
-def test_compute_event_proof_field_order_independent(tmp_path):
-    """Field ordering must not affect the proof (sorted internally)."""
-    key = b"test-key-32-bytes-exactly-here!!"
-    key_path = tmp_path / "session.key"
-    key_path.write_bytes(key)
-
-    compute_event_proof = _enforcement_common.compute_event_proof
-
-    fields_a = {"z_field": "last", "a_field": "first"}
-    fields_b = {"a_field": "first", "z_field": "last"}
-    assert compute_event_proof("test_event", fields_a, str(key_path)) == \
-           compute_event_proof("test_event", fields_b, str(key_path))
+def test_compute_event_proof_calls_daemon():
+    """compute_event_proof connects to daemon and returns proof."""
+    with _mock_daemon_sign("deadbeef0123"):
+        proof = _enforcement_common.compute_event_proof(
+            "quiz_answered",
+            {"project": "holtz", "perspective": "component"},
+        )
+    assert proof == "deadbeef0123"
 
 
-def test_compute_event_proof_matches_manual(tmp_path):
-    """Proof must match manual HMAC-SHA256 computation."""
-    key = b"known-key"
-    key_path = tmp_path / "session.key"
-    key_path.write_bytes(key)
+def test_compute_event_proof_sorts_fields():
+    """Fields must be sorted before sending to daemon."""
+    requests = []
 
-    compute_event_proof = _enforcement_common.compute_event_proof
+    def _capture_request(sock_path, request):
+        requests.append(request)
+        return {"ok": True, "proof": "abc"}
 
-    fields = {"auditor": "holtz", "project": "test"}
-    proof = compute_event_proof("my_event", fields, str(key_path))
+    with mock.patch.object(_enforcement_common, '_daemon_request', side_effect=_capture_request):
+        _enforcement_common.compute_event_proof(
+            "test_event", {"z_field": "last", "a_field": "first"}
+        )
 
-    # Manual computation
-    payload = "my_event\0auditor=holtz\0project=test"
-    expected = hmac.new(key, payload.encode(), hashlib.sha256).hexdigest()
-    assert proof == expected
-
-
-def test_compute_event_proof_rejects_null_bytes_in_values(tmp_path):
-    """Field values with null bytes must not produce colliding proofs (BH-014)."""
-    key = b"test-key-32-bytes-exactly-here!!"
-    key_path = tmp_path / "session.key"
-    key_path.write_bytes(key)
-
-    compute_event_proof = _enforcement_common.compute_event_proof
-
-    # A value containing \0 could spoof additional fields
-    injected = {"auditor": "holtz\x00score=5/5"}
-    legitimate = {"auditor": "holtz", "score": "5/5"}
-
-    # Either the proofs must differ, or the function must raise ValueError
-    try:
-        proof_injected = compute_event_proof("quiz_answered", injected, str(key_path))
-    except ValueError:
-        return  # raising is an acceptable defense
-
-    proof_legit = compute_event_proof("quiz_answered", legitimate, str(key_path))
-    assert proof_injected != proof_legit, (
-        "Null byte in field value produces HMAC collision with separate field"
-    )
+    assert requests[0]["fields"] == {"a_field": "first", "z_field": "last"}
 
 
-def test_compute_event_proof_rejects_null_bytes_in_keys(tmp_path):
-    """Field keys with null bytes must not produce colliding proofs (BH-014)."""
-    key = b"test-key-32-bytes-exactly-here!!"
-    key_path = tmp_path / "session.key"
-    key_path.write_bytes(key)
+def test_compute_event_proof_field_order_independent():
+    """Field ordering must not affect the request sent to daemon (sorted internally)."""
+    requests = []
 
-    compute_event_proof = _enforcement_common.compute_event_proof
+    def _capture_request(sock_path, request):
+        requests.append(request)
+        return {"ok": True, "proof": "abc"}
 
-    # A key containing \0 and = could spoof the k=v format
-    try:
-        proof = compute_event_proof("test", {"a\x00b": "c"}, str(key_path))
-    except ValueError:
-        return  # raising is acceptable
-    # If it doesn't raise, the proof should differ from the non-injected version
-    proof_clean = compute_event_proof("test", {"a": "c"}, str(key_path))
-    assert proof != proof_clean
+    with mock.patch.object(_enforcement_common, '_daemon_request', side_effect=_capture_request):
+        _enforcement_common.compute_event_proof(
+            "test_event", {"z_field": "last", "a_field": "first"}
+        )
+        _enforcement_common.compute_event_proof(
+            "test_event", {"a_field": "first", "z_field": "last"}
+        )
+
+    assert requests[0]["fields"] == requests[1]["fields"]
 
 
-def test_compute_event_proof_different_types_differ(tmp_path):
-    """Different event types produce different proofs."""
-    key = b"test-key-32-bytes-exactly-here!!"
-    key_path = tmp_path / "session.key"
-    key_path.write_bytes(key)
+def test_compute_event_proof_rejects_null_bytes_in_values():
+    """Field values with null bytes must raise ValueError (BH-014)."""
+    import pytest
+    with pytest.raises(ValueError, match="Null byte"):
+        _enforcement_common.compute_event_proof(
+            "quiz_answered", {"auditor": "holtz\x00score=5/5"}
+        )
 
-    compute_event_proof = _enforcement_common.compute_event_proof
 
-    fields = {"project": "holtz"}
-    proof_a = compute_event_proof("event_a", fields, str(key_path))
-    proof_b = compute_event_proof("event_b", fields, str(key_path))
-    assert proof_a != proof_b
+def test_compute_event_proof_rejects_null_bytes_in_keys():
+    """Field keys with null bytes must raise ValueError (BH-014)."""
+    import pytest
+    with pytest.raises(ValueError, match="Null byte"):
+        _enforcement_common.compute_event_proof(
+            "test", {"a\x00b": "c"}
+        )
+
+
+def test_compute_event_proof_daemon_error_raises():
+    """RuntimeError raised when daemon returns error."""
+    import pytest
+
+    def _error_request(sock_path, request):
+        raise RuntimeError("sahjhan daemon error: auth_failed")
+
+    with mock.patch.object(
+        _enforcement_common, '_daemon_request', side_effect=_error_request
+    ), pytest.raises(RuntimeError, match="auth_failed"):
+        _enforcement_common.compute_event_proof("test", {"a": "b"})
+
+
+def test_daemon_request_sends_json():
+    """_daemon_request sends newline-delimited JSON and parses response."""
+    import socket as socket_mod
+
+    mock_socket = mock.MagicMock()
+    mock_file = mock.MagicMock()
+    mock_file.readline.return_value = json.dumps({"ok": True, "proof": "test123"})
+    mock_socket.makefile.return_value = mock_file
+
+    with mock.patch.object(socket_mod, 'socket', return_value=mock_socket):
+        result = _enforcement_common._daemon_request(
+            "/tmp/test.sock",
+            {"op": "sign", "event_type": "test", "fields": {}},
+        )
+
+    assert result == {"ok": True, "proof": "test123"}
+    mock_socket.connect.assert_called_once_with("/tmp/test.sock")
+    sent_data = mock_socket.sendall.call_args[0][0]
+    parsed = json.loads(sent_data.decode().strip())
+    assert parsed["op"] == "sign"
+
+
+def test_daemon_request_raises_on_error_response():
+    """_daemon_request raises RuntimeError when daemon returns ok=false."""
+    import socket as socket_mod
+
+    import pytest
+
+    mock_socket = mock.MagicMock()
+    mock_file = mock.MagicMock()
+    mock_file.readline.return_value = json.dumps({
+        "ok": False, "error": "auth_failed", "message": "not in manifest"
+    })
+    mock_socket.makefile.return_value = mock_file
+
+    with mock.patch.object(
+        socket_mod, 'socket', return_value=mock_socket
+    ), pytest.raises(RuntimeError, match="not in manifest"):
+        _enforcement_common._daemon_request(
+            "/tmp/test.sock",
+            {"op": "sign", "event_type": "test", "fields": {}},
+        )
+
+
+def test_get_daemon_socket_path():
+    """Socket path resolves to .sahjhan/sahjhan.sock under data dir."""
+    path = _enforcement_common._get_daemon_socket_path("/tmp/project")
+    assert path == "/tmp/project/docs/holtz/.sahjhan/sahjhan.sock"
+
+
+def test_get_daemon_socket_path_defaults_to_cwd():
+    """With no argument, uses os.getcwd()."""
+    with mock.patch("os.getcwd", return_value="/fake/cwd"):
+        path = _enforcement_common._get_daemon_socket_path()
+    assert path == "/fake/cwd/docs/holtz/.sahjhan/sahjhan.sock"
+
+
+def test_compute_event_proof_ignores_key_path_kwarg():
+    """key_path kwarg is accepted for backward compat but ignored."""
+    with _mock_daemon_sign("compat_proof"):
+        proof = _enforcement_common.compute_event_proof(
+            "test", {"a": "b"}, key_path="/ignored/path"
+        )
+    assert proof == "compat_proof"
