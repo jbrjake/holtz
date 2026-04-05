@@ -128,6 +128,35 @@ def write_active_run_marker(cwd: str, ledger_name: str) -> None:
         f.write(ledger_name.strip() + "\n")
 
 
+def exit_enforcement_error(
+    cwd: str,
+    reason: str,
+    hook_type: str = "PreToolUse",
+) -> None:
+    """Block if active audit + fresh enforcement, else allow.
+
+    Replaces exit_ok() at daemon-failure fallback paths. During an active,
+    fresh audit, daemon failures are blocks (PreToolUse) or warnings
+    (PostToolUse). Outside audits or with stale enforcement, fail-open
+    as before.
+    """
+    from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: PLC0415
+
+    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
+    if os.path.isdir(data_dir):
+        cache = read_cache(cwd)
+        if is_enforcement_fresh(cache):
+            if hook_type == "PreToolUse":
+                exit_block(f"ENFORCEMENT DEGRADED: {reason}")
+            else:
+                exit_warn(f"ENFORCEMENT DEGRADED: {reason}")
+    # No active audit or stale enforcement — fail-open
+    if hook_type == "PreToolUse":
+        exit_ok("PreToolUse")
+    else:
+        exit_ok()
+
+
 def _get_daemon_socket_path(cwd: str | None = None) -> str:
     """Return the path to the sahjhan daemon Unix socket."""
     if cwd is None:
