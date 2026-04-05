@@ -112,12 +112,97 @@ class TestDaemonHealthCheck:
         assert code == 0
         assert output.get("continue") is True
 
-    def test_never_blocks_on_failure(self, tmp_path):
-        """Even if daemon start fails, the tool call is always allowed."""
+    def test_allows_on_failure_when_no_fresh_enforcement(self, tmp_path):
+        """Daemon start fails + no fresh enforcement → allow (fail-open)."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
         (sahjhan_dir / "active-run").write_text("run-1\n")
         (sahjhan_dir / "daemon.pid").write_text("99999999\n")
+
+        event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
+        assert code == 0
+        assert output.get("continue") is True
+
+
+class TestDaemonLifecycleBlocksDuringActiveAudit:
+    """Issue #39: Dead daemon during active+fresh audit must block, not allow."""
+
+    def test_blocks_when_restart_fails_and_fresh(self, tmp_path):
+        """Daemon dead + restart fails + fresh enforcement → block."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "active-run").write_text("run-1\n")
+        (sahjhan_dir / "daemon.pid").write_text("99999999\n")  # dead PID
+
+        # Write a fresh cache so enforcement is active
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+
+        event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
+        assert code == 0
+        # Should block, not allow
+        assert output.get("continue") is False
+        reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
+        assert "ENFORCEMENT DEGRADED" in reason
+
+    def test_allows_when_restart_fails_and_stale(self, tmp_path):
+        """Daemon dead + restart fails + stale enforcement → allow (abandoned audit)."""
+        from _protocol_cache import empty_cache, write_cache
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "active-run").write_text("run-1\n")
+        (sahjhan_dir / "daemon.pid").write_text("99999999\n")  # dead PID
+
+        # Write a stale cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
+        write_cache(str(tmp_path), cache)
+
+        event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
+        assert code == 0
+        assert output.get("continue") is True
+
+    def test_allows_when_no_cache_file(self, tmp_path):
+        """Daemon dead + no cache file → allow (no enforcement state to protect)."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "active-run").write_text("run-1\n")
+        (sahjhan_dir / "daemon.pid").write_text("99999999\n")  # dead PID
+        # No cache file
+
+        event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
+        assert code == 0
+        assert output.get("continue") is True
+
+
+class TestDaemonStartVerification:
+    """Issue #39 P3: Verify daemon is actually alive after start."""
+
+    def test_still_allows_when_daemon_alive(self, tmp_path):
+        """Daemon PID is alive → allow as before."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "active-run").write_text("run-1\n")
+        # Use our own PID — guaranteed alive
+        (sahjhan_dir / "daemon.pid").write_text(f"{os.getpid()}\n")
+
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
 
         event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
