@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.102.0] - 2026-04-05
+
+_Changes since v0.96.4_
+
+### Added
+- add daemon start/stop to phase-recon and phase-finalize instructions (#37)
+- **enforcement:** daemon cleanup in stop_hook, manual hint on block (#37)
+- **enforcement:** stop daemon on finalized state in protocol_tracker (#37)
+- **enforcement:** register daemon lifecycle hook in hooks.json (#37)
+- **enforcement:** add daemon lifecycle PreToolUse hook (#37)
+
+### Fixed
+- **enforcement:** primer restarts daemon and retries context_reset (#37)
+
+### Documentation
+- add implementation plan for daemon lifecycle integration (#37)
+- add design spec for daemon lifecycle integration (issue #37)
+
+### Infrastructure
+- fix ruff SIM105 and UP017 lint, update test badge to 985
+- fix unused import in test_daemon_lifecycle and update test badge count
+
 ## [0.96.4] - 2026-04-05
 
 _Changes since v0.96.3_
