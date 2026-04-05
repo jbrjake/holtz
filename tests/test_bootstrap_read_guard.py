@@ -215,3 +215,58 @@ class TestWriteGuardsRetained:
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+
+class TestManagedDataWriteProtection:
+    """Issue #39 P2: Write/Edit to .sahjhan/ data dir must be blocked."""
+
+    def test_write_to_enforcement_cache_blocked(self):
+        """Write tool targeting enforcement-cache.json must be blocked."""
+        import os
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/.sahjhan/enforcement-cache.json"},
+            "cwd": repo_root,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert "cannot be modified" in output["hookSpecificOutput"]["permissionDecisionReason"]
+
+    def test_edit_to_active_run_marker_blocked(self):
+        """Edit tool targeting active-run marker must be blocked."""
+        import os
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": "docs/holtz/.sahjhan/active-run",
+                "old_string": "run-1",
+                "new_string": "run-999",
+            },
+            "cwd": repo_root,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_write_to_daemon_pid_blocked(self):
+        """Write tool targeting daemon.pid must be blocked."""
+        import os
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/.sahjhan/daemon.pid"},
+            "cwd": repo_root,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_write_outside_sahjhan_dir_allowed(self):
+        """Write tool targeting a non-protected path is allowed."""
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/some-notes.md"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"

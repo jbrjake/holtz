@@ -286,6 +286,16 @@ def main() -> None:
             )
             return
 
+    # MANAGED_DATA paths are relative to cwd (not _PLUGIN_ROOT)
+    for p in MANAGED_DATA:
+        full = os.path.realpath(os.path.join(cwd, p))
+        if resolved == full or resolved.startswith(full + os.sep):
+            _block(
+                f"BLOCKED: {path} is in the Sahjhan data directory. "
+                "This path cannot be modified during an audit session."
+            )
+            return
+
     _allow()
 
 
