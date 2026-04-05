@@ -155,16 +155,16 @@ def test_daemon_request_raises_on_error_response():
 
 
 def test_get_daemon_socket_path():
-    """Socket path resolves to .sahjhan/sahjhan.sock under data dir."""
+    """Issue #35 bug 3: Socket path must use daemon.sock (binary's actual name)."""
     path = _enforcement_common._get_daemon_socket_path("/tmp/project")
-    assert path == "/tmp/project/docs/holtz/.sahjhan/sahjhan.sock"
+    assert path == "/tmp/project/docs/holtz/.sahjhan/daemon.sock"
 
 
 def test_get_daemon_socket_path_defaults_to_cwd():
     """With no argument, uses os.getcwd()."""
     with mock.patch("os.getcwd", return_value="/fake/cwd"):
         path = _enforcement_common._get_daemon_socket_path()
-    assert path == "/fake/cwd/docs/holtz/.sahjhan/sahjhan.sock"
+    assert path == "/fake/cwd/docs/holtz/.sahjhan/daemon.sock"
 
 
 def test_compute_event_proof_ignores_key_path_kwarg():
@@ -174,3 +174,37 @@ def test_compute_event_proof_ignores_key_path_kwarg():
             "test", {"a": "b"}, key_path="/ignored/path"
         )
     assert proof == "compat_proof"
+
+
+def test_compute_event_proof_uses_explicit_cwd():
+    """Issue #35 bug 1: compute_event_proof must use explicit cwd for socket path.
+
+    In worktree subagents, os.getcwd() is a temp dir. Callers must be able
+    to pass cwd so the socket path resolves to the main project daemon.
+    """
+    def _fake_request(sock_path, request):
+        assert sock_path == "/main/project/docs/holtz/.sahjhan/daemon.sock"
+        return {"ok": True, "proof": "worktree_proof"}
+
+    with mock.patch.object(_enforcement_common, '_daemon_request', side_effect=_fake_request):
+        proof = _enforcement_common.compute_event_proof(
+            "test", {"a": "b"}, cwd="/main/project"
+        )
+    assert proof == "worktree_proof"
+
+
+def test_write_active_run_marker(tmp_path):
+    """Issue #35 bug 2: write_active_run_marker creates the active-run file."""
+    (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+    _enforcement_common.write_active_run_marker(str(tmp_path), "run-42")
+    marker = tmp_path / "docs" / "holtz" / ".sahjhan" / "active-run"
+    assert marker.exists()
+    assert marker.read_text().strip() == "run-42"
+
+
+def test_write_active_run_marker_requires_data_dir(tmp_path):
+    """write_active_run_marker is a no-op when .sahjhan dir doesn't exist."""
+    # Should not raise, just silently skip
+    _enforcement_common.write_active_run_marker(str(tmp_path), "run-99")
+    marker = tmp_path / "docs" / "holtz" / ".sahjhan" / "active-run"
+    assert not marker.exists()

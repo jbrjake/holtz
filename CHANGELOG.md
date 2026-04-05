@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.96.4] - 2026-04-05
+
+_Changes since v0.96.3_
+
+### Fixed
+- **enforcement:** fix daemon socket, cwd threading, primer error handling (#35)
+
 ## [0.96.3] - 2026-04-04
 
 _Changes since v0.96.1_

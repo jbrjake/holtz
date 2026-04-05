@@ -115,11 +115,24 @@ def _active_ledger(cwd: str) -> str | None:
         return None
 
 
+def write_active_run_marker(cwd: str, ledger_name: str) -> None:
+    """Write the active-run marker file so hooks can find the active ledger.
+
+    No-op if the .sahjhan data directory doesn't exist (no active audit).
+    """
+    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
+    if not os.path.isdir(data_dir):
+        return
+    marker = os.path.join(data_dir, "active-run")
+    with open(marker, "w", encoding="utf-8") as f:
+        f.write(ledger_name.strip() + "\n")
+
+
 def _get_daemon_socket_path(cwd: str | None = None) -> str:
     """Return the path to the sahjhan daemon Unix socket."""
     if cwd is None:
         cwd = os.getcwd()
-    return os.path.join(cwd, "docs", "holtz", ".sahjhan", "sahjhan.sock")
+    return os.path.join(cwd, "docs", "holtz", ".sahjhan", "daemon.sock")
 
 
 def _daemon_request(sock_path: str, request: dict) -> dict:
@@ -152,6 +165,9 @@ def compute_event_proof(event_type: str, fields: dict[str, str], **kwargs: objec
         event_type: The event type name (e.g., "quiz_answered").
         fields: Dict of field name -> value pairs.
         **kwargs: Accepted for backward compat (key_path ignored).
+            cwd: Optional working directory for socket path resolution.
+                 When running in a worktree, pass the main project dir
+                 so the socket resolves to the main daemon, not a temp dir.
 
     Returns:
         Hex-encoded HMAC-SHA256 digest.
@@ -162,7 +178,8 @@ def compute_event_proof(event_type: str, fields: dict[str, str], **kwargs: objec
                 f"Null byte in HMAC field: key={k!r} value={v!r}. "
                 "Null bytes would collide with the field separator."
             )
-    sock_path = _get_daemon_socket_path()
+    cwd = kwargs.get("cwd")
+    sock_path = _get_daemon_socket_path(cwd if isinstance(cwd, str) else None)
     response = _daemon_request(sock_path, {
         "op": "sign",
         "event_type": event_type,
@@ -190,7 +207,7 @@ def record_authed_event(
     """
     from _resolve import ensure_sahjhan
 
-    proof = compute_event_proof(event_type, fields)
+    proof = compute_event_proof(event_type, fields, cwd=cwd)
     binary = ensure_sahjhan()
     if binary is None:
         raise OSError("Sahjhan binary unavailable")
