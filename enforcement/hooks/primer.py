@@ -11,7 +11,6 @@ ensuring /clear boundaries are actually observed.
 """
 from __future__ import annotations
 
-import contextlib
 import os
 import subprocess
 import sys
@@ -77,7 +76,8 @@ def main() -> None:
 
     # Record context_reset event (gates awaiting_clear→fix_loop)
     run_number = (ledger or "").replace("run-", "") or "0"
-    with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+    context_reset_failed = False
+    try:
         record_authed_event(
             "context_reset",
             {
@@ -89,6 +89,8 @@ def main() -> None:
             cwd=cwd,
             ledger=ledger,
         )
+    except (OSError, subprocess.TimeoutExpired, RuntimeError):
+        context_reset_failed = True
 
     # Build resume context — use ledger-derived run number (consistent with context_reset event)
     # status text does not include run_number; derive from ledger name.
@@ -116,6 +118,12 @@ def main() -> None:
     state_line = format_state_line(read_enforcement_cache(cwd))
     if state_line:
         context += "\n" + state_line
+
+    if context_reset_failed:
+        context += (
+            "\nWARNING: context_reset recording failed — daemon may not be running. "
+            f"Start it with `{binary} daemon start`, then re-run `/clear`."
+        )
 
     context += f"\nSahjhan binary: {binary}"
     if ledger:

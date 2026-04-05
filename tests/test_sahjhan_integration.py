@@ -630,7 +630,7 @@ class TestPrimer:
         write_cache(str(tmp_path), _cache)
 
         # Set up a mock daemon socket that responds to sign requests
-        sock_path = str(sahjhan_dir / "sahjhan.sock")
+        sock_path = str(sahjhan_dir / "daemon.sock")
         srv = socket_mod.socket(socket_mod.AF_UNIX, socket_mod.SOCK_STREAM)
         srv.bind(sock_path)
         srv.listen(1)
@@ -916,6 +916,37 @@ class TestPrimerWithMockBinary:
         )
         context = output.get("additionalContext", "")
         assert "audit" in context
+
+    def test_warns_when_context_reset_fails(self, tmp_path):
+        """Issue #35 bug 4: Primer must warn (not silently suppress) when context_reset fails.
+
+        When the daemon is unreachable, the primer should still inject resume
+        context but include a warning about the failed context_reset recording.
+        """
+        status = [
+            "state: awaiting_clear (20 events, chain valid)",
+            "sets:",
+            "  perspective: 1/13 [✓ component, · integration, ...]",
+            "next:",
+            "  resume: blocked",
+        ]
+        self._setup(tmp_path, status)
+        # Write active-run marker
+        (tmp_path / "docs" / "holtz" / ".sahjhan" / "active-run").write_text("run-35\n")
+        # No daemon running → record_authed_event will fail
+        event = {"user_message": "continue", "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        context = output.get("additionalContext", "")
+        # Must still inject resume context
+        assert "awaiting_clear" in context
+        # Must warn about failed context_reset — check for explicit warning text,
+        # not just substring (pytest temp dirs include test name which contains "context_reset")
+        assert "context_reset failed" in context.lower() or "context_reset recording failed" in context.lower(), (
+            "Primer must warn when context_reset recording fails, not silently suppress. "
+            f"Got context: {context}"
+        )
 
 
 class TestActiveLedger:
