@@ -6,7 +6,8 @@ PreToolUse hook. Replaces write_guard.py. Performs two checks:
 2. Calls `sahjhan hook eval` which evaluates hooks.toml rules
    (TDD gate in fix_loop, etc.)
 
-Falls back to allow if sahjhan binary is unavailable.
+Fails closed (blocks) during active audits if the daemon is unreachable.
+Falls back to allow outside active audits or when enforcement is stale.
 """
 from __future__ import annotations
 
@@ -21,7 +22,7 @@ from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
 from _sahjhan_bootstrap import MANAGED_DOCS  # noqa: E402
 
-from _common import exit_block, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
+from _common import exit_block, exit_enforcement_error, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
 
 
 def main() -> None:
@@ -54,11 +55,11 @@ def main() -> None:
 
     binary = ensure_sahjhan()
     if binary is None:
-        exit_ok("PreToolUse")
+        exit_enforcement_error(cwd, "Sahjhan binary unavailable")
 
     config_dir, config_found = resolve_config_dir(cwd)
     if not config_found:
-        exit_ok("PreToolUse")
+        exit_enforcement_error(cwd, "Enforcement config not found")
 
     # Detect active ledger
     active_file = os.path.join(cwd, "docs", "holtz", ".sahjhan", "active-run")
@@ -83,15 +84,15 @@ def main() -> None:
             cmd, capture_output=True, text=True, timeout=5, cwd=cwd,
         )
     except (OSError, subprocess.TimeoutExpired):
-        exit_ok("PreToolUse")
+        exit_enforcement_error(cwd, "Hook eval subprocess failed")
 
     if result.returncode != 0:
-        exit_ok("PreToolUse")
+        exit_enforcement_error(cwd, "Hook eval returned error")
 
     try:
         data = json.loads(result.stdout)
     except (json.JSONDecodeError, ValueError):
-        exit_ok("PreToolUse")
+        exit_enforcement_error(cwd, "Hook eval returned invalid JSON")
 
     eval_data = data.get("data", data)
     decision = eval_data.get("decision", "allow")

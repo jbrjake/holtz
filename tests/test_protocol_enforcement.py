@@ -11,6 +11,91 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))
 from test_sahjhan_integration import run_enforcement_hook  # noqa: E402
 
 
+def _force_no_binary(tmp_path):
+    """Create bootstrap cooldown marker so ensure_sahjhan() returns None fast.
+
+    Without this, ensure_sahjhan() would attempt an HTTP download, adding
+    latency and flakiness. The cooldown marker makes it return None immediately.
+    """
+    import time
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / ".sahjhan-bootstrap-failed").write_text(str(time.time()))
+
+
+class TestPreToolHookFailClosed:
+    """Issue #39: pre_tool_hook blocks when daemon unreachable during active audit."""
+
+    def test_blocks_when_binary_unavailable_and_fresh(self, tmp_path):
+        """Sahjhan binary missing + fresh enforcement → block."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(tmp_path / "src" / "app.py")},
+            "cwd": str(tmp_path),
+        }
+        env = dict(os.environ)
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=env,
+        )
+        assert code == 0
+        assert output.get("continue") is False
+        reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
+        assert "ENFORCEMENT DEGRADED" in reason
+
+    def test_allows_when_binary_unavailable_and_stale(self, tmp_path):
+        """Sahjhan binary missing + stale enforcement → allow."""
+        from _protocol_cache import empty_cache, write_cache
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # stale
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(tmp_path / "src" / "app.py")},
+            "cwd": str(tmp_path),
+        }
+        env = dict(os.environ)
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=env,
+        )
+        assert code == 0
+        assert output.get("continue") is True
+
+    def test_allows_when_binary_unavailable_and_no_audit(self, tmp_path):
+        """Sahjhan binary missing + no active audit → allow."""
+        _force_no_binary(tmp_path)
+
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(tmp_path / "src" / "app.py")},
+            "cwd": str(tmp_path),
+        }
+        env = dict(os.environ)
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=env,
+        )
+        assert code == 0
+        assert output.get("continue") is True
+
+
 class TestProtocolCache:
     """Tests for _protocol_cache.py shared module."""
 
