@@ -6,6 +6,7 @@ updates the enforcement cache file. Never blocks. Pure bookkeeping.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import subprocess
@@ -99,6 +100,22 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     return cache
 
 
+def _stop_daemon(cwd: str) -> None:
+    """Best-effort daemon stop after audit finalization."""
+    binary = ensure_sahjhan()
+    if binary is None:
+        return
+    config_dir, _ = resolve_config_dir(cwd)
+    with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+        subprocess.run(
+            [binary, "--config-dir", config_dir, "daemon", "stop"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            cwd=cwd,
+        )
+
+
 def main() -> None:
     event = read_event()
 
@@ -117,6 +134,9 @@ def main() -> None:
             cache = empty_cache()
         cache = _refresh_from_sahjhan(cwd, cache)
         cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        # Stop daemon after finalization (teardown safety net)
+        if cache.get("state") == "finalized":
+            _stop_daemon(cwd)
         # BH-017: match subcommand tokens, not substrings of full command
         tokens = cmd.split()
         if "fix_commit" in tokens:

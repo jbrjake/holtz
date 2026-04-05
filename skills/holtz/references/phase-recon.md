@@ -8,14 +8,15 @@
 
 #### Run Initialization (before anything else)
 
-Determine the run number N (check `docs/holtz/runs/` for existing runs, or start at 1). Then initialize the run ledger and protocol state — **both commands must succeed before any events are recorded:**
+Determine the run number N (check `docs/holtz/runs/` for existing runs, or start at 1). Then start the daemon and initialize the run ledger and protocol state — **all three commands must succeed before any events are recorded:**
 
 ```
+sahjhan daemon start
 sahjhan ledger create --from run N
 sahjhan transition run_start
 ```
 
-All subsequent `event` commands in this run **must** use `--ledger run-N` so findings land in the run ledger, not the default ledger. Omitting `--ledger run-N` causes render warnings and orphaned findings.
+The daemon must be running before any hooks that need signing or vault access. All subsequent `event` commands in this run **must** use `--ledger run-N` so findings land in the run ledger, not the default ledger. Omitting `--ledger run-N` causes render warnings and orphaned findings.
 
 #### Reference Reader Subagent
 

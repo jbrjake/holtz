@@ -31,6 +31,22 @@ from _common import (  # noqa: E402
 )
 
 
+def _try_restart_daemon(cwd: str, binary: str) -> bool:
+    """Attempt to restart the sahjhan daemon. Returns True on success."""
+    try:
+        config_dir, _ = resolve_config_dir(cwd)
+        result = subprocess.run(
+            [binary, "--config-dir", config_dir, "daemon", "start"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            cwd=cwd,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def main() -> None:
     event = read_event()
     binary = ensure_sahjhan()
@@ -90,7 +106,24 @@ def main() -> None:
             ledger=ledger,
         )
     except (OSError, subprocess.TimeoutExpired, RuntimeError):
-        context_reset_failed = True
+        # Daemon may be down — attempt restart and retry once
+        if _try_restart_daemon(cwd, binary):
+            try:
+                record_authed_event(
+                    "context_reset",
+                    {
+                        "project": "holtz",
+                        "run": run_number,
+                        "auditor": "holtz",
+                        "trigger": "user_prompt_submit",
+                    },
+                    cwd=cwd,
+                    ledger=ledger,
+                )
+            except (OSError, subprocess.TimeoutExpired, RuntimeError):
+                context_reset_failed = True
+        else:
+            context_reset_failed = True
 
     # Build resume context — use ledger-derived run number (consistent with context_reset event)
     # status text does not include run_number; derive from ledger name.

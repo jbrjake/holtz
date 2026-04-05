@@ -50,3 +50,9 @@ Run `sahjhan transition finalize` — this transitions to the terminal `finalize
 | LOW        | N         | N         | N%       |
 | **Total**  | **N**     | **N**     | **N%**   |
 ```
+
+After finalization, stop the daemon:
+
+```
+sahjhan daemon stop
+```
