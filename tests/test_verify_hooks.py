@@ -27,6 +27,9 @@ def test_passes_with_all_hooks(tmp_path):
     settings.parent.mkdir(parents=True)
     hooks = {
         "PreToolUse": [
+            {"matcher": "*", "hooks": [
+                {"type": "command", "command": "python enforcement/hooks/_daemon_lifecycle.py"},
+            ]},
             {"matcher": "Write|Edit", "hooks": [
                 {"type": "command", "command": "python enforcement/hooks/_sahjhan_bootstrap.py"},
                 {"type": "command", "command": "python enforcement/hooks/pre_tool_hook.py"},
