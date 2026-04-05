@@ -1470,6 +1470,62 @@ class TestPrimerNoFreshnessGate:
         )
 
 
+class TestPostToolHookFailClosed:
+    """Issue #39: post_tool_hook warns when daemon unreachable during active audit."""
+
+    def test_warns_when_binary_unavailable_and_fresh(self, tmp_path):
+        """Sahjhan binary missing + fresh enforcement → warn (not silent allow)."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(tmp_path / "src" / "app.py")},
+            "cwd": str(tmp_path),
+        }
+        env = dict(os.environ)
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+        code, output, _ = run_enforcement_hook(
+            "post_tool_hook.py", event, cwd=str(tmp_path), env=env,
+        )
+        assert code == 0
+        assert output.get("continue") is True
+        assert "ENFORCEMENT DEGRADED" in output.get("additionalContext", "")
+
+    def test_silent_allow_when_stale(self, tmp_path):
+        """Stale enforcement → silent allow (no warning)."""
+        from _protocol_cache import empty_cache, write_cache
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(tmp_path / "src" / "app.py")},
+            "cwd": str(tmp_path),
+        }
+        env = dict(os.environ)
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+        code, output, _ = run_enforcement_hook(
+            "post_tool_hook.py", event, cwd=str(tmp_path), env=env,
+        )
+        assert code == 0
+        assert output.get("continue") is True
+        assert output.get("suppressOutput") is True  # silent allow
+
+
 class TestTransitionsToml:
     """Validate transitions.toml doesn't contain Holtz-specific paths."""
 
