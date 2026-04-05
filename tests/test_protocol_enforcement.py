@@ -976,6 +976,119 @@ class TestStopHookFreshness:
         assert output == {}  # no output = allow
 
 
+class TestProtocolTrackerDaemonTeardown:
+    """Tests for daemon stop when protocol reaches finalized state."""
+
+    def test_stops_daemon_on_finalized(self, tmp_path):
+        """When sahjhan status returns finalized, protocol_tracker stops the daemon."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+
+        cache = empty_cache()
+        cache["state"] = "converged"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()
+        write_cache(str(tmp_path), cache)
+
+        # Create mock binary that returns finalized status and logs daemon stop
+        stop_flag = tmp_path / "daemon_stopped"
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        mock_binary = bin_dir / "sahjhan-mock"
+        mock_binary.write_text(
+            '#!/bin/bash\n'
+            'case "$*" in\n'
+            '  *status*)\n'
+            '    echo "state: finalized (100 events, chain valid)"\n'
+            '    exit 0\n'
+            '    ;;\n'
+            '  *daemon*stop*)\n'
+            f'    touch {stop_flag}\n'
+            '    exit 0\n'
+            '    ;;\n'
+            'esac\n'
+            'exit 0\n'
+        )
+        mock_binary.chmod(0o755)
+
+        (tmp_path / "enforcement").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True, exist_ok=True)
+
+        env = os.environ.copy()
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+        env["PATH"] = str(bin_dir) + ":" + env.get("PATH", "")
+
+        # The hook uses ensure_sahjhan() which resolves the binary via platform triple.
+        # We need to make the mock available at that path.
+        # Simplest approach: create a symlink at the expected path.
+        from _resolve import platform_triple
+        expected_binary = bin_dir / f"sahjhan-{platform_triple()}"
+        import shutil
+        shutil.copy2(str(mock_binary), str(expected_binary))
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": f"{mock_binary} transition finalize"},
+            "tool_response": {"exit_code": 0, "output": ""},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event, cwd=str(tmp_path), env=env)
+
+        assert stop_flag.exists(), "protocol_tracker should stop daemon when state is finalized"
+
+    def test_does_not_stop_daemon_in_non_terminal(self, tmp_path):
+        """Non-terminal state -> daemon should not be stopped."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()
+        write_cache(str(tmp_path), cache)
+
+        stop_flag = tmp_path / "daemon_stopped"
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        mock_binary = bin_dir / "sahjhan-mock"
+        mock_binary.write_text(
+            '#!/bin/bash\n'
+            'case "$*" in\n'
+            '  *status*)\n'
+            '    echo "state: fix_loop (50 events, chain valid)"\n'
+            '    exit 0\n'
+            '    ;;\n'
+            '  *daemon*stop*)\n'
+            f'    touch {stop_flag}\n'
+            '    exit 0\n'
+            '    ;;\n'
+            'esac\n'
+            'exit 0\n'
+        )
+        mock_binary.chmod(0o755)
+
+        (tmp_path / "enforcement").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True, exist_ok=True)
+
+        env = os.environ.copy()
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+
+        from _resolve import platform_triple
+        expected_binary = bin_dir / f"sahjhan-{platform_triple()}"
+        import shutil
+        shutil.copy2(str(mock_binary), str(expected_binary))
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": f"{mock_binary} status"},
+            "tool_response": {"exit_code": 0, "output": ""},
+            "cwd": str(tmp_path),
+        }
+        run_enforcement_hook("protocol_tracker.py", event, cwd=str(tmp_path), env=env)
+
+        assert not stop_flag.exists(), "daemon should not be stopped in non-terminal state"
+
+
 class TestCommitGateFreshness:
     """Tests for commit_gate.py freshness gate."""
 
