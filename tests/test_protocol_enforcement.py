@@ -986,7 +986,7 @@ class TestStopHookDaemonCleanup:
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
-        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         event = {"cwd": str(tmp_path)}
@@ -1008,7 +1008,7 @@ class TestProtocolTrackerDaemonTeardown:
 
         cache = empty_cache()
         cache["state"] = "converged"
-        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         # Create mock binary that returns finalized status and logs daemon stop
@@ -1065,7 +1065,7 @@ class TestProtocolTrackerDaemonTeardown:
 
         cache = empty_cache()
         cache["state"] = "fix_loop"
-        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
         stop_flag = tmp_path / "daemon_stopped"

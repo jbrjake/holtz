@@ -6,6 +6,7 @@ updates the enforcement cache file. Never blocks. Pure bookkeeping.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import subprocess
@@ -105,7 +106,7 @@ def _stop_daemon(cwd: str) -> None:
     if binary is None:
         return
     config_dir, _ = resolve_config_dir(cwd)
-    try:
+    with contextlib.suppress(OSError, subprocess.TimeoutExpired):
         subprocess.run(
             [binary, "--config-dir", config_dir, "daemon", "stop"],
             capture_output=True,
@@ -113,8 +114,6 @@ def _stop_daemon(cwd: str) -> None:
             timeout=5,
             cwd=cwd,
         )
-    except (OSError, subprocess.TimeoutExpired):
-        pass
 
 
 def main() -> None:

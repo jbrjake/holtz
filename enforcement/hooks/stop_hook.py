@@ -13,6 +13,7 @@ active audit. See: holtz issue #19.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import subprocess
 import sys
@@ -39,7 +40,7 @@ def _try_stop_daemon(cwd: str) -> None:
     if binary is None:
         return
     config_dir, _ = resolve_config_dir(cwd)
-    try:
+    with contextlib.suppress(OSError, subprocess.TimeoutExpired):
         subprocess.run(
             [binary, "--config-dir", config_dir, "daemon", "stop"],
             capture_output=True,
@@ -47,8 +48,6 @@ def _try_stop_daemon(cwd: str) -> None:
             timeout=5,
             cwd=cwd,
         )
-    except (OSError, subprocess.TimeoutExpired):
-        pass
 
 
 def _has_active_audit(cwd: str) -> bool:
