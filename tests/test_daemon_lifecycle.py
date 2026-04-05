@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
