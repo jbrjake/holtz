@@ -976,6 +976,27 @@ class TestStopHookFreshness:
         assert output == {}  # no output = allow
 
 
+class TestStopHookDaemonCleanup:
+    """Tests for daemon cleanup in stop_hook.py."""
+
+    def test_block_message_includes_manual_hint(self, tmp_path):
+        """Blocked stop message should tell user how to manually kill daemon."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()
+        write_cache(str(tmp_path), cache)
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        reason = output.get("reason", "")
+        assert "! sahjhan daemon stop" in reason, (
+            "Block message should tell user how to manually stop daemon"
+        )
+
+
 class TestProtocolTrackerDaemonTeardown:
     """Tests for daemon stop when protocol reaches finalized state."""
 

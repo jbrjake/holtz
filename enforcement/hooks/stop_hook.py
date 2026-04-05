@@ -14,20 +14,41 @@ active audit. See: holtz issue #19.
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
+from _resolve import ensure_sahjhan  # noqa: E402
 
 from _common import (  # noqa: E402
     exit_stop_allow,
     exit_stop_block,
     exit_stop_warn,
     read_event,
+    resolve_config_dir,
 )
 
 _STOP_ALLOWED_STATES = {"idle", "finalized", "awaiting_clear", ""}
+
+
+def _try_stop_daemon(cwd: str) -> None:
+    """Best-effort daemon stop for session cleanup."""
+    binary = ensure_sahjhan()
+    if binary is None:
+        return
+    config_dir, _ = resolve_config_dir(cwd)
+    try:
+        subprocess.run(
+            [binary, "--config-dir", config_dir, "daemon", "stop"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            cwd=cwd,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def _has_active_audit(cwd: str) -> bool:
@@ -58,10 +79,12 @@ def main() -> None:
 
     # Terminal or idle — allow stop
     if current_state in _STOP_ALLOWED_STATES:
+        _try_stop_daemon(cwd)
         exit_stop_allow()
 
     # Non-terminal state: check freshness
     if not is_enforcement_fresh(cache):
+        _try_stop_daemon(cwd)
         exit_stop_warn(
             f"Stale Holtz audit detected (state: '{current_state}'). "
             "No recent sahjhan activity — this appears to be an abandoned audit. "
@@ -71,7 +94,9 @@ def main() -> None:
     # Active audit, non-terminal state — block
     exit_stop_block(
         f"Audit is in state '{current_state}' which is not terminal. "
-        "You must complete the audit protocol before stopping."
+        "You must complete the audit protocol before stopping. "
+        "If this audit cannot be completed, the user can manually run: "
+        "! sahjhan daemon stop"
     )
 
 
