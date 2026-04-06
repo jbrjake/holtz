@@ -26,7 +26,14 @@ sys.path.insert(0, os.path.dirname(__file__))
 from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
 
-from _common import _active_ledger, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
+from _common import (  # noqa: E402
+    _active_ledger,
+    exit_enforcement_error,
+    exit_ok,
+    exit_warn,
+    read_event,
+    resolve_config_dir,
+)
 
 
 def _enrich_auto_record(
@@ -112,11 +119,11 @@ def main() -> None:
 
     binary = ensure_sahjhan()
     if binary is None:
-        exit_ok()
+        exit_enforcement_error(cwd, "Sahjhan binary unavailable", "PostToolUse")
 
     config_dir, config_found = resolve_config_dir(cwd)
     if not config_found:
-        exit_ok()
+        exit_enforcement_error(cwd, "Enforcement config not found", "PostToolUse")
 
     ledger = _active_ledger(cwd)
 
@@ -139,7 +146,7 @@ def main() -> None:
             data = json.loads(result.stdout)
             eval_data = data.get("data", data)
     except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, ValueError):
-        pass
+        exit_enforcement_error(cwd, "Hook eval failed", "PostToolUse")
 
     # Process auto_records
     for record in eval_data.get("auto_records", []):

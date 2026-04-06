@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.107.0] - 2026-04-05
+
+_Changes since v0.102.0_
+
+### Added
+- **enforcement:** bash_guard warns on daemon failure (#39)
+- **enforcement:** post_tool_hook warns on daemon failure (#39)
+- **enforcement:** pre_tool_hook fail-closed during active audits (#39)
+- **enforcement:** daemon lifecycle blocks on failed restart (#39)
+- **enforcement:** add exit_enforcement_error() shared utility (#39)
+
+### Fixed
+- **enforcement:** block Write/Edit to MANAGED_DATA paths (#39)
+
+### Documentation
+- add implementation plan for issue #39 dead daemon bypass fix
+- add design spec for issue #39 dead daemon bypass fix
+
 ## [0.102.0] - 2026-04-05
 
 _Changes since v0.96.4_

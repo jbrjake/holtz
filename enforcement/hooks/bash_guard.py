@@ -17,7 +17,14 @@ sys.path.insert(0, os.path.dirname(__file__))
 from _protocol_cache import is_enforcement_fresh, is_sahjhan_cmd, read_cache  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
 
-from _common import _active_ledger, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
+from _common import (  # noqa: E402
+    _active_ledger,
+    exit_enforcement_error,
+    exit_ok,
+    exit_warn,
+    read_event,
+    resolve_config_dir,
+)
 
 
 def main() -> None:
@@ -35,12 +42,11 @@ def main() -> None:
     if is_sahjhan_cmd(cmd):
         exit_ok()
 
+    cwd = event.get("cwd", os.getcwd())
+
     binary = ensure_sahjhan()
     if binary is None:
-        # Sahjhan not vendored yet — skip verification
-        exit_ok()
-
-    cwd = event.get("cwd", os.getcwd())
+        exit_enforcement_error(cwd, "Sahjhan binary unavailable", "PostToolUse")
     config_dir, _ = resolve_config_dir(cwd)
 
     # Check if there's an active Sahjhan run (data dir exists)
@@ -67,7 +73,7 @@ def main() -> None:
             cwd=cwd,
         )
     except (OSError, subprocess.TimeoutExpired):
-        exit_ok()
+        exit_enforcement_error(cwd, "Manifest verify failed", "PostToolUse")
 
     if result.returncode != 0:
         # Record protocol violation

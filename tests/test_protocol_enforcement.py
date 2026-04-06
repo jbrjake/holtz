@@ -11,6 +11,91 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))
 from test_sahjhan_integration import run_enforcement_hook  # noqa: E402
 
 
+def _force_no_binary(tmp_path):
+    """Create bootstrap cooldown marker so ensure_sahjhan() returns None fast.
+
+    Without this, ensure_sahjhan() would attempt an HTTP download, adding
+    latency and flakiness. The cooldown marker makes it return None immediately.
+    """
+    import time
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / ".sahjhan-bootstrap-failed").write_text(str(time.time()))
+
+
+class TestPreToolHookFailClosed:
+    """Issue #39: pre_tool_hook blocks when daemon unreachable during active audit."""
+
+    def test_blocks_when_binary_unavailable_and_fresh(self, tmp_path):
+        """Sahjhan binary missing + fresh enforcement → block."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(tmp_path / "src" / "app.py")},
+            "cwd": str(tmp_path),
+        }
+        env = dict(os.environ)
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=env,
+        )
+        assert code == 0
+        assert output.get("continue") is False
+        reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
+        assert "ENFORCEMENT DEGRADED" in reason
+
+    def test_allows_when_binary_unavailable_and_stale(self, tmp_path):
+        """Sahjhan binary missing + stale enforcement → allow."""
+        from _protocol_cache import empty_cache, write_cache
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # stale
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(tmp_path / "src" / "app.py")},
+            "cwd": str(tmp_path),
+        }
+        env = dict(os.environ)
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=env,
+        )
+        assert code == 0
+        assert output.get("continue") is True
+
+    def test_allows_when_binary_unavailable_and_no_audit(self, tmp_path):
+        """Sahjhan binary missing + no active audit → allow."""
+        _force_no_binary(tmp_path)
+
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(tmp_path / "src" / "app.py")},
+            "cwd": str(tmp_path),
+        }
+        env = dict(os.environ)
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=env,
+        )
+        assert code == 0
+        assert output.get("continue") is True
+
+
 class TestProtocolCache:
     """Tests for _protocol_cache.py shared module."""
 
@@ -997,6 +1082,119 @@ class TestStopHookDaemonCleanup:
         )
 
 
+class TestExitEnforcementError:
+    """Tests for exit_enforcement_error() shared utility."""
+
+    def test_blocks_pretooluse_during_active_fresh_audit(self, tmp_path, capsys):
+        """Active audit + fresh enforcement + PreToolUse → block with reason."""
+        import json
+        from datetime import datetime, timezone  # noqa: UP017
+
+        import pytest
+        from _protocol_cache import empty_cache, write_cache
+
+        from _common import exit_enforcement_error
+
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+
+        with pytest.raises(SystemExit) as exc_info:
+            exit_enforcement_error(str(tmp_path), "daemon unreachable", "PreToolUse")
+
+        assert exc_info.value.code == 0
+        output = json.loads(capsys.readouterr().out)
+        assert output["continue"] is False
+        reason = output["hookSpecificOutput"]["permissionDecisionReason"]
+        assert "ENFORCEMENT DEGRADED" in reason
+        assert "daemon unreachable" in reason
+
+    def test_warns_posttooluse_during_active_fresh_audit(self, tmp_path, capsys):
+        """Active audit + fresh enforcement + PostToolUse → warn."""
+        import json
+        from datetime import datetime, timezone  # noqa: UP017
+
+        import pytest
+        from _protocol_cache import empty_cache, write_cache
+
+        from _common import exit_enforcement_error
+
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+
+        with pytest.raises(SystemExit) as exc_info:
+            exit_enforcement_error(str(tmp_path), "daemon unreachable", "PostToolUse")
+
+        assert exc_info.value.code == 0
+        output = json.loads(capsys.readouterr().out)
+        assert output["continue"] is True
+        assert "ENFORCEMENT DEGRADED" in output["additionalContext"]
+
+    def test_allows_when_no_active_audit(self, tmp_path, capsys):
+        """No .sahjhan dir → allow (fail-open)."""
+        import json
+
+        import pytest
+
+        from _common import exit_enforcement_error
+
+        with pytest.raises(SystemExit) as exc_info:
+            exit_enforcement_error(str(tmp_path), "daemon unreachable", "PreToolUse")
+
+        assert exc_info.value.code == 0
+        output = json.loads(capsys.readouterr().out)
+        assert output["continue"] is True
+
+    def test_allows_when_stale_enforcement(self, tmp_path, capsys):
+        """Active audit but stale enforcement → allow (fail-open)."""
+        import json
+
+        import pytest
+        from _protocol_cache import empty_cache, write_cache
+
+        from _common import exit_enforcement_error
+
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
+        write_cache(str(tmp_path), cache)
+
+        with pytest.raises(SystemExit) as exc_info:
+            exit_enforcement_error(str(tmp_path), "daemon unreachable", "PreToolUse")
+
+        assert exc_info.value.code == 0
+        output = json.loads(capsys.readouterr().out)
+        assert output["continue"] is True
+
+    def test_allows_when_sahjhan_dir_but_no_cache(self, tmp_path, capsys):
+        """Data dir exists but no cache file → allow (fail-open)."""
+        import json
+
+        import pytest
+
+        from _common import exit_enforcement_error
+
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        # No cache file written
+
+        with pytest.raises(SystemExit) as exc_info:
+            exit_enforcement_error(str(tmp_path), "daemon unreachable", "PreToolUse")
+
+        assert exc_info.value.code == 0
+        output = json.loads(capsys.readouterr().out)
+        assert output["continue"] is True
+
+
 class TestProtocolTrackerDaemonTeardown:
     """Tests for daemon stop when protocol reaches finalized state."""
 
@@ -1272,6 +1470,62 @@ class TestPrimerNoFreshnessGate:
         )
 
 
+class TestPostToolHookFailClosed:
+    """Issue #39: post_tool_hook warns when daemon unreachable during active audit."""
+
+    def test_warns_when_binary_unavailable_and_fresh(self, tmp_path):
+        """Sahjhan binary missing + fresh enforcement → warn (not silent allow)."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(tmp_path / "src" / "app.py")},
+            "cwd": str(tmp_path),
+        }
+        env = dict(os.environ)
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+        code, output, _ = run_enforcement_hook(
+            "post_tool_hook.py", event, cwd=str(tmp_path), env=env,
+        )
+        assert code == 0
+        assert output.get("continue") is True
+        assert "ENFORCEMENT DEGRADED" in output.get("additionalContext", "")
+
+    def test_silent_allow_when_stale(self, tmp_path):
+        """Stale enforcement → silent allow (no warning)."""
+        from _protocol_cache import empty_cache, write_cache
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": str(tmp_path / "src" / "app.py")},
+            "cwd": str(tmp_path),
+        }
+        env = dict(os.environ)
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+        code, output, _ = run_enforcement_hook(
+            "post_tool_hook.py", event, cwd=str(tmp_path), env=env,
+        )
+        assert code == 0
+        assert output.get("continue") is True
+        assert output.get("suppressOutput") is True  # silent allow
+
+
 class TestTransitionsToml:
     """Validate transitions.toml doesn't contain Holtz-specific paths."""
 
@@ -1297,3 +1551,52 @@ class TestTransitionsToml:
                         f"Transition: {transition.get('command')} "
                         f"({transition.get('from')} -> {transition.get('to')})"
                     )
+
+
+class TestBashGuardFailClosed:
+    """Issue #39: bash_guard warns when daemon unreachable during active audit."""
+
+    def test_warns_when_binary_unavailable_and_fresh(self, tmp_path):
+        """Sahjhan binary missing + fresh enforcement → warn."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "ls -la"},
+            "cwd": str(tmp_path),
+        }
+        env = dict(os.environ)
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+        code, output, _ = run_enforcement_hook(
+            "bash_guard.py", event, cwd=str(tmp_path), env=env,
+        )
+        assert code == 0
+        assert output.get("continue") is True
+        assert "ENFORCEMENT DEGRADED" in output.get("additionalContext", "")
+
+    def test_silent_allow_when_no_audit(self, tmp_path):
+        """No active audit → silent allow."""
+        _force_no_binary(tmp_path)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "ls -la"},
+            "cwd": str(tmp_path),
+        }
+        env = dict(os.environ)
+        env["CLAUDE_PLUGIN_ROOT"] = str(tmp_path)
+        code, output, _ = run_enforcement_hook(
+            "bash_guard.py", event, cwd=str(tmp_path), env=env,
+        )
+        assert code == 0
+        assert output.get("continue") is True
+        assert output.get("suppressOutput") is True

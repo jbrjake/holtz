@@ -6,8 +6,7 @@ PreToolUse hook that:
 - Writes active-run marker if missing (scans docs/holtz/runs/ for highest run)
 - Checks daemon health via PID probe (os.kill(pid, 0))
 - Starts daemon if dead or missing
-
-Never blocks. Best-effort supervisor — if daemon start fails, tool call proceeds.
+- Blocks if restart fails during an active, fresh audit (via exit_enforcement_error)
 """
 from __future__ import annotations
 
@@ -22,6 +21,7 @@ from _resolve import ensure_sahjhan  # noqa: E402
 
 from _common import (  # noqa: E402
     _active_ledger,
+    exit_enforcement_error,
     exit_ok,
     read_event,
     write_active_run_marker,
@@ -77,7 +77,11 @@ def _start_daemon(cwd: str) -> bool:
             timeout=5,
             cwd=cwd,
         )
-        return result.returncode == 0
+        if result.returncode == 0:
+            # Verify daemon is actually alive after claiming success
+            pid = _daemon_pid(cwd)
+            return pid is not None and _is_process_alive(pid)
+        return False
     except (OSError, subprocess.TimeoutExpired):
         return False
 
@@ -108,8 +112,15 @@ def main() -> None:
         exit_ok()  # Daemon is healthy
 
     # Daemon is down or missing — attempt start
-    _start_daemon(cwd)
-    exit_ok()  # Always allow, regardless of start success
+    started = _start_daemon(cwd)
+    if not started:
+        # Double-check: daemon still dead after restart attempt?
+        pid = _daemon_pid(cwd)
+        if pid is None or not _is_process_alive(pid):
+            exit_enforcement_error(
+                cwd, "Daemon restart failed — enforcement cannot evaluate"
+            )
+    exit_ok()
 
 
 if __name__ == "__main__":
