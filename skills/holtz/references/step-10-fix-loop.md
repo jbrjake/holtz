@@ -13,6 +13,7 @@ digraph {
   fast [label="Fast Path\n(test→fix→commit)"]
   investigate [label="Investigation Path\n(layers→confidence→fix)"]
   cantrepro [label="Can't-Reproduce Path\n(widen→bisect→defer)"]
+  defer [label="Priority Deferral\n(LOW or MEDIUM budget)"]
   harden [label="Per-Fix Hardening\n(edges+regression)"]
   blast [label="Blast Radius Analysis\n(impact graph 2-hop)"]
   next [label="Next item"]
@@ -21,10 +22,12 @@ digraph {
   triage -> fast [label="test/doc/design\nor deterministic bug"]
   triage -> investigate [label="intermittent\nor theoretical bug"]
   triage -> cantrepro [label="repro test\nunexpectedly passes"]
+  triage -> defer [label="LOW severity\nor MEDIUM with budget"]
   fast -> harden
   investigate -> harden
   cantrepro -> harden [label="if reproduced"]
-  cantrepro -> next [label="DEFERRED\nwith evidence"]
+  cantrepro -> next [label="sahjhan defer\ncant-reproduce"]
+  defer -> next [label="sahjhan defer\nlow/medium"]
   harden -> blast
   blast -> next
 }
@@ -86,7 +89,34 @@ When the reproduction test passes (bug not triggered), do NOT skip the item. Esc
 
 Log every attempt in the investigation file. Failed reproduction attempts are evidence.
 
-If not reproducible after structured attempts: mark the item DEFERRED with evidence. Do not silently drop it.
+If not reproducible after structured attempts:
+
+1. Ensure reproduction attempts are documented in `docs/holtz/investigations/{item_id}.md`
+2. Run: `sahjhan defer cant-reproduce {item_id}`
+3. Run: `sahjhan event finding_deferred --field id={item_id} --field reason=cant_reproduce --field evidence_path=docs/holtz/investigations/{item_id}.md`
+4. Update PUNCHLIST.md status to DEFERRED
+
+Do not silently drop the item.
+
+## Priority Deferral
+
+For LOW and MEDIUM findings where the fix is legitimate but lower priority than the current audit scope. This is not a shortcut — attempt triage before deferring.
+
+**LOW severity:** All LOW findings may be deferred.
+
+```
+sahjhan defer low {item_id}
+sahjhan event finding_deferred --field id={item_id} --field reason=low_priority
+```
+
+**MEDIUM severity:** Up to half of MEDIUM findings may be deferred. The budget is enforced at deferral time — if the cap is reached, the transition is blocked.
+
+```
+sahjhan defer medium {item_id}
+sahjhan event finding_deferred --field id={item_id} --field reason=medium_budget
+```
+
+HIGH and CRITICAL findings are never deferrable via priority (only via can't-reproduce with evidence).
 
 ## Per-Fix Hardening
 
