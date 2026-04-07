@@ -692,12 +692,13 @@ class TestPrimer:
         assert code == 0, "primer should degrade gracefully on OSError"
         assert output.get("continue") is True
 
-    def test_restart_retry_on_daemon_failure(self):
-        """When context_reset fails, primer attempts daemon restart and retries.
+    def test_daemon_death_terminates_on_socket_failure(self):
+        """When context_reset fails and init PID is dead, primer writes terminated marker.
 
-        Uses a mock socket that rejects the first connection (simulating dead
-        daemon), then accepts after restart. The restart is simulated by the
-        mock binary's daemon-start command creating a flag file.
+        Uses a mock binary that returns valid status, but no daemon socket
+        exists — so record_authed_event fails with OSError. The primer then
+        checks daemon-init-pid, finds PID 99999999 is dead, and writes a
+        terminated marker. No daemon restart is attempted.
         """
         import shutil
         import tempfile
@@ -705,13 +706,11 @@ class TestPrimer:
         short_tmp = tempfile.mkdtemp(prefix="hz")
         tmp_path = Path(short_tmp)
         try:
-            self._run_restart_retry_test(tmp_path)
+            self._run_daemon_death_test(tmp_path)
         finally:
             shutil.rmtree(short_tmp, ignore_errors=True)
 
-    def _run_restart_retry_test(self, tmp_path):
-        import socket as socket_mod
-        import threading
+    def _run_daemon_death_test(self, tmp_path):
         from datetime import datetime, timezone
 
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
@@ -725,9 +724,12 @@ class TestPrimer:
         _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), _cache)
 
+        # Dead init PID — this is how primer detects daemon death
+        (sahjhan_dir / "daemon-init-pid").write_text("99999999\n")
+        (sahjhan_dir / "active-run").write_text("run-1\n")
+
         # Track calls to the mock binary
         log_file = tmp_path / "cmd.log"
-        restart_flag = tmp_path / "daemon_restarted"
 
         _create_mock_binary(tmp_path, (
             'echo "$*" >> ' + str(log_file) + '\n'
@@ -736,66 +738,24 @@ class TestPrimer:
             '    echo "state: awaiting_clear (10 events, chain valid)"\n'
             '    exit 0\n'
             '    ;;\n'
-            '  *daemon*start*)\n'
-            '    touch ' + str(restart_flag) + '\n'
-            '    exit 0\n'
-            '    ;;\n'
             'esac\n'
             'exit 0'
         ))
 
-        # Mock daemon socket — first connection serves the sign request
-        # (The restart-retry logic means primer will attempt daemon start
-        # then retry record_authed_event. We set up the socket to serve
-        # the retry's sign request.)
-        sock_path = str(sahjhan_dir / "daemon.sock")
-        srv = socket_mod.socket(socket_mod.AF_UNIX, socket_mod.SOCK_STREAM)
-        srv.bind(sock_path)
-        srv.listen(1)
-        srv.settimeout(5)
-
-        attempt = {"count": 0}
-
-        def _serve():
-            import json as _json
-            try:
-                conn, _ = srv.accept()
-                attempt["count"] += 1
-                data = conn.makefile().readline()
-                req = _json.loads(data)
-                if attempt["count"] == 1:
-                    # First attempt: return error (simulates dead daemon)
-                    conn.sendall((_json.dumps({"ok": False, "message": "not ready"}) + "\n").encode())
-                    conn.close()
-                    # Accept the retry after restart
-                    conn2, _ = srv.accept()
-                    data = conn2.makefile().readline()
-                    req = _json.loads(data)
-                    if req.get("op") == "sign":
-                        conn2.sendall((_json.dumps({"ok": True, "proof": "deadbeef"}) + "\n").encode())
-                    conn2.close()
-                else:
-                    if req.get("op") == "sign":
-                        conn.sendall((_json.dumps({"ok": True, "proof": "deadbeef"}) + "\n").encode())
-                    conn.close()
-            except Exception:
-                pass
-
-        t = threading.Thread(target=_serve, daemon=True)
-        t.start()
-
+        # No daemon socket — record_authed_event will fail with OSError
         event = {"user_message": "continue", "cwd": str(tmp_path)}
         code, output, stderr = run_enforcement_hook(
             "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
         )
-        srv.close()
 
-        # Verify daemon start was attempted
-        assert restart_flag.exists(), "primer should have attempted daemon restart"
-
-        # Verify context_reset was recorded (retry succeeded)
-        logged = log_file.read_text()
-        assert "context_reset" in logged, "retry should have recorded context_reset"
+        # Verify terminated marker was written (no restart attempted)
+        assert (sahjhan_dir / "terminated").exists(), (
+            "primer should write terminated marker when init PID is dead"
+        )
+        context = output.get("additionalContext", "")
+        assert "AUDIT TERMINATED" in context, (
+            "primer should inject termination message"
+        )
 
 
 # --- BH-004 (run 28): hooks.json configuration validation ---
