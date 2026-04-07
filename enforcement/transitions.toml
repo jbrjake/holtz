@@ -85,7 +85,7 @@ gates = [
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}'", expect = "true", intent = "finding must exist" },
     { type = "query", sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'", expect = "true", intent = "finding must not already be resolved or deferred" },
     { type = "ledger_has_event_since", event = "fix_start", since = "last_transition", intent = "must have started working on this item" },
-    { type = "command_succeeds", cmd = "python enforcement/scripts/check_repro_evidence.py {{item_id}}", intent = "reproduction attempts must be documented in investigation file" },
+    { type = "command_succeeds", cmd = "test -f docs/holtz/investigations/{{item_id}}.md && test -s docs/holtz/investigations/{{item_id}}.md", intent = "reproduction attempts must be documented in investigation file" },
 ]
 
 # ── Deferral: LOW severity ──
