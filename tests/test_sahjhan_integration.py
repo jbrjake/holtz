@@ -1245,6 +1245,23 @@ class TestStopHook:
         )
 
 
+class TestStopHookTerminatedAudit:
+    """Stop hook allows stop when audit is terminated."""
+
+    def test_allows_stop_on_terminated_marker(self, tmp_path):
+        """Terminated marker present → allow stop."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "terminated").write_text("reason: daemon_pid_dead\n")
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event, cwd=str(tmp_path))
+        assert code == 0
+        assert output.get("decision") != "block", (
+            f"Terminated audit should allow stop but got: {output}"
+        )
+
+
 # --- post_tool_hook.py (PostToolUse) ---
 
 

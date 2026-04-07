@@ -63,6 +63,12 @@ def main() -> None:
     if not _has_active_audit(cwd):
         exit_stop_allow()
 
+    # Terminated audit — always allow stop
+    terminated = os.path.join(cwd, "docs", "holtz", ".sahjhan", "terminated")
+    if os.path.isfile(terminated):
+        _try_stop_daemon(cwd)
+        exit_stop_allow()
+
     # Read enforcement cache directly (no subprocess, no timeout)
     cache = read_cache(cwd)
 
