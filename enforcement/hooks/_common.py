@@ -17,6 +17,7 @@ import json
 import os
 import socket
 import subprocess
+from datetime import datetime, timezone
 
 _HOOKS_COMMON = os.path.join(
     os.path.dirname(__file__), '..', '..', 'hooks', '_common.py'
@@ -248,3 +249,59 @@ def record_authed_event(
     for k, v in fields.items():
         cmd.extend(["--field", f"{k}={v}"])
     return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, timeout=10)
+
+
+def _read_init_pid(cwd: str) -> int | None:
+    """Read the daemon PID recorded at audit initialization.
+
+    Returns None if the file is missing or corrupt. This PID identifies
+    the specific daemon instance that holds the session key — if this
+    PID is dead, the key is gone and the audit is unrecoverable.
+    """
+    pid_file = os.path.join(cwd, "docs", "holtz", ".sahjhan", "daemon-init-pid")
+    try:
+        with open(pid_file, encoding="utf-8") as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _is_process_alive(pid: int) -> bool:
+    """Check if a process is alive using signal 0."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except (OSError, ProcessLookupError):
+        return False
+
+
+def _write_terminated_marker(
+    cwd: str,
+    init_pid: int,
+    detected_by: str = "unknown",
+) -> None:
+    """Write the audit-terminated marker and update enforcement cache.
+
+    Called when daemon death is detected. The marker file prevents
+    repeated PID checks on subsequent hook invocations. The cache
+    update ensures stop_hook allows stop.
+    """
+    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
+    marker = os.path.join(data_dir, "terminated")
+    with open(marker, "w", encoding="utf-8") as f:
+        f.write(f"reason: daemon_pid_dead\n")
+        f.write(f"init_pid: {init_pid}\n")
+        f.write(f"detected_by: {detected_by}\n")
+        f.write(f"detected_at: {datetime.now(timezone.utc).isoformat()}Z\n")
+
+    cache_path = os.path.join(data_dir, "enforcement-cache.json")
+    try:
+        with open(cache_path, encoding="utf-8") as f:
+            cache = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        cache = {}
+    cache["state"] = "terminated"
+    cache["terminated_reason"] = "daemon_pid_dead"
+    cache["active"] = False
+    with open(cache_path, "w", encoding="utf-8") as f:
+        json.dump(cache, f)

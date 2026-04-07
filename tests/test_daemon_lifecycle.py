@@ -208,3 +208,78 @@ class TestDaemonStartVerification:
         code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
         assert code == 0
         assert output.get("continue") is True
+
+
+class TestWriteTerminatedMarker:
+    """Tests for _write_terminated_marker shared helper."""
+
+    def test_creates_marker_file(self, tmp_path):
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        from _common import _write_terminated_marker
+        _write_terminated_marker(str(tmp_path), 12345, detected_by="_daemon_lifecycle")
+        marker = sahjhan_dir / "terminated"
+        assert marker.exists()
+        content = marker.read_text()
+        assert "reason: daemon_pid_dead" in content
+        assert "init_pid: 12345" in content
+        assert "detected_by: _daemon_lifecycle" in content
+        assert "detected_at:" in content
+
+    def test_updates_enforcement_cache(self, tmp_path):
+        import json
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        cache_path = sahjhan_dir / "enforcement-cache.json"
+        cache_path.write_text(json.dumps({"state": "fix_loop", "active": True}))
+        from _common import _write_terminated_marker
+        _write_terminated_marker(str(tmp_path), 12345)
+        cache = json.loads(cache_path.read_text())
+        assert cache["state"] == "terminated"
+        assert cache["active"] is False
+        assert cache["terminated_reason"] == "daemon_pid_dead"
+
+    def test_handles_missing_cache(self, tmp_path):
+        import json
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        from _common import _write_terminated_marker
+        _write_terminated_marker(str(tmp_path), 12345)
+        cache_path = sahjhan_dir / "enforcement-cache.json"
+        cache = json.loads(cache_path.read_text())
+        assert cache["state"] == "terminated"
+        assert cache["active"] is False
+
+    def test_handles_corrupt_cache(self, tmp_path):
+        import json
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "enforcement-cache.json").write_text("NOT JSON{{{")
+        from _common import _write_terminated_marker
+        _write_terminated_marker(str(tmp_path), 12345)
+        cache = json.loads((sahjhan_dir / "enforcement-cache.json").read_text())
+        assert cache["state"] == "terminated"
+
+
+class TestReadInitPid:
+    """Tests for _read_init_pid shared helper."""
+
+    def test_reads_existing_pid(self, tmp_path):
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "daemon-init-pid").write_text("72578\n")
+        from _common import _read_init_pid
+        assert _read_init_pid(str(tmp_path)) == 72578
+
+    def test_returns_none_when_missing(self, tmp_path):
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        from _common import _read_init_pid
+        assert _read_init_pid(str(tmp_path)) is None
+
+    def test_returns_none_on_corrupt_file(self, tmp_path):
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "daemon-init-pid").write_text("not-a-number\n")
+        from _common import _read_init_pid
+        assert _read_init_pid(str(tmp_path)) is None
