@@ -289,10 +289,11 @@ def _write_terminated_marker(
     data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
     marker = os.path.join(data_dir, "terminated")
     with open(marker, "w", encoding="utf-8") as f:
-        f.write(f"reason: daemon_pid_dead\n")
+        f.write("reason: daemon_pid_dead\n")
         f.write(f"init_pid: {init_pid}\n")
         f.write(f"detected_by: {detected_by}\n")
-        f.write(f"detected_at: {datetime.now(timezone.utc).isoformat()}Z\n")
+        ts = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        f.write(f"detected_at: {ts}Z\n")
 
     cache_path = os.path.join(data_dir, "enforcement-cache.json")
     try:
