@@ -292,8 +292,8 @@ def _write_terminated_marker(
         f.write("reason: daemon_pid_dead\n")
         f.write(f"init_pid: {init_pid}\n")
         f.write(f"detected_by: {detected_by}\n")
-        ts = datetime.now(timezone.utc).isoformat()  # noqa: UP017
-        f.write(f"detected_at: {ts}Z\n")
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: UP017
+        f.write(f"detected_at: {ts}\n")
 
     cache_path = os.path.join(data_dir, "enforcement-cache.json")
     try:
