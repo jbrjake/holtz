@@ -8,13 +8,25 @@
 
 #### Run Initialization (before anything else)
 
-Determine the run number N (check `docs/holtz/runs/` for existing runs, or start at 1). Then start the daemon and initialize the run ledger and protocol state — **all three commands must succeed before any events are recorded:**
+Determine the run number N (check `docs/holtz/runs/` for existing runs, or start at 1). Then start the daemon and initialize the run ledger and protocol state — **all four commands must succeed before any events are recorded:**
 
-```
-sahjhan daemon start
+```bash
+# sahjhan daemon start runs in the foreground — you MUST background it.
+# Use nohup + & so it survives shell exit, and wait briefly for the
+# socket and PID file to appear before proceeding.
+nohup sahjhan daemon start > /dev/null 2>&1 &
+
+# Wait for daemon to be ready (socket + PID file)
+sleep 1
+
+# Copy daemon.pid → daemon-init-pid so lifecycle hooks can detect daemon death
+cp docs/holtz/.sahjhan/daemon.pid docs/holtz/.sahjhan/daemon-init-pid
+
 sahjhan ledger create --from run N
 sahjhan transition run_start
 ```
+
+**Why nohup?** `sahjhan daemon start` is foreground-only — it does not fork. Without `nohup ... &`, the Bash tool blocks until timeout and then kills the daemon. The `daemon-init-pid` copy is required by `_daemon_lifecycle.py` to distinguish "original daemon" from "restarted daemon with different key."
 
 The daemon must be running before any hooks that need signing or vault access. All subsequent `event` commands in this run **must** use `--ledger run-N` so findings land in the run ledger, not the default ledger. Omitting `--ledger run-N` causes render warnings and orphaned findings.
 
