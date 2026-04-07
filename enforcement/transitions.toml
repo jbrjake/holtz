@@ -74,6 +74,45 @@ gates = [
     { type = "query", sql = "SELECT count(*) < 15 FROM events WHERE type='state_transition' AND command='fix_commit'", expect = "true", intent = "circuit breaker: max 15 fix iterations" },
 ]
 
+# ── Deferral: can't reproduce ──
+
+[[transitions]]
+from = "fix_loop"
+to = "fix_loop"
+command = "defer_cant_reproduce"
+args = ["item_id"]
+gates = [
+    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}'", expect = "true", intent = "finding must exist" },
+    { type = "query", sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'", expect = "true", intent = "finding must not already be resolved or deferred" },
+    { type = "ledger_has_event_since", event = "fix_start", since = "last_transition", intent = "must have started working on this item" },
+    { type = "command_succeeds", cmd = "python enforcement/scripts/check_repro_evidence.py {{item_id}}", intent = "reproduction attempts must be documented in investigation file" },
+]
+
+# ── Deferral: LOW severity ──
+
+[[transitions]]
+from = "fix_loop"
+to = "fix_loop"
+command = "defer_low"
+args = ["item_id"]
+gates = [
+    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='LOW'", expect = "true", intent = "finding must exist and be LOW severity" },
+    { type = "query", sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'", expect = "true", intent = "finding must not already be resolved or deferred" },
+]
+
+# ── Deferral: MEDIUM severity (budget-capped) ──
+
+[[transitions]]
+from = "fix_loop"
+to = "fix_loop"
+command = "defer_medium"
+args = ["item_id"]
+gates = [
+    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='MEDIUM'", expect = "true", intent = "finding must exist and be MEDIUM severity" },
+    { type = "query", sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'", expect = "true", intent = "finding must not already be resolved or deferred" },
+    { type = "query", sql = "SELECT (SELECT count(*) FROM events WHERE type='finding_deferred' AND reason='medium_budget') < (SELECT count(*) FROM events WHERE type='finding' AND severity='MEDIUM') / 2", expect = "true", intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings" },
+]
+
 # ── Context Reset (enforces /clear boundaries) ──
 
 [[transitions]]
@@ -121,7 +160,7 @@ to = "perspective_clean"
 command = "set complete perspective"
 args = ["current_perspective"]
 gates = [
-    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')", expect = "0", intent = "all findings must be resolved" },
+    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')", expect = "0", intent = "all findings must be resolved or deferred" },
     { type = "query", sql = "SELECT count(*) >= 2 FROM events WHERE type='iteration_complete' AND perspective='{{current_perspective}}'", expect = "true", intent = "two clean iterations required for stability" },
     { type = "min_elapsed", event = "iteration_complete", seconds = 120, intent = "prevent rapid-fire gaming of iteration count" },
     { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120, intent = "tests must pass" },
@@ -165,7 +204,7 @@ gates = [
     { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member", intent = "all lenses must be complete" },
     { type = "command_succeeds", cmd = "python -m pytest --tb=short -q", timeout = 120, intent = "tests must pass" },
     { type = "command_succeeds", cmd = "ruff check .", timeout = 30, intent = "no lint violations" },
-    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')", expect = "0", intent = "all findings must be resolved" },
+    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')", expect = "0", intent = "all findings must be resolved or deferred" },
     { type = "no_violations", intent = "no unresolved protocol violations" },
     { type = "query", sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')", expect = "true", intent = "no unresolved quiz exhaustions" },
 ]

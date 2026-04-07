@@ -13,8 +13,10 @@
 {# ── Compute finding counts (unique_by deduplicates by fields.id) ── #}
 {% set findings = events | where_eq(attribute="event_type", value="finding") -%}
 {% set resolutions = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") -%}
+{% set deferrals = events | where_eq(attribute="event_type", value="finding_deferred") | unique_by(attribute="fields.id") -%}
 {% set finding_count = findings | length -%}
 {% set resolved_count = resolutions | length -%}
+{% set deferred_count = deferrals | length -%}
 {% set fix_iterations = events | where_eq(attribute="event_type", value="state_transition") | where_eq(attribute="fields.command", value="fix_commit") | length -%}
 
 ## Results
@@ -23,7 +25,8 @@
 |--------|-------|
 | Total findings | {{ finding_count }} |
 | Resolved | {{ resolved_count }} |
-| Open at convergence | {{ finding_count - resolved_count }} |
+| Deferred | {{ deferred_count }} |
+| Open at convergence | {{ finding_count - resolved_count - deferred_count }} |
 | Perspectives completed | {{ sets.perspective.completed }} / {{ sets.perspective.total }} |
 | Fix iterations | {{ fix_iterations }} |
 | Protocol violations | {{ violations }} |
@@ -32,32 +35,37 @@
 
 {# ── Count findings per severity (resolved_ids built once above) ── #}
 {% set resolved_ids = resolutions | map(attribute="fields.id") -%}
-| Severity | Found | Resolved |
-|----------|-------|----------|
+{% set deferred_ids = deferrals | map(attribute="fields.id") -%}
+| Severity | Found | Resolved | Deferred |
+|----------|-------|----------|----------|
 {% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
 {% set sev_findings = findings | where_eq(attribute="fields.severity", value=severity) -%}
 {% set_global sev_resolved = 0 -%}
+{% set_global sev_deferred = 0 -%}
 {% for e in sev_findings -%}
 {% if resolved_ids is containing(e.fields.id) %}{% set_global sev_resolved = sev_resolved + 1 %}{% endif -%}
+{% if deferred_ids is containing(e.fields.id) %}{% set_global sev_deferred = sev_deferred + 1 %}{% endif -%}
 {% endfor -%}
 {% if sev_findings | length > 0 -%}
-| {{ severity }} | {{ sev_findings | length }} | {{ sev_resolved }} |
+| {{ severity }} | {{ sev_findings | length }} | {{ sev_resolved }} | {{ sev_deferred }} |
 {% endif -%}
 {% endfor %}
 
 ## Findings by Perspective
 
 {# ── Count findings per perspective (reuses resolved_ids from above) ── #}
-| Perspective | Found | Resolved |
-|-------------|-------|----------|
+| Perspective | Found | Resolved | Deferred |
+|-------------|-------|----------|----------|
 {% for m in sets.perspective.members -%}
 {% set persp_findings = findings | where_eq(attribute="fields.perspective", value=m.name) -%}
 {% set_global persp_resolved = 0 -%}
+{% set_global persp_deferred = 0 -%}
 {% for e in persp_findings -%}
 {% if resolved_ids is containing(e.fields.id) %}{% set_global persp_resolved = persp_resolved + 1 %}{% endif -%}
+{% if deferred_ids is containing(e.fields.id) %}{% set_global persp_deferred = persp_deferred + 1 %}{% endif -%}
 {% endfor -%}
 {% if persp_findings | length > 0 -%}
-| {{ m.name }} | {{ persp_findings | length }} | {{ persp_resolved }} |
+| {{ m.name }} | {{ persp_findings | length }} | {{ persp_resolved }} | {{ persp_deferred }} |
 {% endif -%}
 {% endfor %}
 

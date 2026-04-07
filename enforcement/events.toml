@@ -513,3 +513,16 @@ fields = [
     { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
     { name = "note", type = "string", optional = true },
 ]
+
+[events.finding_deferred]
+description = "A finding was deferred"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
+    { name = "step", type = "string", pattern = "^\\d+$" },
+    { name = "id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
+    { name = "reason", type = "string", pattern = "^(cant_reproduce|low_priority|medium_budget)$" },
+    { name = "evidence_path", type = "string", optional = true },
+]

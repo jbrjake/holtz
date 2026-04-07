@@ -21,4 +21,5 @@
 ## Findings
 {% set finding_count = events | where_eq(attribute="event_type", value="finding") | length -%}
 {% set resolved_count = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") | length -%}
-**Open:** {{ finding_count - resolved_count }} | **Resolved:** {{ resolved_count }} | **Total:** {{ finding_count }}
+{% set deferred_count = events | where_eq(attribute="event_type", value="finding_deferred") | unique_by(attribute="fields.id") | length -%}
+**Open:** {{ finding_count - resolved_count - deferred_count }} | **Resolved:** {{ resolved_count }} | **Deferred:** {{ deferred_count }} | **Total:** {{ finding_count }}
