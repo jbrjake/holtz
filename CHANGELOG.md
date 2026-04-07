@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.112.2] - 2026-04-07
+
+_Changes since v0.112.1_
+
+### Fixed
+- **enforcement:** background daemon start in phase-recon instructions
+
+### Infrastructure
+- update .sahjhan-version marker to 0.10.0
+
 ## [0.112.1] - 2026-04-07
 
 _Changes since v0.107.0_
