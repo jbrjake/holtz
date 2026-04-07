@@ -2,12 +2,13 @@
 """Sahjhan primer — injects resume context on UserPromptSubmit.
 
 When there's an active non-terminal Sahjhan run, this hook:
-1. Records a context_reset event (used by awaiting_clear gate)
-2. Injects current protocol state as additional context
+1. Checks for terminated audit (daemon died)
+2. Records a context_reset event (used by awaiting_clear gate)
+3. Injects current protocol state as additional context
 
-This replaces convergence_primer.py. The context_reset event is
-critical — the awaiting_clear→fix_loop transition gates on it,
-ensuring /clear boundaries are actually observed.
+If the daemon is dead and the init PID confirms death, writes a
+terminated marker and injects a termination message. No restart
+attempts — a new daemon has a new key, the old ledger is sealed.
 """
 from __future__ import annotations
 
@@ -23,28 +24,15 @@ from _resolve import ensure_sahjhan  # noqa: E402
 
 from _common import (  # noqa: E402
     _active_ledger,
+    _is_process_alive,
+    _read_init_pid,
+    _write_terminated_marker,
     exit_ok,
     exit_warn,
     read_event,
     record_authed_event,
     resolve_config_dir,
 )
-
-
-def _try_restart_daemon(cwd: str, binary: str) -> bool:
-    """Attempt to restart the sahjhan daemon. Returns True on success."""
-    try:
-        config_dir, _ = resolve_config_dir(cwd)
-        result = subprocess.run(
-            [binary, "--config-dir", config_dir, "daemon", "start"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            cwd=cwd,
-        )
-        return result.returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
-        return False
 
 
 def main() -> None:
@@ -61,6 +49,15 @@ def main() -> None:
     data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
     if not os.path.isdir(data_dir):
         exit_ok()
+
+    # Terminated audit — inject termination message, skip everything else
+    terminated = os.path.join(data_dir, "terminated")
+    if os.path.isfile(terminated):
+        exit_warn(
+            "AUDIT TERMINATED: daemon died — session key lost. "
+            "The ledger is unwritable. This audit cannot be completed. "
+            "Use /stop to exit, then start a new audit."
+        )
 
     # Get current status
     ledger = _active_ledger(cwd)
@@ -90,9 +87,10 @@ def main() -> None:
     if is_terminal or not current_state:
         exit_ok()
 
-    # Record context_reset event (gates awaiting_clear→fix_loop)
+    # Record context_reset event (gates awaiting_clear -> fix_loop)
     run_number = (ledger or "").replace("run-", "") or "0"
     context_reset_failed = False
+    audit_terminated = False
     try:
         record_authed_event(
             "context_reset",
@@ -106,27 +104,21 @@ def main() -> None:
             ledger=ledger,
         )
     except (OSError, subprocess.TimeoutExpired, RuntimeError):
-        # Daemon may be down — attempt restart and retry once
-        if _try_restart_daemon(cwd, binary):
-            try:
-                record_authed_event(
-                    "context_reset",
-                    {
-                        "project": "holtz",
-                        "run": run_number,
-                        "auditor": "holtz",
-                        "trigger": "user_prompt_submit",
-                    },
-                    cwd=cwd,
-                    ledger=ledger,
-                )
-            except (OSError, subprocess.TimeoutExpired, RuntimeError):
-                context_reset_failed = True
-        else:
-            context_reset_failed = True
+        # Don't restart. Check if daemon init PID is dead.
+        init_pid = _read_init_pid(cwd)
+        if init_pid is not None and not _is_process_alive(init_pid):
+            _write_terminated_marker(cwd, init_pid, detected_by="primer")
+            audit_terminated = True
+        context_reset_failed = True
 
-    # Build resume context — use ledger-derived run number (consistent with context_reset event)
-    # status text does not include run_number; derive from ledger name.
+    if audit_terminated:
+        exit_warn(
+            "AUDIT TERMINATED: daemon died during awaiting_clear — session key lost. "
+            "The ledger is unwritable. This audit cannot be completed. "
+            "Use /stop to exit, then start a new audit."
+        )
+
+    # Build resume context
     perspective = status.get("current_perspective", "unknown")
     available = status.get("available_transitions", [])
 
@@ -155,7 +147,7 @@ def main() -> None:
     if context_reset_failed:
         context += (
             "\nWARNING: context_reset recording failed — daemon may not be running. "
-            f"Start it with `{binary} daemon start`, then re-run `/clear`."
+            "If the daemon is dead, the audit cannot be completed."
         )
 
     context += f"\nSahjhan binary: {binary}"

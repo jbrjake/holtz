@@ -1,27 +1,31 @@
 #!/usr/bin/env python3
-"""Daemon lifecycle supervisor — ensures sahjhan daemon is running during active audits.
+"""Daemon lifecycle — detects daemon death and terminates audit.
 
 PreToolUse hook that:
 - Detects active audit (docs/holtz/.sahjhan/ exists)
-- Writes active-run marker if missing (scans docs/holtz/runs/ for highest run)
-- Checks daemon health via PID probe (os.kill(pid, 0))
-- Starts daemon if dead or missing
-- Blocks if restart fails during an active, fresh audit (via exit_enforcement_error)
+- Checks terminated marker (fast path for already-dead audits)
+- Verifies the init-PID daemon is still alive
+- If dead: writes terminated marker, blocks all tool use
+- Never restarts the daemon — a new daemon has a new key
+
+The daemon holds the HMAC session key exclusively in memory.
+Daemon death = key loss = ledger unwritable = audit is over.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import re
-import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _resolve import ensure_sahjhan  # noqa: E402
-
 from _common import (  # noqa: E402
     _active_ledger,
-    exit_enforcement_error,
+    _is_process_alive,
+    _read_init_pid,
+    _write_terminated_marker,
+    exit_block,
     exit_ok,
     read_event,
     write_active_run_marker,
@@ -43,84 +47,52 @@ def _find_highest_run(cwd: str) -> str | None:
     return f"run-{highest}" if highest >= 0 else None
 
 
-def _daemon_pid(cwd: str) -> int | None:
-    """Read the daemon PID from daemon.pid, or None if missing/invalid."""
-    pid_file = os.path.join(cwd, "docs", "holtz", ".sahjhan", "daemon.pid")
-    try:
-        with open(pid_file, encoding="utf-8") as f:
-            return int(f.read().strip())
-    except (OSError, ValueError):
-        return None
-
-
-def _is_process_alive(pid: int) -> bool:
-    """Check if a process is alive using signal 0."""
-    try:
-        os.kill(pid, 0)
-        return True
-    except (OSError, ProcessLookupError):
-        return False
-
-
-def _start_daemon(cwd: str) -> bool:
-    """Attempt to start the sahjhan daemon. Returns True on success."""
-    binary = ensure_sahjhan()
-    if binary is None:
-        return False
-    try:
-        from _common import resolve_config_dir
-        config_dir, _ = resolve_config_dir(cwd)
-        result = subprocess.run(
-            [binary, "--config-dir", config_dir, "daemon", "start"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            cwd=cwd,
-        )
-        if result.returncode == 0:
-            # Verify daemon is actually alive after claiming success
-            pid = _daemon_pid(cwd)
-            return pid is not None and _is_process_alive(pid)
-        return False
-    except (OSError, subprocess.TimeoutExpired):
-        return False
+def _ensure_active_run_marker(cwd: str) -> None:
+    """Write active-run marker if missing."""
+    ledger = _active_ledger(cwd)
+    if ledger is not None:
+        return
+    ledger = _find_highest_run(cwd)
+    if ledger is None:
+        return
+    with contextlib.suppress(OSError):
+        write_active_run_marker(cwd, ledger)
 
 
 def main() -> None:
     event = read_event()
     cwd = event.get("cwd", os.getcwd())
 
-    # No active audit — nothing to do
     data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
     if not os.path.isdir(data_dir):
         exit_ok()
 
-    # Ensure active-run marker exists
-    ledger = _active_ledger(cwd)
-    if ledger is None:
-        ledger = _find_highest_run(cwd)
-        if ledger is None:
-            exit_ok()  # No runs exist — data dir is stale or pre-init
-        try:
-            write_active_run_marker(cwd, ledger)
-        except OSError:
-            exit_ok()
+    # Already terminated — block immediately
+    terminated = os.path.join(data_dir, "terminated")
+    if os.path.isfile(terminated):
+        exit_block(
+            "AUDIT TERMINATED: daemon died — session key lost. "
+            "The audit cannot be completed. /stop to exit."
+        )
 
-    # Check daemon health
-    pid = _daemon_pid(cwd)
-    if pid is not None and _is_process_alive(pid):
-        exit_ok()  # Daemon is healthy
+    # Check init PID
+    init_pid = _read_init_pid(cwd)
+    if init_pid is None:
+        # No init PID tracked — legacy audit or pre-init.
+        exit_ok()
 
-    # Daemon is down or missing — attempt start
-    started = _start_daemon(cwd)
-    if not started:
-        # Double-check: daemon still dead after restart attempt?
-        pid = _daemon_pid(cwd)
-        if pid is None or not _is_process_alive(pid):
-            exit_enforcement_error(
-                cwd, "Daemon restart failed — enforcement cannot evaluate"
-            )
-    exit_ok()
+    # Init PID exists — is it still alive?
+    if _is_process_alive(init_pid):
+        _ensure_active_run_marker(cwd)
+        exit_ok()
+
+    # Init PID is dead. Audit is over.
+    _write_terminated_marker(cwd, init_pid, detected_by="_daemon_lifecycle")
+    exit_block(
+        f"AUDIT TERMINATED: daemon (PID {init_pid}) died — session key lost, "
+        "ledger unwritable. The audit cannot be completed. "
+        "/stop to exit."
+    )
 
 
 if __name__ == "__main__":

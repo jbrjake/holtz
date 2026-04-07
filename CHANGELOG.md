@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.112.1] - 2026-04-07
+
+_Changes since v0.107.0_
+
+### Added
+- **enforcement:** upgrade sahjhan to 0.10.0
+- **enforcement:** stop hook allows stop on terminated audit
+- **enforcement:** primer detects daemon death, no restart
+- **enforcement:** daemon death terminates audit, never restarts
+- **enforcement:** add terminated marker and init-pid helpers
+
+### Fixed
+- **enforcement:** fix doubled timezone suffix in terminated marker
+- **enforcement:** fix Python 3.10 compat in _common.py
+
+### Infrastructure
+- update test badge count to 1013
+
 ## [0.107.0] - 2026-04-05
 
 _Changes since v0.102.0_

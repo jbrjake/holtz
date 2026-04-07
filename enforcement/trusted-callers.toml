@@ -6,8 +6,8 @@
 # CI gate: the pre-commit hook verifies this manifest is up to date.
 
 [callers]
-"enforcement/hooks/_common.py" = "sha256:4d6120ef553b80f15a68e1727252347557337f5e807db68fed282764f1510a5c"
+"enforcement/hooks/_common.py" = "sha256:038eb28f0c56de00f6484a1bceb081d9f91da699ebac5264b9f667b462fb964f"
 "enforcement/hooks/lens_quiz.py" = "sha256:dd8cec7c74483eca6e6ec0dc7aa70514e2b1e481c51ace2a9254ccdcfc78073e"
-"enforcement/hooks/stop_hook.py" = "sha256:739564601ab666b6c53cb21e34856359fff136aeeae39473c6326b6b4bd702a6"
-"enforcement/hooks/primer.py" = "sha256:02fcad96be20e7f8c85d412ea72047126a2a98b9a6db96bcfc23ff98f735c407"
+"enforcement/hooks/stop_hook.py" = "sha256:95ee01ec189b4328daeafa1083d7ef1e5007878600b53145af07c3704748dbb1"
+"enforcement/hooks/primer.py" = "sha256:f29c8616469768ba6eeaa1ce7cdc3edd2c8df56e4be18f59b93a99c18e4e9196"
 "hooks/subagent_findings_check.py" = "sha256:b512fa239612e4a0c9a5c4e4d55c874bc30a487eae9e4e053c57f3716fce7b58"
