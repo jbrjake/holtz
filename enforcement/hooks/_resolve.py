@@ -11,15 +11,15 @@ from urllib.request import urlopen
 
 # ── Pinned version and integrity checksums ──
 
-SAHJHAN_VERSION = "0.9.0"
+SAHJHAN_VERSION = "0.10.0"
 _RELEASE_BASE = "https://github.com/jbrjake/sahjhan/releases/download"
 _BOOTSTRAP_COOLDOWN = 3600  # seconds before retrying after failure
 
 SAHJHAN_CHECKSUMS: dict[str, str] = {
-    "aarch64-apple-darwin": "93acb65a79bee1ae7caf24c1f6c82f384b907188916b6f51421816704276ff8e",
-    "x86_64-apple-darwin": "ca32ff0df6ed839d10504c5fb5206b008b405aaf03ea6e8c3d534fddba283ebe",
-    "x86_64-unknown-linux-gnu": "7f6d99a5b662091ed9f9c2b06bcba346775fc46af7fe53c3c3bc7dbb43901755",
-    "aarch64-unknown-linux-gnu": "f5a48a0a266709ee84bbb4a880d7ea6cebec7a4357ff3088421c1a424df249cc",
+    "aarch64-apple-darwin": "4b1cc138261a0b00c80e5d50101aae655173c6bb4f066a64a62d16e128739837",
+    "x86_64-apple-darwin": "01f85e78fe600f1557958c52cb68d6791a41cf1279a7fab8e61401524be9e7ac",
+    "x86_64-unknown-linux-gnu": "7425325bb5291e66f429383b80b21ebc3ed4d91760307f30cc3f65befdbbeafb",
+    "aarch64-unknown-linux-gnu": "8aab48f760c67d2e440d570a5fe220084030133a02e5718a2f0f087bab45c085",
 }
 
 # ── Platform resolution ──
