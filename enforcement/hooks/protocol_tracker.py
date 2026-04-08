@@ -26,7 +26,7 @@ from _protocol_cache import (  # noqa: E402
 )
 from _resolve import ensure_sahjhan  # noqa: E402
 
-from _common import _active_ledger, exit_ok, read_event, resolve_config_dir  # noqa: E402
+from _common import exit_ok, read_event, resolve_config_dir  # noqa: E402
 
 
 def _is_tdd_cmd(cmd: str) -> bool:
@@ -72,12 +72,8 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     if binary is None:
         return cache
     config_dir, _ = resolve_config_dir(cwd)
-    ledger = _active_ledger(cwd)
     try:
-        cmd = [binary, "--config-dir", config_dir]
-        if ledger:
-            cmd.extend(["--ledger", ledger])
-        cmd.append("status")
+        cmd = [binary, "--config-dir", config_dir, "status"]
         result = subprocess.run(
             cmd,
             capture_output=True, text=True, timeout=5, cwd=cwd,
