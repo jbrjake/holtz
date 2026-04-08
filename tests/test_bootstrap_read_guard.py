@@ -24,63 +24,62 @@ def _run_hook(event: dict) -> dict:
     return json.loads(result.stdout)
 
 
-class TestDaemonCommandGuards:
-    """Bash commands invoking privileged sahjhan daemon commands must be blocked."""
+class TestSahjhanAllowlist:
+    """Sahjhan subcommand allowlist: only permitted subcmds pass, all else blocked."""
 
-    def test_bash_sahjhan_sign_blocked(self):
+    def test_sahjhan_reset_blocked(self):
+        """sahjhan reset is not on the allowlist and must be blocked."""
         event = {
             "tool_name": "Bash",
-            "tool_input": {
-                "command": "sahjhan sign --event-type quiz_answered --field perspective=security"
-            },
+            "tool_input": {"command": "sahjhan reset --confirm"},
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "block"
-        assert "sahjhan sign" in output["hookSpecificOutput"]["permissionDecisionReason"]
+        assert "not permitted" in output["hookSpecificOutput"]["permissionDecisionReason"]
 
-    def test_bash_sahjhan_verify_blocked(self):
+    def test_sahjhan_reset_with_proof_blocked(self):
+        """sahjhan reset with extra flags is still blocked."""
         event = {
             "tool_name": "Bash",
-            "tool_input": {
-                "command": "sahjhan verify --event-type quiz_answered --proof abc123"
-            },
-            "cwd": "/tmp/fake-cwd",
-        }
-        output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
-
-    def test_bash_sahjhan_vault_store_blocked(self):
-        event = {
-            "tool_name": "Bash",
-            "tool_input": {
-                "command": "sahjhan vault store --name quiz-bank --file data.json"
-            },
-            "cwd": "/tmp/fake-cwd",
-        }
-        output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
-        assert "sahjhan vault" in output["hookSpecificOutput"]["permissionDecisionReason"]
-
-    def test_bash_sahjhan_vault_read_blocked(self):
-        event = {
-            "tool_name": "Bash",
-            "tool_input": {"command": "sahjhan vault read --name quiz-bank"},
+            "tool_input": {"command": "sahjhan reset --confirm --proof abc123"},
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "block"
 
-    def test_bash_sahjhan_vault_list_blocked(self):
+    def test_sahjhan_unknown_subcommand_blocked(self):
+        """Unknown subcommands are blocked by the allowlist."""
         event = {
             "tool_name": "Bash",
-            "tool_input": {"command": "sahjhan vault list"},
+            "tool_input": {"command": "sahjhan frobnicate --all"},
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "block"
 
-    def test_bash_sahjhan_daemon_stop_blocked(self):
+    def test_bare_sahjhan_blocked(self):
+        """Bare 'sahjhan' with no subcommand is blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_sahjhan_with_config_dir_flag_allowed(self):
+        """Flags before the subcommand should be skipped; status is allowed."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan --config-dir /some/path status"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_sahjhan_daemon_stop_blocked(self):
+        """daemon is allowed but daemon stop is blocked via sub-subcommand check."""
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan daemon stop"},
@@ -88,30 +87,9 @@ class TestDaemonCommandGuards:
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "block"
-        assert "sahjhan daemon stop" in output["hookSpecificOutput"]["permissionDecisionReason"]
 
-    def test_bash_sahjhan_status_allowed(self):
-        """Non-privileged sahjhan commands should be allowed."""
-        event = {
-            "tool_name": "Bash",
-            "tool_input": {"command": "sahjhan status"},
-            "cwd": "/tmp/fake-cwd",
-        }
-        output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
-
-    def test_bash_sahjhan_event_allowed(self):
-        """Non-privileged sahjhan commands should be allowed."""
-        event = {
-            "tool_name": "Bash",
-            "tool_input": {"command": "sahjhan event finding --field msg=test"},
-            "cwd": "/tmp/fake-cwd",
-        }
-        output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
-
-    def test_bash_sahjhan_daemon_start_allowed(self):
-        """daemon start is allowed (only stop is blocked)."""
+    def test_sahjhan_daemon_start_allowed(self):
+        """daemon start is allowed."""
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan daemon start"},
@@ -120,17 +98,67 @@ class TestDaemonCommandGuards:
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
 
-    def test_bash_sahjhan_daemon_status_allowed(self):
-        """daemon status is allowed."""
+    def test_sahjhan_gate_check_allowed(self):
+        """gate subcommand is on the allowlist."""
         event = {
             "tool_name": "Bash",
-            "tool_input": {"command": "sahjhan daemon status"},
+            "tool_input": {"command": "sahjhan gate check converge"},
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
 
-    def test_bash_git_status_allowed(self):
+    def test_sahjhan_defer_allowed(self):
+        """defer subcommand is on the allowlist."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan defer low PL-005"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_sahjhan_init_allowed(self):
+        """init subcommand is on the allowlist."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan init"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_nohup_sahjhan_daemon_start_allowed(self):
+        """nohup wrapper before sahjhan should be handled; daemon start is allowed."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "nohup sahjhan daemon start > /dev/null 2>&1 &"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_chained_sahjhan_reset_blocked(self):
+        """sahjhan reset in a chained command is blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo foo && sahjhan reset --confirm"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_case_insensitive_reset_blocked(self):
+        """Case-insensitive matching must catch mixed-case sahjhan commands."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "Sahjhan Reset --confirm"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+
+    def test_non_sahjhan_command_allowed(self):
         """Normal bash commands should be allowed."""
         event = {
             "tool_name": "Bash",
@@ -139,16 +167,6 @@ class TestDaemonCommandGuards:
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
-
-    def test_bash_case_insensitive_sign_blocked(self):
-        """Case variations of privileged commands must be blocked."""
-        event = {
-            "tool_name": "Bash",
-            "tool_input": {"command": "Sahjhan Sign --event-type test"},
-            "cwd": "/tmp/fake-cwd",
-        }
-        output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
 
 
 class TestReadNoLongerGuarded:

@@ -6,7 +6,7 @@ DO NOT MODIFY. This hook protects itself.
 PreToolUse hook that:
 - Blocks Write/Edit to enforcement/, bin/sahjhan*, hooks/hooks.json, and this file
 - Blocks Bash commands that write to protected or managed paths
-- Blocks Bash commands that invoke privileged sahjhan daemon commands
+- Blocks Bash commands that invoke non-allowlisted sahjhan subcommands
 - Provides defense-in-depth guards for Grep/Glob tools on enforcement paths
 """
 from __future__ import annotations
@@ -41,14 +41,27 @@ MANAGED_DATA = [
 # Combined set of all paths that must be protected from Bash writes.
 ALL_PROTECTED = PROTECTED + MANAGED_DOCS + MANAGED_DATA
 
-# Privileged sahjhan subcommands that the agent must not invoke directly.
-# Defense-in-depth: the daemon's caller authentication is the primary boundary.
-BLOCKED_DAEMON_CMDS = [
-    "sahjhan sign",
-    "sahjhan verify",
-    "sahjhan vault",
-    "sahjhan daemon stop",
-]
+# Sahjhan subcommands the agent is permitted to invoke via Bash.
+# Everything not listed is blocked by default (defense-in-depth).
+ALLOWED_SAHJHAN_SUBCMDS = {
+    "status",        # Read protocol state
+    "event",         # Record standard events
+    "authed-event",  # Record restricted events
+    "transition",    # Advance protocol state
+    "hook",          # Hook evaluation
+    "manifest",      # Manifest verify
+    "ledger",        # Ledger operations
+    "render",        # Render STATUS.md/PUNCHLIST.md
+    "daemon",        # Daemon management (start, status — NOT stop)
+    "gate",          # Gate check
+    "defer",         # Defer findings
+    "init",          # Initialize sahjhan
+}
+
+# Second-level blocks: subcommand is allowed but specific sub-subcommands are not.
+BLOCKED_SAHJHAN_SUBSUB: dict[str, set[str]] = {
+    "daemon": {"stop"},
+}
 
 # Resolve plugin root: enforcement/hooks/ -> enforcement/ -> repo root
 _PLUGIN_ROOT = os.environ.get(
@@ -57,15 +70,93 @@ _PLUGIN_ROOT = os.environ.get(
 )
 
 
-def _bash_references_daemon_cmd(command: str) -> str | None:
-    """Check if a Bash command invokes a privileged sahjhan daemon command.
+def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
+    """Extract the sahjhan subcommand from a shell command segment.
 
-    Returns the blocked command pattern if found, None otherwise.
+    Skips leading wrappers (nohup, env) and flags (--config-dir X).
+    Returns (subcommand, sub_subcommand) or None if not a sahjhan command.
     """
-    cmd_lower = command.lower()
-    for blocked in BLOCKED_DAEMON_CMDS:
-        if blocked in cmd_lower:
-            return blocked
+    # Strip redirections and trailing & for backgrounding
+    import re as _re
+    clean = _re.sub(r'\s*[<>]\S*', '', segment)
+    clean = _re.sub(r'\s*\d*[<>]+\s*\S*', '', clean)
+    clean = clean.rstrip('& \t')
+    tokens = clean.lower().split()
+    if not tokens:
+        return None
+
+    # Skip leading wrappers: nohup, env
+    idx = 0
+    while idx < len(tokens) and tokens[idx] in ("nohup", "env"):
+        idx += 1
+
+    if idx >= len(tokens):
+        return None
+
+    # The next token should be "sahjhan" (or end with /sahjhan)
+    if tokens[idx] != "sahjhan" and not tokens[idx].endswith("/sahjhan"):
+        return None
+
+    idx += 1
+
+    # Skip flags before the subcommand (e.g. --config-dir /some/path)
+    while idx < len(tokens) and tokens[idx].startswith("-"):
+        idx += 1
+        # If the flag expects a value (not another flag), skip the value too
+        if idx < len(tokens) and not tokens[idx].startswith("-"):
+            idx += 1
+
+    if idx >= len(tokens):
+        # Bare "sahjhan" with no subcommand
+        return ("", "")
+
+    subcmd = tokens[idx]
+    sub_subcmd = tokens[idx + 1] if idx + 1 < len(tokens) else ""
+    return (subcmd, sub_subcmd)
+
+
+def _bash_references_blocked_sahjhan(command: str) -> str | None:
+    """Check if a Bash command invokes a blocked sahjhan subcommand.
+
+    Splits on shell operators (&&, ||, ;, |, newline), checks each segment.
+    Returns block reason string if blocked, None if allowed.
+    """
+    import re
+
+    segments = re.split(r'\s*(?:&&|\|\||[;|\n])\s*', command)
+
+    for seg in segments:
+        seg = seg.strip()
+        if not seg:
+            continue
+
+        result = _extract_sahjhan_subcmd(seg)
+        if result is None:
+            # Not a sahjhan command — allow
+            continue
+
+        subcmd, sub_subcmd = result
+
+        if not subcmd:
+            return (
+                "BLOCKED: Bare 'sahjhan' with no subcommand is not permitted. "
+                f"Allowed subcommands: {', '.join(sorted(ALLOWED_SAHJHAN_SUBCMDS))}"
+            )
+
+        if subcmd not in ALLOWED_SAHJHAN_SUBCMDS:
+            return (
+                f"BLOCKED: 'sahjhan {subcmd}' is not permitted. "
+                f"Allowed subcommands: {', '.join(sorted(ALLOWED_SAHJHAN_SUBCMDS))}"
+            )
+
+        # Check second-level blocks
+        blocked_subs = BLOCKED_SAHJHAN_SUBSUB.get(subcmd)
+        if blocked_subs and sub_subcmd in blocked_subs:
+            return (
+                f"BLOCKED: 'sahjhan {subcmd} {sub_subcmd}' is not permitted. "
+                f"'{subcmd}' is allowed but '{sub_subcmd}' is blocked."
+            )
+
     return None
 
 
@@ -248,13 +339,10 @@ def main() -> None:
 
     # Bash tool: check for write operations and privileged daemon commands
     if command and not path:
-        # Block privileged sahjhan daemon commands (defense-in-depth)
-        daemon_cmd = _bash_references_daemon_cmd(command)
-        if daemon_cmd:
-            _block(
-                f"BLOCKED: Bash command invokes privileged sahjhan command '{daemon_cmd}'. "
-                "Only trusted hook scripts may call sahjhan sign/vault/daemon commands."
-            )
+        # Allowlist check for sahjhan subcommands (defense-in-depth)
+        sahjhan_block = _bash_references_blocked_sahjhan(command)
+        if sahjhan_block:
+            _block(sahjhan_block)
             return
         result = _check_bash_write(command)
         if result:
