@@ -30,9 +30,16 @@ ALLOWED_SAHJHAN_SUBCMDS = {
     "transition",    # Advance protocol state (daemon enforces gates)
     "hook",          # Hook evaluation (called by pre_tool_hook.py)
     "manifest",      # Manifest verify (called by bash_guard.py)
-    "ledger",        # Ledger queries (read-only subcommands)
+    "ledger",        # Ledger operations (create, query)
     "render",        # Render STATUS.md/PUNCHLIST.md from ledger
+    "daemon",        # Daemon management (start, status — NOT stop)
+    "gate",          # Gate check (sahjhan gate check <transition>)
+    "defer",         # Defer findings
+    "init",          # Initialize sahjhan working directory
 }
+
+# daemon is allowed but daemon stop is blocked (second-level check)
+BLOCKED_DAEMON_SUBCMDS = {"stop"}
 ```
 
 Replace `_bash_references_daemon_cmd()` with `_bash_references_sahjhan()`:
