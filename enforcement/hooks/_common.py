@@ -244,6 +244,8 @@ def _is_process_alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
         return True
+    except PermissionError:
+        return True  # EPERM → process exists, we just can't signal it
     except (OSError, ProcessLookupError):
         return False
 
