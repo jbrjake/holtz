@@ -1082,6 +1082,81 @@ class TestStopHookDaemonCleanup:
         )
 
 
+class TestStopHookDaemonCleanupGating:
+    """Issue #43: awaiting_clear allows stop but must NOT kill daemon."""
+
+    def test_awaiting_clear_does_not_kill_daemon(self, tmp_path):
+        """awaiting_clear: stop allowed, daemon NOT killed (key needed for resume)."""
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+
+        import pytest
+        from _protocol_cache import empty_cache, write_cache
+
+        cache = empty_cache()
+        cache["state"] = "awaiting_clear"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+
+        import stop_hook
+        with (
+            patch.object(stop_hook, "_try_stop_daemon") as mock_stop,
+            patch.object(stop_hook, "read_event", return_value={"cwd": str(tmp_path)}),
+            patch.object(stop_hook, "_has_active_audit", return_value=True),
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                stop_hook.main()
+            assert exc_info.value.code == 0
+        mock_stop.assert_not_called()
+
+    def test_idle_still_kills_daemon(self, tmp_path):
+        """idle: stop allowed AND daemon killed (no audit to resume)."""
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+
+        import pytest
+        from _protocol_cache import empty_cache, write_cache
+
+        cache = empty_cache()
+        cache["state"] = "idle"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+
+        import stop_hook
+        with (
+            patch.object(stop_hook, "_try_stop_daemon") as mock_stop,
+            patch.object(stop_hook, "read_event", return_value={"cwd": str(tmp_path)}),
+            patch.object(stop_hook, "_has_active_audit", return_value=True),
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                stop_hook.main()
+            assert exc_info.value.code == 0
+        mock_stop.assert_called_once()
+
+    def test_stale_awaiting_clear_does_not_kill_daemon(self, tmp_path):
+        """Stale awaiting_clear: still allows stop, does NOT kill daemon."""
+        from unittest.mock import patch
+
+        import pytest
+        from _protocol_cache import empty_cache, write_cache
+
+        cache = empty_cache()
+        cache["state"] = "awaiting_clear"
+        cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
+        write_cache(str(tmp_path), cache)
+
+        import stop_hook
+        with (
+            patch.object(stop_hook, "_try_stop_daemon") as mock_stop,
+            patch.object(stop_hook, "read_event", return_value={"cwd": str(tmp_path)}),
+            patch.object(stop_hook, "_has_active_audit", return_value=True),
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                stop_hook.main()
+            assert exc_info.value.code == 0
+        mock_stop.assert_not_called()
+
+
 class TestExitEnforcementError:
     """Tests for exit_enforcement_error() shared utility."""
 
