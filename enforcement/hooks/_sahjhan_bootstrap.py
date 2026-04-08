@@ -33,7 +33,7 @@ MANAGED_DOCS = [
 ]
 
 # Issue #33: The .sahjhan data directory contains enforcement state (cache,
-# ledger, active-run marker). Writes and deletes must be blocked.
+# ledger, active-ledger marker). Writes and deletes must be blocked.
 MANAGED_DATA = [
     "docs/holtz/.sahjhan/",
 ]
