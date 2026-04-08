@@ -23,7 +23,6 @@ from _protocol_cache import read_cache as read_enforcement_cache
 from _resolve import ensure_sahjhan  # noqa: E402
 
 from _common import (  # noqa: E402
-    _active_ledger,
     _is_process_alive,
     _read_init_pid,
     _write_terminated_marker,
@@ -60,12 +59,8 @@ def main() -> None:
         )
 
     # Get current status
-    ledger = _active_ledger(cwd)
     try:
-        cmd = [binary, "--config-dir", config_dir]
-        if ledger:
-            cmd.extend(["--ledger", ledger])
-        cmd.append("status")
+        cmd = [binary, "--config-dir", config_dir, "status"]
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -88,7 +83,15 @@ def main() -> None:
         exit_ok()
 
     # Record context_reset event (gates awaiting_clear -> fix_loop)
-    run_number = (ledger or "").replace("run-", "") or "0"
+    run_number = status.get("run_number", "0")
+    if run_number == "0":
+        # Fallback: read sahjhan's active-ledger marker directly
+        active_file = os.path.join(data_dir, "active-ledger")
+        try:
+            with open(active_file, encoding="utf-8") as f:
+                run_number = f.read().strip().replace("run-", "") or "0"
+        except OSError:
+            pass
     context_reset_failed = False
     audit_terminated = False
     try:
@@ -101,7 +104,6 @@ def main() -> None:
                 "trigger": "user_prompt_submit",
             },
             cwd=cwd,
-            ledger=ledger,
         )
     except (OSError, subprocess.TimeoutExpired, RuntimeError):
         # Don't restart. Check if daemon init PID is dead.
@@ -151,8 +153,8 @@ def main() -> None:
         )
 
     context += f"\nSahjhan binary: {binary}"
-    if ledger:
-        context += f"\nActive ledger: {ledger} (use: {binary} --ledger {ledger})"
+    if run_number != "0":
+        context += f"\nActive ledger: run-{run_number}"
 
     exit_warn(context)
 

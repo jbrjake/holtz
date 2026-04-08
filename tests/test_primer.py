@@ -47,7 +47,6 @@ class TestPrimerTerminatedAudit:
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
         (sahjhan_dir / "terminated").write_text("reason: daemon_pid_dead\n")
-        (sahjhan_dir / "active-run").write_text("run-1\n")
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
@@ -61,7 +60,6 @@ class TestPrimerTerminatedAudit:
         """Socket failure does not attempt daemon restart."""
         _init_sahjhan(tmp_path)
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        (sahjhan_dir / "active-run").write_text("run-1\n")
         (sahjhan_dir / "daemon-init-pid").write_text("99999999\n")
 
         # No daemon running — record_authed_event will fail
