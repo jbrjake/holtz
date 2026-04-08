@@ -1133,8 +1133,8 @@ class TestStopHookDaemonCleanupGating:
             assert exc_info.value.code == 0
         mock_stop.assert_called_once()
 
-    def test_stale_awaiting_clear_does_not_kill_daemon(self, tmp_path):
-        """Stale awaiting_clear: still allows stop, does NOT kill daemon."""
+    def test_stale_awaiting_clear_takes_allowed_path_without_daemon_kill(self, tmp_path):
+        """Stale awaiting_clear hits _STOP_ALLOWED_STATES (not staleness path), daemon survives."""
         from unittest.mock import patch
 
         import pytest
