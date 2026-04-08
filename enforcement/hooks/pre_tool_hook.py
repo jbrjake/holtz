@@ -61,19 +61,8 @@ def main() -> None:
     if not config_found:
         exit_enforcement_error(cwd, "Enforcement config not found")
 
-    # Detect active ledger
-    active_file = os.path.join(cwd, "docs", "holtz", ".sahjhan", "active-run")
-    ledger = None
-    try:
-        with open(active_file, encoding="utf-8") as f:
-            ledger = f.read().strip()
-    except OSError:
-        pass
-
-    cmd = [binary, "--config-dir", config_dir, "--json"]
-    if ledger:
-        cmd.extend(["--ledger", ledger])
-    cmd.extend(["hook", "eval", "--event", "PreToolUse"])
+    cmd = [binary, "--config-dir", config_dir, "--json",
+           "hook", "eval", "--event", "PreToolUse"]
     if tool_name:
         cmd.extend(["--tool", tool_name])
     if file_path:
