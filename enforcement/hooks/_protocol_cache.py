@@ -119,6 +119,8 @@ def parse_status_text(text: str) -> dict[str, Any]:
         "terminal": False,
         "event_count": 0,
         "run_number": "0",
+        "ledger_name": "",
+        "ledger_source": "",
         "sets": {},
         "available_transitions": [],
         "current_perspective": "unknown",
@@ -127,6 +129,18 @@ def parse_status_text(text: str) -> dict[str, Any]:
     lines = text.strip().splitlines()
     for line in lines:
         stripped = line.strip()
+
+        # "Ledger: run-31 (active-ledger marker)"
+        m = re.match(r"^Ledger:\s+(\S+)(?:\s+\((.+)\))?", stripped)
+        if m:
+            ledger_name = m.group(1)
+            result["ledger_name"] = ledger_name
+            result["ledger_source"] = m.group(2) or ""
+            # Extract run number from "run-N" pattern
+            rm = re.match(r"^run-(\d+)$", ledger_name)
+            if rm:
+                result["run_number"] = rm.group(1)
+            continue
 
         # "state: fix_loop (59 events, chain valid)"
         m = re.match(r"^state:\s+(\S+)\s+\((\d+)\s+events", stripped)

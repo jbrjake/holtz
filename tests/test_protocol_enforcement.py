@@ -329,6 +329,43 @@ class TestParseStatusText:
         result = parse_status_text(text)
         assert result["current_perspective"] == "unknown"
 
+    def test_parse_status_text_ledger_line(self):
+        """parse_status_text extracts run_number from Ledger line (sahjhan v0.11.0+)."""
+        from _protocol_cache import parse_status_text
+
+        text = (
+            "Ledger: run-31 (active-ledger marker)\n"
+            "state: fix_loop (59 events, chain valid)\n"
+        )
+        result = parse_status_text(text)
+        assert result["run_number"] == "31"
+        assert result["ledger_name"] == "run-31"
+        assert result["ledger_source"] == "active-ledger marker"
+
+    def test_parse_status_text_ledger_line_default(self):
+        """parse_status_text handles default ledger (no run number)."""
+        from _protocol_cache import parse_status_text
+
+        text = (
+            "Ledger: default (no active-ledger marker)\n"
+            "state: idle (0 events, chain valid)\n"
+        )
+        result = parse_status_text(text)
+        assert result["run_number"] == "0"
+        assert result["ledger_name"] == "default"
+
+    def test_parse_status_text_ledger_line_explicit(self):
+        """parse_status_text handles explicit --ledger flag."""
+        from _protocol_cache import parse_status_text
+
+        text = (
+            "Ledger: project (explicit --ledger flag)\n"
+            "state: idle (5 events, chain valid)\n"
+        )
+        result = parse_status_text(text)
+        assert result["ledger_name"] == "project"
+        assert result["run_number"] == "0"
+
 
 class TestProtocolTracker:
     """Tests for protocol_tracker.py PostToolUse hook."""
