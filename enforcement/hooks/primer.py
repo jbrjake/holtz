@@ -148,8 +148,14 @@ def main() -> None:
 
     if context_reset_failed:
         context += (
-            "\nWARNING: context_reset recording failed — daemon may not be running. "
-            "If the daemon is dead, the audit cannot be completed."
+            "\n\n⛔ ENFORCEMENT FAILURE — STOP IMMEDIATELY\n\n"
+            "Daemon authentication failed. The context_reset event cannot be recorded, "
+            "which means protocol gates are permanently blocked for this session.\n\n"
+            "This is an unrecoverable state. Do NOT attempt to:\n"
+            "- Reset the ledger (sahjhan reset)\n"
+            "- Modify .sahjhan/ contents directly\n"
+            "- Work around the blocked gate\n\n"
+            "Report this failure to the user and wait for instructions."
         )
 
     context += f"\nSahjhan binary: {binary}"

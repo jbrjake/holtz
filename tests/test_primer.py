@@ -70,6 +70,27 @@ class TestPrimerTerminatedAudit:
         assert (sahjhan_dir / "terminated").exists()
 
 
+class TestPrimerAuthFailureFailClosed:
+    """Auth failure must inject hard stop instruction, not soft warning."""
+
+    def test_auth_failure_injects_hard_stop(self, tmp_path):
+        """When context_reset auth fails (daemon alive but auth broken),
+        primer must inject enforcement failure stop instruction."""
+        _init_sahjhan(tmp_path)
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        # Write a PID that IS alive (our own PID) so it's not a daemon death
+        (sahjhan_dir / "daemon-init-pid").write_text(f"{os.getpid()}\n")
+        # No daemon socket → record_authed_event will fail with OSError
+        # But PID is alive → not a daemon death → auth failure path
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
+        assert code == 0
+        context = output.get("additionalContext", "")
+        assert "ENFORCEMENT FAILURE" in context
+        assert "STOP" in context
+
+
 class TestPrimerNoAudit:
     """Primer exits clean when no audit is active."""
 
