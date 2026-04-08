@@ -9,6 +9,7 @@
 
 {% set findings = events | where_eq(attribute="event_type", value="finding") -%}
 {% set resolved_ids = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
+{% set deferred_ids = events | where_eq(attribute="event_type", value="finding_deferred") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
 
 {% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
 {% set sev_findings = findings | where_eq(attribute="fields.severity", value=severity) -%}
@@ -19,7 +20,7 @@
 | ID | Category | Location | Perspective | Description | Status |
 |----|----------|----------|-------------|-------------|--------|
 {% for e in sev_findings -%}
-| {{ e.fields.id }} | {{ e.fields.category }} | {{ e.fields.location }} | {{ e.fields.perspective }} | {{ e.fields.description }} | {% if resolved_ids is containing(e.fields.id) %}RESOLVED{% else %}OPEN{% endif %} |
+| {{ e.fields.id }} | {{ e.fields.category }} | {{ e.fields.location }} | {{ e.fields.perspective }} | {{ e.fields.description }} | {% if resolved_ids is containing(e.fields.id) %}RESOLVED{% elif deferred_ids is containing(e.fields.id) %}DEFERRED{% else %}OPEN{% endif %} |
 {% endfor -%}
 {% endif -%}
 {% endfor %}

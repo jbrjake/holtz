@@ -57,4 +57,7 @@ path = "docs/holtz/project.jsonl"
 "test finding" = "event test_audit_finding"
 "code finding" = "event code_audit_finding"
 "graph delta" = "event graph_delta"
+"defer cant-reproduce" = "transition defer_cant_reproduce"
+"defer low" = "transition defer_low"
+"defer medium" = "transition defer_medium"
 

@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.115.3] - 2026-04-07
+
+_Changes since v0.112.2_
+
+### Added
+- **holtz:** add deferral procedures to step-10 fix loop
+- **enforcement:** add finding deferral to protocol and templates
+- **enforcement:** add reproduction evidence validation script
+
+### Fixed
+- **enforcement:** rename misleading stale-path test for accuracy
+- **enforcement:** don't kill daemon in awaiting_clear state
+- **enforcement:** use shell builtins for repro evidence gate
+- **enforcement:** background daemon start in phase-recon instructions
+
+### Documentation
+- add implementation plan for issue #43 stop hook daemon cleanup
+- add design spec for issue #43 stop hook daemon cleanup fix
+- add deferred finding protocol implementation plan
+- add deferred finding protocol design spec
+- update changelog for v0.112.2
+
+### Infrastructure
+- update test badge count to 1020
+- **enforcement:** add failing tests for issue #43 daemon cleanup gating
+- update .sahjhan-version marker to 0.10.0
+
 ## [0.112.2] - 2026-04-07
 
 _Changes since v0.112.1_

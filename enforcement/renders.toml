@@ -8,7 +8,7 @@ ledger_template = "run"
 target = "PUNCHLIST.md"
 template = "templates/punchlist.md.tera"
 trigger = "on_event"
-event_types = ["finding", "finding_resolved"]
+event_types = ["finding", "finding_resolved", "finding_deferred"]
 ledger_template = "run"
 
 [[renders]]
