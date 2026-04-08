@@ -1095,13 +1095,16 @@ class TestStopHook:
     @staticmethod
     def _setup_active_audit(tmp_path, state_name):
         """Create mock binary + active audit that reports given state."""
-        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
-        (tmp_path / "enforcement").mkdir(parents=True)
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "enforcement").mkdir(parents=True, exist_ok=True)
         (tmp_path / "enforcement" / "protocol.toml").write_text("")
         _create_mock_binary(
             tmp_path,
             f'echo "state: {state_name} (1 events, chain valid)"',
         )
+        # Write a live daemon PID so liveness check doesn't short-circuit
+        (sahjhan_dir / "daemon-init-pid").write_text(str(os.getpid()))
         # Write enforcement cache with fresh timestamp for freshness gate
         import sys
         sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))

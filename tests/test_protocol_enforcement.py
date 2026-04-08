@@ -1003,6 +1003,9 @@ class TestStopHookFreshness:
         cache["state"] = "fix_loop"
         cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
+        # Write a live daemon PID so liveness check doesn't short-circuit
+        pid_file = tmp_path / "docs" / "holtz" / ".sahjhan" / "daemon-init-pid"
+        pid_file.write_text(str(os.getpid()))
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("stop_hook.py", event)
@@ -1017,6 +1020,9 @@ class TestStopHookFreshness:
         cache["state"] = "fix_loop"
         cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
         write_cache(str(tmp_path), cache)
+        # Write a live daemon PID so liveness check doesn't short-circuit
+        pid_file = tmp_path / "docs" / "holtz" / ".sahjhan" / "daemon-init-pid"
+        pid_file.write_text(str(os.getpid()))
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("stop_hook.py", event)
@@ -1058,6 +1064,8 @@ class TestStopHookFreshness:
         """Issue #29 R5: Has .sahjhan dir but no enforcement cache → block."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
+        # Write a live daemon PID so liveness check doesn't short-circuit
+        (sahjhan_dir / "daemon-init-pid").write_text(str(os.getpid()))
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("stop_hook.py", event)
@@ -1074,6 +1082,9 @@ class TestStopHookFreshness:
         cache["state"] = "fix_loop"
         cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
+        # Write a live daemon PID so liveness check doesn't short-circuit
+        pid_file = tmp_path / "docs" / "holtz" / ".sahjhan" / "daemon-init-pid"
+        pid_file.write_text(str(os.getpid()))
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("stop_hook.py", event)
@@ -1110,6 +1121,9 @@ class TestStopHookDaemonCleanup:
         cache["state"] = "fix_loop"
         cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
+        # Write a live daemon PID so liveness check doesn't short-circuit
+        pid_file = tmp_path / "docs" / "holtz" / ".sahjhan" / "daemon-init-pid"
+        pid_file.write_text(str(os.getpid()))
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("stop_hook.py", event)
@@ -1164,6 +1178,8 @@ class TestStopHookDaemonCleanupGating:
             patch.object(stop_hook, "_try_stop_daemon") as mock_stop,
             patch.object(stop_hook, "read_event", return_value={"cwd": str(tmp_path)}),
             patch.object(stop_hook, "_has_active_audit", return_value=True),
+            patch.object(stop_hook, "_read_init_pid", return_value=os.getpid()),
+            patch.object(stop_hook, "_is_process_alive", return_value=True),
         ):
             with pytest.raises(SystemExit) as exc_info:
                 stop_hook.main()

@@ -24,6 +24,9 @@ from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
 
 from _common import (  # noqa: E402
+    _is_process_alive,
+    _read_init_pid,
+    _write_terminated_marker,
     exit_stop_allow,
     exit_stop_block,
     exit_stop_warn,
@@ -75,6 +78,18 @@ def main() -> None:
         _try_stop_daemon(cwd)
         exit_stop_allow()
 
+    # Daemon liveness check: if the daemon is dead, the audit is
+    # unrecoverable (session key lost). Allow stop and write marker
+    # so future checks fast-path. Fixes issue #45 (stop loop escape).
+    init_pid = _read_init_pid(cwd)
+    if init_pid is not None and not _is_process_alive(init_pid):
+        _write_terminated_marker(cwd, init_pid, detected_by="stop_hook")
+        exit_stop_allow()
+    if init_pid is None:
+        # No daemon PID file → daemon was never started or already cleaned.
+        # No session key to protect → allow stop.
+        exit_stop_allow()
+
     # Read enforcement cache directly (no subprocess, no timeout)
     cache = read_cache(cwd)
 
@@ -109,7 +124,8 @@ def main() -> None:
         f"Audit is in state '{current_state}' which is not terminal. "
         "You must complete the audit protocol before stopping. "
         "If this audit cannot be completed, the user can manually run: "
-        "! sahjhan daemon stop"
+        "! sahjhan daemon stop\n"
+        "(The next stop attempt will detect the dead daemon and allow exit.)"
     )
 
 
