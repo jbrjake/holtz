@@ -22,13 +22,13 @@ sleep 1
 # Copy daemon.pid → daemon-init-pid so lifecycle hooks can detect daemon death
 cp docs/holtz/.sahjhan/daemon.pid docs/holtz/.sahjhan/daemon-init-pid
 
-sahjhan ledger create --from run N
+sahjhan ledger create --from run N --activate
 sahjhan transition run_start
 ```
 
 **Why nohup?** `sahjhan daemon start` is foreground-only — it does not fork. Without `nohup ... &`, the Bash tool blocks until timeout and then kills the daemon. The `daemon-init-pid` copy is required by `_daemon_lifecycle.py` to distinguish "original daemon" from "restarted daemon with different key."
 
-The daemon must be running before any hooks that need signing or vault access. All subsequent `event` commands in this run **must** use `--ledger run-N` so findings land in the run ledger, not the default ledger. Omitting `--ledger run-N` causes render warnings and orphaned findings.
+The `--activate` flag sets the active-ledger marker so all subsequent sahjhan commands automatically target this run's ledger. No `--ledger run-N` needed on individual commands.
 
 #### Reference Reader Subagent
 
@@ -80,7 +80,7 @@ Create `docs/holtz/` and `docs/holtz/recon/`. Read project structure, docs, CLAU
 
 Output: `docs/holtz/recon/step0-project-overview.md`
 
-**After each step:** record a `sahjhan event recon_step` with the step number and artifact path. Additionally, record significant findings as `recon_finding` events (e.g., `sahjhan event recon_finding --field topic=architecture --field content="..."`) so they are captured in the run ledger alongside the markdown artifacts.
+**After each step:** record a `sahjhan event recon_step` with the step number and artifact path. Additionally, record significant findings as `recon_finding` events (e.g., `sahjhan event recon_finding --field topic=architecture --field content="..."`) so they are captured in the ledger alongside the markdown artifacts.
 
 ### Step 1: Run Toolchain (Subagent)
 
