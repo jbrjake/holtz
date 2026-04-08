@@ -245,6 +245,8 @@ class TestStopHookDegradedEnforcement:
         # Create .sahjhan dir to simulate active audit
         sahjhan = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan.mkdir(parents=True)
+        # Write live PID so liveness check doesn't short-circuit
+        (sahjhan / "daemon-init-pid").write_text(f"{os.getpid()}\n")
 
         event = {"cwd": str(tmp_path)}
         code, output = self._run_stop_hook(event, cwd=str(tmp_path))
@@ -259,6 +261,8 @@ class TestStopHookDegradedEnforcement:
         """Warning message should include the config path that was searched."""
         sahjhan = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan.mkdir(parents=True)
+        # Write live PID so liveness check doesn't short-circuit
+        (sahjhan / "daemon-init-pid").write_text(f"{os.getpid()}\n")
 
         event = {"cwd": str(tmp_path)}
         code, output = self._run_stop_hook(event, cwd=str(tmp_path))

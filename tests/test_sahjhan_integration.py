@@ -1000,10 +1000,9 @@ class TestPrimerWithMockBinary:
         context = output.get("additionalContext", "")
         # Must still inject resume context
         assert "awaiting_clear" in context
-        # Must warn about failed context_reset — check for explicit warning text,
-        # not just substring (pytest temp dirs include test name which contains "context_reset")
-        assert "context_reset failed" in context.lower() or "context_reset recording failed" in context.lower(), (
-            "Primer must warn when context_reset recording fails, not silently suppress. "
+        # Must inject hard stop instruction on auth failure (issue #45)
+        assert "ENFORCEMENT FAILURE" in context, (
+            "Primer must inject hard stop instruction when context_reset auth fails. "
             f"Got context: {context}"
         )
 
