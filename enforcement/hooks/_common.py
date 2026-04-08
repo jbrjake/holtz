@@ -106,29 +106,6 @@ def resolve_config_dir(cwd: str) -> tuple[str, bool]:
     return cwd_candidate, False
 
 
-def _active_ledger(cwd: str) -> str | None:
-    """Detect the active run ledger name from .sahjhan/active-run marker."""
-    active_file = os.path.join(cwd, "docs", "holtz", ".sahjhan", "active-run")
-    try:
-        with open(active_file, encoding="utf-8") as f:
-            return f.read().strip()
-    except OSError:
-        return None
-
-
-def write_active_run_marker(cwd: str, ledger_name: str) -> None:
-    """Write the active-run marker file so hooks can find the active ledger.
-
-    No-op if the .sahjhan data directory doesn't exist (no active audit).
-    """
-    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
-    if not os.path.isdir(data_dir):
-        return
-    marker = os.path.join(data_dir, "active-run")
-    with open(marker, "w", encoding="utf-8") as f:
-        f.write(ledger_name.strip() + "\n")
-
-
 def exit_enforcement_error(
     cwd: str,
     reason: str,
@@ -222,7 +199,6 @@ def record_authed_event(
     event_type: str,
     fields: dict[str, str],
     cwd: str,
-    ledger: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Record a restricted event with daemon-signed HMAC proof via sahjhan authed-event.
 
@@ -230,7 +206,6 @@ def record_authed_event(
         event_type: The restricted event type name.
         fields: Dict of field name -> value pairs.
         cwd: Working directory for the sahjhan command.
-        ledger: Optional ledger name (e.g., "run-25").
 
     Returns:
         The CompletedProcess from the sahjhan call.
@@ -243,8 +218,6 @@ def record_authed_event(
         raise OSError("Sahjhan binary unavailable")
     config_dir, _ = resolve_config_dir(cwd)
     cmd = [binary, "--config-dir", config_dir]
-    if ledger:
-        cmd.extend(["--ledger", ledger])
     cmd.extend(["authed-event", event_type, "--proof", proof])
     for k, v in fields.items():
         cmd.extend(["--field", f"{k}={v}"])
