@@ -70,6 +70,9 @@ _PLUGIN_ROOT = os.environ.get(
 )
 
 
+_VALUE_FLAGS = {"--config-dir", "--data-dir", "-c"}
+
+
 def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
     """Extract the sahjhan subcommand from a shell command segment.
 
@@ -101,9 +104,10 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
 
     # Skip flags before the subcommand (e.g. --config-dir /some/path)
     while idx < len(tokens) and tokens[idx].startswith("-"):
+        flag = tokens[idx]
         idx += 1
-        # If the flag expects a value (not another flag), skip the value too
-        if idx < len(tokens) and not tokens[idx].startswith("-"):
+        # Only value-taking flags consume the next token
+        if flag in _VALUE_FLAGS and idx < len(tokens):
             idx += 1
 
     if idx >= len(tokens):
@@ -111,7 +115,16 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
         return ("", "")
 
     subcmd = tokens[idx]
-    sub_subcmd = tokens[idx + 1] if idx + 1 < len(tokens) else ""
+    idx += 1
+
+    # Skip flags between subcommand and sub-subcommand
+    while idx < len(tokens) and tokens[idx].startswith("-"):
+        flag = tokens[idx]
+        idx += 1
+        if flag in _VALUE_FLAGS and idx < len(tokens):
+            idx += 1
+
+    sub_subcmd = tokens[idx] if idx < len(tokens) else ""
     return (subcmd, sub_subcmd)
 
 

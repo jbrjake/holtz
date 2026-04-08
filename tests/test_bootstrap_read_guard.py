@@ -235,6 +235,55 @@ class TestWriteGuardsRetained:
         assert output["hookSpecificOutput"]["permissionDecision"] == "block"
 
 
+class TestExtractSahjhanSubcmd:
+    """Direct unit tests for _extract_sahjhan_subcmd parsing logic."""
+
+    @staticmethod
+    def _get_extract():
+        import os as _os
+        import sys as _sys
+        hook_dir = _os.path.join(
+            _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+            "enforcement", "hooks",
+        )
+        if hook_dir not in _sys.path:
+            _sys.path.insert(0, hook_dir)
+        from _sahjhan_bootstrap import _extract_sahjhan_subcmd
+        return _extract_sahjhan_subcmd
+
+    def test_simple_subcommand(self):
+        extract = self._get_extract()
+        assert extract("sahjhan status") == ("status", "")
+
+    def test_boolean_flag_before_subcommand(self):
+        extract = self._get_extract()
+        assert extract("sahjhan --verbose status") == ("status", "")
+
+    def test_value_flag_before_subcommand(self):
+        extract = self._get_extract()
+        assert extract("sahjhan --config-dir /path status") == ("status", "")
+
+    def test_subcommand_with_sub_subcommand(self):
+        extract = self._get_extract()
+        assert extract("sahjhan daemon stop") == ("daemon", "stop")
+
+    def test_boolean_flag_between_subcmd_and_sub_subcmd(self):
+        extract = self._get_extract()
+        assert extract("sahjhan daemon --verbose start") == ("daemon", "start")
+
+    def test_bare_sahjhan(self):
+        extract = self._get_extract()
+        assert extract("sahjhan") == ("", "")
+
+    def test_nohup_wrapper(self):
+        extract = self._get_extract()
+        assert extract("nohup sahjhan daemon start") == ("daemon", "start")
+
+    def test_non_sahjhan_command(self):
+        extract = self._get_extract()
+        assert extract("git status") is None
+
+
 class TestManagedDataWriteProtection:
     """Issue #39 P2: Write/Edit to .sahjhan/ data dir must be blocked."""
 
