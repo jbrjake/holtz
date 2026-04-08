@@ -18,7 +18,6 @@ from _protocol_cache import is_enforcement_fresh, is_sahjhan_cmd, read_cache  # 
 from _resolve import ensure_sahjhan  # noqa: E402
 
 from _common import (  # noqa: E402
-    _active_ledger,
     exit_enforcement_error,
     exit_ok,
     exit_warn,
@@ -59,12 +58,8 @@ def main() -> None:
     if not is_enforcement_fresh(cache):
         exit_ok()
 
-    ledger = _active_ledger(cwd)
     try:
-        cmd = [binary, "--config-dir", config_dir]
-        if ledger:
-            cmd.extend(["--ledger", ledger])
-        cmd.extend(["manifest", "verify"])
+        cmd = [binary, "--config-dir", config_dir, "manifest", "verify"]
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -78,20 +73,16 @@ def main() -> None:
     if result.returncode != 0:
         # Record protocol violation
         detail = result.stderr.strip() or result.stdout.strip() or "Manifest verification failed"
-        # Extract run number from ledger name (e.g. "run-31" -> "31")
-        run_number = (ledger or "").replace("run-", "") or "0"
         with contextlib.suppress(OSError, subprocess.TimeoutExpired):
-            violation_cmd = [binary, "--config-dir", config_dir]
-            if ledger:
-                violation_cmd.extend(["--ledger", ledger])
-            violation_cmd.extend([
+            violation_cmd = [
+                binary, "--config-dir", config_dir,
                 "event", "protocol_violation",
                 "--field", "project=holtz",
-                "--field", f"run={run_number}",
+                "--field", "run=0",
                 "--field", "auditor=holtz",
                 "--field", "file_path=unknown",
                 "--field", f"detail={detail}",
-            ])
+            ]
             subprocess.run(
                 violation_cmd,
                 capture_output=True,
