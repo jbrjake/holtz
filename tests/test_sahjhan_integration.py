@@ -726,7 +726,6 @@ class TestPrimer:
 
         # Dead init PID — this is how primer detects daemon death
         (sahjhan_dir / "daemon-init-pid").write_text("99999999\n")
-        (sahjhan_dir / "active-run").write_text("run-1\n")
 
         # Track calls to the mock binary
         log_file = tmp_path / "cmd.log"
@@ -940,8 +939,6 @@ class TestPrimerWithMockBinary:
             "  pattern_check: ready",
         ]
         self._setup(tmp_path, status)
-        # Write active-run marker so run_number is derived from ledger
-        (tmp_path / "docs" / "holtz" / ".sahjhan" / "active-run").write_text("run-31\n")
         event = {"user_message": "continue", "cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook(
             "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
@@ -951,7 +948,6 @@ class TestPrimerWithMockBinary:
         # exit_warn puts resume context in additionalContext
         context = output.get("additionalContext", "")
         assert "fix_loop" in context
-        assert "Run 31" in context
 
     def test_silent_for_terminal_state(self, tmp_path):
         """Primer does nothing when run is in terminal state."""
@@ -996,8 +992,6 @@ class TestPrimerWithMockBinary:
             "  resume: blocked",
         ]
         self._setup(tmp_path, status)
-        # Write active-run marker
-        (tmp_path / "docs" / "holtz" / ".sahjhan" / "active-run").write_text("run-35\n")
         # No daemon running → record_authed_event will fail
         event = {"user_message": "continue", "cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook(
@@ -1011,61 +1005,6 @@ class TestPrimerWithMockBinary:
         assert "context_reset failed" in context.lower() or "context_reset recording failed" in context.lower(), (
             "Primer must warn when context_reset recording fails, not silently suppress. "
             f"Got context: {context}"
-        )
-
-
-class TestActiveLedger:
-    """Tests for active ledger detection in hooks."""
-
-    def test_active_ledger_returns_name(self, tmp_path):
-        """_active_ledger returns the ledger name from marker file."""
-        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
-        (sahjhan_dir / "active-run").write_text("run-22\n")
-        # Import the function
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "_common_enforcement",
-            os.path.join(REPO_ROOT, "enforcement", "hooks", "_common.py"),
-        )
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        result = mod._active_ledger(str(tmp_path))
-        assert result == "run-22"
-
-    def test_active_ledger_returns_none_missing(self, tmp_path):
-        """_active_ledger returns None when no marker file exists."""
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "_common_enforcement",
-            os.path.join(REPO_ROOT, "enforcement", "hooks", "_common.py"),
-        )
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        result = mod._active_ledger(str(tmp_path))
-        assert result is None
-
-    def test_active_run_marker_matches_ledger_registry(self):
-        """active-run marker value must match a registered ledger name.
-
-        BH-005: If the marker says 'run' but the ledger is named 'run-26',
-        hooks pass --ledger run which fails to resolve. The marker must
-        contain the full ledger name (e.g. 'run-26'), not the template name.
-        """
-        marker = os.path.join(REPO_ROOT, "docs", "holtz", ".sahjhan", "active-run")
-        if not os.path.exists(marker):
-            pytest.skip("No active-run marker (no active audit)")
-        with open(marker, encoding="utf-8") as f:
-            ledger_name = f.read().strip()
-        registry = os.path.join(REPO_ROOT, "docs", "holtz", ".sahjhan", "ledgers.toml")
-        if not os.path.exists(registry):
-            pytest.skip("No ledger registry")
-        with open(registry, encoding="utf-8") as f:
-            registry_text = f.read()
-        assert f'name = "{ledger_name}"' in registry_text, (
-            f"active-run marker says '{ledger_name}' but no ledger with that "
-            f"name found in ledgers.toml. Hooks will fail to resolve --ledger {ledger_name}. "
-            f"Use the full ledger name (e.g. 'run-26'), not the template name ('run')."
         )
 
 

@@ -193,18 +193,3 @@ def test_compute_event_proof_uses_explicit_cwd():
     assert proof == "worktree_proof"
 
 
-def test_write_active_run_marker(tmp_path):
-    """Issue #35 bug 2: write_active_run_marker creates the active-run file."""
-    (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
-    _enforcement_common.write_active_run_marker(str(tmp_path), "run-42")
-    marker = tmp_path / "docs" / "holtz" / ".sahjhan" / "active-run"
-    assert marker.exists()
-    assert marker.read_text().strip() == "run-42"
-
-
-def test_write_active_run_marker_requires_data_dir(tmp_path):
-    """write_active_run_marker is a no-op when .sahjhan dir doesn't exist."""
-    # Should not raise, just silently skip
-    _enforcement_common.write_active_run_marker(str(tmp_path), "run-99")
-    marker = tmp_path / "docs" / "holtz" / ".sahjhan" / "active-run"
-    assert not marker.exists()

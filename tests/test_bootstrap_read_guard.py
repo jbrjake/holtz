@@ -233,14 +233,14 @@ class TestManagedDataWriteProtection:
         assert output["hookSpecificOutput"]["permissionDecision"] == "block"
         assert "cannot be modified" in output["hookSpecificOutput"]["permissionDecisionReason"]
 
-    def test_edit_to_active_run_marker_blocked(self):
-        """Edit tool targeting active-run marker must be blocked."""
+    def test_edit_to_active_ledger_marker_blocked(self):
+        """Edit tool targeting active-ledger marker must be blocked."""
         import os
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         event = {
             "tool_name": "Edit",
             "tool_input": {
-                "file_path": "docs/holtz/.sahjhan/active-run",
+                "file_path": "docs/holtz/.sahjhan/active-ledger",
                 "old_string": "run-1",
                 "new_string": "run-999",
             },
