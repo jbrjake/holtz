@@ -1,7 +1,7 @@
 # Holtz: Active Ledger Simplification
 
 **Date:** 2026-04-07
-**Status:** Proposed (blocked on sahjhan active-ledger feature)
+**Status:** Approved (sahjhan v0.11.0 shipped with active-ledger support)
 **Repo:** jbrjake/holtz
 **Depends on:** sahjhan active-ledger defaulting (separate spec, jbrjake/sahjhan)
 
