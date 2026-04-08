@@ -32,42 +32,6 @@ class TestDaemonLifecycleNoAudit:
         assert output.get("continue") is True
 
 
-class TestActiveRunMarker:
-    """Tests for active-run marker creation when missing."""
-
-    def test_creates_marker_from_highest_run(self, tmp_path):
-        """Missing active-run marker + existing runs → writes marker for highest run."""
-        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
-        runs_dir = tmp_path / "docs" / "holtz" / "runs"
-        (runs_dir / "run-1").mkdir(parents=True)
-        (runs_dir / "run-3").mkdir(parents=True)
-        (runs_dir / "run-2").mkdir(parents=True)
-        # Use our own PID — alive daemon triggers marker creation
-        (sahjhan_dir / "daemon.pid").write_text(f"{os.getpid()}\n")
-        (sahjhan_dir / "daemon-init-pid").write_text(f"{os.getpid()}\n")
-
-        event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
-        run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
-
-        marker = sahjhan_dir / "active-run"
-        assert marker.exists()
-        assert marker.read_text().strip() == "run-3"
-
-    def test_skips_marker_when_already_exists(self, tmp_path):
-        """Existing active-run marker → left unchanged."""
-        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
-        (sahjhan_dir / "active-run").write_text("run-5\n")
-        # Write a daemon.pid so it doesn't try to start daemon
-        (sahjhan_dir / "daemon.pid").write_text("99999999\n")
-
-        event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
-        run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
-
-        assert (sahjhan_dir / "active-run").read_text().strip() == "run-5"
-
-
 class TestDaemonDeathTerminatesAudit:
     """Daemon death with init PID tracking — audit terminated."""
 
@@ -75,7 +39,6 @@ class TestDaemonDeathTerminatesAudit:
         """Init PID dead → writes terminated marker, blocks."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
-        (sahjhan_dir / "active-run").write_text("run-1\n")
         (sahjhan_dir / "daemon.pid").write_text("99999999\n")
         (sahjhan_dir / "daemon-init-pid").write_text("99999999\n")
 
@@ -91,7 +54,6 @@ class TestDaemonDeathTerminatesAudit:
         """Init PID is alive → allow, no termination."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
-        (sahjhan_dir / "active-run").write_text("run-1\n")
         (sahjhan_dir / "daemon.pid").write_text(f"{os.getpid()}\n")
         (sahjhan_dir / "daemon-init-pid").write_text(f"{os.getpid()}\n")
 
@@ -118,7 +80,6 @@ class TestDaemonDeathTerminatesAudit:
         """No daemon-init-pid file → legacy audit, allow."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
-        (sahjhan_dir / "active-run").write_text("run-1\n")
         (sahjhan_dir / "daemon.pid").write_text("99999999\n")
 
         event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
@@ -131,7 +92,6 @@ class TestDaemonDeathTerminatesAudit:
         import json
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
-        (sahjhan_dir / "active-run").write_text("run-1\n")
         (sahjhan_dir / "daemon.pid").write_text("99999999\n")
         (sahjhan_dir / "daemon-init-pid").write_text("99999999\n")
 

@@ -13,50 +13,19 @@ Daemon death = key loss = ledger unwritable = audit is over.
 """
 from __future__ import annotations
 
-import contextlib
 import os
-import re
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
-    _active_ledger,
     _is_process_alive,
     _read_init_pid,
     _write_terminated_marker,
     exit_block,
     exit_ok,
     read_event,
-    write_active_run_marker,
 )
-
-
-def _find_highest_run(cwd: str) -> str | None:
-    """Scan docs/holtz/runs/ for the highest-numbered run-N directory."""
-    runs_dir = os.path.join(cwd, "docs", "holtz", "runs")
-    if not os.path.isdir(runs_dir):
-        return None
-    highest = -1
-    for entry in os.listdir(runs_dir):
-        m = re.match(r"^run-(\d+)$", entry)
-        if m and os.path.isdir(os.path.join(runs_dir, entry)):
-            n = int(m.group(1))
-            if n > highest:
-                highest = n
-    return f"run-{highest}" if highest >= 0 else None
-
-
-def _ensure_active_run_marker(cwd: str) -> None:
-    """Write active-run marker if missing."""
-    ledger = _active_ledger(cwd)
-    if ledger is not None:
-        return
-    ledger = _find_highest_run(cwd)
-    if ledger is None:
-        return
-    with contextlib.suppress(OSError):
-        write_active_run_marker(cwd, ledger)
 
 
 def main() -> None:
@@ -83,7 +52,6 @@ def main() -> None:
 
     # Init PID exists — is it still alive?
     if _is_process_alive(init_pid):
-        _ensure_active_run_marker(cwd)
         exit_ok()
 
     # Init PID is dead. Audit is over.
