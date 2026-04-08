@@ -28,7 +28,6 @@ from lens_evidence import (  # noqa: E402
 )
 
 from _common import (  # noqa: E402
-    _active_ledger,
     _daemon_request,
     _get_daemon_socket_path,
     exit_stop_allow,
@@ -311,13 +310,10 @@ def _run_sahjhan(
     binary: str,
     config_dir: str,
     cwd: str,
-    ledger: str | None,
     args: list[str],
 ) -> subprocess.CompletedProcess[str] | None:
     """Run a sahjhan command, returning None on any failure."""
     cmd = [binary, "--config-dir", config_dir]
-    if ledger:
-        cmd.extend(["--ledger", ledger])
     cmd.extend(args)
     with contextlib.suppress(OSError, subprocess.TimeoutExpired):
         return subprocess.run(
@@ -330,26 +326,26 @@ def _run_sahjhan(
     return None
 
 
-def _get_run_number(binary: str, config_dir: str, cwd: str, ledger: str | None) -> str:
-    """Get current run number from ledger name."""
-    # Derive from ledger name (e.g., "run-31" -> "31") since sahjhan status
-    # does not include run_number in its output.
-    if ledger:
-        return ledger.replace("run-", "") or "0"
-    return "0"
+def _get_run_number(cwd: str) -> str:
+    """Get current run number from sahjhan active-ledger marker."""
+    active_file = os.path.join(cwd, "docs", "holtz", ".sahjhan", "active-ledger")
+    try:
+        with open(active_file, encoding="utf-8") as f:
+            return f.read().strip().replace("run-", "") or "0"
+    except OSError:
+        return "0"
 
 
 def _query_events(
     binary: str,
     config_dir: str,
     cwd: str,
-    ledger: str | None,
     event_type: str,
     perspective: str,
 ) -> list[dict]:
     """Query sahjhan for events of a given type and perspective."""
     result = _run_sahjhan(
-        binary, config_dir, cwd, ledger,
+        binary, config_dir, cwd,
         ["query", "--type", event_type, "--field", f"perspective={perspective}", "--json"],
     )
     if result and result.returncode == 0:
@@ -384,8 +380,7 @@ def main() -> None:
     if binary is None:
         exit_stop_allow()
 
-    ledger = _active_ledger(cwd)
-    run = _get_run_number(binary, config_dir, cwd, ledger)
+    run = _get_run_number(cwd)
 
     # Common fields for all events
     base_fields = {
@@ -451,7 +446,7 @@ def main() -> None:
 
     # Check if quiz was already posed for this perspective
     posed_events = _query_events(
-        binary, config_dir, cwd, ledger, "quiz_posed", lens
+        binary, config_dir, cwd, "quiz_posed", lens
     )
 
     if not posed_events:
@@ -460,7 +455,7 @@ def main() -> None:
         with contextlib.suppress(OSError, subprocess.TimeoutExpired):
             record_authed_event("quiz_posed", {
                 **base_fields, "questions_hash": qhash
-            }, cwd, ledger)
+            }, cwd)
         quiz_text = format_quiz_questions(questions, lens)
         exit_stop_block(quiz_text)
 
@@ -499,7 +494,7 @@ def main() -> None:
     if correct >= threshold:
         # IDP-001: Guard against duplicate quiz_answered on hook retry
         already_answered = _query_events(
-            binary, config_dir, cwd, ledger, "quiz_answered", lens
+            binary, config_dir, cwd, "quiz_answered", lens
         )
         if not already_answered:
             with contextlib.suppress(OSError, subprocess.TimeoutExpired):
@@ -507,25 +502,25 @@ def main() -> None:
                     **base_fields,
                     "score": f"{correct}/{total}",
                     "pass": "true",
-                }, cwd, ledger)
+                }, cwd)
         exit_stop_allow()
 
     # Failed — check attempt count
     failed_events = _query_events(
-        binary, config_dir, cwd, ledger, "quiz_failed", lens
+        binary, config_dir, cwd, "quiz_failed", lens
     )
     attempt = len(failed_events) + 1  # this is the current (failing) attempt
 
     with contextlib.suppress(OSError, subprocess.TimeoutExpired):
         record_authed_event("quiz_failed", {
             **base_fields, "score": f"{correct}/{total}"
-        }, cwd, ledger)
+        }, cwd)
 
     if attempt >= MAX_QUIZ_ATTEMPTS:
         with contextlib.suppress(OSError, subprocess.TimeoutExpired):
             record_authed_event("quiz_exhausted", {
                 **base_fields
-            }, cwd, ledger)
+            }, cwd)
         exit_stop_allow()
 
     exit_stop_block(
