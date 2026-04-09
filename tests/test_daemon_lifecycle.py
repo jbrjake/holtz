@@ -87,9 +87,8 @@ class TestDaemonDeathTerminatesAudit:
         assert code == 0
         assert output.get("continue") is True
 
-    def test_writes_terminated_cache_state(self, tmp_path):
-        """Terminated marker also updates enforcement-cache.json."""
-        import json
+    def test_writes_marker_not_cache(self, tmp_path):
+        """Terminated marker written but no enforcement-cache.json (daemon-backed state)."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
         (sahjhan_dir / "daemon.pid").write_text("99999999\n")
@@ -98,10 +97,8 @@ class TestDaemonDeathTerminatesAudit:
         event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
         run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
 
-        cache_path = sahjhan_dir / "enforcement-cache.json"
-        cache = json.loads(cache_path.read_text())
-        assert cache["state"] == "terminated"
-        assert cache["active"] is False
+        assert (sahjhan_dir / "terminated").exists()
+        assert not (sahjhan_dir / "enforcement-cache.json").exists()
 
 
 class TestWriteTerminatedMarker:
@@ -120,39 +117,16 @@ class TestWriteTerminatedMarker:
         assert "detected_by: _daemon_lifecycle" in content
         assert "detected_at:" in content
 
-    def test_updates_enforcement_cache(self, tmp_path):
-        import json
-        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
-        cache_path = sahjhan_dir / "enforcement-cache.json"
-        cache_path.write_text(json.dumps({"state": "fix_loop", "active": True}))
-        from _common import _write_terminated_marker
-        _write_terminated_marker(str(tmp_path), 12345)
-        cache = json.loads(cache_path.read_text())
-        assert cache["state"] == "terminated"
-        assert cache["active"] is False
-        assert cache["terminated_reason"] == "daemon_pid_dead"
-
-    def test_handles_missing_cache(self, tmp_path):
-        import json
+    def test_does_not_write_filesystem_cache(self, tmp_path):
+        """Marker file only — no enforcement-cache.json written (daemon-backed state)."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
         from _common import _write_terminated_marker
         _write_terminated_marker(str(tmp_path), 12345)
         cache_path = sahjhan_dir / "enforcement-cache.json"
-        cache = json.loads(cache_path.read_text())
-        assert cache["state"] == "terminated"
-        assert cache["active"] is False
-
-    def test_handles_corrupt_cache(self, tmp_path):
-        import json
-        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
-        (sahjhan_dir / "enforcement-cache.json").write_text("NOT JSON{{{")
-        from _common import _write_terminated_marker
-        _write_terminated_marker(str(tmp_path), 12345)
-        cache = json.loads((sahjhan_dir / "enforcement-cache.json").read_text())
-        assert cache["state"] == "terminated"
+        assert not cache_path.exists(), (
+            "enforcement-cache.json should not be written — state lives in daemon memory"
+        )
 
 
 class TestReadInitPid:

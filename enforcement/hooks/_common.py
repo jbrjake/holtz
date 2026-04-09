@@ -262,11 +262,12 @@ def _write_terminated_marker(
     init_pid: int,
     detected_by: str = "unknown",
 ) -> None:
-    """Write the audit-terminated marker and update enforcement cache.
+    """Write the audit-terminated marker file.
 
     Called when daemon death is detected. The marker file prevents
-    repeated PID checks on subsequent hook invocations. The cache
-    update ensures stop_hook allows stop.
+    repeated PID checks on subsequent hook invocations. All callers
+    (stop_hook, primer, _daemon_lifecycle) check this marker before
+    read_cache(), so no daemon-side state update is needed.
     """
     data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
     marker = os.path.join(data_dir, "terminated")
@@ -276,15 +277,3 @@ def _write_terminated_marker(
         f.write(f"detected_by: {detected_by}\n")
         ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: UP017
         f.write(f"detected_at: {ts}\n")
-
-    cache_path = os.path.join(data_dir, "enforcement-cache.json")
-    try:
-        with open(cache_path, encoding="utf-8") as f:
-            cache = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        cache = {}
-    cache["state"] = "terminated"
-    cache["terminated_reason"] = "daemon_pid_dead"
-    cache["active"] = False
-    with open(cache_path, "w", encoding="utf-8") as f:
-        json.dump(cache, f)

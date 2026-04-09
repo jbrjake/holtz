@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Sahjhan stop hook — blocks stop in non-terminal audit states.
 
-Stop hook. Two enforcement layers:
-1. Cache-based state check: reads enforcement-cache.json directly
-   (no subprocess, no timeout — fixes issue #24)
-2. Freshness gate: only blocks when enforcement is fresh (sahjhan
-   was used recently). Stale enforcement = abandoned audit, allow
-   stop with a warning.
+Stop hook. Three enforcement layers:
+1. Terminated marker: fast-path allow when daemon death already detected.
+2. Daemon liveness: PID check, writes marker if dead, allows stop.
+3. Cache-based state check: reads enforcement state from daemon
+   (no subprocess, no timeout — fixes issue #24). Freshness gate
+   only blocks when enforcement is fresh (recent sahjhan activity).
 
 Falls back to WARN if sahjhan config is unavailable during an
 active audit. See: holtz issue #19.
