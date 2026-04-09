@@ -4,18 +4,14 @@ Used by commit_gate.py (PreToolUse) and protocol_tracker.py (PostToolUse).
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
 from datetime import datetime, timezone
 from typing import Any
 
-CACHE_FILENAME = "enforcement-cache.json"
 _ENFORCEMENT_FRESHNESS_MINUTES = 30
-
-
-def _cache_path(cwd: str) -> str:
-    return os.path.join(cwd, "docs", "holtz", ".sahjhan", CACHE_FILENAME)
 
 
 def _read_perspectives_total() -> int:
@@ -53,32 +49,54 @@ def empty_cache() -> dict[str, Any]:
 
 
 def read_cache(cwd: str) -> dict[str, Any] | None:
-    path = _cache_path(cwd)
-    if not os.path.isfile(path):
-        return None
+    """Read enforcement state from the sahjhan daemon.
+
+    Returns None if the daemon is unreachable or has no enforcement state
+    (fail-open, same behavior as the old "file not found" path).
+    """
     try:
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
+        from _common import _daemon_request, _get_daemon_socket_path
+        sock_path = _get_daemon_socket_path(cwd)
+        resp = _daemon_request(sock_path, {"op": "enforcement_read"})
+        return json.loads(base64.b64decode(resp["data"]))
+    except Exception:
         return None
 
 
 def write_cache(cwd: str, cache: dict[str, Any]) -> None:
-    path = _cache_path(cwd)
-    parent = os.path.dirname(path)
-    os.makedirs(parent, exist_ok=True)
-    cache["last_refresh"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
-    import tempfile
-    fd, tmp = tempfile.mkstemp(dir=parent, suffix=".tmp")
+    """Write enforcement state to the sahjhan daemon.
+
+    The daemon sets last_refresh to the current UTC timestamp.
+    Raises RuntimeError if the daemon is unreachable.
+    """
+    from _common import _daemon_request, _get_daemon_socket_path
+    sock_path = _get_daemon_socket_path(cwd)
+    data = base64.b64encode(json.dumps(cache).encode()).decode()
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(cache, f, indent=2)
-        os.replace(tmp, path)
-    except BaseException:
-        import contextlib
-        with contextlib.suppress(OSError):
-            os.unlink(tmp)
+        _daemon_request(sock_path, {"op": "enforcement_write", "data": data})
+    except RuntimeError:
         raise
+    except Exception as exc:
+        raise RuntimeError(f"sahjhan daemon unreachable: {exc}") from exc
+
+
+def update_cache(cwd: str, patch: dict[str, Any]) -> dict[str, Any]:
+    """Atomically patch enforcement state in the sahjhan daemon.
+
+    Sends a partial dict of fields to merge into current state.
+    Returns the full state after merge.
+    Raises RuntimeError if daemon unreachable or no state exists.
+    """
+    from _common import _daemon_request, _get_daemon_socket_path
+    sock_path = _get_daemon_socket_path(cwd)
+    data = base64.b64encode(json.dumps(patch).encode()).decode()
+    try:
+        resp = _daemon_request(sock_path, {"op": "enforcement_update", "patch": data})
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(f"sahjhan daemon unreachable: {exc}") from exc
+    return json.loads(base64.b64decode(resp["data"]))
 
 
 def is_enforcement_fresh(
