@@ -55,7 +55,7 @@ class MockEnforcementDaemon:
         while not self._stop_event.is_set():
             try:
                 conn, _ = self._server.accept()
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 break
@@ -84,7 +84,7 @@ class MockEnforcementDaemon:
 
         if op == "enforcement_write":
             raw = json.loads(base64.b64decode(request["data"]))
-            raw["last_refresh"] = datetime.now(timezone.utc).isoformat()
+            raw["last_refresh"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
             self.state = raw
             return {"ok": True}
 
@@ -93,7 +93,7 @@ class MockEnforcementDaemon:
                 return {"ok": False, "error": "not_found", "message": "no enforcement state to update"}
             patch = json.loads(base64.b64decode(request["patch"]))
             self.state.update(patch)
-            self.state["last_refresh"] = datetime.now(timezone.utc).isoformat()
+            self.state["last_refresh"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
             encoded = base64.b64encode(json.dumps(self.state).encode()).decode()
             return {"ok": True, "data": encoded}
 

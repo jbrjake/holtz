@@ -120,8 +120,23 @@ def mock_daemon(tmp_path, monkeypatch):
     daemon.start()
 
     # Patch _get_daemon_socket_path so code under test finds our short socket.
-    # The function is in enforcement/hooks/_common.py, loaded as _common in sys.modules.
+    # Eagerly load _common if not already imported (tests that use mock_daemon
+    # before importing _protocol_cache would otherwise silently skip the patch).
+    import importlib.util as _ilu
     import sys as _sys
+
+    if "_common" not in _sys.modules:
+        _enforcement_hooks = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "enforcement", "hooks",
+        )
+        _spec = _ilu.spec_from_file_location(
+            "_common", os.path.join(_enforcement_hooks, "_common.py"),
+        )
+        if _spec and _spec.loader:
+            _mod = _ilu.module_from_spec(_spec)
+            _spec.loader.exec_module(_mod)
+            _sys.modules["_common"] = _mod
+
     _common_mod = _sys.modules.get("_common")
     if _common_mod and hasattr(_common_mod, "_get_daemon_socket_path"):
         _original = _common_mod._get_daemon_socket_path
