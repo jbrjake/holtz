@@ -181,7 +181,9 @@ def test_parse_header_only_section_skipped():
 def test_cli_main_with_path(tmp_path, capsys):
     """CLI with explicit path outputs JSON lens list."""
     import contextlib
+
     import pytest
+
     from parse_lens_registry import main
 
     registry_file = tmp_path / "registry.md"
@@ -196,7 +198,7 @@ def test_cli_main_with_path(tmp_path, capsys):
     import json
     lenses = json.loads(captured.out)
     assert len(lenses) == 2
-    names = [l["name"] for l in lenses]
+    names = [lens["name"] for lens in lenses]
     assert "component" in names
     assert "integration" in names
 
@@ -205,7 +207,9 @@ def test_cli_main_with_scope_filter(tmp_path, capsys):
     """CLI --scope filters output to matching lenses."""
     import contextlib
     import json
+
     import pytest
+
     from parse_lens_registry import main
 
     registry_file = tmp_path / "registry.md"
@@ -227,7 +231,9 @@ def test_cli_main_with_scope_filter(tmp_path, capsys):
 def test_cli_main_names_only(tmp_path, capsys):
     """CLI --names-only outputs one lens name per line."""
     import contextlib
+
     import pytest
+
     from parse_lens_registry import main
 
     registry_file = tmp_path / "registry.md"
@@ -248,8 +254,8 @@ def test_cli_main_names_only(tmp_path, capsys):
 
 def test_cli_main_auto_detect_missing(tmp_path, capsys):
     """CLI with no path and missing auto-detect file exits 1."""
-    import contextlib
     import pytest
+
     from parse_lens_registry import main
 
     exit_code = 0

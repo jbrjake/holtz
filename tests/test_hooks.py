@@ -414,6 +414,7 @@ class TestCommonInProcess:
     def _import_common():
         sys.path.insert(0, HOOKS_DIR)
         import importlib
+
         import _common
         importlib.reload(_common)
         return _common

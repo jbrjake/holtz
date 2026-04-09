@@ -1046,9 +1046,8 @@ def test_save_cleanup_on_error(tmp_path):
     g = ImpactGraph(tmp_path / "graph.json")
     g.add_node("a.py", "module", "a.py")
 
-    with mock.patch("os.write", side_effect=OSError("disk full")):
-        with pytest.raises(OSError, match="disk full"):
-            g.save()
+    with mock.patch("os.write", side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        g.save()
 
     # Temp file should be cleaned up, no .tmp files left behind
     tmp_files = list(tmp_path.glob("*.tmp"))
@@ -1075,13 +1074,9 @@ def _seed_graph(graph_path):
 
 def _run_cli(args, capsys):
     """Run impact_graph.main() in-process with given argv, return (exit_code, stdout, stderr)."""
-    import contextlib
     from impact_graph import main
 
     exit_code = 0
-    with contextlib.suppress(SystemExit) as ctx:
-        pass
-    # We need to actually catch the exit code
     try:
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr("sys.argv", ["impact_graph.py"] + args)

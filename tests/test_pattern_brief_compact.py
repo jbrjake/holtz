@@ -218,7 +218,6 @@ class TestPatternBriefCLI:
 
     @staticmethod
     def _run_main(args, capsys):
-        import contextlib
         import pytest
         exit_code = 0
         try:
