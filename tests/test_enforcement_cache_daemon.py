@@ -98,3 +98,49 @@ class TestUpdateCacheDaemon:
         from _protocol_cache import update_cache
         with pytest.raises(RuntimeError):
             update_cache(str(tmp_path), {"stall": 1})
+
+
+class TestProtocolTrackerUpdatePatterns:
+    """Verify protocol_tracker write patterns work with daemon cache."""
+
+    def test_stall_increment(self, tmp_path, mock_daemon):
+        """Stall counter increments atomically via update_cache."""
+        from _protocol_cache import empty_cache, read_cache, update_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["stall"] = 3
+        write_cache(str(tmp_path), cache)
+
+        updated = update_cache(str(tmp_path), {"stall": 4})
+        assert updated["stall"] == 4
+
+        loaded = read_cache(str(tmp_path))
+        assert loaded is not None
+        assert loaded["stall"] == 4
+
+    def test_commit_registration(self, tmp_path, mock_daemon):
+        """Commit hash appended and stall reset via update_cache."""
+        from _protocol_cache import empty_cache, read_cache, update_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["stall"] = 5
+        cache["unregistered_commits"] = ["aaa"]
+        write_cache(str(tmp_path), cache)
+
+        updated = update_cache(str(tmp_path), {
+            "unregistered_commits": ["aaa", "bbb"],
+            "stall": 0,
+        })
+        assert updated["unregistered_commits"] == ["aaa", "bbb"]
+        assert updated["stall"] == 0
+
+    def test_sleep_double_stall(self, tmp_path, mock_daemon):
+        """Sleep command gets double stall penalty via update_cache."""
+        from _protocol_cache import empty_cache, update_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["stall"] = 3
+        write_cache(str(tmp_path), cache)
+
+        updated = update_cache(str(tmp_path), {"stall": 5})
+        assert updated["stall"] == 5

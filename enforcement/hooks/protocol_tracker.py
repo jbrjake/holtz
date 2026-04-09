@@ -22,6 +22,7 @@ from _protocol_cache import (  # noqa: E402
     is_sahjhan_cmd,
     parse_status_text,
     read_cache,
+    update_cache,
     write_cache,
 )
 from _resolve import ensure_sahjhan  # noqa: E402
@@ -154,18 +155,17 @@ def main() -> None:
 
     if is_git_commit(cmd) and exit_code == 0:
         commit_hash = _parse_commit_hash(output)
-        cache.setdefault("unregistered_commits", []).append(commit_hash)
-        cache["stall"] = 0
-        write_cache(cwd, cache)
+        commits = list(cache.get("unregistered_commits", []))
+        commits.append(commit_hash)
+        update_cache(cwd, {"unregistered_commits": commits, "stall": 0})
         exit_ok()
 
     # Test/lint/type-check commands are legitimate TDD activity — don't count as stalling
     if _is_sleep_cmd(cmd):
         # Sleep to game timing gates gets double stall penalty
-        cache["stall"] = cache.get("stall", 0) + 2
+        update_cache(cwd, {"stall": cache.get("stall", 0) + 2})
     elif not _is_tdd_cmd(cmd):
-        cache["stall"] = cache.get("stall", 0) + 1
-    write_cache(cwd, cache)
+        update_cache(cwd, {"stall": cache.get("stall", 0) + 1})
     exit_ok()
 
 
