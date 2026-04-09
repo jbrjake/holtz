@@ -120,7 +120,7 @@ class TestProtocolTrackerUpdatePatterns:
 
     def test_commit_registration(self, tmp_path, mock_daemon):
         """Commit hash appended and stall reset via update_cache."""
-        from _protocol_cache import empty_cache, read_cache, update_cache, write_cache
+        from _protocol_cache import empty_cache, update_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["stall"] = 5

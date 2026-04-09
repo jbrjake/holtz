@@ -1,7 +1,6 @@
 """Tests for stop_hook.py — Stop event hook."""
 from __future__ import annotations
 
-import json
 import os
 import sys
 
@@ -15,21 +14,21 @@ from test_sahjhan_integration import run_enforcement_hook  # noqa: E402
 class TestStopHookDaemonLiveness:
     """Tests for daemon liveness check in stop_hook.py (issue #45)."""
 
-    def test_dead_daemon_allows_stop(self, tmp_path):
+    def test_dead_daemon_allows_stop(self, tmp_path, mock_daemon):
         """Dead daemon PID → allow stop and write terminated marker."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
 
         # Write a PID that is guaranteed to be dead
         (sahjhan_dir / "daemon-init-pid").write_text("99999999")
 
-        # Write enforcement cache with active non-terminal state
-        cache = {
+        # Write enforcement cache via daemon
+        from _protocol_cache import write_cache
+        write_cache(str(tmp_path), {
             "state": "fix_loop",
             "active": True,
             "last_sahjhan_cmd": "2099-01-01T00:00:00+00:00",
-        }
-        (sahjhan_dir / "enforcement-cache.json").write_text(json.dumps(cache))
+        })
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("stop_hook.py", event, cwd=str(tmp_path))
@@ -46,18 +45,18 @@ class TestStopHookDaemonLiveness:
             "Dead daemon should write terminated marker"
         )
 
-    def test_no_pid_file_allows_stop(self, tmp_path):
+    def test_no_pid_file_allows_stop(self, tmp_path, mock_daemon):
         """No daemon PID file → allow stop (daemon never started)."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
 
         # No daemon-init-pid file, but cache exists with non-terminal state
-        cache = {
+        from _protocol_cache import write_cache
+        write_cache(str(tmp_path), {
             "state": "fix_loop",
             "active": True,
             "last_sahjhan_cmd": "2099-01-01T00:00:00+00:00",
-        }
-        (sahjhan_dir / "enforcement-cache.json").write_text(json.dumps(cache))
+        })
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("stop_hook.py", event, cwd=str(tmp_path))
@@ -67,21 +66,21 @@ class TestStopHookDaemonLiveness:
             f"No PID file should allow stop but got: {output}"
         )
 
-    def test_live_daemon_still_blocks(self, tmp_path):
+    def test_live_daemon_still_blocks(self, tmp_path, mock_daemon):
         """Live daemon PID → still block stop in non-terminal state."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
 
         # Write our own PID (guaranteed alive)
         (sahjhan_dir / "daemon-init-pid").write_text(str(os.getpid()))
 
-        # Write enforcement cache with active non-terminal state
-        cache = {
+        # Write enforcement cache via daemon
+        from _protocol_cache import write_cache
+        write_cache(str(tmp_path), {
             "state": "fix_loop",
             "active": True,
             "last_sahjhan_cmd": "2099-01-01T00:00:00+00:00",
-        }
-        (sahjhan_dir / "enforcement-cache.json").write_text(json.dumps(cache))
+        })
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("stop_hook.py", event, cwd=str(tmp_path))
@@ -95,21 +94,21 @@ class TestStopHookDaemonLiveness:
 class TestStopHookRemediationMessage:
     """Tests for remediation message in stop_hook.py block output."""
 
-    def test_block_message_explains_two_step(self, tmp_path):
+    def test_block_message_explains_two_step(self, tmp_path, mock_daemon):
         """Block message should explain the two-step escape (kill daemon, retry stop)."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
 
         # Write our own PID (guaranteed alive)
         (sahjhan_dir / "daemon-init-pid").write_text(str(os.getpid()))
 
-        # Write enforcement cache with active non-terminal state
-        cache = {
+        # Write enforcement cache via daemon
+        from _protocol_cache import write_cache
+        write_cache(str(tmp_path), {
             "state": "fix_loop",
             "active": True,
             "last_sahjhan_cmd": "2099-01-01T00:00:00+00:00",
-        }
-        (sahjhan_dir / "enforcement-cache.json").write_text(json.dumps(cache))
+        })
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("stop_hook.py", event, cwd=str(tmp_path))
