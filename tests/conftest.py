@@ -93,20 +93,46 @@ def make_item():
     return _make_item
 
 
+import os
+import shutil
+import tempfile
+
 from mock_enforcement_daemon import MockEnforcementDaemon
 
 
 @pytest.fixture
-def mock_daemon(tmp_path):
-    """Start a mock enforcement daemon with socket at the standard path.
+def mock_daemon(tmp_path, monkeypatch):
+    """Start a mock enforcement daemon reachable via _get_daemon_socket_path(tmp_path).
 
-    The daemon listens at tmp_path/docs/holtz/.sahjhan/daemon.sock,
-    matching _get_daemon_socket_path(cwd=str(tmp_path)).
+    macOS limits AF_UNIX paths to 104 chars, and pytest tmp_path can exceed
+    that. We create the socket in a short /tmp dir and monkeypatch
+    _get_daemon_socket_path to return the short path when cwd matches tmp_path.
     """
-    socket_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-    socket_dir.mkdir(parents=True, exist_ok=True)
-    socket_path = socket_dir / "daemon.sock"
+    # Create the .sahjhan dir in tmp_path (code checks for its existence)
+    sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+    sahjhan_dir.mkdir(parents=True, exist_ok=True)
+
+    # Short socket path to stay within kernel limit
+    short_dir = tempfile.mkdtemp(prefix="hd_")
+    socket_path = os.path.join(short_dir, "d.sock")
+
     daemon = MockEnforcementDaemon(socket_path)
     daemon.start()
+
+    # Patch _get_daemon_socket_path so code under test finds our short socket.
+    # The function is in enforcement/hooks/_common.py, loaded as _common in sys.modules.
+    import sys as _sys
+    _common_mod = _sys.modules.get("_common")
+    if _common_mod and hasattr(_common_mod, "_get_daemon_socket_path"):
+        _original = _common_mod._get_daemon_socket_path
+
+        def _patched(cwd=None):
+            if cwd is not None and os.path.realpath(cwd) == os.path.realpath(str(tmp_path)):
+                return socket_path
+            return _original(cwd)
+
+        monkeypatch.setattr(_common_mod, "_get_daemon_socket_path", _patched)
+
     yield daemon
     daemon.stop()
+    shutil.rmtree(short_dir, ignore_errors=True)
