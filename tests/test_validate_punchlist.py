@@ -2576,3 +2576,124 @@ def test_cli_without_render_runs_validation(tmp_path, make_item):
     )
     # Normal validation output
     assert "Holtz Punchlist Validation" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# CLI main() in-process tests (coverage-contributing)
+# ---------------------------------------------------------------------------
+
+
+def _run_vp_main(args, capsys):
+    """Run validate_punchlist.main() in-process, return (exit_code, stdout, stderr)."""
+    import pytest
+    exit_code = 0
+    try:
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("sys.argv", ["validate_punchlist.py"] + args)
+            vp.main()
+    except SystemExit as e:
+        exit_code = e.code if e.code is not None else 0
+    captured = capsys.readouterr()
+    return exit_code, captured.out, captured.err
+
+
+def test_cli_main_missing_file(tmp_path, capsys):
+    """CLI with nonexistent file prints error and exits 1."""
+    code, out, _ = _run_vp_main([str(tmp_path / "nope.md")], capsys)
+    assert code == 1
+    assert "not found" in out
+
+
+def test_cli_main_empty_punchlist(tmp_path, capsys):
+    """CLI with file containing no items exits 1."""
+    f = tmp_path / "PUNCHLIST.md"
+    f.write_text("# Just a title\nNo items here.\n")
+    code, out, _ = _run_vp_main([str(f)], capsys)
+    assert code == 1
+    assert "No punchlist items" in out
+
+
+def test_cli_main_unclosed_fence_hint(tmp_path, capsys):
+    """CLI hints about unclosed fence when no items found and fence is open."""
+    f = tmp_path / "PUNCHLIST.md"
+    f.write_text("# Punchlist\n\n```python\ndef foo():\n    pass\n# No closing fence\n")
+    code, out, _ = _run_vp_main([str(f)], capsys)
+    assert code == 1
+    assert "unclosed code fence" in out
+
+
+def test_cli_main_validation_clean(tmp_path, make_item, capsys):
+    """CLI with valid punchlist prints stats and exits 0."""
+    f = tmp_path / "PUNCHLIST.md"
+    f.write_text(make_item(
+        extra_fields="**Determinism:** deterministic",
+        wrap=True,
+    ))
+    code, out, _ = _run_vp_main([str(f)], capsys)
+    assert code == 0
+    assert "Holtz Punchlist Validation" in out
+    assert "Total items: 1" in out
+    assert "All items valid" in out
+
+
+def test_cli_main_validation_errors(tmp_path, make_item, capsys):
+    """CLI with invalid item prints errors and exits 1."""
+    f = tmp_path / "PUNCHLIST.md"
+    f.write_text(make_item(severity="BOGUS", wrap=True))
+    code, out, _ = _run_vp_main([str(f)], capsys)
+    assert code == 1
+    assert "ERRORS" in out
+    assert "invalid severity" in out
+
+
+def test_cli_main_validation_warnings(tmp_path, make_item, capsys):
+    """CLI with items generating warnings prints them."""
+    f = tmp_path / "PUNCHLIST.md"
+    # Missing location triggers a warning
+    f.write_text(make_item(location="", wrap=True))
+    code, out, _ = _run_vp_main([str(f)], capsys)
+    assert "WARNINGS" in out
+
+
+def test_cli_main_open_critical_message(tmp_path, make_item, capsys):
+    """CLI reports count of open CRITICAL items."""
+    f = tmp_path / "PUNCHLIST.md"
+    f.write_text(make_item(severity="CRITICAL", status="OPEN", wrap=True))
+    code, out, _ = _run_vp_main([str(f)], capsys)
+    assert "CRITICAL items still OPEN" in out
+
+
+def test_cli_main_render_mode(tmp_path, make_item, capsys):
+    """CLI --render outputs markdown instead of validation report."""
+    f = tmp_path / "PUNCHLIST.md"
+    f.write_text(make_item(wrap=True))
+    code, out, _ = _run_vp_main([str(f), "--render"], capsys)
+    assert code == 0
+    assert "BH-001" in out
+    # Should NOT have validation output
+    assert "Holtz Punchlist Validation" not in out
+
+
+def test_cli_main_filter_status(tmp_path, make_item, capsys):
+    """CLI --filter-status filters items before validation."""
+    content = make_item(item_id="BH-001", status="OPEN", wrap=True)
+    content += "\n" + make_item(item_id="BH-002", status="RESOLVED",
+                                resolution="Fixed in abc123.")
+    f = tmp_path / "PUNCHLIST.md"
+    f.write_text(content)
+    code, out, _ = _run_vp_main([str(f), "--filter-status", "OPEN"], capsys)
+    assert "Total items: 1" in out
+
+
+def test_cli_main_filter_with_render(tmp_path, make_item, capsys):
+    """CLI --filter-status --render filters then renders markdown."""
+    content = make_item(item_id="BH-001", status="OPEN", wrap=True)
+    content += "\n" + make_item(item_id="BH-002", status="RESOLVED",
+                                resolution="Fixed in abc123.")
+    f = tmp_path / "PUNCHLIST.md"
+    f.write_text(content)
+    code, out, _ = _run_vp_main([
+        str(f), "--filter-status", "OPEN", "--render",
+    ], capsys)
+    assert code == 0
+    assert "BH-001" in out
