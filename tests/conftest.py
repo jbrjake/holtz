@@ -91,3 +91,22 @@ def make_item():
         return body
 
     return _make_item
+
+
+from mock_enforcement_daemon import MockEnforcementDaemon
+
+
+@pytest.fixture
+def mock_daemon(tmp_path):
+    """Start a mock enforcement daemon with socket at the standard path.
+
+    The daemon listens at tmp_path/docs/holtz/.sahjhan/daemon.sock,
+    matching _get_daemon_socket_path(cwd=str(tmp_path)).
+    """
+    socket_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+    socket_dir.mkdir(parents=True, exist_ok=True)
+    socket_path = socket_dir / "daemon.sock"
+    daemon = MockEnforcementDaemon(socket_path)
+    daemon.start()
+    yield daemon
+    daemon.stop()
