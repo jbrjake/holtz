@@ -191,3 +191,71 @@ class TestTruncate:
         result = pbc._truncate("a long sentence here", 10)
         assert result.endswith("...")
         assert len(result) <= 10
+
+
+# --- format_compact edge cases ---
+
+
+def test_format_compact_empty_entries():
+    """format_compact with no entries returns 'No patterns' message (line 130)."""
+    output = pbc.format_compact([], fmt="structured")
+    assert "No patterns recorded" in output
+
+
+def test_format_compact_unknown_format():
+    """format_compact with invalid format raises ValueError (line 158)."""
+    import pytest
+    entries = pbc.parse_brief(SAMPLE_BRIEF)
+    with pytest.raises(ValueError, match="Unknown format"):
+        pbc.format_compact(entries, fmt="bogus")
+
+
+# --- CLI main() in-process tests ---
+
+
+class TestPatternBriefCLI:
+    """In-process CLI tests for coverage of main() (lines 164-189)."""
+
+    @staticmethod
+    def _run_main(args, capsys):
+        import contextlib
+        import pytest
+        exit_code = 0
+        try:
+            with pytest.MonkeyPatch.context() as mp:
+                mp.setattr("sys.argv", ["pattern_brief_compact.py"] + args)
+                pbc.main()
+        except SystemExit as e:
+            exit_code = e.code if e.code is not None else 0
+        return exit_code, capsys.readouterr()
+
+    def test_cli_default_format(self, tmp_path, capsys):
+        """CLI with valid brief outputs structured format by default."""
+        brief_file = tmp_path / "patterns-brief.md"
+        brief_file.write_text(SAMPLE_BRIEF)
+        code, captured = self._run_main([str(brief_file)], capsys)
+        assert code == 0
+        assert "PAT-001" in captured.out
+        assert "Look for:" in captured.out  # structured format
+
+    def test_cli_oneliner_format(self, tmp_path, capsys):
+        """CLI --format oneliner produces pipe-delimited output."""
+        brief_file = tmp_path / "patterns-brief.md"
+        brief_file.write_text(SAMPLE_BRIEF)
+        code, captured = self._run_main([str(brief_file), "--format", "oneliner"], capsys)
+        assert code == 0
+        assert "|" in captured.out
+
+    def test_cli_missing_file(self, tmp_path, capsys):
+        """CLI with nonexistent file exits 0 (not an error on early runs)."""
+        code, captured = self._run_main([str(tmp_path / "nope.md")], capsys)
+        assert code == 0
+        assert "No pattern brief" in captured.err
+
+    def test_cli_empty_brief(self, tmp_path, capsys):
+        """CLI with brief containing no patterns exits 0."""
+        brief_file = tmp_path / "patterns-brief.md"
+        brief_file.write_text("# Just a header\n\nNo patterns here.\n")
+        code, captured = self._run_main([str(brief_file)], capsys)
+        assert code == 0
+        assert "No patterns in brief" in captured.err
