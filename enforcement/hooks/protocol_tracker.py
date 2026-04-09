@@ -30,15 +30,17 @@ from _common import exit_ok, read_event, resolve_config_dir  # noqa: E402
 
 
 def _is_tdd_cmd(cmd: str) -> bool:
-    """Detect test, lint, and type-check commands (TDD workflow)."""
-    cmd_stripped = cmd.strip()
-    return (
-        cmd_stripped.startswith("pytest")
-        or cmd_stripped.startswith("python -m pytest")
-        or cmd_stripped.startswith("ruff check")
-        or cmd_stripped.startswith("ruff format")
-        or cmd_stripped.startswith("mypy")
-    )
+    """Detect test, lint, and type-check commands (TDD workflow).
+
+    Checks each segment of chained commands (split on &&, ||, ;, |)
+    so that ``cd /project && python -m pytest`` is recognized.
+    """
+    _TDD_PREFIXES = ("pytest", "python -m pytest", "ruff check", "ruff format", "mypy")
+    for segment in re.split(r'&&|\|\||[;|]', cmd):
+        seg = segment.strip()
+        if any(seg.startswith(p) for p in _TDD_PREFIXES):
+            return True
+    return False
 
 
 def _is_sleep_cmd(cmd: str) -> bool:

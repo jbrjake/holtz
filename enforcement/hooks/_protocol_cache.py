@@ -217,9 +217,12 @@ def _split_shell_segments(cmd: str) -> list[str]:
         if not seg:
             continue
         # Strip all leading env var assignments (FOO=bar, export X=1, etc.)
+        # Handles quoted values with spaces: FOO="bar baz", FOO='bar baz'.
         # Uses + quantifier to handle multiple assignments in one pass.
-        # Inner \s* (not \s+) so final assignment without trailing space is stripped.
-        seg = re.sub(r'^(?:(?:export\s+)?\w+=\S*\s*)+', '', seg).strip()
+        seg = re.sub(
+            r'^(?:(?:export\s+)?\w+=(?:"[^"]*"|\'[^\']*\'|\S*)\s*)+',
+            '', seg,
+        ).strip()
         # After stripping, segment may be empty (e.g., "export FOO=bar")
         if seg:
             result.append(seg)
@@ -239,7 +242,8 @@ def is_git_commit(cmd: str) -> bool:
     for segment in _split_shell_segments(cmd):
         seg = segment.strip()
         # Strip leading env var assignments (VAR=x git commit ...)
-        stripped_seg = re.sub(r"^\s*(?:\w+=\S*\s+)*", "", seg)
+        # Handles quoted values: VAR="foo bar" git commit ...
+        stripped_seg = re.sub(r"""^\s*(?:\w+=(?:"[^"]*"|'[^']*'|\S*)\s+)*""", "", seg)
         if not re.match(r"git\s+commit\b(?!-)", stripped_seg):
             continue
         # This segment starts with git commit — check for --amend

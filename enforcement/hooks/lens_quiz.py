@@ -145,7 +145,7 @@ def _extract_symbol_body(file_content: str, symbol: str) -> str | None:
     if "." in symbol:
         class_name, method_name = symbol.split(".", 1)
         class_pattern = re.compile(rf"^class\s+{re.escape(class_name)}\b")
-        method_pattern = re.compile(rf"^\s+def\s+{re.escape(method_name)}\b")
+        method_pattern = re.compile(rf"^\s+(?:async\s+)?def\s+{re.escape(method_name)}\b")
         in_class = False
         method_start = None
         for i, line in enumerate(lines):
@@ -169,8 +169,8 @@ def _extract_symbol_body(file_content: str, symbol: str) -> str | None:
                 end = min(len(lines), i + 6)
                 return "\n".join(lines[start:end])
 
-    # For function/class names
-    pattern = re.compile(rf"^(?:def|class)\s+{re.escape(symbol)}\b")
+    # For function/class names (including async def)
+    pattern = re.compile(rf"^(?:async\s+)?(?:def|class)\s+{re.escape(symbol)}\b")
     for i, line in enumerate(lines):
         if pattern.match(line):
             return _extract_def_body(lines, i)
