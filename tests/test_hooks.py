@@ -403,3 +403,72 @@ class TestSubagentFindingsCheckInProcess:
         output = self._run_main(event, capsys)
         assert "impact-graph.json" in output.get("additionalContext", "")
 
+
+# --- _common.py in-process coverage for exit_stop_warn, exit_stop_block, read_event ---
+
+
+class TestCommonInProcess:
+    """In-process tests for _common.py functions that subprocess tests can't cover."""
+
+    @staticmethod
+    def _import_common():
+        sys.path.insert(0, HOOKS_DIR)
+        import importlib
+        import _common
+        importlib.reload(_common)
+        return _common
+
+    def test_read_event_empty_stdin(self, monkeypatch):
+        """read_event returns {} when stdin is empty (line 35)."""
+        import io
+        common = self._import_common()
+        monkeypatch.setattr("sys.stdin", io.StringIO(""))
+        result = common.read_event()
+        assert result == {}
+
+    def test_read_event_whitespace_only_stdin(self, monkeypatch):
+        """read_event returns {} when stdin is only whitespace."""
+        import io
+        common = self._import_common()
+        monkeypatch.setattr("sys.stdin", io.StringIO("   \n  \n"))
+        result = common.read_event()
+        assert result == {}
+
+    def test_read_event_malformed_json(self, monkeypatch):
+        """read_event returns {} on malformed JSON (lines 37-38)."""
+        import io
+        common = self._import_common()
+        monkeypatch.setattr("sys.stdin", io.StringIO("not valid json {{{"))
+        result = common.read_event()
+        assert result == {}
+
+    def test_read_event_valid_json(self, monkeypatch):
+        """read_event returns parsed dict for valid JSON."""
+        import io
+        common = self._import_common()
+        monkeypatch.setattr("sys.stdin", io.StringIO('{"tool_name": "Bash", "args": {}}'))
+        result = common.read_event()
+        assert result == {"tool_name": "Bash", "args": {}}
+
+    def test_exit_stop_warn_outputs_approve_decision(self, capsys):
+        """exit_stop_warn outputs decision=approve with reason (lines 163-167)."""
+        import contextlib
+        common = self._import_common()
+        with contextlib.suppress(SystemExit):
+            common.exit_stop_warn("config not found")
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+        assert output["decision"] == "approve"
+        assert output["reason"] == "config not found"
+
+    def test_exit_stop_block_outputs_block_decision(self, capsys):
+        """exit_stop_block outputs decision=block with reason (lines 177-181)."""
+        import contextlib
+        common = self._import_common()
+        with contextlib.suppress(SystemExit):
+            common.exit_stop_block("punchlist not written")
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+        assert output["decision"] == "block"
+        assert output["reason"] == "punchlist not written"
+
