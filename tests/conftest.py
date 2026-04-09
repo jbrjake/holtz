@@ -102,11 +102,11 @@ from mock_enforcement_daemon import MockEnforcementDaemon
 
 @pytest.fixture
 def mock_daemon(tmp_path, monkeypatch):
-    """Start a mock enforcement daemon reachable via _get_daemon_socket_path(tmp_path).
+    """Start a mock enforcement daemon reachable via _get_daemon_socket_path.
 
     macOS limits AF_UNIX paths to 104 chars, and pytest tmp_path can exceed
-    that. We create the socket in a short /tmp dir and monkeypatch
-    _get_daemon_socket_path to return the short path when cwd matches tmp_path.
+    that. We create the socket in a short /tmp dir and set SAHJHAN_DAEMON_SOCKET
+    so both in-process and subprocess code finds the daemon.
     """
     # Create the .sahjhan dir in tmp_path (code checks for its existence)
     sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
@@ -119,34 +119,9 @@ def mock_daemon(tmp_path, monkeypatch):
     daemon = MockEnforcementDaemon(socket_path)
     daemon.start()
 
-    # Patch _get_daemon_socket_path so code under test finds our short socket.
-    # Eagerly load _common if not already imported (tests that use mock_daemon
-    # before importing _protocol_cache would otherwise silently skip the patch).
-    import importlib.util as _ilu
-    import sys as _sys
-
-    if "_common" not in _sys.modules:
-        _enforcement_hooks = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "enforcement", "hooks",
-        )
-        _spec = _ilu.spec_from_file_location(
-            "_common", os.path.join(_enforcement_hooks, "_common.py"),
-        )
-        if _spec and _spec.loader:
-            _mod = _ilu.module_from_spec(_spec)
-            _spec.loader.exec_module(_mod)
-            _sys.modules["_common"] = _mod
-
-    _common_mod = _sys.modules.get("_common")
-    if _common_mod and hasattr(_common_mod, "_get_daemon_socket_path"):
-        _original = _common_mod._get_daemon_socket_path
-
-        def _patched(cwd=None):
-            if cwd is not None and os.path.realpath(cwd) == os.path.realpath(str(tmp_path)):
-                return socket_path
-            return _original(cwd)
-
-        monkeypatch.setattr(_common_mod, "_get_daemon_socket_path", _patched)
+    # Set env var so _get_daemon_socket_path returns our short path.
+    # This works for both in-process imports and subprocess-based hook tests.
+    monkeypatch.setenv("SAHJHAN_DAEMON_SOCKET", socket_path)
 
     yield daemon
     daemon.stop()

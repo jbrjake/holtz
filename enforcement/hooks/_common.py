@@ -136,7 +136,14 @@ def exit_enforcement_error(
 
 
 def _get_daemon_socket_path(cwd: str | None = None) -> str:
-    """Return the path to the sahjhan daemon Unix socket."""
+    """Return the path to the sahjhan daemon Unix socket.
+
+    Checks SAHJHAN_DAEMON_SOCKET env var first (used by test fixtures
+    to work around macOS AF_UNIX 104-char path limit).
+    """
+    override = os.environ.get("SAHJHAN_DAEMON_SOCKET")
+    if override:
+        return override
     if cwd is None:
         cwd = os.getcwd()
     return os.path.join(cwd, "docs", "holtz", ".sahjhan", "daemon.sock")
