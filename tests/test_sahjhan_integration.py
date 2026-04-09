@@ -16,6 +16,9 @@ import pytest
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENFORCEMENT_HOOKS_DIR = os.path.join(REPO_ROOT, "enforcement", "hooks")
 
+sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))
+from mock_enforcement_daemon import MockEnforcementDaemon  # noqa: E402
+
 
 def run_enforcement_hook(hook_name, event, cwd=None, env=None):
     """Run an enforcement hook script with the given event JSON on stdin."""
@@ -437,10 +440,10 @@ class TestBashGuard:
         assert code == 0
         assert output.get("continue") is True
 
-    def test_violation_records_event_with_field_syntax(self, tmp_path):
+    def test_violation_records_event_with_field_syntax(self, tmp_path, mock_daemon):
         """BH-007/BH-013: Violation event uses --field key=value syntax."""
         # Set up mock binary that fails manifest verify and captures violation cmd
-        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True, exist_ok=True)
         (tmp_path / "enforcement").mkdir(parents=True)
         # Write enforcement cache with fresh timestamp for freshness gate
         import sys
@@ -483,7 +486,7 @@ class TestBashGuard:
         STATUS.md, PUNCHLIST.md from ledger state). Without this skip,
         sahjhan transitions trigger permanent protocol violations.
         """
-        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True, exist_ok=True)
         (tmp_path / "enforcement").mkdir(parents=True)
         # Create mock binary that would FAIL manifest verify
         _create_mock_binary(tmp_path, (
@@ -502,9 +505,9 @@ class TestBashGuard:
         assert code == 0, "bash_guard should skip verification for sahjhan commands"
         assert output.get("continue") is True
 
-    def test_does_not_skip_for_chained_sahjhan(self, tmp_path):
+    def test_does_not_skip_for_chained_sahjhan(self, tmp_path, mock_daemon):
         """BH-019: Chained commands with non-sahjhan segments still get checked."""
-        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True, exist_ok=True)
         (tmp_path / "enforcement").mkdir(parents=True)
         # Write enforcement cache with fresh timestamp for freshness gate
         import sys
@@ -545,7 +548,7 @@ class TestBashGuard:
 
     def test_degrades_gracefully_on_oserror(self, tmp_path):
         """BH-015: bash_guard degrades gracefully when binary is unexecutable."""
-        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True, exist_ok=True)
         (tmp_path / "enforcement").mkdir(parents=True)
         # Create binary that is not executable (triggers OSError)
         _create_mock_binary(tmp_path, "exit 0")
@@ -612,11 +615,10 @@ class TestPrimer:
             shutil.rmtree(short_tmp, ignore_errors=True)
 
     def _run_reset_test(self, tmp_path):
-        import socket as socket_mod
-        import threading
+        import tempfile
 
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
         (tmp_path / "enforcement").mkdir(parents=True)
         # Write enforcement cache with fresh timestamp for freshness gate
         import sys
@@ -624,51 +626,47 @@ class TestPrimer:
         from datetime import datetime, timezone
 
         from _protocol_cache import empty_cache, write_cache
-        _cache = empty_cache()
-        _cache["state"] = "fix_loop"
-        _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
-        write_cache(str(tmp_path), _cache)
 
-        # Set up a mock daemon socket that responds to sign requests
-        sock_path = str(sahjhan_dir / "daemon.sock")
-        srv = socket_mod.socket(socket_mod.AF_UNIX, socket_mod.SOCK_STREAM)
-        srv.bind(sock_path)
-        srv.listen(1)
-        srv.settimeout(5)
+        # Start a mock daemon at a short socket path to handle enforcement ops
+        # and sign requests (MockEnforcementDaemon handles enforcement_read/write
+        # and sign ops — see mock_enforcement_daemon.py).
+        short_sock_dir = tempfile.mkdtemp(prefix="hzr_")
+        sock_path = os.path.join(short_sock_dir, "d.sock")
+        daemon = MockEnforcementDaemon(sock_path)
+        daemon.start()
 
-        def _serve():
-            import json as _json
-            try:
-                conn, _ = srv.accept()
-                data = conn.makefile().readline()
-                req = _json.loads(data)
-                if req.get("op") == "sign":
-                    conn.sendall((_json.dumps({"ok": True, "proof": "deadbeef"}) + "\n").encode())
-                conn.close()
-            except Exception:
-                pass
+        saved_sock_env = os.environ.get("SAHJHAN_DAEMON_SOCKET")
+        os.environ["SAHJHAN_DAEMON_SOCKET"] = sock_path
+        try:
+            _cache = empty_cache()
+            _cache["state"] = "fix_loop"
+            _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+            write_cache(str(tmp_path), _cache)
 
-        # Start daemon mock in background (may need multiple connections)
-        threads = [threading.Thread(target=_serve, daemon=True) for _ in range(3)]
-        for t in threads:
-            t.start()
+            log_file = tmp_path / "reset_cmd.log"
+            _create_mock_binary(tmp_path, (
+                'echo "$*" >> ' + str(log_file) + '\n'
+                'case "$*" in\n'
+                '  *status*)\n'
+                '    echo "state: fix_loop (10 events, chain valid)"\n'
+                '    exit 0\n'
+                '    ;;\n'
+                'esac\n'
+                'exit 0'
+            ))
+            event = {"user_message": "continue", "cwd": str(tmp_path)}
+            run_enforcement_hook(
+                "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+            )
+        finally:
+            daemon.stop()
+            import shutil
+            shutil.rmtree(short_sock_dir, ignore_errors=True)
+            if saved_sock_env is None:
+                os.environ.pop("SAHJHAN_DAEMON_SOCKET", None)
+            else:
+                os.environ["SAHJHAN_DAEMON_SOCKET"] = saved_sock_env
 
-        log_file = tmp_path / "reset_cmd.log"
-        _create_mock_binary(tmp_path, (
-            'echo "$*" >> ' + str(log_file) + '\n'
-            'case "$*" in\n'
-            '  *status*)\n'
-            '    echo "state: fix_loop (10 events, chain valid)"\n'
-            '    exit 0\n'
-            '    ;;\n'
-            'esac\n'
-            'exit 0'
-        ))
-        event = {"user_message": "continue", "cwd": str(tmp_path)}
-        run_enforcement_hook(
-            "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
-        )
-        srv.close()
         assert log_file.exists(), (
             "primer should record a context_reset event when active non-terminal run exists"
         )
@@ -680,7 +678,7 @@ class TestPrimer:
 
     def test_degrades_gracefully_on_oserror(self, tmp_path):
         """BH-015: primer degrades gracefully when binary is unexecutable."""
-        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True, exist_ok=True)
         _create_mock_binary(tmp_path, "exit 0")
         binary_path = list((tmp_path / "bin").iterdir())[0]
         binary_path.chmod(0o000)
@@ -711,18 +709,40 @@ class TestPrimer:
             shutil.rmtree(short_tmp, ignore_errors=True)
 
     def _run_daemon_death_test(self, tmp_path):
+        import shutil
+        import tempfile
         from datetime import datetime, timezone
 
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
         (tmp_path / "enforcement").mkdir(parents=True)
 
         sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
         from _protocol_cache import empty_cache, write_cache
-        _cache = empty_cache()
-        _cache["state"] = "awaiting_clear"
-        _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
-        write_cache(str(tmp_path), _cache)
+
+        # Start a mock daemon at a short socket path to allow write_cache during setup.
+        # The daemon is stopped BEFORE running the primer subprocess so the primer
+        # finds no running daemon (simulating daemon death detection).
+        short_sock_dir = tempfile.mkdtemp(prefix="hzd_")
+        sock_path = os.path.join(short_sock_dir, "d.sock")
+        daemon = MockEnforcementDaemon(sock_path)
+        daemon.start()
+
+        saved_sock_env = os.environ.get("SAHJHAN_DAEMON_SOCKET")
+        os.environ["SAHJHAN_DAEMON_SOCKET"] = sock_path
+        try:
+            _cache = empty_cache()
+            _cache["state"] = "awaiting_clear"
+            _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+            write_cache(str(tmp_path), _cache)
+        finally:
+            # Stop daemon before primer runs — primer should find no socket
+            daemon.stop()
+            shutil.rmtree(short_sock_dir, ignore_errors=True)
+            if saved_sock_env is None:
+                os.environ.pop("SAHJHAN_DAEMON_SOCKET", None)
+            else:
+                os.environ["SAHJHAN_DAEMON_SOCKET"] = saved_sock_env
 
         # Dead init PID — this is how primer detects daemon death
         (sahjhan_dir / "daemon-init-pid").write_text("99999999\n")
@@ -857,7 +877,7 @@ class TestBashGuardWithMockBinary:
     """BH-010: Tests that exercise actual bash_guard logic with a mock binary."""
 
     def _setup(self, tmp_path, verify_exit=0, verify_stderr=""):
-        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True, exist_ok=True)
         (tmp_path / "enforcement").mkdir(parents=True)
         # Write enforcement cache with fresh timestamp for freshness gate
         import sys
@@ -877,7 +897,7 @@ class TestBashGuardWithMockBinary:
             f'exit 0'
         ))
 
-    def test_allows_clean_manifest(self, tmp_path):
+    def test_allows_clean_manifest(self, tmp_path, mock_daemon):
         """Bash guard allows when manifest verify passes."""
         self._setup(tmp_path, verify_exit=0)
         event = {"tool_name": "Bash", "cwd": str(tmp_path)}
@@ -887,7 +907,7 @@ class TestBashGuardWithMockBinary:
         assert code == 0
         assert output.get("continue") is True
 
-    def test_warns_on_manifest_violation(self, tmp_path):
+    def test_warns_on_manifest_violation(self, tmp_path, mock_daemon):
         """Bash guard warns when manifest verify fails."""
         self._setup(tmp_path, verify_exit=1, verify_stderr="tampered")
         event = {"tool_name": "Bash", "cwd": str(tmp_path)}
@@ -903,7 +923,7 @@ class TestPrimerWithMockBinary:
     """BH-010: Tests that exercise actual primer logic with a mock binary."""
 
     def _setup(self, tmp_path, status_lines):
-        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True, exist_ok=True)
         (tmp_path / "enforcement").mkdir(parents=True)
         # Write enforcement cache with fresh timestamp for freshness gate
         import sys
@@ -928,7 +948,7 @@ class TestPrimerWithMockBinary:
             'exit 0'
         ))
 
-    def test_injects_context_for_active_run(self, tmp_path):
+    def test_injects_context_for_active_run(self, tmp_path, mock_daemon):
         """Primer injects resume context when an active run exists."""
         status = [
             "state: fix_loop (50 events, chain valid)",
@@ -949,7 +969,7 @@ class TestPrimerWithMockBinary:
         context = output.get("additionalContext", "")
         assert "fix_loop" in context
 
-    def test_silent_for_terminal_state(self, tmp_path):
+    def test_silent_for_terminal_state(self, tmp_path, mock_daemon):
         """Primer does nothing when run is in terminal state."""
         self._setup(tmp_path, ["state: finalized (100 events, chain valid)"])
         event = {"user_message": "hello", "cwd": str(tmp_path)}
@@ -961,7 +981,7 @@ class TestPrimerWithMockBinary:
         assert output.get("continue") is True
         assert "additionalContext" not in output
 
-    def test_injects_lens_priming_in_audit(self, tmp_path):
+    def test_injects_lens_priming_in_audit(self, tmp_path, mock_daemon):
         """Primer injects lens priming when in audit state with active perspective."""
         status = [
             "state: audit (30 events, chain valid)",
@@ -978,7 +998,7 @@ class TestPrimerWithMockBinary:
         context = output.get("additionalContext", "")
         assert "audit" in context
 
-    def test_warns_when_context_reset_fails(self, tmp_path):
+    def test_warns_when_context_reset_fails(self, tmp_path, mock_daemon):
         """Issue #35 bug 4: Primer must warn (not silently suppress) when context_reset fails.
 
         When the daemon is unreachable, the primer should still inject resume
@@ -992,10 +1012,13 @@ class TestPrimerWithMockBinary:
             "  resume: blocked",
         ]
         self._setup(tmp_path, status)
-        # No daemon running → record_authed_event will fail
+        # Subprocess must run without SAHJHAN_DAEMON_SOCKET so record_authed_event fails
+        # (no daemon socket at the default path) while _setup could use the mock daemon.
+        env = _mock_env(tmp_path)
+        env.pop("SAHJHAN_DAEMON_SOCKET", None)
         event = {"user_message": "continue", "cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook(
-            "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+            "primer.py", event, cwd=str(tmp_path), env=env
         )
         context = output.get("additionalContext", "")
         # Must still inject resume context
@@ -1080,7 +1103,7 @@ class TestStopHook:
 
     def test_degrades_gracefully_on_oserror(self, tmp_path):
         """stop_hook allows when binary is unexecutable."""
-        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True, exist_ok=True)
         _create_mock_binary(tmp_path, "exit 0")
         binary_path = list((tmp_path / "bin").iterdir())[0]
         binary_path.chmod(0o000)
@@ -1120,7 +1143,7 @@ class TestStopHook:
         "perspective_clean", "all_perspectives_clean",
         "final_sweep_clean", "converged",
     ])
-    def test_blocks_in_non_terminal_non_active_states(self, tmp_path, state):
+    def test_blocks_in_non_terminal_non_active_states(self, tmp_path, state, mock_daemon):
         """Issue #22: stop hook must block ALL non-terminal states, not just _ACTIVE_WORK_STATES."""
         self._setup_active_audit(tmp_path, state)
         event = {"cwd": str(tmp_path)}
@@ -1134,7 +1157,7 @@ class TestStopHook:
             f"Full output: {output}"
         )
 
-    def test_allows_in_awaiting_clear_state(self, tmp_path):
+    def test_allows_in_awaiting_clear_state(self, tmp_path, mock_daemon):
         """Issue #32: awaiting_clear is designed for agent stop — must be allowed."""
         self._setup_active_audit(tmp_path, "awaiting_clear")
         event = {"cwd": str(tmp_path)}
@@ -1149,7 +1172,7 @@ class TestStopHook:
     @pytest.mark.parametrize("state", [
         "audit", "fix_loop", "pattern_analysis", "final_sweep",
     ])
-    def test_blocks_in_active_work_states(self, tmp_path, state):
+    def test_blocks_in_active_work_states(self, tmp_path, state, mock_daemon):
         """Active work states must also be blocked (pre-existing behavior)."""
         self._setup_active_audit(tmp_path, state)
         event = {"cwd": str(tmp_path)}
@@ -1161,7 +1184,7 @@ class TestStopHook:
             f"Active state '{state}' should be blocked but got: {output}"
         )
 
-    def test_allows_in_idle_state(self, tmp_path):
+    def test_allows_in_idle_state(self, tmp_path, mock_daemon):
         """Idle state should allow stop (no audit in progress)."""
         self._setup_active_audit(tmp_path, "idle")
         event = {"cwd": str(tmp_path)}
@@ -1173,7 +1196,7 @@ class TestStopHook:
             f"Idle state should allow stop but got: {output}"
         )
 
-    def test_allows_in_finalized_state(self, tmp_path):
+    def test_allows_in_finalized_state(self, tmp_path, mock_daemon):
         """Terminal (finalized) state should allow stop."""
         self._setup_active_audit(tmp_path, "finalized")
         event = {"cwd": str(tmp_path)}
@@ -1192,7 +1215,7 @@ class TestStopHookTerminatedAudit:
     def test_allows_stop_on_terminated_marker(self, tmp_path):
         """Terminated marker present → allow stop."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
         (sahjhan_dir / "terminated").write_text("reason: daemon_pid_dead\n")
 
         event = {"cwd": str(tmp_path)}

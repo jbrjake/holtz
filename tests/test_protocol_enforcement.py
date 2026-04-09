@@ -26,13 +26,13 @@ def _force_no_binary(tmp_path):
 class TestPreToolHookFailClosed:
     """Issue #39: pre_tool_hook blocks when daemon unreachable during active audit."""
 
-    def test_blocks_when_binary_unavailable_and_fresh(self, tmp_path):
+    def test_blocks_when_binary_unavailable_and_fresh(self, tmp_path, mock_daemon):
         """Sahjhan binary missing + fresh enforcement → block."""
         from datetime import datetime, timezone
 
         from _protocol_cache import empty_cache, write_cache
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
@@ -54,11 +54,11 @@ class TestPreToolHookFailClosed:
         reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
         assert "ENFORCEMENT DEGRADED" in reason
 
-    def test_allows_when_binary_unavailable_and_stale(self, tmp_path):
+    def test_allows_when_binary_unavailable_and_stale(self, tmp_path, mock_daemon):
         """Sahjhan binary missing + stale enforcement → allow."""
         from _protocol_cache import empty_cache, write_cache
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # stale
@@ -99,8 +99,8 @@ class TestPreToolHookFailClosed:
 class TestProtocolCache:
     """Tests for _protocol_cache.py shared module."""
 
-    def test_read_cache_missing_file(self, tmp_path):
-        """Returns None when cache file doesn't exist."""
+    def test_read_cache_daemon_unreachable(self, tmp_path):
+        """Returns None when daemon is unreachable (fail-open)."""
         from _protocol_cache import read_cache
         assert read_cache(str(tmp_path)) is None
 
@@ -119,7 +119,7 @@ class TestProtocolCache:
             _protocol_cache._read_perspectives_total()
         monkeypatch.setattr(tomllib, "load", original_load)
 
-    def test_write_and_read_cache(self, tmp_path):
+    def test_write_and_read_cache(self, tmp_path, mock_daemon):
         """Round-trip write then read."""
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
@@ -405,7 +405,7 @@ class TestProtocolTracker:
         assert code == 0
         assert output.get("continue") is True
 
-    def test_detects_git_commit(self, tmp_path):
+    def test_detects_git_commit(self, tmp_path, mock_daemon):
         """Git commit updates cache with unregistered commit."""
         from datetime import datetime, timezone  # noqa: UP017
 
@@ -428,7 +428,7 @@ class TestProtocolTracker:
         assert updated is not None
         assert "abc1234" in updated["unregistered_commits"]
 
-    def test_increments_stall_counter(self, tmp_path):
+    def test_increments_stall_counter(self, tmp_path, mock_daemon):
         """Non-git, non-sahjhan, non-TDD commands increment stall."""
         from datetime import datetime, timezone  # noqa: UP017
 
@@ -450,7 +450,7 @@ class TestProtocolTracker:
         updated = read_cache(str(tmp_path))
         assert updated["stall"] == 6
 
-    def test_tdd_commands_skip_stall(self, tmp_path):
+    def test_tdd_commands_skip_stall(self, tmp_path, mock_daemon):
         """Test/lint/type-check commands do not increment stall (BH-012)."""
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
@@ -477,7 +477,7 @@ class TestProtocolTracker:
         assert code == 0
         assert output.get("continue") is True
 
-    def test_ignores_failed_git_commit(self, tmp_path):
+    def test_ignores_failed_git_commit(self, tmp_path, mock_daemon):
         """Failed git commit does not add to unregistered."""
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
@@ -506,7 +506,7 @@ class TestProtocolTracker:
         code, output, _ = run_enforcement_hook("protocol_tracker.py", event)
         assert code == 0
 
-    def test_sahjhan_cmd_updates_last_sahjhan_cmd(self, tmp_path):
+    def test_sahjhan_cmd_updates_last_sahjhan_cmd(self, tmp_path, mock_daemon):
         """Sahjhan commands update last_sahjhan_cmd timestamp."""
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
@@ -527,7 +527,7 @@ class TestProtocolTracker:
         from datetime import datetime
         datetime.fromisoformat(updated["last_sahjhan_cmd"])
 
-    def test_non_sahjhan_cmd_does_not_update_last_sahjhan_cmd(self, tmp_path):
+    def test_non_sahjhan_cmd_does_not_update_last_sahjhan_cmd(self, tmp_path, mock_daemon):
         """Regular bash commands do NOT update last_sahjhan_cmd."""
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
@@ -546,7 +546,7 @@ class TestProtocolTracker:
         updated = read_cache(str(tmp_path))
         assert updated["last_sahjhan_cmd"] == "2026-01-01T00:00:00+00:00"
 
-    def test_git_commit_does_not_update_last_sahjhan_cmd(self, tmp_path):
+    def test_git_commit_does_not_update_last_sahjhan_cmd(self, tmp_path, mock_daemon):
         """Git commits do NOT update last_sahjhan_cmd."""
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
@@ -565,7 +565,7 @@ class TestProtocolTracker:
         updated = read_cache(str(tmp_path))
         assert updated["last_sahjhan_cmd"] == "2026-01-01T00:00:00+00:00"
 
-    def test_stale_enforcement_skips_stall(self, tmp_path):
+    def test_stale_enforcement_skips_stall(self, tmp_path, mock_daemon):
         """When enforcement is stale, protocol_tracker does not increment stall."""
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
@@ -585,7 +585,7 @@ class TestProtocolTracker:
         updated = read_cache(str(tmp_path))
         assert updated["stall"] == 5, "Stall should not increment when enforcement is stale"
 
-    def test_stale_enforcement_still_allows_sahjhan(self, tmp_path):
+    def test_stale_enforcement_still_allows_sahjhan(self, tmp_path, mock_daemon):
         """Even with stale enforcement, sahjhan commands reactivate tracking."""
         from _protocol_cache import empty_cache, is_enforcement_fresh, read_cache, write_cache
         cache = empty_cache()
@@ -619,7 +619,7 @@ class TestCommitGate:
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "allow"
 
-    def test_blocks_commit_with_unregistered(self, tmp_path):
+    def test_blocks_commit_with_unregistered(self, tmp_path, mock_daemon):
         """Blocks git commit when prior commits unregistered."""
         from datetime import datetime, timezone  # noqa: UP017
 
@@ -642,7 +642,7 @@ class TestCommitGate:
         reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
         assert "unregistered" in reason.lower() or "fix_commit" in reason.lower()
 
-    def test_allows_sahjhan_with_unregistered(self, tmp_path):
+    def test_allows_sahjhan_with_unregistered(self, tmp_path, mock_daemon):
         """Sahjhan commands always allowed, even with obligations."""
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
@@ -659,7 +659,7 @@ class TestCommitGate:
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "allow"
 
-    def test_allows_pytest_with_unregistered(self, tmp_path):
+    def test_allows_pytest_with_unregistered(self, tmp_path, mock_daemon):
         """Test commands allowed even with unregistered commits."""
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
@@ -676,7 +676,7 @@ class TestCommitGate:
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "allow"
 
-    def test_blocks_on_stall(self, tmp_path):
+    def test_blocks_on_stall(self, tmp_path, mock_daemon):
         """Blocks all non-sahjhan Bash after stall threshold."""
         from datetime import datetime, timezone  # noqa: UP017
 
@@ -696,7 +696,7 @@ class TestCommitGate:
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "block"
 
-    def test_blocks_commit_when_pattern_overdue(self, tmp_path):
+    def test_blocks_commit_when_pattern_overdue(self, tmp_path, mock_daemon):
         """Pattern check overdue hard-blocks git commit after 3+ fixes."""
         from datetime import datetime, timezone  # noqa: UP017
 
@@ -718,7 +718,7 @@ class TestCommitGate:
         reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
         assert "pattern" in reason.lower()
 
-    def test_injects_soft_obligation_non_commit_cmd(self, tmp_path):
+    def test_injects_soft_obligation_non_commit_cmd(self, tmp_path, mock_daemon):
         """Pattern check due: non-commit commands still get soft injection (not blocked)."""
         from datetime import datetime, timezone  # noqa: UP017
 
@@ -740,7 +740,7 @@ class TestCommitGate:
         context = output.get("additionalContext", "")
         assert "pattern_check" in context.lower()
 
-    def test_allows_sahjhan_when_pattern_overdue(self, tmp_path):
+    def test_allows_sahjhan_when_pattern_overdue(self, tmp_path, mock_daemon):
         """Sahjhan commands allowed even when pattern analysis is overdue."""
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
@@ -799,7 +799,7 @@ class TestPrimerStateLine:
 class TestEnforcementIntegration:
     """End-to-end: simulate a fix loop and verify enforcement."""
 
-    def test_commit_blocked_after_unregistered(self, tmp_path):
+    def test_commit_blocked_after_unregistered(self, tmp_path, mock_daemon):
         """Full flow: tracker detects commit, gate blocks next commit."""
         from datetime import datetime, timezone  # noqa: UP017
 
@@ -839,7 +839,7 @@ class TestEnforcementIntegration:
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "allow", "Gate should allow sahjhan commands"
 
-    def test_stall_blocks_all(self, tmp_path):
+    def test_stall_blocks_all(self, tmp_path, mock_daemon):
         """Stall counter blocks everything except sahjhan."""
         from datetime import datetime, timezone  # noqa: UP017
 
@@ -866,7 +866,7 @@ class TestEnforcementIntegration:
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "allow"
 
-    def test_tracker_then_gate_full_cycle(self, tmp_path):
+    def test_tracker_then_gate_full_cycle(self, tmp_path, mock_daemon):
         """Full cycle: commit -> blocked -> sahjhan fix_commit -> tracker clears -> allowed."""
         from datetime import datetime, timezone  # noqa: UP017
 
@@ -919,7 +919,7 @@ class TestEnforcementIntegration:
         perm = out.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "allow", f"Expected allow after fix_commit, got {perm}"
 
-    def test_fix_commit_substring_not_triggered_by_option(self, tmp_path):
+    def test_fix_commit_substring_not_triggered_by_option(self, tmp_path, mock_daemon):
         """BH-017: 'fix_commit' in a ledger name does not clear unregistered_commits."""
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
@@ -1017,7 +1017,7 @@ class TestStopHookFreshness:
         assert code == 0
         assert output == {}  # no output = allow
 
-    def test_blocks_stop_in_active_audit(self, tmp_path):
+    def test_blocks_stop_in_active_audit(self, tmp_path, mock_daemon):
         """Active audit (fresh enforcement, non-terminal state) → block."""
         from datetime import datetime, timezone  # noqa: UP017
 
@@ -1036,7 +1036,7 @@ class TestStopHookFreshness:
         assert output.get("decision") == "block"
         assert "fix_loop" in output.get("reason", "")
 
-    def test_warns_stop_in_stale_audit(self, tmp_path):
+    def test_warns_stop_in_stale_audit(self, tmp_path, mock_daemon):
         """Stale audit (old last_sahjhan_cmd, non-terminal state) → warn, allow."""
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
@@ -1053,7 +1053,7 @@ class TestStopHookFreshness:
         assert output.get("decision") == "approve"
         assert "stale" in output.get("reason", "").lower() or "abandoned" in output.get("reason", "").lower()
 
-    def test_allows_stop_in_terminal_state(self, tmp_path):
+    def test_allows_stop_in_terminal_state(self, tmp_path, mock_daemon):
         """Terminal state (finalized) → allow stop regardless of freshness."""
         from datetime import datetime, timezone  # noqa: UP017
 
@@ -1068,7 +1068,7 @@ class TestStopHookFreshness:
         assert code == 0
         assert output == {}  # no output = allow
 
-    def test_allows_stop_in_idle_state(self, tmp_path):
+    def test_allows_stop_in_idle_state(self, tmp_path, mock_daemon):
         """Idle state → allow stop regardless of freshness."""
         from datetime import datetime, timezone  # noqa: UP017
 
@@ -1086,7 +1086,7 @@ class TestStopHookFreshness:
     def test_blocks_when_no_cache_but_sahjhan_dir_exists(self, tmp_path):
         """Issue #29 R5: Has .sahjhan dir but no enforcement cache → block."""
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
         # Write a live daemon PID so liveness check doesn't short-circuit
         (sahjhan_dir / "daemon-init-pid").write_text(str(os.getpid()))
 
@@ -1096,7 +1096,7 @@ class TestStopHookFreshness:
         assert output.get("decision") == "block"
         assert "missing" in output.get("reason", "").lower() or "cache" in output.get("reason", "").lower()
 
-    def test_block_message_includes_state(self, tmp_path):
+    def test_block_message_includes_state(self, tmp_path, mock_daemon):
         """Block message should include current state name."""
         from datetime import datetime, timezone  # noqa: UP017
 
@@ -1116,7 +1116,7 @@ class TestStopHookFreshness:
         assert "fix_loop" in reason
         assert "not terminal" in reason.lower() or "complete" in reason.lower()
 
-    def test_allows_stop_in_awaiting_clear_state(self, tmp_path):
+    def test_allows_stop_in_awaiting_clear_state(self, tmp_path, mock_daemon):
         """Issue #32: awaiting_clear is a stop-allowed state — agent must be able to stop."""
         from datetime import datetime, timezone
 
@@ -1135,7 +1135,7 @@ class TestStopHookFreshness:
 class TestStopHookDaemonCleanup:
     """Tests for daemon cleanup in stop_hook.py."""
 
-    def test_block_message_includes_manual_hint(self, tmp_path):
+    def test_block_message_includes_manual_hint(self, tmp_path, mock_daemon):
         """Blocked stop message should tell user how to manually kill daemon."""
         from datetime import datetime, timezone
 
@@ -1159,7 +1159,7 @@ class TestStopHookDaemonCleanup:
 class TestStopHookDaemonCleanupGating:
     """Issue #43: awaiting_clear allows stop but must NOT kill daemon."""
 
-    def test_awaiting_clear_does_not_kill_daemon(self, tmp_path):
+    def test_awaiting_clear_does_not_kill_daemon(self, tmp_path, mock_daemon):
         """awaiting_clear: stop allowed, daemon NOT killed (key needed for resume)."""
         from datetime import datetime, timezone
         from unittest.mock import patch
@@ -1183,7 +1183,7 @@ class TestStopHookDaemonCleanupGating:
             assert exc_info.value.code == 0
         mock_stop.assert_not_called()
 
-    def test_idle_still_kills_daemon(self, tmp_path):
+    def test_idle_still_kills_daemon(self, tmp_path, mock_daemon):
         """idle: stop allowed AND daemon killed (no audit to resume)."""
         from datetime import datetime, timezone
         from unittest.mock import patch
@@ -1209,7 +1209,7 @@ class TestStopHookDaemonCleanupGating:
             assert exc_info.value.code == 0
         mock_stop.assert_called_once()
 
-    def test_stale_awaiting_clear_takes_allowed_path_without_daemon_kill(self, tmp_path):
+    def test_stale_awaiting_clear_takes_allowed_path_without_daemon_kill(self, tmp_path, mock_daemon):
         """Stale awaiting_clear hits _STOP_ALLOWED_STATES (not staleness path), daemon survives."""
         from unittest.mock import patch
 
@@ -1236,7 +1236,7 @@ class TestStopHookDaemonCleanupGating:
 class TestExitEnforcementError:
     """Tests for exit_enforcement_error() shared utility."""
 
-    def test_blocks_pretooluse_during_active_fresh_audit(self, tmp_path, capsys):
+    def test_blocks_pretooluse_during_active_fresh_audit(self, tmp_path, mock_daemon, capsys):
         """Active audit + fresh enforcement + PreToolUse → block with reason."""
         import json
         from datetime import datetime, timezone  # noqa: UP017
@@ -1247,7 +1247,7 @@ class TestExitEnforcementError:
         from _common import exit_enforcement_error
 
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
@@ -1263,7 +1263,7 @@ class TestExitEnforcementError:
         assert "ENFORCEMENT DEGRADED" in reason
         assert "daemon unreachable" in reason
 
-    def test_warns_posttooluse_during_active_fresh_audit(self, tmp_path, capsys):
+    def test_warns_posttooluse_during_active_fresh_audit(self, tmp_path, mock_daemon, capsys):
         """Active audit + fresh enforcement + PostToolUse → warn."""
         import json
         from datetime import datetime, timezone  # noqa: UP017
@@ -1274,7 +1274,7 @@ class TestExitEnforcementError:
         from _common import exit_enforcement_error
 
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
@@ -1303,7 +1303,7 @@ class TestExitEnforcementError:
         output = json.loads(capsys.readouterr().out)
         assert output["continue"] is True
 
-    def test_allows_when_stale_enforcement(self, tmp_path, capsys):
+    def test_allows_when_stale_enforcement(self, tmp_path, mock_daemon, capsys):
         """Active audit but stale enforcement → allow (fail-open)."""
         import json
 
@@ -1313,7 +1313,7 @@ class TestExitEnforcementError:
         from _common import exit_enforcement_error
 
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"  # very stale
@@ -1335,7 +1335,7 @@ class TestExitEnforcementError:
         from _common import exit_enforcement_error
 
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
         # No cache file written
 
         with pytest.raises(SystemExit) as exc_info:
@@ -1349,7 +1349,7 @@ class TestExitEnforcementError:
 class TestProtocolTrackerDaemonTeardown:
     """Tests for daemon stop when protocol reaches finalized state."""
 
-    def test_stops_daemon_on_finalized(self, tmp_path):
+    def test_stops_daemon_on_finalized(self, tmp_path, mock_daemon):
         """When sahjhan status returns finalized, protocol_tracker stops the daemon."""
         from datetime import datetime, timezone
 
@@ -1406,7 +1406,7 @@ class TestProtocolTrackerDaemonTeardown:
 
         assert stop_flag.exists(), "protocol_tracker should stop daemon when state is finalized"
 
-    def test_does_not_stop_daemon_in_non_terminal(self, tmp_path):
+    def test_does_not_stop_daemon_in_non_terminal(self, tmp_path, mock_daemon):
         """Non-terminal state -> daemon should not be stopped."""
         from datetime import datetime, timezone
 
@@ -1462,7 +1462,7 @@ class TestProtocolTrackerDaemonTeardown:
 class TestCommitGateFreshness:
     """Tests for commit_gate.py freshness gate."""
 
-    def test_allows_commit_when_enforcement_stale(self, tmp_path):
+    def test_allows_commit_when_enforcement_stale(self, tmp_path, mock_daemon):
         """Stale enforcement → commit gate passes through, no blocking."""
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
@@ -1480,7 +1480,7 @@ class TestCommitGateFreshness:
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "allow"
 
-    def test_allows_all_bash_when_enforcement_stale(self, tmp_path):
+    def test_allows_all_bash_when_enforcement_stale(self, tmp_path, mock_daemon):
         """Stale enforcement → even stall > 15 doesn't block."""
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
@@ -1502,7 +1502,7 @@ class TestCommitGateFreshness:
 class TestPrimerFreshness:
     """Tests for primer.py freshness gate."""
 
-    def test_primer_exits_early_when_stale(self, tmp_path):
+    def test_primer_exits_early_when_stale(self, tmp_path, mock_daemon):
         """Stale enforcement → primer does not inject context."""
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
@@ -1521,7 +1521,7 @@ class TestPrimerFreshness:
 class TestRemainingHooksFreshness:
     """Tests for freshness gate on pre_tool_hook, post_tool_hook, bash_guard."""
 
-    def test_pre_tool_hook_skips_eval_when_stale(self, tmp_path):
+    def test_pre_tool_hook_skips_eval_when_stale(self, tmp_path, mock_daemon):
         """Stale enforcement → pre_tool_hook skips hook eval."""
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
@@ -1539,7 +1539,7 @@ class TestRemainingHooksFreshness:
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "allow"
 
-    def test_pre_tool_hook_still_guards_managed_paths_when_stale(self, tmp_path):
+    def test_pre_tool_hook_still_guards_managed_paths_when_stale(self, tmp_path, mock_daemon):
         """Managed-path guard is always active, even when stale."""
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
@@ -1557,7 +1557,7 @@ class TestRemainingHooksFreshness:
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "block"
 
-    def test_post_tool_hook_exits_early_when_stale(self, tmp_path):
+    def test_post_tool_hook_exits_early_when_stale(self, tmp_path, mock_daemon):
         """Stale enforcement → post_tool_hook does nothing."""
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
@@ -1574,7 +1574,7 @@ class TestRemainingHooksFreshness:
         assert code == 0
         assert output.get("continue") is True
 
-    def test_bash_guard_exits_early_when_stale(self, tmp_path):
+    def test_bash_guard_exits_early_when_stale(self, tmp_path, mock_daemon):
         """Stale enforcement → bash_guard does not verify manifest."""
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
@@ -1624,13 +1624,13 @@ class TestPrimerNoFreshnessGate:
 class TestPostToolHookFailClosed:
     """Issue #39: post_tool_hook warns when daemon unreachable during active audit."""
 
-    def test_warns_when_binary_unavailable_and_fresh(self, tmp_path):
+    def test_warns_when_binary_unavailable_and_fresh(self, tmp_path, mock_daemon):
         """Sahjhan binary missing + fresh enforcement → warn (not silent allow)."""
         from datetime import datetime, timezone
 
         from _protocol_cache import empty_cache, write_cache
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
@@ -1651,11 +1651,11 @@ class TestPostToolHookFailClosed:
         assert output.get("continue") is True
         assert "ENFORCEMENT DEGRADED" in output.get("additionalContext", "")
 
-    def test_silent_allow_when_stale(self, tmp_path):
+    def test_silent_allow_when_stale(self, tmp_path, mock_daemon):
         """Stale enforcement → silent allow (no warning)."""
         from _protocol_cache import empty_cache, write_cache
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["last_sahjhan_cmd"] = "2025-01-01T00:00:00+00:00"
@@ -1707,13 +1707,13 @@ class TestTransitionsToml:
 class TestBashGuardFailClosed:
     """Issue #39: bash_guard warns when daemon unreachable during active audit."""
 
-    def test_warns_when_binary_unavailable_and_fresh(self, tmp_path):
+    def test_warns_when_binary_unavailable_and_fresh(self, tmp_path, mock_daemon):
         """Sahjhan binary missing + fresh enforcement → warn."""
         from datetime import datetime, timezone
 
         from _protocol_cache import empty_cache, write_cache
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        sahjhan_dir.mkdir(parents=True)
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017

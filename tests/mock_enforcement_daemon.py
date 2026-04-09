@@ -97,6 +97,10 @@ class MockEnforcementDaemon:
             encoded = base64.b64encode(json.dumps(self.state).encode()).decode()
             return {"ok": True, "data": encoded}
 
+        if op == "sign":
+            # Return a dummy proof for tests that need signing support
+            return {"ok": True, "proof": "deadbeef" * 8}
+
         return {"ok": False, "error": "unknown_op", "message": f"unknown op: {op}"}
 
 
