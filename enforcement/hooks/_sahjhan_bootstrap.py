@@ -88,10 +88,16 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
     if not tokens:
         return None
 
-    # Skip leading wrappers: nohup, env
+    # Skip leading wrappers (nohup, env) and env var assignments (FOO=bar)
     idx = 0
-    while idx < len(tokens) and tokens[idx] in ("nohup", "env"):
-        idx += 1
+    while idx < len(tokens):
+        if tokens[idx] in ("nohup", "env"):
+            idx += 1
+        elif "=" in tokens[idx] and not tokens[idx].startswith("-"):
+            # Shell env var assignment: FOO=bar, PATH=/usr/bin, etc.
+            idx += 1
+        else:
+            break
 
     if idx >= len(tokens):
         return None
@@ -195,7 +201,7 @@ def _check_bash_write(command: str) -> str | None:
     # semicolons inside the string argument get split by the segment splitter,
     # causing the interpreter prefix and the path reference to appear in
     # different segments. Check the full command first.
-    cmd_stripped = command.lstrip()
+    cmd_stripped = re.sub(r'^(?:(?:export\s+)?\w+=\S*\s+)*', '', command.lstrip()).strip()
     for interp in ("python ", "python3 ", "ruby ", "node "):
         if cmd_stripped.startswith(interp) and " -" in cmd_stripped:
             for p in ALL_PROTECTED:
@@ -213,6 +219,10 @@ def _check_bash_write(command: str) -> str | None:
         seg = seg.strip()
         if not seg:
             continue
+
+        # Strip leading env var assignments (FOO=bar, export X=1, etc.)
+        # so that startswith-based command detection isn't bypassed.
+        seg_cmd = re.sub(r'^(?:(?:export\s+)?\w+=\S*\s+)*', '', seg).strip()
 
         for p in ALL_PROTECTED:
             # Redirect check: find ALL > and >> in the segment, not just first
@@ -248,9 +258,8 @@ def _check_bash_write(command: str) -> str | None:
                     )
 
             # cp/mv/install check: protected path as LAST argument
-            seg_stripped = seg.lstrip()
-            if any(seg_stripped.startswith(c) for c in ("cp ", "mv ", "install ")):
-                args = seg_stripped.split()
+            if any(seg_cmd.startswith(c) for c in ("cp ", "mv ", "install ")):
+                args = seg_cmd.split()
                 if len(args) >= 3:
                     dest = args[-1]
                     if dest == p or dest.startswith(p):
@@ -262,7 +271,7 @@ def _check_bash_write(command: str) -> str | None:
             # Issue #33: rm/rmdir check — destructive operations on protected paths
             # Also match trailing-slash-stripped form so that
             # "rm -rf docs/holtz/.sahjhan" matches "docs/holtz/.sahjhan/".
-            if any(seg_stripped.startswith(c) for c in ("rm ", "rm\t", "rmdir ")):
+            if any(seg_cmd.startswith(c) for c in ("rm ", "rm\t", "rmdir ")):
                 p_stripped = p.rstrip("/")
                 ref = _segment_references_protected(seg, [p, p_stripped])
                 if ref:
@@ -292,18 +301,18 @@ def _check_bash_write(command: str) -> str | None:
             # These can write to arbitrary paths without using shell redirects.
             # Use substring match on full segment — paths may be inside quotes.
             for interp in ("python ", "python3 ", "ruby ", "node "):
-                if seg_stripped.startswith(interp) and " -" in seg_stripped and p in seg:
+                if seg_cmd.startswith(interp) and " -" in seg_cmd and p in seg:
                     return (
                             f"BLOCKED: Bash command uses interpreter to write to protected path '{p}'. "
                             "This path cannot be modified during an audit session."
                         )
-            if seg_stripped.startswith("dd ") and ("of=" + p) in seg_stripped:
+            if seg_cmd.startswith("dd ") and ("of=" + p) in seg_cmd:
                 return (
                     f"BLOCKED: Bash command uses dd to write to protected path '{p}'. "
                     "This path cannot be modified during an audit session."
                 )
-            if seg_stripped.startswith("wget "):
-                args = seg_stripped.split()
+            if seg_cmd.startswith("wget "):
+                args = seg_cmd.split()
                 for i, arg in enumerate(args):
                     # BH-006 run 28: handle both -O <path> and --output-document=<path>
                     if arg == "-O" and i + 1 < len(args) and args[i + 1].startswith(p):
@@ -319,8 +328,8 @@ def _check_bash_write(command: str) -> str | None:
                                 "This path cannot be modified during an audit session."
                             )
             # BH-007 run 28: curl -o / --output handler
-            if seg_stripped.startswith("curl "):
-                args = seg_stripped.split()
+            if seg_cmd.startswith("curl "):
+                args = seg_cmd.split()
                 for i, arg in enumerate(args):
                     if arg in ("-o", "--output") and i + 1 < len(args) and args[i + 1].startswith(p):
                         return (

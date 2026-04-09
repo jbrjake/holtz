@@ -192,6 +192,29 @@ class TestProtocolCache:
         # Mixed with non-sahjhan still false
         assert not is_sahjhan_cmd("export PATH=/usr/bin:$PATH && git commit -m 'fix'")
 
+    def test_sahjhan_cmd_with_multiple_env_vars(self):
+        """Multiple inline env vars must not break sahjhan detection.
+
+        _split_shell_segments only strips ONE env var assignment per segment.
+        FOO=bar BAZ=1 sahjhan status → strips FOO=bar → leaves BAZ=1 sahjhan status
+        → parts[0] = 'BAZ=1' → not recognized as sahjhan → returns False.
+        """
+        from _protocol_cache import is_sahjhan_cmd
+        assert is_sahjhan_cmd("FOO=bar BAZ=1 sahjhan status"), (
+            "Multiple env var prefixes broke sahjhan detection — "
+            "_split_shell_segments only strips one assignment"
+        )
+
+    def test_split_shell_segments_strips_multiple_env_vars(self):
+        """_split_shell_segments must strip all leading env var assignments."""
+        from _protocol_cache import _split_shell_segments
+        segments = _split_shell_segments("A=1 B=2 C=3 sahjhan status")
+        assert len(segments) == 1
+        # After stripping all env vars, should be just "sahjhan status"
+        assert segments[0].startswith("sahjhan"), (
+            f"Expected 'sahjhan ...' after stripping env vars, got: {segments[0]!r}"
+        )
+
     def test_git_commit_with_redirect(self):
         """Issue #29 R1: 2>&1 must not break git commit detection."""
         from _protocol_cache import is_git_commit

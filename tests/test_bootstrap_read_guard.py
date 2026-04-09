@@ -283,6 +283,114 @@ class TestExtractSahjhanSubcmd:
         extract = self._get_extract()
         assert extract("git status") is None
 
+    def test_env_var_prefix_single(self):
+        """Env var prefix before sahjhan must be skipped — FOO=bar sahjhan reset
+        must be recognized as ('reset', '') so the allowlist can block it."""
+        extract = self._get_extract()
+        assert extract("FOO=bar sahjhan reset") == ("reset", "")
+
+    def test_env_var_prefix_multiple(self):
+        """Multiple env var prefixes must all be skipped."""
+        extract = self._get_extract()
+        # --confirm is a flag, not a sub-subcommand — parser correctly skips it
+        assert extract("A=1 B=2 sahjhan reset --confirm") == ("reset", "")
+
+    def test_env_var_prefix_with_path(self):
+        """Env var with path value must be handled (= inside value)."""
+        extract = self._get_extract()
+        assert extract("PATH=/usr/bin sahjhan status") == ("status", "")
+
+
+class TestEnvVarPrefixBypassesAllowlist:
+    """Env var prefix before blocked sahjhan subcommand must still be blocked.
+
+    Root cause: _extract_sahjhan_subcmd only skips 'nohup' and 'env' wrappers.
+    Shell env var assignments (FOO=bar) before the command are valid syntax
+    but aren't recognized, causing the entire subcommand allowlist to be bypassed.
+    """
+
+    def test_env_prefix_sahjhan_reset_blocked(self):
+        """FOO=bar sahjhan reset must be blocked — not allowed to bypass allowlist."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "FOO=bar sahjhan reset --confirm"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block", (
+            "Env var prefix bypassed sahjhan subcommand allowlist — "
+            "'FOO=bar sahjhan reset' was allowed through"
+        )
+
+    def test_multi_env_prefix_sahjhan_reset_blocked(self):
+        """A=1 B=2 sahjhan reset must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "A=1 B=2 sahjhan reset --confirm"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block", (
+            "Multiple env var prefixes bypassed sahjhan allowlist"
+        )
+
+
+class TestEnvVarPrefixBypassesWriteProtection:
+    """Env var prefix before destructive commands bypasses write protection.
+
+    Root cause: _check_bash_write checks seg_stripped.startswith("rm ") etc.,
+    but doesn't strip env var assignments first. FOO=bar rm ... starts with
+    "FOO=bar", not "rm", so the check is skipped entirely.
+    """
+
+    def test_env_prefix_rm_sahjhan_dir_blocked(self):
+        """X=1 rm -rf docs/holtz/.sahjhan/ must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "X=1 rm -rf docs/holtz/.sahjhan/"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block", (
+            "Env var prefix bypassed rm write protection on .sahjhan dir"
+        )
+
+    def test_env_prefix_cp_to_enforcement_blocked(self):
+        """X=1 cp /tmp/evil enforcement/hooks/foo.py must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "X=1 cp /tmp/evil enforcement/hooks/foo.py"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block", (
+            "Env var prefix bypassed cp write protection on enforcement/"
+        )
+
+    def test_env_prefix_sed_inplace_blocked(self):
+        """X=1 sed -i 's/old/new/' enforcement/events.toml must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "X=1 sed -i 's/old/new/' enforcement/events.toml"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block", (
+            "Env var prefix bypassed sed write protection on enforcement/"
+        )
+
+    def test_env_prefix_redirect_to_managed_blocked(self):
+        """X=1 echo hacked > docs/holtz/STATUS.md must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": 'X=1 echo "hacked" > docs/holtz/STATUS.md'},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "block", (
+            "Env var prefix bypassed redirect write protection on managed doc"
+        )
+
 
 class TestManagedDataWriteProtection:
     """Issue #39 P2: Write/Edit to .sahjhan/ data dir must be blocked."""
