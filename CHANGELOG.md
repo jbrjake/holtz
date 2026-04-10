@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.127.1] - 2026-04-10
+
+_Changes since v0.115.3_
+
+### Added
+- **enforcement:** add SAHJHAN_DAEMON_SOCKET env var override to _get_daemon_socket_path
+- replace filesystem enforcement cache with daemon socket calls
+- add implementation plan for enforcement state migration
+- add design specs for enforcement state migration to daemon memory
+- add unrecoverable-state hard gate and red flag to SKILL.md
+- **enforcement:** fail-closed on primer auth failure
+- **enforcement:** add daemon liveness check to stop hook
+- **enforcement:** switch sahjhan bootstrap to allowlist model
+- **enforcement:** upgrade sahjhan to v0.12.0
+- update phase references for active-ledger simplification
+- remove --ledger run-N from SKILL.md command reference
+- **enforcement:** parse Ledger line from sahjhan v0.11.0 status output
+
+### Fixed
+- **enforcement:** remove dead filesystem cache write from _write_terminated_marker
+- **enforcement:** use update_cache for atomic stall/commit updates in protocol_tracker
+- **test:** ruff violations in mock daemon + eager _common import in fixture
+- **test:** handle macOS AF_UNIX 104-char socket path limit in mock_daemon fixture
+- **enforcement:** close 4 bugs found via adversarial review
+- **enforcement:** close env var prefix bypass in shell command parsing
+- **enforcement:** handle PermissionError in _is_process_alive
+- **enforcement:** handle boolean flags in sahjhan subcmd extraction
+- **enforcement:** update active-run comment to active-ledger in bootstrap
+- **enforcement:** remove ledger plumbing from lens_quiz.py
+- **enforcement:** remove ledger plumbing from protocol_tracker.py
+- **enforcement:** remove ledger plumbing from bash_guard.py
+- **enforcement:** remove ledger plumbing from post_tool_hook.py
+- **enforcement:** remove ledger plumbing from pre_tool_hook.py
+- **enforcement:** remove ledger plumbing from primer.py
+- **enforcement:** remove active-run marker logic from _daemon_lifecycle.py
+- **enforcement:** remove _active_ledger and write_active_run_marker from _common.py
+
+### Documentation
+- add implementation plan for issue #45 enforcement gaps
+- add design spec for issue #45 enforcement gap closure
+- add implementation plan for active-ledger simplification
+- add design specs for active-ledger defaulting
+
+### Infrastructure
+- update README test badge count to 1119
+- add regression test for issue #46 dynamic path bypass
+- fix remaining test files for daemon-backed enforcement cache
+- migrate existing tests to mock enforcement daemon fixture
+- add MockEnforcementDaemon fixture for daemon-backed cache tests
+- bump sahjhan version pin to 0.13.0
+- update sahjhan version marker to 0.12.0
+- fix lint issues and update test badge to 1079
+- **validate-punchlist:** add in-process CLI tests for main()
+- **pattern-brief:** add CLI and edge case tests
+- **parse-lens-registry:** add CLI and edge case tests
+- **impact-graph:** add in-process CLI tests and edge case coverage
+- **hooks:** add in-process tests for _common.py uncovered functions
+- update test badge count to 1033
+- **enforcement:** fix tests broken by issue #45 changes
+- update test badge count to 1019
+- **enforcement:** remove stale active-run marker tests
+- **enforcement:** upgrade sahjhan to v0.11.0 (active-ledger support)
+
 ## [0.115.3] - 2026-04-07
 
 _Changes since v0.112.2_
