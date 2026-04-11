@@ -445,3 +445,101 @@ class TestManagedDataWriteProtection:
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+
+class TestCopyMoveTargetDirectoryBypass:
+    """cp/mv -t and --target-directory bypass: target is NOT the last arg."""
+
+    def test_cp_t_flag_to_enforcement_blocked(self):
+        """cp -t enforcement/hooks/ must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "cp -t enforcement/hooks/ /tmp/evil.py"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_mv_t_flag_to_enforcement_blocked(self):
+        """mv -t enforcement/hooks/ must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "mv -t enforcement/hooks/ /tmp/evil.py"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_cp_target_directory_long_flag_blocked(self):
+        """cp --target-directory=enforcement/ must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "cp --target-directory=enforcement/ /tmp/evil.py"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_mv_target_directory_space_flag_blocked(self):
+        """mv --target-directory enforcement/ must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "mv --target-directory enforcement/ /tmp/evil.py"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+class TestFullPathCommandBypass:
+    """Full-path commands (/bin/cp, /usr/bin/rm) must be caught."""
+
+    def test_bin_cp_to_enforcement_blocked(self):
+        """/bin/cp to enforcement/ must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "/bin/cp /tmp/evil.py enforcement/hooks/foo.py"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_usr_bin_mv_to_enforcement_blocked(self):
+        """/usr/bin/mv to enforcement/ must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "/usr/bin/mv /tmp/evil.py enforcement/hooks/foo.py"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_bin_rm_sahjhan_dir_blocked(self):
+        """/bin/rm -rf docs/holtz/.sahjhan/ must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "/bin/rm -rf docs/holtz/.sahjhan/"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_usr_bin_rmdir_sahjhan_blocked(self):
+        """/usr/bin/rmdir docs/holtz/.sahjhan/ must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "/usr/bin/rmdir docs/holtz/.sahjhan/"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_full_path_cp_safe_target_allowed(self):
+        """/bin/cp to a non-protected path must be allowed."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "/bin/cp file.txt /tmp/safe.txt"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
