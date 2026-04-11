@@ -5,6 +5,10 @@ from pathlib import Path
 
 import pytest
 
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "network: tests that require network access")
+
 # Add scripts directory to path so we can import the modules
 sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "holtz" / "scripts"))
 # Add token_profiler package parent so `import token_profiler` works everywhere
