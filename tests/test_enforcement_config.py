@@ -1,6 +1,7 @@
 """Tests for enforcement TOML configuration files."""
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -305,6 +306,19 @@ def test_settings_local_has_no_enforcement_hooks():
         f"Enforcement hooks must not be in settings.local.json (found: {enforcement_hooks}). "
         "They belong in hooks/hooks.json (plugin mode only)."
     )
+
+
+def test_pre_release_hook_validation_gate():
+    """Pre-release gate: smoke test script exists and is executable."""
+    smoke_test = Path(__file__).parent.parent / "scripts" / "smoke-test-hooks.sh"
+    assert smoke_test.exists(), "scripts/smoke-test-hooks.sh missing"
+    assert os.access(smoke_test, os.X_OK), "scripts/smoke-test-hooks.sh not executable"
+
+
+def test_hook_schema_exists():
+    """Pre-release gate: hook_schema.py must exist as source of truth."""
+    schema = Path(__file__).parent / "hook_schema.py"
+    assert schema.exists(), "tests/hook_schema.py missing — hooks have no schema to validate against"
 
 
 def test_hooks_json_registers_enforcement_hooks():
