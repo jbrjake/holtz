@@ -118,7 +118,7 @@ sahjhan gate check converge            # see what's blocking convergence
 sahjhan set status perspective         # which perspectives are done
 
 # Checkpoint before /clear
-sahjhan ledger checkpoint --name pre-clear
+sahjhan ledger checkpoint --snapshot pre-clear
 
 # Record events (all use --field key=value syntax — required: project, run, auditor, phase, step)
 sahjhan event recon_step --field project=holtz --field run=N \
@@ -140,8 +140,13 @@ sahjhan event iteration_complete --field project=holtz --field run=N \
   --field auditor=holtz --field phase=fix_loop --field step=10 \
   --field perspective=component --field items_resolved=3 --field items_remaining=2 \
   --field test_count=50 --field tests_passed=true
+# Snapshot for gate comparison (key must match snapshot_compare reference in transitions.toml)
+sahjhan event snapshot --field key=pre_audit_edge_count --field value=28
+# mode is for audit trail only — gate checks presence, not mode value
 sahjhan event justine_dispatched --field project=holtz --field run=N \
   --field auditor=holtz --field phase=recon --field mode=full
+sahjhan event merge_agent_dispatched --field project=holtz --field run=N \
+  --field auditor=holtz --field phase=merge --field step=9
 ```
 
 ## Terminal Output
