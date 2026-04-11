@@ -222,188 +222,42 @@ def user_prompt_submit_event(cwd: str) -> dict:
 
 # ─── Schema validators ──────────────────────────────────────────────────
 
-
-_VALID_PERMISSION_DECISIONS = {"allow", "deny", "ask", "defer"}
+from hook_schema import validate_hook_output
 
 
 def validate_pretooluse_output(output: dict, hook_cmd: str) -> list[str]:
-    """Validate PreToolUse hook output matches Claude Code's ACTUAL schema.
-
-    PreToolUse hooks use hookSpecificOutput.permissionDecision as the
-    primary control mechanism. Valid permissionDecision values are:
-    "allow", "deny", "ask", "defer".
-
-    "continue" is a universal field that stops Claude entirely when false —
-    it is NOT how you deny a tool call. Tool denial uses permissionDecision.
-
-    See: https://code.claude.com/docs/en/hooks
-    """
-    errors = []
-
+    """Validate PreToolUse output against the canonical schema."""
     if "__raw_stdout" in output:
-        errors.append(f"Invalid JSON output from {hook_cmd}: {output['__raw_stdout'][:200]}")
-        return errors
-
-    if not output:
-        # Empty output is valid (default allow)
-        return errors
-
-    hook_specific = output.get("hookSpecificOutput", {})
-
-    if hook_specific:
-        # Validate hookSpecificOutput fields against Claude Code's real schema
-        if hook_specific.get("hookEventName") != "PreToolUse":
-            errors.append(
-                f"hookEventName must be 'PreToolUse', got '{hook_specific.get('hookEventName')}' "
-                f"from {hook_cmd}"
-            )
-        decision = hook_specific.get("permissionDecision")
-        if decision not in _VALID_PERMISSION_DECISIONS:
-            errors.append(
-                f"Invalid permissionDecision '{decision}' from {hook_cmd}. "
-                f"Valid values: {_VALID_PERMISSION_DECISIONS}"
-            )
-    else:
-        # No hookSpecificOutput — only universal fields are allowed.
-        # "continue" is optional (defaults to true). Check for invalid
-        # top-level fields that belong inside hookSpecificOutput.
-        bad_fields = {"permissionDecision", "additionalContext"} & set(output.keys())
-        if bad_fields:
-            errors.append(
-                f"Fields {bad_fields} must be inside hookSpecificOutput, not at "
-                f"top level, from {hook_cmd}"
-            )
-
-    # "continue: false" is NOT how you deny a tool — it stops Claude entirely.
-    # Flag it as likely wrong if combined with permissionDecision deny.
-    if output.get("continue") is False and hook_specific.get("permissionDecision") == "deny":
-        errors.append(
-            f"Hook {hook_cmd} uses both continue=false AND permissionDecision='deny'. "
-            "continue=false stops Claude entirely — use permissionDecision='deny' alone "
-            "to deny a tool call."
-        )
-
-    return errors
+        return [f"Invalid JSON from {hook_cmd}: {output['__raw_stdout'][:200]}"]
+    return [f"{hook_cmd}: {e}" for e in validate_hook_output("PreToolUse", output)]
 
 
 def validate_posttooluse_output(output: dict, hook_cmd: str) -> list[str]:
-    """Validate PostToolUse hook output.
-
-    Valid responses:
-    - Allow: {"continue": true, "suppressOutput": true}
-    - Warn (user): {"continue": true, "suppressOutput": false, "systemMessage": str}
-    - Warn (Claude): {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": str}}
-    - Empty dict (legacy allow)
-    """
-    errors = []
-
+    """Validate PostToolUse output against the canonical schema."""
     if "__raw_stdout" in output:
-        errors.append(f"Invalid JSON output from {hook_cmd}: {output['__raw_stdout'][:200]}")
-        return errors
-
-    if not output:
-        return errors  # Empty = allow
-
-    # hookSpecificOutput format — injects context into Claude's next prompt
-    hook_specific = output.get("hookSpecificOutput", {})
-    if hook_specific:
-        event_name = hook_specific.get("hookEventName")
-        if event_name != "PostToolUse":
-            errors.append(
-                f"hookEventName must be 'PostToolUse', got '{event_name}' from {hook_cmd}"
-            )
-        # PostToolUse hookSpecificOutput should NOT have permissionDecision
-        if "permissionDecision" in hook_specific:
-            errors.append(
-                f"PostToolUse hookSpecificOutput should not have permissionDecision from {hook_cmd}"
-            )
-        return errors
-
-    # Generic format — continue/suppressOutput/systemMessage
-    if "continue" not in output:
-        errors.append(f"Missing 'continue' key in PostToolUse output from {hook_cmd}: {output}")
-        return errors
-
-    # PostToolUse hooks should NOT block
-    if output.get("continue") is False:
-        errors.append(
-            f"PostToolUse hook {hook_cmd} returned continue=false — "
-            "PostToolUse hooks cannot block (tool already executed)"
-        )
-
-    return errors
+        return [f"Invalid JSON from {hook_cmd}: {output['__raw_stdout'][:200]}"]
+    return [f"{hook_cmd}: {e}" for e in validate_hook_output("PostToolUse", output)]
 
 
 def validate_stop_output(output: dict, hook_cmd: str) -> list[str]:
-    """Validate Stop/SubagentStop hook output against Claude Code's schema.
-
-    Valid responses:
-    - Allow: empty dict (no output, exit 0)
-    - Warn/Allow: {"systemMessage": str}  (allows stop, shows msg to user)
-    - Block: {"decision": "block", "reason": str}
-
-    The only valid decision value is "block". Omit decision to allow.
-    See: https://code.claude.com/docs/en/hooks
-    """
-    errors = []
-
+    """Validate Stop output against the canonical schema."""
     if "__raw_stdout" in output:
-        errors.append(f"Invalid JSON output from {hook_cmd}: {output['__raw_stdout'][:200]}")
-        return errors
-
-    if not output:
-        return errors  # Empty = allow
-
-    decision = output.get("decision")
-    if decision is not None and decision != "block":
-        errors.append(
-            f"Invalid Stop decision '{decision}' from {hook_cmd}. "
-            "Only 'block' is valid; omit 'decision' to allow."
-        )
-
-    return errors
+        return [f"Invalid JSON from {hook_cmd}: {output['__raw_stdout'][:200]}"]
+    return [f"{hook_cmd}: {e}" for e in validate_hook_output("Stop", output)]
 
 
 def validate_subagent_stop_output(output: dict, hook_cmd: str) -> list[str]:
-    """Validate SubagentStop hook output.
-
-    Same schema as Stop hooks.
-    """
-    return validate_stop_output(output, hook_cmd)
+    """Validate SubagentStop output against the canonical schema."""
+    if "__raw_stdout" in output:
+        return [f"Invalid JSON from {hook_cmd}: {output['__raw_stdout'][:200]}"]
+    return [f"{hook_cmd}: {e}" for e in validate_hook_output("SubagentStop", output)]
 
 
 def validate_user_prompt_submit_output(output: dict, hook_cmd: str) -> list[str]:
-    """Validate UserPromptSubmit hook output.
-
-    Valid responses:
-    - Allow: {"continue": true, "suppressOutput": true}
-    - Inject (user): {"continue": true, "suppressOutput": false, "systemMessage": str}
-    - Inject (Claude): {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": str}}
-    """
-    errors = []
-
+    """Validate UserPromptSubmit output against the canonical schema."""
     if "__raw_stdout" in output:
-        errors.append(f"Invalid JSON output from {hook_cmd}: {output['__raw_stdout'][:200]}")
-        return errors
-
-    if not output:
-        return errors  # Empty = allow
-
-    # hookSpecificOutput format — injects context into Claude's next prompt
-    hook_specific = output.get("hookSpecificOutput", {})
-    if hook_specific:
-        event_name = hook_specific.get("hookEventName")
-        if event_name != "UserPromptSubmit":
-            errors.append(
-                f"hookEventName must be 'UserPromptSubmit', got '{event_name}' from {hook_cmd}"
-            )
-        return errors
-
-    # Generic format
-    if "continue" not in output:
-        errors.append(f"Missing 'continue' in UserPromptSubmit output from {hook_cmd}: {output}")
-
-    return errors
+        return [f"Invalid JSON from {hook_cmd}: {output['__raw_stdout'][:200]}"]
+    return [f"{hook_cmd}: {e}" for e in validate_hook_output("UserPromptSubmit", output)]
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────

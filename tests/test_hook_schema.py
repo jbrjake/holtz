@@ -99,3 +99,14 @@ def test_validate_posttooluse_with_hook_specific():
         },
     })
     assert errs == []
+
+
+def test_e2e_validators_delegate_to_schema():
+    """E2E validators must use hook_schema, not independent logic."""
+    import inspect
+    import test_e2e_hook_invocation as e2e
+    # The validators must import from hook_schema
+    src = inspect.getsource(e2e.validate_pretooluse_output)
+    assert "hook_schema" in src or "validate_hook_output" in src, (
+        "validate_pretooluse_output must delegate to hook_schema"
+    )
