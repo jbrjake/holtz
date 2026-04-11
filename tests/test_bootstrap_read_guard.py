@@ -300,6 +300,182 @@ class TestExtractSahjhanSubcmd:
         extract = self._get_extract()
         assert extract("PATH=/usr/bin sahjhan status") == ("status", "")
 
+    # --- Issue #53: --help flag must not be treated as a subcommand ---
+
+    def test_help_flag_returns_none(self):
+        """sahjhan --help must return None (bypass enforcement)."""
+        extract = self._get_extract()
+        assert extract("sahjhan --help") is None
+
+    def test_short_help_flag_returns_none(self):
+        """sahjhan -h must return None (bypass enforcement)."""
+        extract = self._get_extract()
+        assert extract("sahjhan -h") is None
+
+    def test_help_after_subcommand_still_parses(self):
+        """sahjhan init --help — subcmd is init, --help is just a trailing flag."""
+        extract = self._get_extract()
+        result = extract("sahjhan init --help")
+        assert result == ("init", "")
+
+    def test_help_after_config_dir_flag(self):
+        """sahjhan --config-dir /path --help must return None."""
+        extract = self._get_extract()
+        assert extract("sahjhan --config-dir /path --help") is None
+
+    # --- Issue #53: redirect fragments must not become subcommand tokens ---
+
+    def test_status_with_stderr_redirect(self):
+        """sahjhan status 2>&1 — '2' must not become sub-subcommand."""
+        extract = self._get_extract()
+        assert extract("sahjhan status 2>&1") == ("status", "")
+
+    def test_status_with_fd_redirect_to_devnull(self):
+        """sahjhan status 2>/dev/null — '2' must not leak."""
+        extract = self._get_extract()
+        assert extract("sahjhan status 2>/dev/null") == ("status", "")
+
+    def test_init_with_stderr_redirect(self):
+        """sahjhan init 2>&1 — redirect must be fully stripped."""
+        extract = self._get_extract()
+        assert extract("sahjhan init 2>&1") == ("init", "")
+
+    def test_bare_sahjhan_with_redirect(self):
+        """sahjhan 2>&1 — after stripping redirect, bare sahjhan remains."""
+        extract = self._get_extract()
+        assert extract("sahjhan 2>&1") == ("", "")
+
+    def test_nohup_daemon_start_full_redirect(self):
+        """Full nohup pattern: > /dev/null 2>&1 & — must parse to daemon start."""
+        extract = self._get_extract()
+        assert extract("nohup sahjhan daemon start > /dev/null 2>&1 &") == ("daemon", "start")
+
+    def test_combined_redirect(self):
+        """sahjhan status &>/dev/null — combined redirect must be stripped."""
+        extract = self._get_extract()
+        assert extract("sahjhan status &>/dev/null") == ("status", "")
+
+    def test_stdout_redirect_to_file(self):
+        """sahjhan status > /tmp/out.log — stdout redirect stripped."""
+        extract = self._get_extract()
+        assert extract("sahjhan status > /tmp/out.log") == ("status", "")
+
+    def test_stderr_redirect_to_file(self):
+        """sahjhan init 2>/tmp/err.log — fd redirect stripped."""
+        extract = self._get_extract()
+        assert extract("sahjhan init 2>/tmp/err.log") == ("init", "")
+
+    def test_reverse_fd_dup(self):
+        """sahjhan status 1>&2 — reverse fd duplication stripped."""
+        extract = self._get_extract()
+        assert extract("sahjhan status 1>&2") == ("status", "")
+
+
+class TestHelpFlagAllowed:
+    """Issue #53: sahjhan --help and -h must be allowed through the hook."""
+
+    def test_sahjhan_help_allowed(self):
+        """sahjhan --help must not be blocked by the allowlist."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan --help"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "sahjhan --help was blocked — help requests must bypass enforcement"
+        )
+
+    def test_sahjhan_short_help_allowed(self):
+        """sahjhan -h must not be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan -h"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_sahjhan_init_help_allowed(self):
+        """sahjhan init --help must be allowed (init is on allowlist, --help is a flag)."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan init --help"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_sahjhan_help_with_config_dir_allowed(self):
+        """sahjhan --config-dir /path --help must be allowed."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan --config-dir /some/path --help"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+
+class TestRedirectFragmentHandling:
+    """Issue #53: shell redirect fragments must not become subcommand tokens."""
+
+    def test_sahjhan_status_stderr_redirect_allowed(self):
+        """sahjhan status 2>&1 — '2' from redirect must not be parsed as subcommand."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan status 2>&1"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "sahjhan status 2>&1 was blocked — redirect fragment '2' was "
+            "parsed as a subcommand"
+        )
+
+    def test_sahjhan_init_stderr_redirect_allowed(self):
+        """sahjhan init 2>&1 must be allowed."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan init 2>&1"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_sahjhan_status_fd_redirect_devnull_allowed(self):
+        """sahjhan status 2>/dev/null must be allowed."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan status 2>/dev/null"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_sahjhan_transition_with_redirect_allowed(self):
+        """sahjhan transition run_start 2>&1 must be allowed."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan transition run_start 2>&1"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_blocked_subcmd_with_redirect_still_blocked(self):
+        """sahjhan reset 2>&1 — redirect doesn't bypass the allowlist block."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan reset --confirm 2>&1"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "sahjhan reset with redirect was allowed — redirect stripping must "
+            "not bypass the allowlist"
+        )
+
 
 class TestEnvVarPrefixBypassesAllowlist:
     """Env var prefix before blocked sahjhan subcommand must still be blocked.

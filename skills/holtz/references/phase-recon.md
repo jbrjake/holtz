@@ -8,9 +8,13 @@
 
 #### Run Initialization (before anything else)
 
-Determine the run number N (check `docs/holtz/runs/` for existing runs, or start at 1). Then start the daemon and initialize the run ledger and protocol state — **all four commands must succeed before any events are recorded:**
+Determine the run number N (check `docs/holtz/runs/` for existing runs, or start at 1). Then initialize Sahjhan, start the daemon, and set up the run ledger and protocol state — **all five commands must succeed before any events are recorded:**
 
 ```bash
+# Initialize the .sahjhan data directory and manifest.json.
+# Safe to re-run — on an already-initialized project this is a no-op.
+sahjhan init
+
 # sahjhan daemon start runs in the foreground — you MUST background it.
 # Use nohup + & so it survives shell exit, and wait briefly for the
 # socket and PID file to appear before proceeding.
@@ -25,6 +29,8 @@ cp docs/holtz/.sahjhan/daemon.pid docs/holtz/.sahjhan/daemon-init-pid
 sahjhan ledger create --from run N --activate
 sahjhan transition run_start
 ```
+
+> **Warning:** `sahjhan init` must run before `daemon start` on first-ever runs. Without it, `manifest.json` is never created and every subsequent sahjhan command fails with "Cannot load manifest." On projects that already have a `.sahjhan/` directory, `init` is a safe no-op.
 
 > **Warning:** Skipping `sahjhan ledger create --from run N --activate` causes "no ledger found for template 'run'; using default ledger" warnings on every subsequent `sahjhan render` and `sahjhan transition` (~20+ times per audit). Always create and activate the ledger before `run_start`.
 

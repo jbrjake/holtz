@@ -61,11 +61,11 @@ Users can add custom lenses by appending new sections following the same five-fi
 **Entry point:** Pick a workflow that spans 2+ files. Trace the actual execution sequence step by step. At each state change, ask: "What work happened since the last state change? What work remains before the next? Is there a state that exists for zero work?"
 
 ## public-contract
-**Focus:** Whether user-facing documentation (README, CHANGELOG, help output, install instructions) accurately describes runtime behavior
+**Focus:** Whether user-facing artifacts (README, CHANGELOG, help output, install instructions, API docs, setup guides, examples, tutorials) accurately describe runtime behavior
 **Scope:** cross-file
-**Audit priorities:** README feature claims vs actual implementation, install/setup instruction accuracy, dependency list correctness, feature coverage gaps
-**Failure modes:** Aspirational documentation that describes intended behavior instead of implemented behavior, stale install instructions, feature gaps where code has capabilities the README omits, marketing-code divergence
-**Entry point:** Read README.md end-to-end. For each concrete claim, grep for the implementing code. Classify as VERIFIED, OVERSTATED (code does something weaker), FABRICATED (code does not do this), or UNDERSTATED (code does more than claimed)
+**Audit priorities:** README feature claims vs actual implementation, install/setup instruction accuracy, dependency list correctness, feature coverage gaps, **consumer-contract fidelity** (every command/API call/config shown in docs or examples must actually work when a consumer follows them verbatim — including with the idioms, flags, and formatting that real consumers naturally add)
+**Failure modes:** Aspirational documentation that describes intended behavior instead of implemented behavior, stale install instructions, feature gaps where code has capabilities the README omits, marketing-code divergence, **doc-implementation drift** (docs say "run X" or "call Y with Z", but X fails or Y rejects Z — the consumer follows documented instructions and hits an error)
+**Entry point:** Read README.md end-to-end. For each concrete claim, grep for the implementing code. Classify as VERIFIED, OVERSTATED (code does something weaker), FABRICATED (code does not do this), or UNDERSTATED (code does more than claimed). For any documented command/API example: execute or trace it through the system and verify it succeeds. Check that documented inputs work with the variations real consumers naturally produce (shell idioms, optional flags, different formatting, quoted vs unquoted arguments).
 
 ## concurrency
 **Focus:** Thread safety, race conditions, synchronization correctness, deadlock potential

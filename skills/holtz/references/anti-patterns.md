@@ -40,6 +40,8 @@
 
 **17. The Ice Cream Cone** — Inverted test pyramid: mostly manual or end-to-end tests, minimal unit tests, almost no integration tests. Feedback loop is hours instead of seconds; developers stop running tests locally. Detection: count test files by type (unit vs integration vs e2e). If e2e > unit, the pyramid is inverted. A codebase-level antipattern, not per-test — score it during project audits, not file audits.
 
+**18. Synthetic Input Syndrome** — Tests use developer-invented inputs instead of inputs derived from the system's actual consumers. Every test input was hand-crafted by reading the implementation, not by observing what callers actually send. Detection: compare test inputs against real-world sources — client SDK request patterns, upstream system output formats, log samples from production, documented API examples, config files from real deployments. If every test input is a clean, minimal example that exercises a code path but no test input includes the noise/idioms/edge-formatting that real callers produce, the test surface diverges from reality. Signature: comprehensive test suite, all green, but the first real consumer hits an error on inputs the tests never anticipated. Fix: derive test inputs from consumer artifacts (API client code, upstream system docs, production logs, documented examples) rather than from the implementation. The consumers define the input surface, not the developer.
+
 ## Audit Checklist
 
 For each test file, score against:
@@ -58,5 +60,6 @@ For each test file, score against:
 | External dependency visibility | Test relies on state not created in test/fixture |
 | Behavioral isolation | Single test exercises multiple unrelated behaviors |
 | Pyramid shape | E2E test count exceeds unit test count |
+| Consumer-derived inputs | Test inputs diverge from what actual callers/skill files/docs send |
 
 0-2 red flags = decent. 3-4 = needs work. 5+ = rewrite.

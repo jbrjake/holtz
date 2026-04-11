@@ -56,6 +56,7 @@ ALLOWED_SAHJHAN_SUBCMDS = {
     "gate",          # Gate check
     "defer",         # Defer findings
     "init",          # Initialize sahjhan
+    "set",           # Set perspective status, completion markers
 }
 
 # Second-level blocks: subcommand is allowed but specific sub-subcommands are not.
@@ -79,10 +80,14 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
     Skips leading wrappers (nohup, env) and flags (--config-dir X).
     Returns (subcommand, sub_subcommand) or None if not a sahjhan command.
     """
-    # Strip redirections and trailing & for backgrounding
+    # Strip shell redirections and trailing & for backgrounding.
+    # Order matters: fd duplication first (2>&1), then fd redirections (2>/dev/null),
+    # then combined redirects (&>file).  Issue #53: prior regexes left the leading
+    # digit of "2>&1" behind, turning it into a ghost subcommand token.
     import re as _re
-    clean = _re.sub(r'\s*[<>]\S*', '', segment)
-    clean = _re.sub(r'\s*\d*[<>]+\s*\S*', '', clean)
+    clean = _re.sub(r'\d*>&\d+', '', segment)           # fd dup: 2>&1, 1>&2
+    clean = _re.sub(r'\d*[<>]+\s*\S+', '', clean)       # fd redir: 2>/dev/null, >file, >>file, <in
+    clean = _re.sub(r'&>+\s*\S+', '', clean)             # combined: &>file, &>>file
     clean = clean.rstrip('& \t')
     tokens = clean.lower().split()
     if not tokens:
@@ -108,9 +113,13 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
 
     idx += 1
 
-    # Skip flags before the subcommand (e.g. --config-dir /some/path)
+    # Skip flags before the subcommand (e.g. --config-dir /some/path).
+    # Issue #53: --help / -h are not subcommands to enforce — allow through
+    # by returning None (treated as "not a sahjhan command" → allowed).
     while idx < len(tokens) and tokens[idx].startswith("-"):
         flag = tokens[idx]
+        if flag in ("--help", "-h"):
+            return None  # help requests bypass enforcement
         idx += 1
         # Only value-taking flags consume the next token
         if flag in _VALUE_FLAGS and idx < len(tokens):

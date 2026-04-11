@@ -79,6 +79,9 @@ Read the reference file for your current Sahjhan state. Run `sahjhan status` to 
 All protocol state is managed by the Sahjhan enforcement engine. Use these canonical CLI commands instead of writing to managed files directly.
 
 ```
+# First-run initialization — creates .sahjhan/ dir and manifest.json (no-op if exists)
+sahjhan init
+
 # Run ledger management — sahjhan resolves active ledger automatically
 sahjhan ledger create --from run N --activate
 
@@ -251,9 +254,10 @@ digraph {
 
 Before starting ANY work, check for existing Sahjhan state and output files:
 
+0. **First-ever run (no `docs/holtz/.sahjhan/` directory):** Run `sahjhan init` to create the data directory and `manifest.json`. This is required before `daemon start`, `ledger create`, or any other sahjhan command. Safe to re-run on already-initialized projects.
 1. **Run `sahjhan status`:** If there's an active run, it tells you exactly where the last run stopped. Resume from that state — do not restart from Step 0.
-2. **If no Sahjhan state but `docs/holtz/recon/` dir exists:** A prior run crashed during recon (Steps 0-4). Create the run ledger (`sahjhan ledger create --from run N --activate`) then run `sahjhan transition run_start`, then check which `docs/holtz/recon/step*.md` files exist. Resume from the first missing step.
-3. **If no Sahjhan state but `docs/holtz/PUNCHLIST.md` exists:** A prior run completed before Sahjhan was installed. Read it + any STATUS.md to determine position. Initialize Sahjhan and advance to the appropriate state.
+2. **If no Sahjhan state but `docs/holtz/recon/` dir exists:** A prior run crashed during recon (Steps 0-4). Run `sahjhan init` (safe no-op if already initialized), create the run ledger (`sahjhan ledger create --from run N --activate`) then run `sahjhan transition run_start`, then check which `docs/holtz/recon/step*.md` files exist. Resume from the first missing step.
+3. **If no Sahjhan state but `docs/holtz/PUNCHLIST.md` exists:** A prior run completed before Sahjhan was installed. Read it + any STATUS.md to determine position. Run `sahjhan init`, then initialize the ledger and advance to the appropriate state.
 4. **If the user says "start fresh" or "re-audit":** Archive the run: move the current run's files from `docs/holtz/` to `docs/holtz/archive/{date}-run{NN}/` as a backup, then create fresh output files in `docs/holtz/`. **Exception:** `patterns-brief.md`, `patterns-brief-archive.md`, and `impact-graph.json` persist across runs — copy them from the archive back into `docs/holtz/` if they were moved. The impact graph grows richer over time and should never be discarded. The architecture baseline (`docs/holtz/architecture-baseline.md`) and living punchlist (`docs/holtz/LIVING-PUNCHLIST.md`) also persist across runs — never archive them. The living punchlist is updated at the end of each converged run, not during. The architecture baseline's Drift Log is appended during Step 0 as drift is detected; its Structural Snapshot and Documented Intent sections are updated only at convergence.
 5. **If `docs/holtz/SUMMARY.md` exists:** A prior run completed. Ask the user if they want a fresh audit or to review/extend the prior findings.
 
