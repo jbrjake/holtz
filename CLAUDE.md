@@ -34,16 +34,18 @@ scripts/install-hooks.sh
 1. Ensure dev is up to date and CI is green.
 2. Review commits since last release: `git log dev --not main --oneline`
 3. Read the version from `.claude-plugin/plugin.json` (already bumped by hook).
-4. Generate changelog: `python scripts/generate-changelog.py --write` (preview without `--write` first). Review the output in CHANGELOG.md, commit it.
-5. Create a release PR:
+4. Run hook smoke test: `scripts/smoke-test-hooks.sh --verbose`
+5. Run schema freshness check: `python -m pytest tests/test_hook_schema_freshness.py -v`
+6. Generate changelog: `python scripts/generate-changelog.py --write` (preview without `--write` first). Review the output in CHANGELOG.md, commit it.
+7. Create a release PR:
    ```
    gh pr create --base main --head dev \
      --title "chore: release vX.Y.Z" \
      --body "<highlights and commit summary>"
    ```
-6. Wait for CI to pass on the PR.
-7. Merge: `gh pr merge <number> --merge --subject "chore: release vX.Y.Z" --body "<summary>"`
-8. The release GitHub Action automatically creates the git tag and GitHub Release.
+8. Wait for CI to pass on the PR.
+9. Merge: `gh pr merge <number> --merge --subject "chore: release vX.Y.Z" --body "<summary>"`
+10. The release GitHub Action automatically creates the git tag and GitHub Release.
 
 ## Running Tests
 
