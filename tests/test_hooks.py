@@ -265,19 +265,25 @@ class TestReadEvent:
 
 
 class TestSubagentFindingsCheck:
-    """Tests for the subagent findings check hook."""
+    """Tests for the subagent findings check hook.
+
+    SubagentStop hooks use Stop protocol:
+    - Allow: no output (empty stdout, exit 0)
+    - Warn: {"decision": "approve", "reason": msg}
+    - Block: {"decision": "block", "reason": msg}
+    """
 
     def test_allows_empty_message(self):
-        """Empty last_assistant_message should be allowed."""
+        """Empty last_assistant_message should be allowed (no output)."""
         event = {"last_assistant_message": ""}
         code, output, _ = run_hook("subagent_findings_check.py", event)
-        assert_allowed(code, output)
+        assert_stop_allowed(code, output)
 
     def test_allows_no_holtz_paths(self):
-        """Messages without docs/holtz/ paths should be allowed."""
+        """Messages without docs/holtz/ paths should be allowed (no output)."""
         event = {"last_assistant_message": "I fixed the bug in src/foo.py"}
         code, output, _ = run_hook("subagent_findings_check.py", event)
-        assert_allowed(code, output)
+        assert_stop_allowed(code, output)
 
     def test_allows_existing_files(self, tmp_path):
         """Referenced files that exist should not trigger a warning."""
@@ -289,7 +295,7 @@ class TestSubagentFindingsCheck:
             "cwd": str(tmp_path),
         }
         code, output, _ = run_hook("subagent_findings_check.py", event)
-        assert_allowed(code, output)
+        assert_stop_allowed(code, output)
 
     def test_warns_missing_files(self, tmp_path):
         """Referenced files that don't exist should trigger a warning."""
@@ -298,8 +304,10 @@ class TestSubagentFindingsCheck:
             "cwd": str(tmp_path),
         }
         code, output, _ = run_hook("subagent_findings_check.py", event)
-        assert_warned(code, output, "WARNING")
-        assert "PUNCHLIST.md" in output.get("additionalContext", "")
+        assert code == 0
+        assert output.get("decision") == "approve"
+        assert "WARNING" in output.get("reason", "")
+        assert "PUNCHLIST.md" in output.get("reason", "")
 
     def test_deduplicates_paths(self, tmp_path):
         """Multiple references to the same path should be deduplicated."""
@@ -308,9 +316,10 @@ class TestSubagentFindingsCheck:
             "cwd": str(tmp_path),
         }
         code, output, _ = run_hook("subagent_findings_check.py", event)
-        assert_warned(code, output)
+        assert code == 0
+        assert output.get("decision") == "approve"
         # Should only mention FOO.md once
-        assert output.get("additionalContext", "").count("FOO.md") == 1
+        assert output.get("reason", "").count("FOO.md") == 1
 
     def test_warns_missing_json_artifacts(self, tmp_path):
         """BH-007: .json artifacts under docs/holtz/ should be checked, not just .md."""
@@ -319,8 +328,10 @@ class TestSubagentFindingsCheck:
             "cwd": str(tmp_path),
         }
         code, output, _ = run_hook("subagent_findings_check.py", event)
-        assert_warned(code, output, "WARNING")
-        assert "impact-graph.json" in output.get("additionalContext", "")
+        assert code == 0
+        assert output.get("decision") == "approve"
+        assert "WARNING" in output.get("reason", "")
+        assert "impact-graph.json" in output.get("reason", "")
 
     def test_allows_existing_json_artifact(self, tmp_path):
         """BH-007: existing .json artifact should be allowed."""
@@ -332,14 +343,19 @@ class TestSubagentFindingsCheck:
             "cwd": str(tmp_path),
         }
         code, output, _ = run_hook("subagent_findings_check.py", event)
-        assert_allowed(code, output)
+        assert_stop_allowed(code, output)
 
-    def test_subagentstop_does_not_include_hook_specific_output(self):
-        """SubagentStop hooks should not include hookSpecificOutput."""
+    def test_subagentstop_uses_stop_protocol(self):
+        """SubagentStop hooks must use Stop protocol, not PreToolUse format."""
         event = {"last_assistant_message": ""}
         code, output, _ = run_hook("subagent_findings_check.py", event)
         assert code == 0
+        # Stop allow = no output
+        assert output == {}
+        # Must NOT use PreToolUse format
         assert "hookSpecificOutput" not in output
+        assert "continue" not in output
+        assert "suppressOutput" not in output
 
 
 class TestSubagentFindingsCheckInProcess:
@@ -366,24 +382,27 @@ class TestSubagentFindingsCheckInProcess:
             return {}
 
     def test_empty_message_ok(self, capsys):
+        """Empty message → stop-allow (no output)."""
         output = self._run_main({"last_assistant_message": ""}, capsys)
-        assert output.get("continue") is True
-        assert output.get("suppressOutput") is True
+        assert output == {}
 
     def test_no_holtz_paths_ok(self, capsys):
+        """No docs/holtz/ paths → stop-allow (no output)."""
         output = self._run_main({"last_assistant_message": "Fixed src/foo.py"}, capsys)
-        assert output.get("continue") is True
+        assert output == {}
 
     def test_missing_md_warns(self, tmp_path, capsys):
+        """Missing file → stop-warn with decision=approve."""
         event = {
             "last_assistant_message": "Wrote docs/holtz/NONEXISTENT.md",
             "cwd": str(tmp_path),
         }
         output = self._run_main(event, capsys)
-        assert output.get("suppressOutput") is False
-        assert "NONEXISTENT.md" in output.get("additionalContext", "")
+        assert output.get("decision") == "approve"
+        assert "NONEXISTENT.md" in output.get("reason", "")
 
     def test_existing_file_ok(self, tmp_path, capsys):
+        """Existing file → stop-allow (no output)."""
         holtz_dir = tmp_path / "docs" / "holtz"
         holtz_dir.mkdir(parents=True)
         (holtz_dir / "PUNCHLIST.md").write_text("# Punchlist")
@@ -392,16 +411,17 @@ class TestSubagentFindingsCheckInProcess:
             "cwd": str(tmp_path),
         }
         output = self._run_main(event, capsys)
-        assert output.get("continue") is True
-        assert output.get("suppressOutput") is True
+        assert output == {}
 
     def test_json_artifact_warns(self, tmp_path, capsys):
+        """Missing JSON artifact → stop-warn with decision=approve."""
         event = {
             "last_assistant_message": "Updated docs/holtz/impact-graph.json",
             "cwd": str(tmp_path),
         }
         output = self._run_main(event, capsys)
-        assert "impact-graph.json" in output.get("additionalContext", "")
+        assert output.get("decision") == "approve"
+        assert "impact-graph.json" in output.get("reason", "")
 
 
 # --- _common.py in-process coverage for exit_stop_warn, exit_stop_block, read_event ---
