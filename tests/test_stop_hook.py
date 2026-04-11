@@ -151,12 +151,13 @@ class TestStopHookStatusCacheFallback:
 
         assert code == 0
         # Should warn, not block — blocking creates infinite loop
-        assert output.get("decision") == "approve", (
+        assert "systemMessage" in output, (
             f"Missing both caches should warn (not block) to avoid infinite loop, got: {output}"
         )
-        reason = output.get("reason", "").lower()
-        assert "unavailable" in reason or "status-cache" in reason, (
-            f"Warn reason should mention 'unavailable' or 'status-cache', got: {output.get('reason')}"
+        assert "decision" not in output, f"Warn should not have decision field, got: {output}"
+        msg = output.get("systemMessage", "").lower()
+        assert "unavailable" in msg or "status-cache" in msg, (
+            f"Warn message should mention 'unavailable' or 'status-cache', got: {output.get('systemMessage')}"
         )
 
 

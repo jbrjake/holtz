@@ -217,13 +217,20 @@ def user_prompt_submit_event(cwd: str) -> dict:
 # ─── Schema validators ──────────────────────────────────────────────────
 
 
-def validate_pretooluse_output(output: dict, hook_cmd: str) -> list[str]:
-    """Validate PreToolUse hook output matches Claude Code's expected schema.
+_VALID_PERMISSION_DECISIONS = {"allow", "deny", "ask", "defer"}
 
-    Valid responses:
-    - Allow: {"continue": true, "suppressOutput": true, ...}
-    - Warn: {"continue": true, "suppressOutput": false, "additionalContext": str}
-    - Block: {"continue": false, "hookSpecificOutput": {"permissionDecision": "block", ...}}
+
+def validate_pretooluse_output(output: dict, hook_cmd: str) -> list[str]:
+    """Validate PreToolUse hook output matches Claude Code's ACTUAL schema.
+
+    PreToolUse hooks use hookSpecificOutput.permissionDecision as the
+    primary control mechanism. Valid permissionDecision values are:
+    "allow", "deny", "ask", "defer".
+
+    "continue" is a universal field that stops Claude entirely when false —
+    it is NOT how you deny a tool call. Tool denial uses permissionDecision.
+
+    See: https://code.claude.com/docs/en/hooks
     """
     errors = []
 
@@ -232,25 +239,43 @@ def validate_pretooluse_output(output: dict, hook_cmd: str) -> list[str]:
         return errors
 
     if not output:
-        # Empty output is valid for some hooks (legacy allow)
+        # Empty output is valid (default allow)
         return errors
 
-    if "continue" not in output:
-        errors.append(f"Missing 'continue' key in output from {hook_cmd}: {output}")
-        return errors
+    hook_specific = output.get("hookSpecificOutput", {})
 
-    if output["continue"] is True:
-        if "suppressOutput" not in output:
-            errors.append(f"Missing 'suppressOutput' in allow/warn response from {hook_cmd}")
-    elif output["continue"] is False:
-        hook_specific = output.get("hookSpecificOutput", {})
-        if not hook_specific:
-            errors.append(f"Block response missing 'hookSpecificOutput' from {hook_cmd}")
-        elif hook_specific.get("permissionDecision") not in ("block", "allow"):
+    if hook_specific:
+        # Validate hookSpecificOutput fields against Claude Code's real schema
+        if hook_specific.get("hookEventName") != "PreToolUse":
             errors.append(
-                f"Invalid permissionDecision '{hook_specific.get('permissionDecision')}' "
+                f"hookEventName must be 'PreToolUse', got '{hook_specific.get('hookEventName')}' "
                 f"from {hook_cmd}"
             )
+        decision = hook_specific.get("permissionDecision")
+        if decision not in _VALID_PERMISSION_DECISIONS:
+            errors.append(
+                f"Invalid permissionDecision '{decision}' from {hook_cmd}. "
+                f"Valid values: {_VALID_PERMISSION_DECISIONS}"
+            )
+    else:
+        # No hookSpecificOutput — only universal fields are allowed.
+        # "continue" is optional (defaults to true). Check for invalid
+        # top-level fields that belong inside hookSpecificOutput.
+        bad_fields = {"permissionDecision", "additionalContext"} & set(output.keys())
+        if bad_fields:
+            errors.append(
+                f"Fields {bad_fields} must be inside hookSpecificOutput, not at "
+                f"top level, from {hook_cmd}"
+            )
+
+    # "continue: false" is NOT how you deny a tool — it stops Claude entirely.
+    # Flag it as likely wrong if combined with permissionDecision deny.
+    if output.get("continue") is False and hook_specific.get("permissionDecision") == "deny":
+        errors.append(
+            f"Hook {hook_cmd} uses both continue=false AND permissionDecision='deny'. "
+            "continue=false stops Claude entirely — use permissionDecision='deny' alone "
+            "to deny a tool call."
+        )
 
     return errors
 
@@ -287,12 +312,15 @@ def validate_posttooluse_output(output: dict, hook_cmd: str) -> list[str]:
 
 
 def validate_stop_output(output: dict, hook_cmd: str) -> list[str]:
-    """Validate Stop hook output.
+    """Validate Stop/SubagentStop hook output against Claude Code's schema.
 
     Valid responses:
-    - Allow: empty dict (no output)
-    - Warn/Allow: {"decision": "approve", "reason": str}
+    - Allow: empty dict (no output, exit 0)
+    - Warn/Allow: {"systemMessage": str}  (allows stop, shows msg to user)
     - Block: {"decision": "block", "reason": str}
+
+    The only valid decision value is "block". Omit decision to allow.
+    See: https://code.claude.com/docs/en/hooks
     """
     errors = []
 
@@ -303,14 +331,11 @@ def validate_stop_output(output: dict, hook_cmd: str) -> list[str]:
     if not output:
         return errors  # Empty = allow
 
-    if "decision" not in output:
-        errors.append(f"Stop hook output missing 'decision' key from {hook_cmd}: {output}")
-        return errors
-
-    if output["decision"] not in ("block", "approve"):
+    decision = output.get("decision")
+    if decision is not None and decision != "block":
         errors.append(
-            f"Invalid Stop decision '{output['decision']}' from {hook_cmd} "
-            "(expected 'block' or 'approve')"
+            f"Invalid Stop decision '{decision}' from {hook_cmd}. "
+            "Only 'block' is valid; omit 'decision' to allow."
         )
 
     return errors

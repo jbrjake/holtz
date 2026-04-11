@@ -50,9 +50,9 @@ class TestPreToolHookFailClosed:
             "pre_tool_hook.py", event, cwd=str(tmp_path), env=env,
         )
         assert code == 0
-        assert output.get("continue") is False
-        reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
-        assert "ENFORCEMENT DEGRADED" in reason
+        hook_output = output.get("hookSpecificOutput", {})
+        assert hook_output.get("permissionDecision") == "deny"
+        assert "ENFORCEMENT DEGRADED" in hook_output.get("permissionDecisionReason", "")
 
     def test_allows_when_binary_unavailable_and_stale(self, tmp_path, mock_daemon):
         """Sahjhan binary missing + stale enforcement → allow."""
@@ -76,7 +76,7 @@ class TestPreToolHookFailClosed:
             "pre_tool_hook.py", event, cwd=str(tmp_path), env=env,
         )
         assert code == 0
-        assert output.get("continue") is True
+        assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
 
     def test_allows_when_binary_unavailable_and_no_audit(self, tmp_path):
         """Sahjhan binary missing + no active audit → allow."""
@@ -93,7 +93,7 @@ class TestPreToolHookFailClosed:
             "pre_tool_hook.py", event, cwd=str(tmp_path), env=env,
         )
         assert code == 0
-        assert output.get("continue") is True
+        assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
 
 
 class TestProtocolCache:
@@ -638,7 +638,7 @@ class TestCommitGate:
         code, output, _ = run_enforcement_hook("commit_gate.py", event)
         assert code == 0
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
-        assert perm == "block"
+        assert perm == "deny"
         reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
         assert "unregistered" in reason.lower() or "fix_commit" in reason.lower()
 
@@ -694,7 +694,7 @@ class TestCommitGate:
         code, output, _ = run_enforcement_hook("commit_gate.py", event)
         assert code == 0
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
-        assert perm == "block"
+        assert perm == "deny"
 
     def test_blocks_commit_when_pattern_overdue(self, tmp_path, mock_daemon):
         """Pattern check overdue hard-blocks git commit after 3+ fixes."""
@@ -714,7 +714,7 @@ class TestCommitGate:
         code, output, _ = run_enforcement_hook("commit_gate.py", event)
         assert code == 0
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
-        assert perm == "block"
+        assert perm == "deny"
         reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
         assert "pattern" in reason.lower()
 
@@ -736,8 +736,8 @@ class TestCommitGate:
         code, output, _ = run_enforcement_hook("commit_gate.py", event)
         assert code == 0
         # Non-commit commands should get soft injection, not blocked
-        assert output.get("continue") is True
-        context = output.get("additionalContext", "")
+        assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
         assert "pattern_check" in context.lower()
 
     def test_allows_sahjhan_when_pattern_overdue(self, tmp_path, mock_daemon):
@@ -828,7 +828,7 @@ class TestEnforcementIntegration:
         }
         code, output, _ = run_enforcement_hook("commit_gate.py", gate_event)
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
-        assert perm == "block", "Gate should block second commit"
+        assert perm == "deny", "Gate should block second commit"
 
         # But: sahjhan command is allowed
         sahjhan_event = {
@@ -858,7 +858,7 @@ class TestEnforcementIntegration:
         }
         code, output, _ = run_enforcement_hook("commit_gate.py", event)
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
-        assert perm == "block"
+        assert perm == "deny"
 
         # Sahjhan allowed
         event["tool_input"]["command"] = "./bin/sahjhan status"
@@ -896,7 +896,7 @@ class TestEnforcementIntegration:
             "tool_input": {"command": "git commit -m 'fix: second'"},
             "cwd": str(tmp_path),
         })
-        assert out.get("hookSpecificOutput", {}).get("permissionDecision") == "block"
+        assert out.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
 
         # 4. Simulate sahjhan fix_commit (tracker clears unregistered)
         run_enforcement_hook("protocol_tracker.py", {
@@ -1050,8 +1050,9 @@ class TestStopHookFreshness:
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("stop_hook.py", event)
         assert code == 0
-        assert output.get("decision") == "approve"
-        assert "stale" in output.get("reason", "").lower() or "abandoned" in output.get("reason", "").lower()
+        assert "systemMessage" in output
+        msg = output.get("systemMessage", "").lower()
+        assert "stale" in msg or "abandoned" in msg
 
     def test_allows_stop_in_terminal_state(self, tmp_path, mock_daemon):
         """Terminal state (finalized) → allow stop regardless of freshness."""
@@ -1097,13 +1098,14 @@ class TestStopHookFreshness:
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("stop_hook.py", event)
         assert code == 0
-        # Was "block" (issue #29 R5), now "approve" with warning (issue #48)
-        assert output.get("decision") == "approve", (
+        # Was "block" (issue #29 R5), now warn with systemMessage (issue #48)
+        assert "systemMessage" in output, (
             f"Missing both caches should warn, not block (issue #48 bug 1), got: {output}"
         )
-        reason = output.get("reason", "").lower()
-        assert "unavailable" in reason or "status-cache" in reason, (
-            f"Warn reason should mention 'unavailable' or 'status-cache', got: {output.get('reason')}"
+        assert "decision" not in output, f"Warn should not have decision field, got: {output}"
+        msg = output.get("systemMessage", "").lower()
+        assert "unavailable" in msg or "status-cache" in msg, (
+            f"Warn message should mention 'unavailable' or 'status-cache', got: {output.get('systemMessage')}"
         )
 
     def test_block_message_includes_state(self, tmp_path, mock_daemon):
@@ -1268,7 +1270,6 @@ class TestExitEnforcementError:
 
         assert exc_info.value.code == 0
         output = json.loads(capsys.readouterr().out)
-        assert output["continue"] is False
         reason = output["hookSpecificOutput"]["permissionDecisionReason"]
         assert "ENFORCEMENT DEGRADED" in reason
         assert "daemon unreachable" in reason
@@ -1295,8 +1296,8 @@ class TestExitEnforcementError:
 
         assert exc_info.value.code == 0
         output = json.loads(capsys.readouterr().out)
-        assert output["continue"] is True
-        assert "ENFORCEMENT DEGRADED" in output["additionalContext"]
+        hook_output = output.get("hookSpecificOutput", {})
+        assert "ENFORCEMENT DEGRADED" in hook_output.get("additionalContext", "")
 
     def test_allows_when_no_active_audit(self, tmp_path, capsys):
         """No .sahjhan dir → allow (fail-open)."""
@@ -1311,7 +1312,7 @@ class TestExitEnforcementError:
 
         assert exc_info.value.code == 0
         output = json.loads(capsys.readouterr().out)
-        assert output["continue"] is True
+        assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
 
     def test_allows_when_stale_enforcement(self, tmp_path, mock_daemon, capsys):
         """Active audit but stale enforcement → allow (fail-open)."""
@@ -1334,7 +1335,7 @@ class TestExitEnforcementError:
 
         assert exc_info.value.code == 0
         output = json.loads(capsys.readouterr().out)
-        assert output["continue"] is True
+        assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
 
     def test_allows_when_sahjhan_dir_but_no_cache(self, tmp_path, capsys):
         """Data dir exists but no cache file → allow (fail-open)."""
@@ -1353,7 +1354,7 @@ class TestExitEnforcementError:
 
         assert exc_info.value.code == 0
         output = json.loads(capsys.readouterr().out)
-        assert output["continue"] is True
+        assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
 
 
 class TestProtocolTrackerDaemonTeardown:
@@ -1565,7 +1566,7 @@ class TestRemainingHooksFreshness:
         code, output, _ = run_enforcement_hook("pre_tool_hook.py", event)
         assert code == 0
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
-        assert perm == "block"
+        assert perm == "deny"
 
     def test_post_tool_hook_exits_early_when_stale(self, tmp_path, mock_daemon):
         """Stale enforcement → post_tool_hook does nothing."""
@@ -1658,8 +1659,8 @@ class TestPostToolHookFailClosed:
             "post_tool_hook.py", event, cwd=str(tmp_path), env=env,
         )
         assert code == 0
-        assert output.get("continue") is True
-        assert "ENFORCEMENT DEGRADED" in output.get("additionalContext", "")
+        assert "hookSpecificOutput" in output
+        assert "ENFORCEMENT DEGRADED" in output.get("hookSpecificOutput", {}).get("additionalContext", "")
 
     def test_silent_allow_when_stale(self, tmp_path, mock_daemon):
         """Stale enforcement → silent allow (no warning)."""
@@ -1741,8 +1742,8 @@ class TestBashGuardFailClosed:
             "bash_guard.py", event, cwd=str(tmp_path), env=env,
         )
         assert code == 0
-        assert output.get("continue") is True
-        assert "ENFORCEMENT DEGRADED" in output.get("additionalContext", "")
+        assert "hookSpecificOutput" in output
+        assert "ENFORCEMENT DEGRADED" in output.get("hookSpecificOutput", {}).get("additionalContext", "")
 
     def test_silent_allow_when_no_audit(self, tmp_path):
         """No active audit → silent allow."""

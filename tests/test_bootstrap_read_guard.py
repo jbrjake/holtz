@@ -35,7 +35,7 @@ class TestSahjhanAllowlist:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
         assert "not permitted" in output["hookSpecificOutput"]["permissionDecisionReason"]
 
     def test_sahjhan_reset_with_proof_blocked(self):
@@ -46,7 +46,7 @@ class TestSahjhanAllowlist:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
     def test_sahjhan_unknown_subcommand_blocked(self):
         """Unknown subcommands are blocked by the allowlist."""
@@ -56,7 +56,7 @@ class TestSahjhanAllowlist:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
     def test_bare_sahjhan_blocked(self):
         """Bare 'sahjhan' with no subcommand is blocked."""
@@ -66,7 +66,7 @@ class TestSahjhanAllowlist:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
     def test_sahjhan_with_config_dir_flag_allowed(self):
         """Flags before the subcommand should be skipped; status is allowed."""
@@ -86,7 +86,7 @@ class TestSahjhanAllowlist:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
     def test_sahjhan_daemon_start_allowed(self):
         """daemon start is allowed."""
@@ -146,7 +146,7 @@ class TestSahjhanAllowlist:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
     def test_case_insensitive_reset_blocked(self):
         """Case-insensitive matching must catch mixed-case sahjhan commands."""
@@ -156,7 +156,7 @@ class TestSahjhanAllowlist:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
     def test_non_sahjhan_command_allowed(self):
         """Normal bash commands should be allowed."""
@@ -214,7 +214,7 @@ class TestWriteGuardsRetained:
             "cwd": repo_root,
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
     def test_sed_inplace_to_protected_blocked(self):
         event = {
@@ -223,7 +223,7 @@ class TestWriteGuardsRetained:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
     def test_bash_redirect_to_managed_status_blocked(self):
         event = {
@@ -232,7 +232,7 @@ class TestWriteGuardsRetained:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 class TestExtractSahjhanSubcmd:
@@ -317,7 +317,7 @@ class TestEnvVarPrefixBypassesAllowlist:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block", (
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
             "Env var prefix bypassed sahjhan subcommand allowlist — "
             "'FOO=bar sahjhan reset' was allowed through"
         )
@@ -330,7 +330,7 @@ class TestEnvVarPrefixBypassesAllowlist:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block", (
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
             "Multiple env var prefixes bypassed sahjhan allowlist"
         )
 
@@ -351,7 +351,7 @@ class TestEnvVarPrefixBypassesWriteProtection:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block", (
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
             "Env var prefix bypassed rm write protection on .sahjhan dir"
         )
 
@@ -363,7 +363,7 @@ class TestEnvVarPrefixBypassesWriteProtection:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block", (
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
             "Env var prefix bypassed cp write protection on enforcement/"
         )
 
@@ -375,7 +375,7 @@ class TestEnvVarPrefixBypassesWriteProtection:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block", (
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
             "Env var prefix bypassed sed write protection on enforcement/"
         )
 
@@ -387,7 +387,7 @@ class TestEnvVarPrefixBypassesWriteProtection:
             "cwd": "/tmp/fake-cwd",
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block", (
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
             "Env var prefix bypassed redirect write protection on managed doc"
         )
 
@@ -405,7 +405,7 @@ class TestManagedDataWriteProtection:
             "cwd": repo_root,
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
         assert "cannot be modified" in output["hookSpecificOutput"]["permissionDecisionReason"]
 
     def test_edit_to_active_ledger_marker_blocked(self):
@@ -422,7 +422,7 @@ class TestManagedDataWriteProtection:
             "cwd": repo_root,
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
     def test_write_to_daemon_pid_blocked(self):
         """Write tool targeting daemon.pid must be blocked."""
@@ -434,7 +434,7 @@ class TestManagedDataWriteProtection:
             "cwd": repo_root,
         }
         output = _run_hook(event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "block"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
     def test_write_outside_sahjhan_dir_allowed(self):
         """Write tool targeting a non-protected path is allowed."""

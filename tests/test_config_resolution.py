@@ -178,22 +178,24 @@ class TestExitStopWarn:
             output = {}
         return result.returncode, output
 
-    def test_outputs_approve_decision(self):
-        """exit_stop_warn outputs decision=approve so stop proceeds."""
+    def test_outputs_system_message(self):
+        """exit_stop_warn outputs systemMessage (allows stop, shows msg to user)."""
         code, output = self._run_func("exit_stop_warn", "test warning")
         assert code == 0
-        assert output.get("decision") == "approve"
+        assert output.get("systemMessage") == "test warning"
+        assert "decision" not in output
 
-    def test_includes_reason(self):
-        """exit_stop_warn includes the warning message as reason."""
+    def test_includes_warning_text(self):
+        """exit_stop_warn includes the warning message in systemMessage."""
         _, output = self._run_func("exit_stop_warn", "enforcement unavailable")
-        assert output.get("reason") == "enforcement unavailable"
+        assert output.get("systemMessage") == "enforcement unavailable"
 
     def test_no_pretooluse_fields(self):
         """Stop hooks should not include PreToolUse-specific fields."""
         _, output = self._run_func("exit_stop_warn", "test")
         assert "hookSpecificOutput" not in output
         assert "continue" not in output
+        assert "decision" not in output
 
     def test_produces_output_unlike_allow(self):
         """exit_stop_warn produces output (hasOutput=true) unlike exit_stop_allow."""
@@ -253,9 +255,11 @@ class TestStopHookDegradedEnforcement:
         assert code == 0
         # Should have output (not silent allow)
         assert output != {}, "Stop hook silently allowed despite active audit with no config"
-        # Should be a warning, not a block
-        reason = output.get("reason", "")
-        assert "WARNING" in reason or "enforcement" in reason.lower()
+        # Should be a warning (systemMessage), not a block
+        msg = output.get("systemMessage", "")
+        assert "unavailable" in msg.lower() or "enforcement" in msg.lower() or "status-cache" in msg.lower(), (
+            f"Warn message should mention enforcement/unavailable/status-cache, got: {msg}"
+        )
 
     def test_warns_include_config_path(self, tmp_path):
         """Warning message should include the config path that was searched."""
@@ -266,8 +270,8 @@ class TestStopHookDegradedEnforcement:
 
         event = {"cwd": str(tmp_path)}
         code, output = self._run_stop_hook(event, cwd=str(tmp_path))
-        reason = output.get("reason", "")
-        assert "protocol.toml" in reason or "enforcement" in reason.lower()
+        msg = output.get("systemMessage", "")
+        assert "protocol.toml" in msg or "enforcement" in msg.lower() or "status-cache" in msg.lower()
 
     def test_uses_plugin_root_config(self, tmp_path):
         """Stop hook uses CLAUDE_PLUGIN_ROOT/enforcement when available."""

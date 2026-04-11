@@ -1,13 +1,14 @@
 """Tests for hooks/ modules.
 
 All hooks output modern-format JSON to stdout and exit 0.
-Decision semantics are encoded in the JSON payload:
+PreToolUse decisions use hookSpecificOutput.permissionDecision:
 
-  - allow:  {"continue": true,  "suppressOutput": true, ...}
-  - warn:   {"continue": true,  "suppressOutput": false, "additionalContext": ...}
-  - block:  {"continue": false, "hookSpecificOutput": {"permissionDecision": "block", ...}}
+  - allow:  hookSpecificOutput.permissionDecision = "allow"
+  - warn:   hookSpecificOutput.permissionDecision = "allow" + additionalContext
+  - deny:   hookSpecificOutput.permissionDecision = "deny"
 
-See: https://github.com/anthropics/claude-code/issues/17088
+Valid permissionDecision values: "allow", "deny", "ask", "defer".
+See: https://code.claude.com/docs/en/hooks
 """
 
 import json
@@ -41,18 +42,27 @@ def run_hook(hook_name, event, cwd=None):
 
 
 def assert_allowed(code, output):
-    """Assert that the hook allowed the operation."""
+    """Assert that the hook allowed the operation (PreToolUse).
+
+    Valid allow format: hookSpecificOutput.permissionDecision = "allow"
+    """
     assert code == 0, f"Expected exit 0, got {code}"
-    assert output.get("continue") is True
-    assert output.get("suppressOutput") is True
+    hook_output = output.get("hookSpecificOutput", {})
+    assert hook_output.get("permissionDecision") == "allow", (
+        f"Expected permissionDecision 'allow', got: {output}"
+    )
 
 
 def assert_blocked(code, output, reason_substring=""):
-    """Assert that the hook blocked the operation (PreToolUse)."""
+    """Assert that the hook denied the operation (PreToolUse).
+
+    Valid deny format: hookSpecificOutput.permissionDecision = "deny"
+    """
     assert code == 0, f"Expected exit 0, got {code}"
-    assert output.get("continue") is False
     hook_output = output.get("hookSpecificOutput", {})
-    assert hook_output.get("permissionDecision") == "block"
+    assert hook_output.get("permissionDecision") == "deny", (
+        f"Expected permissionDecision 'deny', got: {output}"
+    )
     if reason_substring:
         assert reason_substring in hook_output.get("permissionDecisionReason", "")
 
@@ -133,22 +143,23 @@ class TestModernOutputFormat:
 
     def test_exit_warn_outputs_valid_json(self):
         _, output, _ = self._run_common_func("exit_warn", "test warning")
+        # Without event_name, uses generic format with systemMessage
         assert output.get("continue") is True
         assert output.get("suppressOutput") is False
-        assert output.get("additionalContext") == "test warning"
+        assert output.get("systemMessage") == "test warning"
 
     # -- exit_block --
 
     def test_exit_block_outputs_valid_json(self):
         _, output, _ = self._run_common_func("exit_block", "test block")
-        assert output.get("continue") is False
-        assert output.get("suppressOutput") is False
+        hook_output = output.get("hookSpecificOutput", {})
+        assert hook_output.get("permissionDecision") == "deny"
 
     def test_exit_block_includes_hook_specific_output(self):
         _, output, _ = self._run_common_func("exit_block", "reason here")
         hook_output = output.get("hookSpecificOutput", {})
         assert hook_output["hookEventName"] == "PreToolUse"
-        assert hook_output["permissionDecision"] == "block"
+        assert hook_output["permissionDecision"] == "deny"
         assert hook_output["permissionDecisionReason"] == "reason here"
 
     # -- exit_stop_allow --
@@ -269,8 +280,9 @@ class TestSubagentFindingsCheck:
 
     SubagentStop hooks use Stop protocol:
     - Allow: no output (empty stdout, exit 0)
-    - Warn: {"decision": "approve", "reason": msg}
+    - Warn: {"systemMessage": msg}
     - Block: {"decision": "block", "reason": msg}
+    See: https://code.claude.com/docs/en/hooks
     """
 
     def test_allows_empty_message(self):
@@ -305,9 +317,9 @@ class TestSubagentFindingsCheck:
         }
         code, output, _ = run_hook("subagent_findings_check.py", event)
         assert code == 0
-        assert output.get("decision") == "approve"
-        assert "WARNING" in output.get("reason", "")
-        assert "PUNCHLIST.md" in output.get("reason", "")
+        assert "systemMessage" in output
+        assert "WARNING" in output.get("systemMessage", "")
+        assert "PUNCHLIST.md" in output.get("systemMessage", "")
 
     def test_deduplicates_paths(self, tmp_path):
         """Multiple references to the same path should be deduplicated."""
@@ -317,9 +329,9 @@ class TestSubagentFindingsCheck:
         }
         code, output, _ = run_hook("subagent_findings_check.py", event)
         assert code == 0
-        assert output.get("decision") == "approve"
+        assert "systemMessage" in output
         # Should only mention FOO.md once
-        assert output.get("reason", "").count("FOO.md") == 1
+        assert output.get("systemMessage", "").count("FOO.md") == 1
 
     def test_warns_missing_json_artifacts(self, tmp_path):
         """BH-007: .json artifacts under docs/holtz/ should be checked, not just .md."""
@@ -329,9 +341,9 @@ class TestSubagentFindingsCheck:
         }
         code, output, _ = run_hook("subagent_findings_check.py", event)
         assert code == 0
-        assert output.get("decision") == "approve"
-        assert "WARNING" in output.get("reason", "")
-        assert "impact-graph.json" in output.get("reason", "")
+        assert "systemMessage" in output
+        assert "WARNING" in output.get("systemMessage", "")
+        assert "impact-graph.json" in output.get("systemMessage", "")
 
     def test_allows_existing_json_artifact(self, tmp_path):
         """BH-007: existing .json artifact should be allowed."""
@@ -392,14 +404,14 @@ class TestSubagentFindingsCheckInProcess:
         assert output == {}
 
     def test_missing_md_warns(self, tmp_path, capsys):
-        """Missing file → stop-warn with decision=approve."""
+        """Missing file → stop-warn with systemMessage."""
         event = {
             "last_assistant_message": "Wrote docs/holtz/NONEXISTENT.md",
             "cwd": str(tmp_path),
         }
         output = self._run_main(event, capsys)
-        assert output.get("decision") == "approve"
-        assert "NONEXISTENT.md" in output.get("reason", "")
+        assert "systemMessage" in output
+        assert "NONEXISTENT.md" in output.get("systemMessage", "")
 
     def test_existing_file_ok(self, tmp_path, capsys):
         """Existing file → stop-allow (no output)."""
@@ -414,14 +426,14 @@ class TestSubagentFindingsCheckInProcess:
         assert output == {}
 
     def test_json_artifact_warns(self, tmp_path, capsys):
-        """Missing JSON artifact → stop-warn with decision=approve."""
+        """Missing JSON artifact → stop-warn with systemMessage."""
         event = {
             "last_assistant_message": "Updated docs/holtz/impact-graph.json",
             "cwd": str(tmp_path),
         }
         output = self._run_main(event, capsys)
-        assert output.get("decision") == "approve"
-        assert "impact-graph.json" in output.get("reason", "")
+        assert "systemMessage" in output
+        assert "impact-graph.json" in output.get("systemMessage", "")
 
 
 # --- _common.py in-process coverage for exit_stop_warn, exit_stop_block, read_event ---
@@ -471,16 +483,16 @@ class TestCommonInProcess:
         result = common.read_event()
         assert result == {"tool_name": "Bash", "args": {}}
 
-    def test_exit_stop_warn_outputs_approve_decision(self, capsys):
-        """exit_stop_warn outputs decision=approve with reason (lines 163-167)."""
+    def test_exit_stop_warn_outputs_system_message(self, capsys):
+        """exit_stop_warn outputs systemMessage (allows stop, shows msg to user)."""
         import contextlib
         common = self._import_common()
         with contextlib.suppress(SystemExit):
             common.exit_stop_warn("config not found")
         captured = capsys.readouterr()
         output = json.loads(captured.out)
-        assert output["decision"] == "approve"
-        assert output["reason"] == "config not found"
+        assert output["systemMessage"] == "config not found"
+        assert "decision" not in output
 
     def test_exit_stop_block_outputs_block_decision(self, capsys):
         """exit_stop_block outputs decision=block with reason (lines 177-181)."""
