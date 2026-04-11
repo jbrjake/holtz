@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.127.5] - 2026-04-10
+
+_Changes since v0.127.1_
+
+### Fixed
+- **skill:** fix doc gaps for snapshot, checkpoint, merge events
+- **enforcement:** recon_complete gate checks recon_step, not recon_finding
+- **enforcement:** add status-cache.json fallback to stop hook
+
+### Infrastructure
+- update README test badge count to 1120
+- bump sahjhan binary to v0.13.1
+
 ## [0.127.1] - 2026-04-10
 
 _Changes since v0.115.3_
