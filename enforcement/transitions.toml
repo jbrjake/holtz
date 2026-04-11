@@ -11,7 +11,7 @@ from = "recon"
 to = "audit"
 command = "recon_complete"
 gates = [
-    { type = "query", sql = "SELECT count(DISTINCT step) >= 5 FROM events WHERE type='recon_finding'", expect = "true", intent = "recon must cover all 5 steps" },
+    { type = "query", sql = "SELECT count(DISTINCT step) >= 5 FROM events WHERE type='recon_step'", expect = "true", intent = "recon must cover all 5 steps" },
     { type = "file_exists", path = "docs/holtz/impact-graph.json", intent = "impact graph must exist before auditing" },
     { type = "ledger_has_event", event = "recon_step", min_count = 5, intent = "each recon step must be recorded" },
     { type = "ledger_has_event", event = "justine_dispatched", min_count = 1, intent = "Justine must be dispatched for parallel audit" },
@@ -27,7 +27,7 @@ to = "merge_ready"
 command = "audit_complete"
 gates = [
     { type = "ledger_has_event", event = "audit_claim", min_count = 1, intent = "at least one doc claim must be verified" },
-    { type = "snapshot_compare", cmd = "python skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats", extract = "edges", compare = "gt", reference = "snapshot:pre_audit_edge_count", intent = "audit must add edges to the impact graph" },
+    { type = "snapshot_compare", cmd = "python $CLAUDE_PLUGIN_ROOT/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats", extract = "edges", compare = "gt", reference = "snapshot:pre_audit_edge_count", intent = "audit must add edges to the impact graph" },
 ]
 
 # ── Merge ──
