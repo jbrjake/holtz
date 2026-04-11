@@ -91,6 +91,75 @@ class TestStopHookDaemonLiveness:
         )
 
 
+class TestStopHookStatusCacheFallback:
+    """Tests for status-cache.json fallback when daemon cache is unreachable (issue #48 bug 1)."""
+
+    def test_fallback_to_status_cache_terminal_state(self, tmp_path, mock_daemon):
+        """Live daemon + no enforcement cache + status-cache.json with terminal state → allow stop."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write our own PID (guaranteed alive)
+        (sahjhan_dir / "daemon-init-pid").write_text(str(os.getpid()))
+
+        # Do NOT write enforcement cache to daemon — simulates auth failure
+        # (read_cache() will return None)
+
+        # Write status-cache.json with a terminal state
+        import json
+        status_cache = {"state": "awaiting_clear", "ts": "2099-01-01T00:00:00Z"}
+        (sahjhan_dir / "status-cache.json").write_text(json.dumps(status_cache))
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event, cwd=str(tmp_path))
+
+        assert code == 0
+        assert output == {}, (
+            f"Terminal state in status-cache.json should allow stop (empty output), got: {output}"
+        )
+
+    def test_fallback_to_status_cache_nonterminal_state(self, tmp_path, mock_daemon):
+        """Live daemon + no enforcement cache + status-cache.json with non-terminal state → block."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
+
+        (sahjhan_dir / "daemon-init-pid").write_text(str(os.getpid()))
+
+        import json
+        status_cache = {"state": "fix_loop", "ts": "2099-01-01T00:00:00Z"}
+        (sahjhan_dir / "status-cache.json").write_text(json.dumps(status_cache))
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event, cwd=str(tmp_path))
+
+        assert code == 0
+        assert output.get("decision") == "block", (
+            f"Non-terminal state in status-cache.json should block, got: {output}"
+        )
+
+    def test_fallback_no_status_cache_warns(self, tmp_path, mock_daemon):
+        """Live daemon + no enforcement cache + no status-cache.json → warn (not block)."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
+
+        (sahjhan_dir / "daemon-init-pid").write_text(str(os.getpid()))
+
+        # No enforcement cache, no status-cache.json
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event, cwd=str(tmp_path))
+
+        assert code == 0
+        # Should warn, not block — blocking creates infinite loop
+        assert output.get("decision") == "approve", (
+            f"Missing both caches should warn (not block) to avoid infinite loop, got: {output}"
+        )
+        reason = output.get("reason", "").lower()
+        assert "unavailable" in reason or "status-cache" in reason, (
+            f"Warn reason should mention 'unavailable' or 'status-cache', got: {output.get('reason')}"
+        )
+
+
 class TestStopHookRemediationMessage:
     """Tests for remediation message in stop_hook.py block output."""
 
