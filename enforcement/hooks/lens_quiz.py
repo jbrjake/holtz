@@ -412,8 +412,14 @@ def main() -> None:
         events_list = [{"type": "assistant", "content": message}]
 
     # Load quiz bank from daemon vault (secrets never on disk)
+    # Graceful degradation: catch daemon-unavailable errors (OSError covers
+    # socket failures; RuntimeError covers daemon-returned errors; KeyError
+    # covers missing "data" field when vault is unpopulated).
+    # Data corruption (binascii.Error, json.JSONDecodeError) is NOT caught —
+    # corrupt vault data should crash the hook visibly, not silently disable
+    # the quiz gate.
     bank: list[dict] = []
-    with contextlib.suppress(Exception):
+    with contextlib.suppress(OSError, RuntimeError, KeyError):
         import base64
         sock_path = _get_daemon_socket_path(cwd)
         resp = _daemon_request(sock_path, {"op": "vault_read", "name": "quiz-bank"})
