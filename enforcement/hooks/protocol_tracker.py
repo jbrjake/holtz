@@ -22,23 +22,26 @@ from _protocol_cache import (  # noqa: E402
     is_sahjhan_cmd,
     parse_status_text,
     read_cache,
+    update_cache,
     write_cache,
 )
 from _resolve import ensure_sahjhan  # noqa: E402
 
-from _common import _active_ledger, exit_ok, read_event, resolve_config_dir  # noqa: E402
+from _common import exit_ok, read_event, resolve_config_dir  # noqa: E402
 
 
 def _is_tdd_cmd(cmd: str) -> bool:
-    """Detect test, lint, and type-check commands (TDD workflow)."""
-    cmd_stripped = cmd.strip()
-    return (
-        cmd_stripped.startswith("pytest")
-        or cmd_stripped.startswith("python -m pytest")
-        or cmd_stripped.startswith("ruff check")
-        or cmd_stripped.startswith("ruff format")
-        or cmd_stripped.startswith("mypy")
-    )
+    """Detect test, lint, and type-check commands (TDD workflow).
+
+    Checks each segment of chained commands (split on &&, ||, ;, |)
+    so that ``cd /project && python -m pytest`` is recognized.
+    """
+    _TDD_PREFIXES = ("pytest", "python -m pytest", "ruff check", "ruff format", "mypy")
+    for segment in re.split(r'&&|\|\||[;|]', cmd):
+        seg = segment.strip()
+        if any(seg.startswith(p) for p in _TDD_PREFIXES):
+            return True
+    return False
 
 
 def _is_sleep_cmd(cmd: str) -> bool:
@@ -72,12 +75,8 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     if binary is None:
         return cache
     config_dir, _ = resolve_config_dir(cwd)
-    ledger = _active_ledger(cwd)
     try:
-        cmd = [binary, "--config-dir", config_dir]
-        if ledger:
-            cmd.extend(["--ledger", ledger])
-        cmd.append("status")
+        cmd = [binary, "--config-dir", config_dir, "status"]
         result = subprocess.run(
             cmd,
             capture_output=True, text=True, timeout=5, cwd=cwd,
@@ -156,18 +155,17 @@ def main() -> None:
 
     if is_git_commit(cmd) and exit_code == 0:
         commit_hash = _parse_commit_hash(output)
-        cache.setdefault("unregistered_commits", []).append(commit_hash)
-        cache["stall"] = 0
-        write_cache(cwd, cache)
+        commits = list(cache.get("unregistered_commits", []))
+        commits.append(commit_hash)
+        update_cache(cwd, {"unregistered_commits": commits, "stall": 0})
         exit_ok()
 
     # Test/lint/type-check commands are legitimate TDD activity — don't count as stalling
     if _is_sleep_cmd(cmd):
         # Sleep to game timing gates gets double stall penalty
-        cache["stall"] = cache.get("stall", 0) + 2
+        update_cache(cwd, {"stall": cache.get("stall", 0) + 2})
     elif not _is_tdd_cmd(cmd):
-        cache["stall"] = cache.get("stall", 0) + 1
-    write_cache(cwd, cache)
+        update_cache(cwd, {"stall": cache.get("stall", 0) + 1})
     exit_ok()
 
 

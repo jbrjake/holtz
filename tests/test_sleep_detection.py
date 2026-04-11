@@ -42,7 +42,7 @@ def _load_tracker_module() -> ModuleType:
     # Stub out other sibling modules if not already present
     stubs: dict[str, list[str]] = {
         "_protocol_cache": ["empty_cache", "is_git_commit", "is_sahjhan_cmd",
-                            "parse_status_text", "read_cache", "write_cache"],
+                            "parse_status_text", "read_cache", "update_cache", "write_cache"],
         "_resolve": ["sahjhan_binary", "ensure_sahjhan"],
     }
     for mod_name, attrs in stubs.items():
@@ -164,10 +164,15 @@ class TestStallPenalty:
         def fake_write_cache(cwd: str, cache: dict) -> None:
             captured_cache.update(cache)
 
+        def fake_update_cache(cwd: str, patch: dict) -> dict:
+            captured_cache.update(patch)
+            return {**initial_cache, **patch}
+
         with (
             patch.object(_tracker, "read_event", return_value=event),
             patch.object(_tracker, "read_cache", return_value=dict(initial_cache)),
             patch.object(_tracker, "write_cache", side_effect=fake_write_cache),
+            patch.object(_tracker, "update_cache", side_effect=fake_update_cache),
             patch.object(_tracker, "is_sahjhan_cmd", return_value=False),
             patch.object(_tracker, "is_git_commit", return_value=False),
             patch.object(_tracker, "exit_ok", side_effect=SystemExit(0)),contextlib.suppress(SystemExit)

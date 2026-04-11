@@ -1010,3 +1010,255 @@ def test_load_node_missing_id_key_filtered(tmp_path):
     hotspots = g.risk_hotspots(top=10)
     assert len(hotspots) == 1
     assert hotspots[0]["id"] == "has_id"
+
+
+# ---------------------------------------------------------------------------
+# add_edge update with confidence/discovered (lines 153, 155)
+# ---------------------------------------------------------------------------
+
+
+def test_add_edge_update_confidence_and_discovered(graph):
+    """Updating existing edge with confidence and discovered args updates metadata."""
+    graph.add_node("x.py::a", "function", "x.py", line=1)
+    graph.add_node("x.py::b", "function", "x.py", line=5)
+    edge = graph.add_edge("x.py::a", "x.py::b", "calls", confidence="low")
+    assert edge["metadata"]["confidence"] == "low"
+
+    # Update with new confidence and discovered
+    updated = graph.add_edge(
+        "x.py::a", "x.py::b", "calls",
+        confidence="high", discovered="2026-04-01",
+    )
+    assert graph.stats()["edges"] == 1  # no duplicate
+    assert updated["metadata"]["confidence"] == "high"
+    assert updated["metadata"]["discovered"] == "2026-04-01"
+
+
+# ---------------------------------------------------------------------------
+# save() error path (lines 100-105)
+# ---------------------------------------------------------------------------
+
+
+def test_save_cleanup_on_error(tmp_path):
+    """save() cleans up temp file when os.write raises (lines 100-105)."""
+    import unittest.mock as mock
+
+    g = ImpactGraph(tmp_path / "graph.json")
+    g.add_node("a.py", "module", "a.py")
+
+    with mock.patch("os.write", side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        g.save()
+
+    # Temp file should be cleaned up, no .tmp files left behind
+    tmp_files = list(tmp_path.glob("*.tmp"))
+    assert tmp_files == [], f"Temp files not cleaned up: {tmp_files}"
+
+
+# ---------------------------------------------------------------------------
+# CLI in-process tests (coverage-contributing)
+# ---------------------------------------------------------------------------
+
+
+def _seed_graph(graph_path):
+    """Create a graph file with nodes and edges for CLI testing."""
+    g = ImpactGraph(graph_path)
+    g.add_node("a.py::fn_a", "function", "a.py", line=1)
+    g.add_node("b.py::fn_b", "function", "b.py", line=10)
+    g.add_node("c.py::fn_c", "function", "c.py", line=20)
+    g.add_edge("a.py::fn_a", "b.py::fn_b", "calls")
+    g.add_edge("b.py::fn_b", "c.py::fn_c", "calls")
+    g.nodes["a.py::fn_a"]["risk_score"] = 0.8
+    g.save()
+    return g
+
+
+def _run_cli(args, capsys):
+    """Run impact_graph.main() in-process with given argv, return (exit_code, stdout, stderr)."""
+    from impact_graph import main
+
+    exit_code = 0
+    try:
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("sys.argv", ["impact_graph.py"] + args)
+            main()
+    except SystemExit as e:
+        exit_code = e.code if e.code is not None else 0
+    captured = capsys.readouterr()
+    return exit_code, captured.out, captured.err
+
+
+def test_cli_no_command(tmp_path, capsys):
+    """No subcommand prints help and exits 1."""
+    code, _, _ = _run_cli(["--graph", str(tmp_path / "g.json")], capsys)
+    assert code == 1
+
+
+def test_cli_add_edge(tmp_path, capsys):
+    """CLI add_edge creates edge and saves."""
+    gp = tmp_path / "g.json"
+    _seed_graph(gp)
+    code, out, _ = _run_cli([
+        "--graph", str(gp), "add_edge",
+        "a.py::fn_a", "c.py::fn_c", "imports", "--note", "used for X",
+    ], capsys)
+    assert code == 0
+    edge = json.loads(out)
+    assert edge["source"] == "a.py::fn_a"
+    assert edge["metadata"]["note"] == "used for X"
+
+
+def test_cli_add_edge_error(tmp_path, capsys):
+    """CLI add_edge with nonexistent target exits 1."""
+    gp = tmp_path / "g.json"
+    _seed_graph(gp)
+    code, _, err = _run_cli([
+        "--graph", str(gp), "add_edge",
+        "a.py::fn_a", "ghost.py::x", "calls",
+    ], capsys)
+    assert code == 1
+    assert "ghost.py::x" in err
+
+
+def test_cli_neighbors(tmp_path, capsys):
+    """CLI neighbors returns correct neighbor list."""
+    gp = tmp_path / "g.json"
+    _seed_graph(gp)
+    code, out, _ = _run_cli(["--graph", str(gp), "neighbors", "a.py::fn_a"], capsys)
+    assert code == 0
+    assert json.loads(out) == ["b.py::fn_b"]
+
+
+def test_cli_neighbors_with_type_filter(tmp_path, capsys):
+    """CLI neighbors with --type filters by edge type."""
+    gp = tmp_path / "g.json"
+    _seed_graph(gp)
+    code, out, _ = _run_cli([
+        "--graph", str(gp), "neighbors", "a.py::fn_a", "--type", "imports",
+    ], capsys)
+    assert code == 0
+    assert json.loads(out) == []
+
+
+def test_cli_blast_radius(tmp_path, capsys):
+    """CLI blast_radius returns correct reachable set."""
+    gp = tmp_path / "g.json"
+    _seed_graph(gp)
+    code, out, _ = _run_cli([
+        "--graph", str(gp), "blast_radius", "a.py::fn_a", "--depth", "2",
+    ], capsys)
+    assert code == 0
+    result = json.loads(out)
+    assert "b.py::fn_b" in result
+    assert "c.py::fn_c" in result
+
+
+def test_cli_blast_radius_with_type_filter(tmp_path, capsys):
+    """CLI blast_radius with --type filters correctly."""
+    gp = tmp_path / "g.json"
+    _seed_graph(gp)
+    code, out, _ = _run_cli([
+        "--graph", str(gp), "blast_radius", "a.py::fn_a",
+        "--depth", "2", "--type", "imports",
+    ], capsys)
+    assert code == 0
+    assert json.loads(out) == []
+
+
+def test_cli_risk_hotspots(tmp_path, capsys):
+    """CLI risk_hotspots returns ranked nodes."""
+    gp = tmp_path / "g.json"
+    _seed_graph(gp)
+    code, out, _ = _run_cli(["--graph", str(gp), "risk_hotspots", "--top", "2"], capsys)
+    assert code == 0
+    hotspots = json.loads(out)
+    assert len(hotspots) <= 2
+    assert hotspots[0]["id"] == "a.py::fn_a"
+
+
+def test_cli_update_risk(tmp_path, capsys):
+    """CLI update_risk adjusts score and saves."""
+    gp = tmp_path / "g.json"
+    _seed_graph(gp)
+    code, out, _ = _run_cli(["--graph", str(gp), "update_risk", "b.py::fn_b", "0.3"], capsys)
+    assert code == 0
+    node = json.loads(out)
+    assert node["risk_score"] == 0.3
+
+
+def test_cli_update_risk_error(tmp_path, capsys):
+    """CLI update_risk on nonexistent node exits 1."""
+    gp = tmp_path / "g.json"
+    _seed_graph(gp)
+    code, _, _ = _run_cli(["--graph", str(gp), "update_risk", "ghost.py::x", "0.1"], capsys)
+    assert code == 1
+
+
+def test_cli_stats(tmp_path, capsys):
+    """CLI stats returns node/edge counts."""
+    gp = tmp_path / "g.json"
+    _seed_graph(gp)
+    code, out, _ = _run_cli(["--graph", str(gp), "stats"], capsys)
+    assert code == 0
+    stats = json.loads(out)
+    assert stats["nodes"] == 3
+    assert stats["edges"] == 2
+
+
+def test_cli_prune_node(tmp_path, capsys):
+    """CLI prune_node removes node and reports edge count."""
+    gp = tmp_path / "g.json"
+    _seed_graph(gp)
+    code, out, _ = _run_cli(["--graph", str(gp), "prune_node", "b.py::fn_b"], capsys)
+    assert code == 0
+    result = json.loads(out)
+    assert result["removed_edges"] == 2  # a->b and b->c
+
+
+def test_cli_prune_node_error(tmp_path, capsys):
+    """CLI prune_node on nonexistent node exits 1."""
+    gp = tmp_path / "g.json"
+    _seed_graph(gp)
+    code, _, _ = _run_cli(["--graph", str(gp), "prune_node", "ghost.py::x"], capsys)
+    assert code == 1
+
+
+def test_cli_prune_missing(tmp_path, capsys):
+    """CLI prune_missing removes nodes with missing files."""
+    gp = tmp_path / "g.json"
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "a.py").write_text("def fn_a(): pass\n")
+
+    g = ImpactGraph(gp)
+    g.add_node("a.py::fn_a", "function", "a.py", line=1)
+    g.add_node("b.py::fn_b", "function", "b.py", line=1)
+    g.save()
+
+    code, out, _ = _run_cli([
+        "--graph", str(gp), "prune_missing", "--project-root", str(project),
+    ], capsys)
+    assert code == 0
+    result = json.loads(out)
+    assert "b.py::fn_b" in result["removed_nodes"]
+
+
+def test_cli_drift_check(tmp_path, capsys):
+    """CLI drift_check reports drifted entities."""
+    gp = tmp_path / "g.json"
+    project = tmp_path / "project"
+    project.mkdir()
+    lines = ["# padding\n"] * 50
+    lines[49] = "def fn_a(): pass\n"
+    (project / "a.py").write_text("".join(lines))
+
+    g = ImpactGraph(gp)
+    g.add_node("a.py::fn_a", "function", "a.py", line=1)
+    g.save()
+
+    code, out, _ = _run_cli([
+        "--graph", str(gp), "drift_check", "--project-root", str(project),
+    ], capsys)
+    assert code == 0
+    result = json.loads(out)
+    assert len(result["drifted"]) == 1
+    assert result["drifted"][0]["reason"] == "line_shifted"

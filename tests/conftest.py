@@ -91,3 +91,38 @@ def make_item():
         return body
 
     return _make_item
+
+
+import os
+import shutil
+import tempfile
+
+from mock_enforcement_daemon import MockEnforcementDaemon
+
+
+@pytest.fixture
+def mock_daemon(tmp_path, monkeypatch):
+    """Start a mock enforcement daemon reachable via _get_daemon_socket_path.
+
+    macOS limits AF_UNIX paths to 104 chars, and pytest tmp_path can exceed
+    that. We create the socket in a short /tmp dir and set SAHJHAN_DAEMON_SOCKET
+    so both in-process and subprocess code finds the daemon.
+    """
+    # Create the .sahjhan dir in tmp_path (code checks for its existence)
+    sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+    sahjhan_dir.mkdir(parents=True, exist_ok=True)
+
+    # Short socket path to stay within kernel limit
+    short_dir = tempfile.mkdtemp(prefix="hd_")
+    socket_path = os.path.join(short_dir, "d.sock")
+
+    daemon = MockEnforcementDaemon(socket_path)
+    daemon.start()
+
+    # Set env var so _get_daemon_socket_path returns our short path.
+    # This works for both in-process imports and subprocess-based hook tests.
+    monkeypatch.setenv("SAHJHAN_DAEMON_SOCKET", socket_path)
+
+    yield daemon
+    daemon.stop()
+    shutil.rmtree(short_dir, ignore_errors=True)

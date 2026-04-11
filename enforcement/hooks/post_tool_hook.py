@@ -27,7 +27,6 @@ from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
 
 from _common import (  # noqa: E402
-    _active_ledger,
     exit_enforcement_error,
     exit_ok,
     exit_warn,
@@ -89,16 +88,12 @@ def _build_bash_event(tool_input: dict[str, Any]) -> dict[str, Any]:
 def _record_event(
     binary: str,
     config_dir: str,
-    ledger: str | None,
     cwd: str,
     event_type: str,
     fields: dict[str, str],
 ) -> None:
     """Record an event via sahjhan CLI. Best-effort, failures are silent."""
-    cmd = [binary, "--config-dir", config_dir]
-    if ledger:
-        cmd.extend(["--ledger", ledger])
-    cmd.extend(["event", event_type])
+    cmd = [binary, "--config-dir", config_dir, "event", event_type]
     for k, v in fields.items():
         cmd.extend(["--field", f"{k}={v}"])
     with contextlib.suppress(OSError, subprocess.TimeoutExpired):
@@ -125,13 +120,9 @@ def main() -> None:
     if not config_found:
         exit_enforcement_error(cwd, "Enforcement config not found", "PostToolUse")
 
-    ledger = _active_ledger(cwd)
-
     # Call hook eval
-    cmd = [binary, "--config-dir", config_dir, "--json"]
-    if ledger:
-        cmd.extend(["--ledger", ledger])
-    cmd.extend(["hook", "eval", "--event", "PostToolUse"])
+    cmd = [binary, "--config-dir", config_dir, "--json",
+           "hook", "eval", "--event", "PostToolUse"]
     if tool_name:
         cmd.extend(["--tool", tool_name])
     if file_path:
@@ -152,7 +143,7 @@ def main() -> None:
     for record in eval_data.get("auto_records", []):
         enriched = _enrich_auto_record(record, tool_name, tool_input)
         _record_event(
-            binary, config_dir, ledger, cwd,
+            binary, config_dir, cwd,
             enriched["event_type"], enriched["fields"],
         )
 
@@ -160,7 +151,7 @@ def main() -> None:
     if tool_name == "Bash":
         bash_event = _build_bash_event(tool_input)
         _record_event(
-            binary, config_dir, ledger, cwd,
+            binary, config_dir, cwd,
             bash_event["event_type"], bash_event["fields"],
         )
 

@@ -6,7 +6,7 @@ DO NOT MODIFY. This hook protects itself.
 PreToolUse hook that:
 - Blocks Write/Edit to enforcement/, bin/sahjhan*, hooks/hooks.json, and this file
 - Blocks Bash commands that write to protected or managed paths
-- Blocks Bash commands that invoke privileged sahjhan daemon commands
+- Blocks Bash commands that invoke non-allowlisted sahjhan subcommands
 - Provides defense-in-depth guards for Grep/Glob tools on enforcement paths
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ MANAGED_DOCS = [
 ]
 
 # Issue #33: The .sahjhan data directory contains enforcement state (cache,
-# ledger, active-run marker). Writes and deletes must be blocked.
+# ledger, active-ledger marker). Writes and deletes must be blocked.
 MANAGED_DATA = [
     "docs/holtz/.sahjhan/",
 ]
@@ -41,14 +41,27 @@ MANAGED_DATA = [
 # Combined set of all paths that must be protected from Bash writes.
 ALL_PROTECTED = PROTECTED + MANAGED_DOCS + MANAGED_DATA
 
-# Privileged sahjhan subcommands that the agent must not invoke directly.
-# Defense-in-depth: the daemon's caller authentication is the primary boundary.
-BLOCKED_DAEMON_CMDS = [
-    "sahjhan sign",
-    "sahjhan verify",
-    "sahjhan vault",
-    "sahjhan daemon stop",
-]
+# Sahjhan subcommands the agent is permitted to invoke via Bash.
+# Everything not listed is blocked by default (defense-in-depth).
+ALLOWED_SAHJHAN_SUBCMDS = {
+    "status",        # Read protocol state
+    "event",         # Record standard events
+    "authed-event",  # Record restricted events
+    "transition",    # Advance protocol state
+    "hook",          # Hook evaluation
+    "manifest",      # Manifest verify
+    "ledger",        # Ledger operations
+    "render",        # Render STATUS.md/PUNCHLIST.md
+    "daemon",        # Daemon management (start, status — NOT stop)
+    "gate",          # Gate check
+    "defer",         # Defer findings
+    "init",          # Initialize sahjhan
+}
+
+# Second-level blocks: subcommand is allowed but specific sub-subcommands are not.
+BLOCKED_SAHJHAN_SUBSUB: dict[str, set[str]] = {
+    "daemon": {"stop"},
+}
 
 # Resolve plugin root: enforcement/hooks/ -> enforcement/ -> repo root
 _PLUGIN_ROOT = os.environ.get(
@@ -57,15 +70,112 @@ _PLUGIN_ROOT = os.environ.get(
 )
 
 
-def _bash_references_daemon_cmd(command: str) -> str | None:
-    """Check if a Bash command invokes a privileged sahjhan daemon command.
+_VALUE_FLAGS = {"--config-dir", "--data-dir", "-c"}
 
-    Returns the blocked command pattern if found, None otherwise.
+
+def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
+    """Extract the sahjhan subcommand from a shell command segment.
+
+    Skips leading wrappers (nohup, env) and flags (--config-dir X).
+    Returns (subcommand, sub_subcommand) or None if not a sahjhan command.
     """
-    cmd_lower = command.lower()
-    for blocked in BLOCKED_DAEMON_CMDS:
-        if blocked in cmd_lower:
-            return blocked
+    # Strip redirections and trailing & for backgrounding
+    import re as _re
+    clean = _re.sub(r'\s*[<>]\S*', '', segment)
+    clean = _re.sub(r'\s*\d*[<>]+\s*\S*', '', clean)
+    clean = clean.rstrip('& \t')
+    tokens = clean.lower().split()
+    if not tokens:
+        return None
+
+    # Skip leading wrappers (nohup, env) and env var assignments (FOO=bar)
+    idx = 0
+    while idx < len(tokens):
+        if tokens[idx] in ("nohup", "env"):
+            idx += 1
+        elif "=" in tokens[idx] and not tokens[idx].startswith("-"):
+            # Shell env var assignment: FOO=bar, PATH=/usr/bin, etc.
+            idx += 1
+        else:
+            break
+
+    if idx >= len(tokens):
+        return None
+
+    # The next token should be "sahjhan" (or end with /sahjhan)
+    if tokens[idx] != "sahjhan" and not tokens[idx].endswith("/sahjhan"):
+        return None
+
+    idx += 1
+
+    # Skip flags before the subcommand (e.g. --config-dir /some/path)
+    while idx < len(tokens) and tokens[idx].startswith("-"):
+        flag = tokens[idx]
+        idx += 1
+        # Only value-taking flags consume the next token
+        if flag in _VALUE_FLAGS and idx < len(tokens):
+            idx += 1
+
+    if idx >= len(tokens):
+        # Bare "sahjhan" with no subcommand
+        return ("", "")
+
+    subcmd = tokens[idx]
+    idx += 1
+
+    # Skip flags between subcommand and sub-subcommand
+    while idx < len(tokens) and tokens[idx].startswith("-"):
+        flag = tokens[idx]
+        idx += 1
+        if flag in _VALUE_FLAGS and idx < len(tokens):
+            idx += 1
+
+    sub_subcmd = tokens[idx] if idx < len(tokens) else ""
+    return (subcmd, sub_subcmd)
+
+
+def _bash_references_blocked_sahjhan(command: str) -> str | None:
+    """Check if a Bash command invokes a blocked sahjhan subcommand.
+
+    Splits on shell operators (&&, ||, ;, |, newline), checks each segment.
+    Returns block reason string if blocked, None if allowed.
+    """
+    import re
+
+    segments = re.split(r'\s*(?:&&|\|\||[;|\n])\s*', command)
+
+    for seg in segments:
+        seg = seg.strip()
+        if not seg:
+            continue
+
+        result = _extract_sahjhan_subcmd(seg)
+        if result is None:
+            # Not a sahjhan command — allow
+            continue
+
+        subcmd, sub_subcmd = result
+
+        if not subcmd:
+            return (
+                "BLOCKED: Bare 'sahjhan' with no subcommand is not permitted. "
+                f"Allowed subcommands: {', '.join(sorted(ALLOWED_SAHJHAN_SUBCMDS))}"
+            )
+
+        if subcmd not in ALLOWED_SAHJHAN_SUBCMDS:
+            return (
+                f"BLOCKED: 'sahjhan {subcmd}' is not permitted. "
+                f"Allowed subcommands: {', '.join(sorted(ALLOWED_SAHJHAN_SUBCMDS))}"
+            )
+
+        # Check second-level blocks
+        blocked_subs = BLOCKED_SAHJHAN_SUBSUB.get(subcmd)
+        if blocked_subs and sub_subcmd in blocked_subs:
+            return (
+                f"BLOCKED: 'sahjhan {subcmd} {sub_subcmd}' is not permitted. "
+                f"'{subcmd}' is allowed but '{sub_subcmd}' is blocked."
+            )
+
     return None
 
 
@@ -91,7 +201,7 @@ def _check_bash_write(command: str) -> str | None:
     # semicolons inside the string argument get split by the segment splitter,
     # causing the interpreter prefix and the path reference to appear in
     # different segments. Check the full command first.
-    cmd_stripped = command.lstrip()
+    cmd_stripped = re.sub(r'^(?:(?:export\s+)?\w+=\S*\s+)*', '', command.lstrip()).strip()
     for interp in ("python ", "python3 ", "ruby ", "node "):
         if cmd_stripped.startswith(interp) and " -" in cmd_stripped:
             for p in ALL_PROTECTED:
@@ -109,6 +219,10 @@ def _check_bash_write(command: str) -> str | None:
         seg = seg.strip()
         if not seg:
             continue
+
+        # Strip leading env var assignments (FOO=bar, export X=1, etc.)
+        # so that startswith-based command detection isn't bypassed.
+        seg_cmd = re.sub(r'^(?:(?:export\s+)?\w+=\S*\s+)*', '', seg).strip()
 
         for p in ALL_PROTECTED:
             # Redirect check: find ALL > and >> in the segment, not just first
@@ -144,9 +258,8 @@ def _check_bash_write(command: str) -> str | None:
                     )
 
             # cp/mv/install check: protected path as LAST argument
-            seg_stripped = seg.lstrip()
-            if any(seg_stripped.startswith(c) for c in ("cp ", "mv ", "install ")):
-                args = seg_stripped.split()
+            if any(seg_cmd.startswith(c) for c in ("cp ", "mv ", "install ")):
+                args = seg_cmd.split()
                 if len(args) >= 3:
                     dest = args[-1]
                     if dest == p or dest.startswith(p):
@@ -158,7 +271,7 @@ def _check_bash_write(command: str) -> str | None:
             # Issue #33: rm/rmdir check — destructive operations on protected paths
             # Also match trailing-slash-stripped form so that
             # "rm -rf docs/holtz/.sahjhan" matches "docs/holtz/.sahjhan/".
-            if any(seg_stripped.startswith(c) for c in ("rm ", "rm\t", "rmdir ")):
+            if any(seg_cmd.startswith(c) for c in ("rm ", "rm\t", "rmdir ")):
                 p_stripped = p.rstrip("/")
                 ref = _segment_references_protected(seg, [p, p_stripped])
                 if ref:
@@ -188,18 +301,18 @@ def _check_bash_write(command: str) -> str | None:
             # These can write to arbitrary paths without using shell redirects.
             # Use substring match on full segment — paths may be inside quotes.
             for interp in ("python ", "python3 ", "ruby ", "node "):
-                if seg_stripped.startswith(interp) and " -" in seg_stripped and p in seg:
+                if seg_cmd.startswith(interp) and " -" in seg_cmd and p in seg:
                     return (
                             f"BLOCKED: Bash command uses interpreter to write to protected path '{p}'. "
                             "This path cannot be modified during an audit session."
                         )
-            if seg_stripped.startswith("dd ") and ("of=" + p) in seg_stripped:
+            if seg_cmd.startswith("dd ") and ("of=" + p) in seg_cmd:
                 return (
                     f"BLOCKED: Bash command uses dd to write to protected path '{p}'. "
                     "This path cannot be modified during an audit session."
                 )
-            if seg_stripped.startswith("wget "):
-                args = seg_stripped.split()
+            if seg_cmd.startswith("wget "):
+                args = seg_cmd.split()
                 for i, arg in enumerate(args):
                     # BH-006 run 28: handle both -O <path> and --output-document=<path>
                     if arg == "-O" and i + 1 < len(args) and args[i + 1].startswith(p):
@@ -215,8 +328,8 @@ def _check_bash_write(command: str) -> str | None:
                                 "This path cannot be modified during an audit session."
                             )
             # BH-007 run 28: curl -o / --output handler
-            if seg_stripped.startswith("curl "):
-                args = seg_stripped.split()
+            if seg_cmd.startswith("curl "):
+                args = seg_cmd.split()
                 for i, arg in enumerate(args):
                     if arg in ("-o", "--output") and i + 1 < len(args) and args[i + 1].startswith(p):
                         return (
@@ -248,13 +361,10 @@ def main() -> None:
 
     # Bash tool: check for write operations and privileged daemon commands
     if command and not path:
-        # Block privileged sahjhan daemon commands (defense-in-depth)
-        daemon_cmd = _bash_references_daemon_cmd(command)
-        if daemon_cmd:
-            _block(
-                f"BLOCKED: Bash command invokes privileged sahjhan command '{daemon_cmd}'. "
-                "Only trusted hook scripts may call sahjhan sign/vault/daemon commands."
-            )
+        # Allowlist check for sahjhan subcommands (defense-in-depth)
+        sahjhan_block = _bash_references_blocked_sahjhan(command)
+        if sahjhan_block:
+            _block(sahjhan_block)
             return
         result = _check_bash_write(command)
         if result:

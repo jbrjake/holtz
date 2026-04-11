@@ -28,12 +28,17 @@ from _common import exit_block, exit_ok, exit_warn, read_event  # noqa: E402
 
 
 def _is_test_cmd(cmd: str) -> bool:
-    """Detect test/pytest commands that should always be allowed."""
-    cmd_stripped = cmd.strip()
-    return (
-        cmd_stripped.startswith("pytest")
-        or cmd_stripped.startswith("python -m pytest")
-    )
+    """Detect test/pytest commands that should always be allowed.
+
+    Checks each segment of chained commands (split on &&, ||, ;, |)
+    so that ``cd /project && pytest`` is recognized.
+    """
+    import re as _re
+    for segment in _re.split(r'&&|\|\||[;|]', cmd):
+        seg = segment.strip()
+        if seg.startswith("pytest") or seg.startswith("python -m pytest"):
+            return True
+    return False
 
 
 def main() -> None:

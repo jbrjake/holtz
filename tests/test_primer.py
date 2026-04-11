@@ -47,7 +47,6 @@ class TestPrimerTerminatedAudit:
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True)
         (sahjhan_dir / "terminated").write_text("reason: daemon_pid_dead\n")
-        (sahjhan_dir / "active-run").write_text("run-1\n")
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
@@ -61,7 +60,6 @@ class TestPrimerTerminatedAudit:
         """Socket failure does not attempt daemon restart."""
         _init_sahjhan(tmp_path)
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        (sahjhan_dir / "active-run").write_text("run-1\n")
         (sahjhan_dir / "daemon-init-pid").write_text("99999999\n")
 
         # No daemon running — record_authed_event will fail
@@ -70,6 +68,27 @@ class TestPrimerTerminatedAudit:
         assert code == 0
         # Should write terminated marker since init PID is dead
         assert (sahjhan_dir / "terminated").exists()
+
+
+class TestPrimerAuthFailureFailClosed:
+    """Auth failure must inject hard stop instruction, not soft warning."""
+
+    def test_auth_failure_injects_hard_stop(self, tmp_path):
+        """When context_reset auth fails (daemon alive but auth broken),
+        primer must inject enforcement failure stop instruction."""
+        _init_sahjhan(tmp_path)
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        # Write a PID that IS alive (our own PID) so it's not a daemon death
+        (sahjhan_dir / "daemon-init-pid").write_text(f"{os.getpid()}\n")
+        # No daemon socket → record_authed_event will fail with OSError
+        # But PID is alive → not a daemon death → auth failure path
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
+        assert code == 0
+        context = output.get("additionalContext", "")
+        assert "ENFORCEMENT FAILURE" in context
+        assert "STOP" in context
 
 
 class TestPrimerNoAudit:
