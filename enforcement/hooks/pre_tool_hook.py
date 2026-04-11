@@ -99,7 +99,7 @@ def main() -> None:
         monitor_warnings = eval_data.get("monitor_warnings", [])
         warnings.extend(w["message"] for w in monitor_warnings)
         if warnings:
-            exit_warn(" | ".join(warnings))
+            exit_warn(" | ".join(warnings), "PreToolUse")
 
     exit_ok("PreToolUse")
 

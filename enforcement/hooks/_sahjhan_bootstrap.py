@@ -411,24 +411,21 @@ def main() -> None:
 
 def _allow() -> None:
     print(json.dumps({
-        "continue": True,
-        "suppressOutput": True,
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "allow",
             "permissionDecisionReason": "",
         },
+        "suppressOutput": True,
     }))
     sys.exit(0)
 
 
 def _block(reason: str) -> None:
     print(json.dumps({
-        "continue": False,
-        "suppressOutput": False,
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
-            "permissionDecision": "block",
+            "permissionDecision": "deny",
             "permissionDecisionReason": reason,
         },
     }))

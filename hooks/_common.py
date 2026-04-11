@@ -3,17 +3,21 @@
 All hooks read JSON from stdin and write modern-format JSON to stdout.
 Every hook exits 0. The JSON payload controls the decision:
 
-  PreToolUse/PostToolUse/UserPromptSubmit:
-  - exit_ok:    {"continue": true,  "suppressOutput": true, ...}
-  - exit_warn:  {"continue": true,  "suppressOutput": false, "additionalContext": msg}
-  - exit_block: {"continue": false, "suppressOutput": false, "hookSpecificOutput": {...}}
+  PreToolUse:
+  - exit_ok:    hookSpecificOutput with permissionDecision "allow"
+  - exit_warn:  hookSpecificOutput with permissionDecision "allow" + additionalContext
+  - exit_block: hookSpecificOutput with permissionDecision "deny"
 
-  Stop:
+  PostToolUse/UserPromptSubmit:
+  - exit_ok:    {"continue": true,  "suppressOutput": true}
+  - exit_warn:  {"continue": true,  "suppressOutput": false, "systemMessage": msg}
+
+  Stop/SubagentStop:
   - exit_stop_allow:  (no output, exit 0)
+  - exit_stop_warn:   {"systemMessage": msg}  (allows stop, shows msg to user)
   - exit_stop_block:  {"decision": "block", "reason": msg}
 
-PreToolUse hooks include hookSpecificOutput with permissionDecision.
-See: https://github.com/anthropics/claude-code/issues/17088
+See: https://code.claude.com/docs/en/hooks
 """
 from __future__ import annotations
 
@@ -39,46 +43,81 @@ def read_event() -> dict[str, Any]:
 
 
 def exit_ok(event_name: str = "") -> None:
-    """Allow the tool call. Modern JSON on stdout, exit 0.
+    """Allow the tool call silently, exit 0.
 
-    For PreToolUse hooks, pass event_name="PreToolUse" to include
-    hookSpecificOutput with permissionDecision (avoids phantom
-    "hook error" label in the Claude Code UI).
+    For PreToolUse hooks, pass event_name="PreToolUse" to emit
+    hookSpecificOutput with permissionDecision "allow".
+    Other events get universal top-level fields only.
+
+    See: https://code.claude.com/docs/en/hooks
     """
-    output: dict[str, Any] = {"continue": True, "suppressOutput": True}
     if event_name == "PreToolUse":
-        output["hookSpecificOutput"] = {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "allow",
-            "permissionDecisionReason": "",
-        }
-    print(json.dumps(output))
+        print(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": "",
+            },
+            "suppressOutput": True,
+        }))
+    else:
+        print(json.dumps({"continue": True, "suppressOutput": True}))
     sys.exit(0)
 
 
-def exit_warn(msg: str) -> None:
-    """Warn but allow. Modern JSON on stdout, exit 0."""
-    print(json.dumps({
-        "continue": True,
-        "suppressOutput": False,
-        "additionalContext": msg,
-    }))
+def exit_warn(msg: str, event_name: str = "") -> None:
+    """Warn but allow, exit 0.
+
+    When event_name is provided, emits hookSpecificOutput with
+    additionalContext (shown to Claude). PreToolUse additionally
+    requires permissionDecision.
+
+    Without event_name: uses universal systemMessage (shown to user).
+
+    See: https://code.claude.com/docs/en/hooks
+    """
+    if event_name == "PreToolUse":
+        print(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": "",
+                "additionalContext": msg,
+            },
+        }))
+    elif event_name:
+        # PostToolUse, UserPromptSubmit, etc. — hookSpecificOutput
+        # with additionalContext injects context to Claude
+        print(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": event_name,
+                "additionalContext": msg,
+            },
+        }))
+    else:
+        print(json.dumps({
+            "continue": True,
+            "suppressOutput": False,
+            "systemMessage": msg,
+        }))
     sys.exit(0)
 
 
 def exit_block(msg: str) -> None:
-    """Block the tool call. Modern JSON on stdout, exit 0.
+    """Block the tool call (PreToolUse only), exit 0.
 
-    For PreToolUse hooks only — uses hookSpecificOutput with
-    permissionDecision "block". PostToolUse hooks should use
-    exit_warn() instead since the tool has already executed.
+    Emits hookSpecificOutput with permissionDecision "deny".
+    The reason is shown to Claude so it can adapt.
+
+    Valid permissionDecision values: "allow", "deny", "ask", "defer".
+    Do NOT use "continue": false — that stops Claude entirely.
+
+    See: https://code.claude.com/docs/en/hooks
     """
     print(json.dumps({
-        "continue": False,
-        "suppressOutput": False,
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
-            "permissionDecision": "block",
+            "permissionDecision": "deny",
             "permissionDecisionReason": msg,
         },
     }))
@@ -156,13 +195,14 @@ def exit_stop_warn(message: str) -> None:
     """Allow a Stop event but surface a warning message.
 
     Used when enforcement is degraded (e.g., config not found) — the
-    stop proceeds but the agent sees the warning. Uses decision="approve"
-    (the schema-valid allow value) so Claude Code shows the message
-    (hasOutput=true) without blocking continuation.
+    stop proceeds but the user sees the warning. Uses the universal
+    systemMessage field (shown to user). Stop hooks only support
+    decision="block"; omit decision to allow.
+
+    See: https://code.claude.com/docs/en/hooks
     """
     print(json.dumps({
-        "decision": "approve",
-        "reason": message,
+        "systemMessage": message,
     }))
     sys.exit(0)
 

@@ -93,7 +93,8 @@ def main() -> None:
         exit_warn(
             f"PROTOCOL VIOLATION: Managed file integrity check failed. "
             f"Detail: {detail}. This violation is permanent and will "
-            f"block convergence for this run."
+            f"block convergence for this run.",
+            "PostToolUse",
         )
 
     exit_ok()

@@ -163,7 +163,7 @@ def main() -> None:
         warnings = [m["message"] for m in messages if m.get("action") == "warn"]
         warnings.extend(w["message"] for w in monitor_warnings)
         if warnings:
-            exit_warn(" | ".join(warnings))
+            exit_warn(" | ".join(warnings), "PostToolUse")
 
     exit_ok()
 

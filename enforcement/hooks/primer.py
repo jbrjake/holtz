@@ -55,7 +55,8 @@ def main() -> None:
         exit_warn(
             "AUDIT TERMINATED: daemon died — session key lost. "
             "The ledger is unwritable. This audit cannot be completed. "
-            "Use /stop to exit, then start a new audit."
+            "Use /stop to exit, then start a new audit.",
+            "UserPromptSubmit",
         )
 
     # Get current status
@@ -117,7 +118,8 @@ def main() -> None:
         exit_warn(
             "AUDIT TERMINATED: daemon died during awaiting_clear — session key lost. "
             "The ledger is unwritable. This audit cannot be completed. "
-            "Use /stop to exit, then start a new audit."
+            "Use /stop to exit, then start a new audit.",
+            "UserPromptSubmit",
         )
 
     # Build resume context
@@ -162,7 +164,7 @@ def main() -> None:
     if run_number != "0":
         context += f"\nActive ledger: run-{run_number}"
 
-    exit_warn(context)
+    exit_warn(context, "UserPromptSubmit")
 
 
 if __name__ == "__main__":

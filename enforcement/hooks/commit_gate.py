@@ -100,7 +100,7 @@ def main() -> None:
 
     # Soft injection: obligations exist but don't block this command
     if injection:
-        exit_warn(injection)
+        exit_warn(injection, "PreToolUse")
 
     exit_ok("PreToolUse")
 
