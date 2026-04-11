@@ -88,8 +88,9 @@ def _validate_and_append(lens: dict, lenses: list[dict]) -> None:
     if not present:
         return  # Header-only section (like the intro paragraph)
 
-    # Only validate lenses that have at least some fields
-    if present & REQUIRED_FIELDS:
+    # Only validate sections that look like a real lens (have at least 2 required fields).
+    # A non-lens section that happens to contain **Focus:** shouldn't crash the parser.
+    if len(present & REQUIRED_FIELDS) >= 2:
         if "scope" not in lens:
             raise ValueError(
                 f"Lens '{lens.get('name', '?')}' is missing required Scope field"
