@@ -43,10 +43,10 @@ HOOK_EVENTS["enforcement/hooks/stop_hook.py"]="Stop"
 HOOK_EVENTS["enforcement/hooks/primer.py"]="UserPromptSubmit"
 HOOK_EVENTS["hooks/subagent_findings_check.py"]="SubagentStop"
 
+SKIPPED=0
 for hook_path in "${!HOOK_EVENTS[@]}"; do
     event="${HOOK_EVENTS[$hook_path]}"
     hook_name=$(basename "$hook_path" .py)
-    TESTED=$((TESTED + 1))
 
     # Build a settings.json that registers just this one hook
     # Use the appropriate matcher for the event type
@@ -66,8 +66,11 @@ for hook_path in "${!HOOK_EVENTS[@]}"; do
     elif [[ "$event" == "SubagentStop" ]]; then
         # SubagentStop is hard to trigger in isolation — skip live test
         echo "SKIP $hook_name ($event — requires subagent)"
+        SKIPPED=$((SKIPPED + 1))
         continue
     fi
+
+    TESTED=$((TESTED + 1))
 
     # Write temp settings
     mkdir -p "$WORK_DIR/.claude"
@@ -105,7 +108,7 @@ SETTINGS_EOF
 done
 
 echo ""
-echo "Results: $((TESTED - FAILURES))/$TESTED passed"
+echo "Results: $((TESTED - FAILURES))/$TESTED passed ($SKIPPED skipped)"
 if [[ $FAILURES -gt 0 ]]; then
     echo "FAILED: $FAILURES hook(s) produced invalid JSON"
     exit 1

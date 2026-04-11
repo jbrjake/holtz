@@ -17,6 +17,8 @@ def generate_html(profile: RunProfile) -> str:
     template = TEMPLATE_PATH.read_text()
     data = asdict(profile)
     profile_json = json.dumps(data, default=str)  # str handles datetimes
+    # Escape </script> to prevent XSS when embedding in <script> tags
+    profile_json = profile_json.replace("</", r"<\/")
     return template.replace(
         DATA_PLACEHOLDER, f"const PROFILE_DATA = {profile_json};"
     )

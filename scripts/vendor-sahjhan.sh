@@ -10,7 +10,7 @@ mkdir -p "$BIN_DIR"
 
 for target in aarch64-apple-darwin x86_64-apple-darwin x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
     echo "Downloading sahjhan-${target}..."
-    curl -sL "${BASE_URL}/sahjhan-${target}" -o "${BIN_DIR}/sahjhan-${target}"
+    curl -sfL "${BASE_URL}/sahjhan-${target}" -o "${BIN_DIR}/sahjhan-${target}"
     chmod +x "${BIN_DIR}/sahjhan-${target}"
 done
 

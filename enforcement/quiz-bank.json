@@ -171,7 +171,7 @@
   },
   {
     "lens": "security",
-    "q": "write_guard.py resolves paths using what function to prevent traversal?",
+    "q": "_sahjhan_bootstrap.py resolves paths using what function to prevent traversal?",
     "a": "B",
     "opts": [
       "os.path.abspath",
@@ -179,16 +179,16 @@
       "pathlib.Path.resolve",
       "os.path.normpath"
     ],
-    "source": "enforcement/hooks/write_guard.py::main",
+    "source": "enforcement/hooks/_sahjhan_bootstrap.py::main",
     "keywords": [
-      "write_guard",
+      "_sahjhan_bootstrap",
       "realpath",
       "path traversal"
     ]
   },
   {
     "lens": "security",
-    "q": "How many files are in MANAGED_FILES in write_guard.py?",
+    "q": "How many files are in MANAGED_DOCS in _sahjhan_bootstrap.py?",
     "a": "C",
     "opts": [
       "3",
@@ -196,10 +196,10 @@
       "5",
       "6"
     ],
-    "source": "enforcement/hooks/write_guard.py::MANAGED_FILES",
+    "source": "enforcement/hooks/_sahjhan_bootstrap.py::MANAGED_DOCS",
     "keywords": [
-      "MANAGED_FILES",
-      "write_guard",
+      "MANAGED_DOCS",
+      "_sahjhan_bootstrap",
       "managed"
     ]
   },
@@ -290,19 +290,19 @@
   },
   {
     "lens": "error-propagation",
-    "q": "stop_gate.py allows stop on subprocess.TimeoutExpired via what pattern?",
-    "a": "B",
+    "q": "stop_hook.py handles TimeoutExpired in _try_stop_daemon via what pattern?",
+    "a": "C",
     "opts": [
       "try/except pass",
       "try/except exit_stop_allow()",
       "contextlib.suppress",
       "result.returncode check"
     ],
-    "source": "enforcement/hooks/stop_gate.py::main",
+    "source": "enforcement/hooks/stop_hook.py::_try_stop_daemon",
     "keywords": [
-      "stop_gate",
+      "stop_hook",
       "TimeoutExpired",
-      "exit_stop_allow"
+      "contextlib.suppress"
     ]
   },
   {

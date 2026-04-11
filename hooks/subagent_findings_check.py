@@ -35,7 +35,7 @@ def main() -> None:
         exit_stop_allow()
 
     # Scan for docs/holtz/ file references (.md, .json, .jsonl, .toml, .txt)
-    paths = re.findall(r'docs/holtz/[^\s"\')\]]+\.(?:md|json|jsonl|toml|txt)', message)
+    paths = re.findall(r'docs/holtz/[^\s"\')\],;]+\.(?:md|json|jsonl|toml|txt)', message)
     if not paths:
         exit_stop_allow()
 
