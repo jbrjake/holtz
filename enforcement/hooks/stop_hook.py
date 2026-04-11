@@ -144,9 +144,12 @@ def main() -> None:
         exit_stop_allow()
 
     # Non-terminal state: check freshness
+    # Note: _DAEMON_CLEANUP_STATES is a subset of _STOP_ALLOWED_STATES,
+    # so if we reach here (state not in _STOP_ALLOWED_STATES), the state
+    # is never in _DAEMON_CLEANUP_STATES. No daemon cleanup needed —
+    # this is a stale non-terminal audit, and the daemon may still hold
+    # a session key for a potential resume.
     if not is_enforcement_fresh(cache):
-        if current_state in _DAEMON_CLEANUP_STATES:
-            _try_stop_daemon(cwd)
         exit_stop_warn(
             f"Stale Holtz audit detected (state: '{current_state}'). "
             "No recent sahjhan activity — this appears to be an abandoned audit. "

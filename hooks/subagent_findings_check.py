@@ -13,7 +13,7 @@ and false positives are preferable to missed findings.
 
 Output format: SubagentStop uses the Stop protocol:
 - Allow: no output (exit 0)
-- Warn: {"decision": "approve", "reason": msg}
+- Warn: {"systemMessage": msg}  (allows stop, shows msg to user)
 - Block: {"decision": "block", "reason": msg}
 """
 from __future__ import annotations

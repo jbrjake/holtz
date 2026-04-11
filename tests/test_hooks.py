@@ -68,11 +68,22 @@ def assert_blocked(code, output, reason_substring=""):
 
 
 def assert_warned(code, output, reason_substring=""):
-    """Assert that the hook warned but allowed the operation."""
+    """Assert that the hook warned but allowed the operation.
+
+    Accepts two valid warn formats:
+    1. Generic: {"continue": true, "suppressOutput": false, "systemMessage": msg}
+    2. hookSpecificOutput: {"hookSpecificOutput": {"additionalContext": msg}}
+    """
     assert code == 0, f"Expected exit 0, got {code}"
-    assert output.get("continue") is True
-    assert output.get("suppressOutput") is False
-    context = output.get("additionalContext", "")
+    hook_output = output.get("hookSpecificOutput", {})
+    if hook_output:
+        # hookSpecificOutput format — additionalContext is inside hookSpecificOutput
+        context = hook_output.get("additionalContext", "")
+    else:
+        # Generic format — systemMessage shown to user
+        assert output.get("continue") is True
+        assert output.get("suppressOutput") is False
+        context = output.get("systemMessage", "")
     if reason_substring:
         assert reason_substring in context
 

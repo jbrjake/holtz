@@ -188,13 +188,19 @@ def posttooluse_write_event(cwd: str) -> dict:
 
 
 def subagent_stop_event(cwd: str) -> dict:
-    """Realistic SubagentStop event."""
+    """Realistic SubagentStop event.
+
+    Claude Code sends last_assistant_message with the subagent's final output.
+    This is the primary input for SubagentStop hooks like subagent_findings_check.py
+    and lens_quiz.py.
+    """
     return {
         "tool_name": "Agent",
         "tool_input": {
             "prompt": "Find all bugs in src/",
         },
         "tool_output": "Found 3 issues:\n1. Missing null check\n2. Race condition\n3. Memory leak",
+        "last_assistant_message": "I analyzed src/ and found 3 issues:\n1. Missing null check in src/auth.py\n2. Race condition in src/cache.py\n3. Memory leak in src/worker.py",
         "cwd": cwd,
     }
 
@@ -285,7 +291,8 @@ def validate_posttooluse_output(output: dict, hook_cmd: str) -> list[str]:
 
     Valid responses:
     - Allow: {"continue": true, "suppressOutput": true}
-    - Warn: {"continue": true, "suppressOutput": false, "additionalContext": str}
+    - Warn (user): {"continue": true, "suppressOutput": false, "systemMessage": str}
+    - Warn (Claude): {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": str}}
     - Empty dict (legacy allow)
     """
     errors = []
@@ -297,11 +304,27 @@ def validate_posttooluse_output(output: dict, hook_cmd: str) -> list[str]:
     if not output:
         return errors  # Empty = allow
 
+    # hookSpecificOutput format — injects context into Claude's next prompt
+    hook_specific = output.get("hookSpecificOutput", {})
+    if hook_specific:
+        event_name = hook_specific.get("hookEventName")
+        if event_name != "PostToolUse":
+            errors.append(
+                f"hookEventName must be 'PostToolUse', got '{event_name}' from {hook_cmd}"
+            )
+        # PostToolUse hookSpecificOutput should NOT have permissionDecision
+        if "permissionDecision" in hook_specific:
+            errors.append(
+                f"PostToolUse hookSpecificOutput should not have permissionDecision from {hook_cmd}"
+            )
+        return errors
+
+    # Generic format — continue/suppressOutput/systemMessage
     if "continue" not in output:
         errors.append(f"Missing 'continue' key in PostToolUse output from {hook_cmd}: {output}")
         return errors
 
-    # PostToolUse hooks should NOT block with hookSpecificOutput/permissionDecision
+    # PostToolUse hooks should NOT block
     if output.get("continue") is False:
         errors.append(
             f"PostToolUse hook {hook_cmd} returned continue=false — "
@@ -354,7 +377,8 @@ def validate_user_prompt_submit_output(output: dict, hook_cmd: str) -> list[str]
 
     Valid responses:
     - Allow: {"continue": true, "suppressOutput": true}
-    - Modify: {"continue": true, "suppressOutput": false, "additionalContext": str}
+    - Inject (user): {"continue": true, "suppressOutput": false, "systemMessage": str}
+    - Inject (Claude): {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": str}}
     """
     errors = []
 
@@ -365,6 +389,17 @@ def validate_user_prompt_submit_output(output: dict, hook_cmd: str) -> list[str]
     if not output:
         return errors  # Empty = allow
 
+    # hookSpecificOutput format — injects context into Claude's next prompt
+    hook_specific = output.get("hookSpecificOutput", {})
+    if hook_specific:
+        event_name = hook_specific.get("hookEventName")
+        if event_name != "UserPromptSubmit":
+            errors.append(
+                f"hookEventName must be 'UserPromptSubmit', got '{event_name}' from {hook_cmd}"
+            )
+        return errors
+
+    # Generic format
     if "continue" not in output:
         errors.append(f"Missing 'continue' in UserPromptSubmit output from {hook_cmd}: {output}")
 
