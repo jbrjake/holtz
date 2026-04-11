@@ -118,8 +118,8 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
     # by returning None (treated as "not a sahjhan command" → allowed).
     while idx < len(tokens) and tokens[idx].startswith("-"):
         flag = tokens[idx]
-        if flag in ("--help", "-h"):
-            return None  # help requests bypass enforcement
+        if flag in ("--help", "-h", "--version"):
+            return None  # help/version requests bypass enforcement
         idx += 1
         # Only value-taking flags consume the next token
         if flag in _VALUE_FLAGS and idx < len(tokens):

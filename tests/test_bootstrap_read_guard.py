@@ -312,6 +312,11 @@ class TestExtractSahjhanSubcmd:
         extract = self._get_extract()
         assert extract("sahjhan -h") is None
 
+    def test_version_flag_returns_none(self):
+        """sahjhan --version must return None (bypass enforcement)."""
+        extract = self._get_extract()
+        assert extract("sahjhan --version") is None
+
     def test_help_after_subcommand_still_parses(self):
         """sahjhan init --help — subcmd is init, --help is just a trailing flag."""
         extract = self._get_extract()

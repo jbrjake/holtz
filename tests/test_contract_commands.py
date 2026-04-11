@@ -10,6 +10,7 @@ gets a test here. If a skill file changes, this file must be updated.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 
@@ -318,6 +319,7 @@ _REPRESENTATIVE_SUBCMDS = [
 
 # Common shell idioms that get appended to commands
 _SHELL_IDIOMS = [
+    # Redirects
     ("2>&1", "stderr to stdout"),
     ("2>/dev/null", "stderr to devnull"),
     (">/dev/null 2>&1", "stdout+stderr to devnull"),
@@ -325,6 +327,24 @@ _SHELL_IDIOMS = [
     ("1>&2", "stdout to stderr"),
     ("&>/dev/null", "combined redirect to devnull"),
     ("2>/tmp/err.log", "stderr to file"),
+    # Backgrounding
+    ("&", "trailing ampersand"),
+    # Pipes
+    ("| cat", "pipe to cat"),
+    ("| head -20", "pipe to head"),
+]
+
+# Shell idioms that wrap the ENTIRE command (prefix + suffix)
+_SHELL_WRAPPER_IDIOMS = [
+    ("nohup ", " &", "nohup wrapper with background"),
+    ("nohup ", " > /dev/null 2>&1 &", "nohup full redirect and background"),
+]
+
+# Idioms that chain a second command after the sahjhan command
+_SHELL_CHAIN_IDIOMS = [
+    ("; echo done", "semicolon chain"),
+    ("&& echo ok", "and-chain"),
+    ("|| echo fail", "or-chain"),
 ]
 
 
@@ -355,6 +375,40 @@ def test_subcmd_with_help_flag(base_cmd, cmd_label):
     _assert_allowed(f"{base_cmd} --help", f"{cmd_label} --help")
 
 
+# Wrapper idioms (nohup ... &) must work with all subcommands
+@pytest.mark.parametrize(
+    "base_cmd,cmd_label",
+    _REPRESENTATIVE_SUBCMDS,
+    ids=[label for _, label in _REPRESENTATIVE_SUBCMDS],
+)
+@pytest.mark.parametrize(
+    "prefix,suffix,idiom_label",
+    _SHELL_WRAPPER_IDIOMS,
+    ids=[label for _, _, label in _SHELL_WRAPPER_IDIOMS],
+)
+def test_subcmd_with_wrapper_idiom(base_cmd, cmd_label, prefix, suffix, idiom_label):
+    """Every allowed subcommand wrapped with nohup/& must be allowed."""
+    command = f"{prefix}{base_cmd}{suffix}"
+    _assert_allowed(command, f"{cmd_label} + {idiom_label}")
+
+
+# Chain idioms (; echo done, && echo ok) must work with all subcommands
+@pytest.mark.parametrize(
+    "base_cmd,cmd_label",
+    _REPRESENTATIVE_SUBCMDS,
+    ids=[label for _, label in _REPRESENTATIVE_SUBCMDS],
+)
+@pytest.mark.parametrize(
+    "chain,chain_label",
+    _SHELL_CHAIN_IDIOMS,
+    ids=[label for _, label in _SHELL_CHAIN_IDIOMS],
+)
+def test_subcmd_with_chain_idiom(base_cmd, cmd_label, chain, chain_label):
+    """Every allowed subcommand + chained second command must be allowed."""
+    command = f"{base_cmd} {chain}"
+    _assert_allowed(command, f"{cmd_label} + {chain_label}")
+
+
 # Bare sahjhan with help flags
 def test_bare_sahjhan_help():
     _assert_allowed("sahjhan --help", "bare sahjhan --help")
@@ -362,6 +416,21 @@ def test_bare_sahjhan_help():
 
 def test_bare_sahjhan_short_help():
     _assert_allowed("sahjhan -h", "bare sahjhan -h")
+
+
+# Version flag must bypass enforcement like help
+def test_bare_sahjhan_version():
+    _assert_allowed("sahjhan --version", "bare sahjhan --version")
+
+
+@pytest.mark.parametrize(
+    "base_cmd,cmd_label",
+    _REPRESENTATIVE_SUBCMDS,
+    ids=[label for _, label in _REPRESENTATIVE_SUBCMDS],
+)
+def test_subcmd_with_version_flag(base_cmd, cmd_label):
+    """Every allowed subcommand with --version appended must be allowed."""
+    _assert_allowed(f"{base_cmd} --version", f"{cmd_label} --version")
 
 
 # ---------------------------------------------------------------------------
@@ -446,4 +515,28 @@ class TestDenyMessageQuality:
         )
         assert "'sahjhan 2'" not in reason, (
             f"Deny message contains redirect fragment: {reason}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Pre-release contract gate: run scripts/contract_gate.py as a test
+# Catches drift between skill instructions and hook enforcement.
+# ---------------------------------------------------------------------------
+
+class TestContractGate:
+    """Run the contract gate script and verify it passes."""
+
+    def test_contract_gate_passes(self):
+        """The contract gate script must exit 0 (all commands match)."""
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        gate_script = os.path.join(repo_root, "scripts", "contract_gate.py")
+        result = subprocess.run(
+            [sys.executable, gate_script],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=repo_root,
+        )
+        assert result.returncode == 0, (
+            f"Contract gate FAILED:\n{result.stdout}\n{result.stderr}"
         )
