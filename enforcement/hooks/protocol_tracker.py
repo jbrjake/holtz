@@ -143,7 +143,8 @@ def main() -> None:
             cache["fixes_since_pattern"] = cache.get("fixes_since_pattern", 0) + 1
         if "pattern_check" in tokens or "pattern_done" in tokens:
             cache["fixes_since_pattern"] = 0
-        write_cache(cwd, cache)
+        with contextlib.suppress(RuntimeError):
+            write_cache(cwd, cache)
         exit_ok()
 
     if cache is None:
@@ -157,15 +158,17 @@ def main() -> None:
         commit_hash = _parse_commit_hash(output)
         commits = list(cache.get("unregistered_commits", []))
         commits.append(commit_hash)
-        update_cache(cwd, {"unregistered_commits": commits, "stall": 0})
+        with contextlib.suppress(RuntimeError):
+            update_cache(cwd, {"unregistered_commits": commits, "stall": 0})
         exit_ok()
 
     # Test/lint/type-check commands are legitimate TDD activity — don't count as stalling
-    if _is_sleep_cmd(cmd):
-        # Sleep to game timing gates gets double stall penalty
-        update_cache(cwd, {"stall": cache.get("stall", 0) + 2})
-    elif not _is_tdd_cmd(cmd):
-        update_cache(cwd, {"stall": cache.get("stall", 0) + 1})
+    with contextlib.suppress(RuntimeError):
+        if _is_sleep_cmd(cmd):
+            # Sleep to game timing gates gets double stall penalty
+            update_cache(cwd, {"stall": cache.get("stall", 0) + 2})
+        elif not _is_tdd_cmd(cmd):
+            update_cache(cwd, {"stall": cache.get("stall", 0) + 1})
     exit_ok()
 
 
