@@ -14,6 +14,7 @@ active audit. See: holtz issue #19.
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import subprocess
 import sys
@@ -64,6 +65,22 @@ def _has_active_audit(cwd: str) -> bool:
     return os.path.isdir(os.path.join(cwd, "docs", "holtz", ".sahjhan"))
 
 
+def _read_status_cache_state(cwd: str) -> str | None:
+    """Read state from sahjhan's status-cache.json (file-based fallback).
+
+    Sahjhan writes this file after every init and transition (since v0.8.0).
+    Used as a fallback when the daemon is alive but the enforcement cache
+    is unreachable (e.g., macOS auth failure — sahjhan #26).
+    """
+    cache_path = os.path.join(cwd, "docs", "holtz", ".sahjhan", "status-cache.json")
+    try:
+        with open(cache_path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("state", "")
+    except (OSError, ValueError, KeyError):
+        return None
+
+
 def main() -> None:
     event = read_event()
     cwd = event.get("cwd", os.getcwd())
@@ -94,11 +111,28 @@ def main() -> None:
     cache = read_cache(cwd)
 
     if cache is None:
-        # .sahjhan dir exists but no enforcement cache — audit state unknown.
-        # Block to prevent silent enforcement bypass (issue #29 R5).
-        exit_stop_block(
-            "Sahjhan data directory exists but enforcement cache is missing. "
-            "Run `sahjhan status` to check audit state before stopping."
+        # Daemon is alive but enforcement cache is unreachable (e.g., auth
+        # failure — sahjhan #26). Fall back to status-cache.json file.
+        file_state = _read_status_cache_state(cwd)
+        if file_state is not None:
+            if file_state in _STOP_ALLOWED_STATES:
+                if file_state in _DAEMON_CLEANUP_STATES:
+                    _try_stop_daemon(cwd)
+                exit_stop_allow()
+            # Non-terminal state confirmed by file — block with guidance
+            exit_stop_block(
+                f"Audit is in state '{file_state}' (from status-cache.json fallback). "
+                "You must complete the audit protocol before stopping. "
+                "If this audit cannot be completed, the user can manually run: "
+                "! sahjhan daemon stop\n"
+                "(The next stop attempt will detect the dead daemon and allow exit.)"
+            )
+        # Both caches unavailable — warn instead of block to avoid
+        # infinite loop (issue #48 bug 1). The user can decide.
+        exit_stop_warn(
+            "Sahjhan data directory exists but enforcement state is unavailable "
+            "(daemon cache and status-cache.json both unreadable). "
+            "Run `sahjhan status` to check audit state."
         )
 
     current_state = cache.get("state", "")

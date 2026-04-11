@@ -8,7 +8,7 @@ Each iteration gets fresh context. At the end of each iteration — regardless o
 
 1. Run `sahjhan transition converge` to attempt convergence. Sahjhan checks all gates: all perspectives complete, suite passes, linters pass, zero open items, no protocol violations.
 2. **`sahjhan transition converge` MUST succeed before SUMMARY.md is rendered.** If gates fail, Sahjhan reports which gates are blocking. Run `sahjhan gate check converge` for details.
-3. If not converged: run `sahjhan ledger checkpoint` then `sahjhan transition iteration_boundary`. Tell the user: *"Not converged. `/clear` then any message to continue."* Stop. The stop gate hook enforces this: blocks premature stops until the protocol reaches a terminal state.
+3. If not converged: run `sahjhan ledger checkpoint --snapshot pre-clear` then `sahjhan transition iteration_boundary`. Tell the user: *"Not converged. `/clear` then any message to continue."* Stop. The stop gate hook enforces this: blocks premature stops until the protocol reaches a terminal state.
 4. If converged: Sahjhan transitions to `final_sweep_clean` → `converged`. Proceed to Step 16.
 
 After `/clear`, the primer hook injects resume context and records a `context_reset` event — the user types anything and the model resumes from `sahjhan status`.

@@ -26,6 +26,8 @@ sahjhan ledger create --from run N --activate
 sahjhan transition run_start
 ```
 
+> **Warning:** Skipping `sahjhan ledger create --from run N --activate` causes "no ledger found for template 'run'; using default ledger" warnings on every subsequent `sahjhan render` and `sahjhan transition` (~20+ times per audit). Always create and activate the ledger before `run_start`.
+
 **Why nohup?** `sahjhan daemon start` is foreground-only — it does not fork. Without `nohup ... &`, the Bash tool blocks until timeout and then kills the daemon. The `daemon-init-pid` copy is required by `_daemon_lifecycle.py` to distinguish "original daemon" from "restarted daemon with different key."
 
 The `--activate` flag sets the active-ledger marker so all subsequent sahjhan commands automatically target this run's ledger. No `--ledger run-N` needed on individual commands.
