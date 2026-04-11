@@ -70,7 +70,7 @@ class TestPreToolUseDecisions:
 class TestStopDecisions:
 
     def test_block_is_only_stop_decision(self):
-        assert STOP_VALID_DECISIONS == {"block"}
+        assert {"block"} == STOP_VALID_DECISIONS
 
     def test_approve_not_valid_for_stop(self):
         """'approve' was never a valid Stop decision."""

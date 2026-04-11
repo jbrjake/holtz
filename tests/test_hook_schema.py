@@ -1,10 +1,7 @@
 """Tests that hook_schema.py is internally consistent and complete."""
-import pytest
-
 from hook_schema import (
     PRETOOLUSE_VALID_DECISIONS,
     STOP_VALID_DECISIONS,
-    UNIVERSAL_FIELDS,
     validate_hook_output,
 )
 
@@ -25,7 +22,7 @@ def test_pretooluse_does_not_have_block():
 
 def test_stop_only_has_block():
     """Stop hooks only support 'block' for decision."""
-    assert STOP_VALID_DECISIONS == {"block"}
+    assert {"block"} == STOP_VALID_DECISIONS
 
 
 def test_validate_pretooluse_allow():
@@ -104,6 +101,7 @@ def test_validate_posttooluse_with_hook_specific():
 def test_e2e_validators_delegate_to_schema():
     """E2E validators must use hook_schema, not independent logic."""
     import inspect
+
     import test_e2e_hook_invocation as e2e
     # The validators must import from hook_schema
     src = inspect.getsource(e2e.validate_pretooluse_output)
