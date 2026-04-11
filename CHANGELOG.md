@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.127.6] - 2026-04-11
+
+_Hotfix release. v0.127.5 had runtime hook errors — upgrade immediately._
+
+### Fixed
+- **hooks:** `subagent_findings_check.py` was using PreToolUse output format (`{"continue": true, ...}`) for SubagentStop events, which require Stop format (`{"decision": "approve/block", ...}`). Caused Claude Code to report errors on every subagent completion.
+- **enforcement:** `protocol_tracker.py` crashed with unhandled `RuntimeError` when the sahjhan daemon died mid-session. `write_cache`/`update_cache` raise on dead socket; now suppressed gracefully (daemon death is detected by `_daemon_lifecycle.py` on next call).
+- **enforcement:** sahjhan binary version pin was stuck at 0.13.0 despite commit `72fc1a7` claiming v0.13.1. Updated `_resolve.py` version pin, checksums for all 4 platforms, `bin/.sahjhan-version`, and local binary.
+
+### Added
+- **tests:** E2E hook invocation test suite (`test_e2e_hook_invocation.py`, 18 tests) that simulates Claude Code's actual runtime path: reads `hooks.json`, expands `${CLAUDE_PLUGIN_ROOT}`, pipes realistic event JSON to each hook via subprocess, validates output schema per event type. Covers crash resilience (empty stdin, malformed JSON, missing fields), stderr noise detection, and full session lifecycle simulation.
+
+### Infrastructure
+- Update README test badge to 1138
+- Update changelog for v0.127.5
+
 ## [0.127.5] - 2026-04-10
 
 _Changes since v0.127.1_
