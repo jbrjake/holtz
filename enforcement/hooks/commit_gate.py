@@ -14,6 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from _common import exit_block, exit_ok, exit_warn, read_event  # noqa: E402
 from _protocol_cache import (  # noqa: E402
     compute_obligations,
     format_injection,
@@ -24,17 +25,15 @@ from _protocol_cache import (  # noqa: E402
     read_cache,
 )
 
-from _common import exit_block, exit_ok, exit_warn, read_event  # noqa: E402
-
 
 def _is_test_cmd(cmd: str) -> bool:
     """Detect test/pytest commands that should always be allowed.
 
-    Checks each segment of chained commands (split on &&, ||, ;, |)
+    Checks each segment of chained commands (split on &&, ||, ;, |, newline)
     so that ``cd /project && pytest`` is recognized.
     """
     import re as _re
-    for segment in _re.split(r'&&|\|\||[;|]', cmd):
+    for segment in _re.split(r'&&|\|\||[;|\n]', cmd):
         seg = segment.strip()
         if seg.startswith("pytest") or seg.startswith("python -m pytest"):
             return True
@@ -100,7 +99,7 @@ def main() -> None:
 
     # Soft injection: obligations exist but don't block this command
     if injection:
-        exit_warn(injection)
+        exit_warn(injection, "PreToolUse")
 
     exit_ok("PreToolUse")
 

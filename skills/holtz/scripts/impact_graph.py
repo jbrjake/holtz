@@ -169,7 +169,7 @@ class ImpactGraph:
         """Direct outgoing neighbors, optionally filtered by edge type."""
         if node_id not in self.nodes:
             return []
-        type_set = set(types) if types else None
+        type_set = set(types) if types is not None else None
         result: set[str] = set()
         for edge in self.edges:
             if edge["source"] == node_id and (type_set is None or edge["type"] in type_set):
@@ -185,7 +185,7 @@ class ImpactGraph:
         if node_id not in self.nodes or depth <= 0:
             return []
 
-        type_set = set(types) if types else None
+        type_set = set(types) if types is not None else None
         visited: set[str] = {node_id}
         result: set[str] = set()
 

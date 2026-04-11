@@ -42,16 +42,17 @@ def run_enforcement_hook(hook_name, event, cwd=None, env=None):
 def assert_allowed(code, output):
     """Assert that a PreToolUse hook allowed the operation."""
     assert code == 0, f"Expected exit 0, got {code}"
-    assert output.get("continue") is True
-    assert output.get("suppressOutput") is True
+    hook_output = output.get("hookSpecificOutput", {})
+    assert hook_output.get("permissionDecision") == "allow", (
+        f"Expected permissionDecision 'allow', got: {output}"
+    )
 
 
 def assert_blocked(code, output, reason_substring=""):
     """Assert that a PreToolUse hook blocked the operation."""
     assert code == 0, f"Expected exit 0, got {code}"
-    assert output.get("continue") is False
     hook_output = output.get("hookSpecificOutput", {})
-    assert hook_output.get("permissionDecision") == "block", (
+    assert hook_output.get("permissionDecision") == "deny", (
         f"Expected block, got: {hook_output}"
     )
     if reason_substring:
@@ -542,7 +543,7 @@ class TestBashGuard:
         # Should get the warning (manifest failed) since chained cmd is not pure sahjhan
         assert code == 0
         # exit_warn puts the message in additionalContext, not hookSpecificOutput
-        assert "PROTOCOL VIOLATION" in output.get("additionalContext", ""), (
+        assert "PROTOCOL VIOLATION" in output.get("hookSpecificOutput", {}).get("additionalContext", ""), (
             "Expected PROTOCOL VIOLATION warning for non-pure-sahjhan chained command"
         )
 
@@ -771,7 +772,7 @@ class TestPrimer:
         assert (sahjhan_dir / "terminated").exists(), (
             "primer should write terminated marker when init PID is dead"
         )
-        context = output.get("additionalContext", "")
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
         assert "AUDIT TERMINATED" in context, (
             "primer should inject termination message"
         )
@@ -916,7 +917,7 @@ class TestBashGuardWithMockBinary:
         )
         assert code == 0
         # exit_warn puts the message in additionalContext
-        assert "PROTOCOL VIOLATION" in output.get("additionalContext", "")
+        assert "PROTOCOL VIOLATION" in output.get("hookSpecificOutput", {}).get("additionalContext", "")
 
 
 class TestPrimerWithMockBinary:
@@ -964,9 +965,9 @@ class TestPrimerWithMockBinary:
             "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
         )
         assert code == 0
-        assert output.get("continue") is True
+        assert "hookSpecificOutput" in output
         # exit_warn puts resume context in additionalContext
-        context = output.get("additionalContext", "")
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
         assert "fix_loop" in context
 
     def test_silent_for_terminal_state(self, tmp_path, mock_daemon):
@@ -979,7 +980,7 @@ class TestPrimerWithMockBinary:
         assert code == 0
         # Terminal state = exit_ok, no additionalContext
         assert output.get("continue") is True
-        assert "additionalContext" not in output
+        assert "additionalContext" not in output.get("hookSpecificOutput", {})
 
     def test_injects_lens_priming_in_audit(self, tmp_path, mock_daemon):
         """Primer injects lens priming when in audit state with active perspective."""
@@ -995,7 +996,7 @@ class TestPrimerWithMockBinary:
         code, output, _ = run_enforcement_hook(
             "primer.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
         )
-        context = output.get("additionalContext", "")
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
         assert "audit" in context
 
     def test_warns_when_context_reset_fails(self, tmp_path, mock_daemon):
@@ -1020,7 +1021,7 @@ class TestPrimerWithMockBinary:
         code, output, _ = run_enforcement_hook(
             "primer.py", event, cwd=str(tmp_path), env=env
         )
-        context = output.get("additionalContext", "")
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
         # Must still inject resume context
         assert "awaiting_clear" in context
         # Must inject hard stop instruction on auth failure (issue #45)

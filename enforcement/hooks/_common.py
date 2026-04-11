@@ -127,7 +127,7 @@ def exit_enforcement_error(
             if hook_type == "PreToolUse":
                 exit_block(f"ENFORCEMENT DEGRADED: {reason}")
             else:
-                exit_warn(f"ENFORCEMENT DEGRADED: {reason}")
+                exit_warn(f"ENFORCEMENT DEGRADED: {reason}", hook_type)
     # No active audit or stale enforcement — fail-open
     if hook_type == "PreToolUse":
         exit_ok("PreToolUse")

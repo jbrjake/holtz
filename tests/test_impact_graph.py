@@ -743,24 +743,24 @@ def test_cli_add_node_and_stats(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_neighbors_empty_types_is_no_filter(graph):
-    """neighbors with types=[] is falsy → treated as no filter, returns all (BH-005)."""
+def test_neighbors_empty_types_returns_empty(graph):
+    """neighbors with types=[] means 'match no edge types' → returns empty."""
     graph.add_node("solo.py::A", "function", "solo.py", line=1)
     graph.add_node("solo.py::B", "function", "solo.py", line=5)
     graph.add_edge("solo.py::A", "solo.py::B", "calls")
 
-    # [] is falsy in Python → type_set = None → no filter → all neighbors returned
-    assert graph.neighbors("solo.py::A", types=[]) == ["solo.py::B"]
+    # types=[] is an explicit empty set → no types match → no neighbors
+    assert graph.neighbors("solo.py::A", types=[]) == []
 
 
-def test_blast_radius_empty_types_is_no_filter(graph):
-    """blast_radius with types=[] is falsy → treated as no filter, returns all (BH-005)."""
+def test_blast_radius_empty_types_returns_empty(graph):
+    """blast_radius with types=[] means 'match no edge types' → returns empty."""
     graph.add_node("void.py::A", "function", "void.py", line=1)
     graph.add_node("void.py::B", "function", "void.py", line=5)
     graph.add_edge("void.py::A", "void.py::B", "calls")
 
-    # [] is falsy → type_set = None → no filter → all reachable
-    assert graph.blast_radius("void.py::A", depth=2, types=[]) == ["void.py::B"]
+    # types=[] is an explicit empty set → no types match → no reachable nodes
+    assert graph.blast_radius("void.py::A", depth=2, types=[]) == []
 
 
 # ---------------------------------------------------------------------------

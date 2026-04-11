@@ -63,6 +63,7 @@ def test_passes_with_all_hooks(tmp_path):
         "SubagentStop": [
             {"matcher": "", "hooks": [
                 {"type": "command", "command": "python enforcement/hooks/lens_quiz.py"},
+                {"type": "command", "command": "python hooks/subagent_findings_check.py"},
             ]},
         ],
     }

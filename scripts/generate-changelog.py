@@ -104,6 +104,7 @@ def format_changelog(commits: list[dict], version: str, since: str | None) -> st
             continue
         if c["breaking"]:
             breaking.append(f"- **BREAKING:** {c['desc']}")
+            continue  # don't double-count in normal section
 
         section = SECTION_MAP.get(c["type"], "Other")
         scope = f"**{c['scope']}:** " if c["scope"] else ""

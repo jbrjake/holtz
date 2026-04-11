@@ -21,7 +21,7 @@ class TestDaemonLifecycleNoAudit:
         event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
         assert code == 0
-        assert output.get("continue") is True
+        assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
 
     def test_allows_when_no_runs_and_no_marker(self, tmp_path):
         """Data dir exists but no runs/ and no active-run marker → allow, no action."""
@@ -29,7 +29,7 @@ class TestDaemonLifecycleNoAudit:
         event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
         assert code == 0
-        assert output.get("continue") is True
+        assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
 
 
 class TestDaemonDeathTerminatesAudit:
@@ -45,7 +45,6 @@ class TestDaemonDeathTerminatesAudit:
         event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
         assert code == 0
-        assert output.get("continue") is False
         reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
         assert "AUDIT TERMINATED" in reason
         assert (sahjhan_dir / "terminated").exists()
@@ -60,7 +59,7 @@ class TestDaemonDeathTerminatesAudit:
         event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
         assert code == 0
-        assert output.get("continue") is True
+        assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
         assert not (sahjhan_dir / "terminated").exists()
 
     def test_blocks_fast_when_terminated_marker_exists(self, tmp_path):
@@ -72,7 +71,6 @@ class TestDaemonDeathTerminatesAudit:
         event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
         assert code == 0
-        assert output.get("continue") is False
         reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
         assert "AUDIT TERMINATED" in reason
 
@@ -85,7 +83,7 @@ class TestDaemonDeathTerminatesAudit:
         event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
         assert code == 0
-        assert output.get("continue") is True
+        assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
 
     def test_writes_marker_not_cache(self, tmp_path):
         """Terminated marker written but no enforcement-cache.json (daemon-backed state)."""

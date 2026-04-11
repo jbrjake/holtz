@@ -188,13 +188,19 @@ def posttooluse_write_event(cwd: str) -> dict:
 
 
 def subagent_stop_event(cwd: str) -> dict:
-    """Realistic SubagentStop event."""
+    """Realistic SubagentStop event.
+
+    Claude Code sends last_assistant_message with the subagent's final output.
+    This is the primary input for SubagentStop hooks like subagent_findings_check.py
+    and lens_quiz.py.
+    """
     return {
         "tool_name": "Agent",
         "tool_input": {
             "prompt": "Find all bugs in src/",
         },
         "tool_output": "Found 3 issues:\n1. Missing null check\n2. Race condition\n3. Memory leak",
+        "last_assistant_message": "I analyzed src/ and found 3 issues:\n1. Missing null check in src/auth.py\n2. Race condition in src/cache.py\n3. Memory leak in src/worker.py",
         "cwd": cwd,
     }
 
@@ -216,134 +222,42 @@ def user_prompt_submit_event(cwd: str) -> dict:
 
 # ─── Schema validators ──────────────────────────────────────────────────
 
+from hook_schema import validate_hook_output
+
 
 def validate_pretooluse_output(output: dict, hook_cmd: str) -> list[str]:
-    """Validate PreToolUse hook output matches Claude Code's expected schema.
-
-    Valid responses:
-    - Allow: {"continue": true, "suppressOutput": true, ...}
-    - Warn: {"continue": true, "suppressOutput": false, "additionalContext": str}
-    - Block: {"continue": false, "hookSpecificOutput": {"permissionDecision": "block", ...}}
-    """
-    errors = []
-
+    """Validate PreToolUse output against the canonical schema."""
     if "__raw_stdout" in output:
-        errors.append(f"Invalid JSON output from {hook_cmd}: {output['__raw_stdout'][:200]}")
-        return errors
-
-    if not output:
-        # Empty output is valid for some hooks (legacy allow)
-        return errors
-
-    if "continue" not in output:
-        errors.append(f"Missing 'continue' key in output from {hook_cmd}: {output}")
-        return errors
-
-    if output["continue"] is True:
-        if "suppressOutput" not in output:
-            errors.append(f"Missing 'suppressOutput' in allow/warn response from {hook_cmd}")
-    elif output["continue"] is False:
-        hook_specific = output.get("hookSpecificOutput", {})
-        if not hook_specific:
-            errors.append(f"Block response missing 'hookSpecificOutput' from {hook_cmd}")
-        elif hook_specific.get("permissionDecision") not in ("block", "allow"):
-            errors.append(
-                f"Invalid permissionDecision '{hook_specific.get('permissionDecision')}' "
-                f"from {hook_cmd}"
-            )
-
-    return errors
+        return [f"Invalid JSON from {hook_cmd}: {output['__raw_stdout'][:200]}"]
+    return [f"{hook_cmd}: {e}" for e in validate_hook_output("PreToolUse", output)]
 
 
 def validate_posttooluse_output(output: dict, hook_cmd: str) -> list[str]:
-    """Validate PostToolUse hook output.
-
-    Valid responses:
-    - Allow: {"continue": true, "suppressOutput": true}
-    - Warn: {"continue": true, "suppressOutput": false, "additionalContext": str}
-    - Empty dict (legacy allow)
-    """
-    errors = []
-
+    """Validate PostToolUse output against the canonical schema."""
     if "__raw_stdout" in output:
-        errors.append(f"Invalid JSON output from {hook_cmd}: {output['__raw_stdout'][:200]}")
-        return errors
-
-    if not output:
-        return errors  # Empty = allow
-
-    if "continue" not in output:
-        errors.append(f"Missing 'continue' key in PostToolUse output from {hook_cmd}: {output}")
-        return errors
-
-    # PostToolUse hooks should NOT block with hookSpecificOutput/permissionDecision
-    if output.get("continue") is False:
-        errors.append(
-            f"PostToolUse hook {hook_cmd} returned continue=false — "
-            "PostToolUse hooks cannot block (tool already executed)"
-        )
-
-    return errors
+        return [f"Invalid JSON from {hook_cmd}: {output['__raw_stdout'][:200]}"]
+    return [f"{hook_cmd}: {e}" for e in validate_hook_output("PostToolUse", output)]
 
 
 def validate_stop_output(output: dict, hook_cmd: str) -> list[str]:
-    """Validate Stop hook output.
-
-    Valid responses:
-    - Allow: empty dict (no output)
-    - Warn/Allow: {"decision": "approve", "reason": str}
-    - Block: {"decision": "block", "reason": str}
-    """
-    errors = []
-
+    """Validate Stop output against the canonical schema."""
     if "__raw_stdout" in output:
-        errors.append(f"Invalid JSON output from {hook_cmd}: {output['__raw_stdout'][:200]}")
-        return errors
-
-    if not output:
-        return errors  # Empty = allow
-
-    if "decision" not in output:
-        errors.append(f"Stop hook output missing 'decision' key from {hook_cmd}: {output}")
-        return errors
-
-    if output["decision"] not in ("block", "approve"):
-        errors.append(
-            f"Invalid Stop decision '{output['decision']}' from {hook_cmd} "
-            "(expected 'block' or 'approve')"
-        )
-
-    return errors
+        return [f"Invalid JSON from {hook_cmd}: {output['__raw_stdout'][:200]}"]
+    return [f"{hook_cmd}: {e}" for e in validate_hook_output("Stop", output)]
 
 
 def validate_subagent_stop_output(output: dict, hook_cmd: str) -> list[str]:
-    """Validate SubagentStop hook output.
-
-    Same schema as Stop hooks.
-    """
-    return validate_stop_output(output, hook_cmd)
+    """Validate SubagentStop output against the canonical schema."""
+    if "__raw_stdout" in output:
+        return [f"Invalid JSON from {hook_cmd}: {output['__raw_stdout'][:200]}"]
+    return [f"{hook_cmd}: {e}" for e in validate_hook_output("SubagentStop", output)]
 
 
 def validate_user_prompt_submit_output(output: dict, hook_cmd: str) -> list[str]:
-    """Validate UserPromptSubmit hook output.
-
-    Valid responses:
-    - Allow: {"continue": true, "suppressOutput": true}
-    - Modify: {"continue": true, "suppressOutput": false, "additionalContext": str}
-    """
-    errors = []
-
+    """Validate UserPromptSubmit output against the canonical schema."""
     if "__raw_stdout" in output:
-        errors.append(f"Invalid JSON output from {hook_cmd}: {output['__raw_stdout'][:200]}")
-        return errors
-
-    if not output:
-        return errors  # Empty = allow
-
-    if "continue" not in output:
-        errors.append(f"Missing 'continue' in UserPromptSubmit output from {hook_cmd}: {output}")
-
-    return errors
+        return [f"Invalid JSON from {hook_cmd}: {output['__raw_stdout'][:200]}"]
+    return [f"{hook_cmd}: {e}" for e in validate_hook_output("UserPromptSubmit", output)]
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────────

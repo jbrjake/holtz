@@ -69,8 +69,10 @@ def parse_brief(content: str) -> list[PatternEntry]:
         block = '\n'.join(original_lines[start_line:end_line])
 
         def _extract(field: str, _block: str = block) -> str:
+            # Only terminate at known field headers (**Name:**) not arbitrary bold,
+            # so field values containing **emphasis** aren't truncated.
             m = re.search(
-                rf'\*\*{field}:\*\*[ \t]*(.*?)(?=\n\*\*|\n##|\Z)',
+                rf'\*\*{field}:\*\*[ \t]*(.*?)(?=\n\*\*\w[^*]*:\*\*|\n##|\Z)',
                 _block,
                 re.DOTALL,
             )
@@ -104,13 +106,18 @@ def _compress_heuristic(heuristic: str) -> str:
         m = re.search(r'`([^`]+)`', heuristic)
         if m:
             return m.group(0)
-    first_sentence = heuristic.split('.')[0].strip()
+    # Split on sentence-ending period (followed by space or end) not mid-word dots
+    m = re.match(r'(.*?\w\.)\s', heuristic)
+    first_sentence = m.group(1) if m else heuristic.split('\n')[0].strip()
     return _truncate(first_sentence, 120)
 
 
 def _compress_example(example: str) -> str:
     """Compress an example to a single sentence."""
-    first_sentence = example.split('.')[0].strip()
+    # Split on sentence-ending period (followed by space or end) not mid-word dots
+    # like config.json, os.path, etc.
+    m = re.match(r'(.*?\w\.)\s', example)
+    first_sentence = m.group(1) if m else example.split('\n')[0].strip()
     if first_sentence.startswith('A ') or first_sentence.startswith('The '):
         first_sentence = first_sentence[0].lower() + first_sentence[1:]
     return _truncate(first_sentence, 100)

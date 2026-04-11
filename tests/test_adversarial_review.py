@@ -149,6 +149,53 @@ class TestIsSahjhanCmdQuotedEnvVarBypass:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Bug 5: Newline-separated commands bypass commit gate and protocol tracking
+#
+# Root cause: _split_shell_segments, _is_tdd_cmd, _is_test_cmd, and
+# _is_sleep_cmd split on &&, ||, ;, | but NOT on \n (newline).
+# However, _sahjhan_bootstrap.py DOES split on \n. This dual-parser
+# divergence means "echo\ngit commit" bypasses commit_gate while
+# "echo\nrm enforcement/foo.py" is correctly blocked by bootstrap.
+#
+# Impact: Newline-separated git commits bypass the commit gate entirely.
+# The commit happens but is invisible to enforcement tracking.
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestNewlineSeparatedCommandBypass:
+    """Commands separated by newlines must be detected, not treated as one segment."""
+
+    def test_newline_git_commit_detected(self):
+        """echo hello\\ngit commit -m 'fix: x' IS a git commit."""
+        from _protocol_cache import is_git_commit
+        assert is_git_commit("echo hello\ngit commit -m 'fix: x'"), (
+            "Newline-separated git commit was not detected — commit gate bypassed"
+        )
+
+    def test_newline_sahjhan_detected(self):
+        """echo hello\\nsahjhan status — contains a non-sahjhan segment."""
+        from _protocol_cache import is_sahjhan_cmd
+        # The whole command is NOT exclusively sahjhan (echo is non-sahjhan)
+        assert not is_sahjhan_cmd("echo hello\nsahjhan status"), (
+            "Mixed newline command should not be classified as pure sahjhan"
+        )
+
+    def test_newline_tdd_cmd_detected(self):
+        """echo hello\\npytest IS a TDD command."""
+        tracker = _load_with_enforcement_deps("protocol_tracker", "protocol_tracker.py")
+        assert tracker._is_tdd_cmd("echo hello\npytest"), (
+            "Newline-separated pytest was not detected as TDD"
+        )
+
+    def test_newline_sleep_detected(self):
+        """echo hello\\nsleep 60 IS a sleep command."""
+        tracker = _load_with_enforcement_deps("protocol_tracker", "protocol_tracker.py")
+        assert tracker._is_sleep_cmd("echo hello\nsleep 60"), (
+            "Newline-separated sleep was not detected"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Bug 2: _is_tdd_cmd doesn't handle chained commands
 #
 # Root cause: _is_tdd_cmd checks cmd.strip().startswith("pytest") etc.

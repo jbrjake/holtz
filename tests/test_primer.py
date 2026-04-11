@@ -12,7 +12,6 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
 sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))
 
 from _resolve import ensure_sahjhan  # noqa: E402
-
 from test_sahjhan_integration import run_enforcement_hook  # noqa: E402
 
 SAHJHAN = ensure_sahjhan()
@@ -51,9 +50,9 @@ class TestPrimerTerminatedAudit:
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
         assert code == 0
-        # Primer uses exit_warn, so continue=True, suppressOutput=False
-        assert output.get("continue") is True
-        context = output.get("additionalContext", "")
+        # Primer uses exit_warn with "UserPromptSubmit" → hookSpecificOutput
+        hook_output = output.get("hookSpecificOutput", {})
+        context = hook_output.get("additionalContext", "")
         assert "AUDIT TERMINATED" in context
 
     def test_no_restart_attempt_on_socket_failure(self, tmp_path):
@@ -86,7 +85,8 @@ class TestPrimerAuthFailureFailClosed:
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
         assert code == 0
-        context = output.get("additionalContext", "")
+        hook_output = output.get("hookSpecificOutput", {})
+        context = hook_output.get("additionalContext", "")
         assert "ENFORCEMENT FAILURE" in context
         assert "STOP" in context
 

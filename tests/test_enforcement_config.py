@@ -1,6 +1,7 @@
 """Tests for enforcement TOML configuration files."""
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -280,33 +281,44 @@ def test_mypy_uses_explicit_package_bases():
 # ── Tasks 5 & 6: Hook registration ──
 
 
-def test_settings_local_registers_enforcement_hooks():
-    """Dev-mode settings must register commit_gate and protocol_tracker."""
+def test_settings_local_has_no_enforcement_hooks():
+    """settings.local.json must NOT register enforcement hooks.
+
+    Enforcement hooks run via the plugin (hooks/hooks.json), not via
+    project settings. Having them in settings.local.json causes them
+    to fire during plugin development, blocking edits to the hooks
+    themselves. See: two broken releases from this exact mistake.
+    """
     settings_path = Path(__file__).parent.parent / ".claude" / "settings.local.json"
     if not settings_path.exists():
         pytest.skip(".claude/settings.local.json not present (not tracked in git)")
     cfg = json.loads(settings_path.read_text())
     hooks = cfg.get("hooks", {})
 
-    pre_tool = hooks.get("PreToolUse", [])
-    post_tool = hooks.get("PostToolUse", [])
+    all_commands = []
+    for event_hooks in hooks.values():
+        for entry in event_hooks if isinstance(event_hooks, list) else []:
+            for h in entry.get("hooks", []):
+                all_commands.append(h.get("command", ""))
 
-    pre_commands = []
-    for entry in pre_tool:
-        for h in entry.get("hooks", []):
-            pre_commands.append(h.get("command", ""))
-
-    post_commands = []
-    for entry in post_tool:
-        for h in entry.get("hooks", []):
-            post_commands.append(h.get("command", ""))
-
-    assert any("commit_gate" in c for c in pre_commands), (
-        "commit_gate.py not registered in settings.local.json PreToolUse"
+    enforcement_hooks = [c for c in all_commands if "enforcement/" in c]
+    assert not enforcement_hooks, (
+        f"Enforcement hooks must not be in settings.local.json (found: {enforcement_hooks}). "
+        "They belong in hooks/hooks.json (plugin mode only)."
     )
-    assert any("protocol_tracker" in c for c in post_commands), (
-        "protocol_tracker.py not registered in settings.local.json PostToolUse"
-    )
+
+
+def test_pre_release_hook_validation_gate():
+    """Pre-release gate: smoke test script exists and is executable."""
+    smoke_test = Path(__file__).parent.parent / "scripts" / "smoke-test-hooks.sh"
+    assert smoke_test.exists(), "scripts/smoke-test-hooks.sh missing"
+    assert os.access(smoke_test, os.X_OK), "scripts/smoke-test-hooks.sh not executable"
+
+
+def test_hook_schema_exists():
+    """Pre-release gate: hook_schema.py must exist as source of truth."""
+    schema = Path(__file__).parent / "hook_schema.py"
+    assert schema.exists(), "tests/hook_schema.py missing — hooks have no schema to validate against"
 
 
 def test_hooks_json_registers_enforcement_hooks():

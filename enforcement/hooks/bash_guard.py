@@ -14,9 +14,6 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _protocol_cache import is_enforcement_fresh, is_sahjhan_cmd, read_cache  # noqa: E402
-from _resolve import ensure_sahjhan  # noqa: E402
-
 from _common import (  # noqa: E402
     exit_enforcement_error,
     exit_ok,
@@ -24,6 +21,8 @@ from _common import (  # noqa: E402
     read_event,
     resolve_config_dir,
 )
+from _protocol_cache import is_enforcement_fresh, is_sahjhan_cmd, read_cache  # noqa: E402
+from _resolve import ensure_sahjhan  # noqa: E402
 
 
 def main() -> None:
@@ -93,7 +92,8 @@ def main() -> None:
         exit_warn(
             f"PROTOCOL VIOLATION: Managed file integrity check failed. "
             f"Detail: {detail}. This violation is permanent and will "
-            f"block convergence for this run."
+            f"block convergence for this run.",
+            "PostToolUse",
         )
 
     exit_ok()

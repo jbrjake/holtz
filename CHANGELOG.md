@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.131.5] - 2026-04-11
+
+_Changes since v0.127.6_
+
+### Added
+- **hooks:** add pre-release gate for schema and smoke test
+- **hooks:** add schema freshness gate against live docs
+- **hooks:** add live Claude Code smoke test
+- **hooks:** add hook output schema as single source of truth
+
+### Fixed
+- fix content truncation in pattern_brief and lens registry parser crash
+- **ci:** add enforcement/hooks/ to coverage, mypy, and ruff config
+- address defects found during adversarial review
+- **hooks:** close bootstrap write-protection bypasses for cp -t, mv -t, and full-path commands
+- **hooks:** resolve ruff lint issues in new test files
+- **enforcement:** newline bypass, quiz gate error destruction, double-bump guard
+- **enforcement:** correct hook protocol lies, dead code, and test schema errors
+- **enforcement:** use Claude Code's actual hook output schema
+
+### Changed
+- **hooks:** rewire E2E validators to use hook_schema
+
+### Documentation
+- add hook smoke test and schema check to release checklist
+- add hook validation hardening plan
+
+### Infrastructure
+- **hooks:** add regression tests for cp -t, mv -t, and full-path command bypasses
+- update test badge to 1166
+- **enforcement:** update all assertions to match correct hook schema
+
 ## [0.127.6] - 2026-04-11
 
 _Hotfix release. v0.127.5 had runtime hook errors — upgrade immediately._

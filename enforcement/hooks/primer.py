@@ -18,10 +18,6 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _protocol_cache import format_state_line, parse_status_text  # noqa: E402
-from _protocol_cache import read_cache as read_enforcement_cache
-from _resolve import ensure_sahjhan  # noqa: E402
-
 from _common import (  # noqa: E402
     _is_process_alive,
     _read_init_pid,
@@ -32,6 +28,9 @@ from _common import (  # noqa: E402
     record_authed_event,
     resolve_config_dir,
 )
+from _protocol_cache import format_state_line, parse_status_text  # noqa: E402
+from _protocol_cache import read_cache as read_enforcement_cache
+from _resolve import ensure_sahjhan  # noqa: E402
 
 
 def main() -> None:
@@ -55,7 +54,8 @@ def main() -> None:
         exit_warn(
             "AUDIT TERMINATED: daemon died — session key lost. "
             "The ledger is unwritable. This audit cannot be completed. "
-            "Use /stop to exit, then start a new audit."
+            "Use /stop to exit, then start a new audit.",
+            "UserPromptSubmit",
         )
 
     # Get current status
@@ -117,7 +117,8 @@ def main() -> None:
         exit_warn(
             "AUDIT TERMINATED: daemon died during awaiting_clear — session key lost. "
             "The ledger is unwritable. This audit cannot be completed. "
-            "Use /stop to exit, then start a new audit."
+            "Use /stop to exit, then start a new audit.",
+            "UserPromptSubmit",
         )
 
     # Build resume context
@@ -162,7 +163,7 @@ def main() -> None:
     if run_number != "0":
         context += f"\nActive ledger: run-{run_number}"
 
-    exit_warn(context)
+    exit_warn(context, "UserPromptSubmit")
 
 
 if __name__ == "__main__":

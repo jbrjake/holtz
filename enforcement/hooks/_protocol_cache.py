@@ -226,9 +226,12 @@ def _split_shell_segments(cmd: str) -> list[str]:
     # Strip shell redirections: 2>&1, >&2, 2>/dev/null, etc.
     cleaned = re.sub(r'\d*>&?\d+', '', cmd)
     cleaned = re.sub(r'\d*>/dev/null', '', cleaned)
-    # Split on actual shell operators: &&, ||, ;, |
+    # Split on actual shell operators: &&, ||, ;, |, newline
     # Use specific multi-char operators first to avoid splitting on single &
-    segments = re.split(r'&&|\|\||[;|]', cleaned)
+    # Include \n: Claude Code can send newline-separated commands in a single
+    # Bash call. Without \n, commands like "echo\ngit commit" bypass detection.
+    # Must match _sahjhan_bootstrap.py's split pattern to avoid divergence.
+    segments = re.split(r'&&|\|\||[;|\n]', cleaned)
     result = []
     for seg in segments:
         seg = seg.strip()

@@ -34,7 +34,7 @@ def main() -> None:
 
     data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
     if not os.path.isdir(data_dir):
-        exit_ok()
+        exit_ok("PreToolUse")
 
     # Already terminated — block immediately
     terminated = os.path.join(data_dir, "terminated")
@@ -48,11 +48,11 @@ def main() -> None:
     init_pid = _read_init_pid(cwd)
     if init_pid is None:
         # No init PID tracked — legacy audit or pre-init.
-        exit_ok()
+        exit_ok("PreToolUse")
 
     # Init PID exists — is it still alive?
     if _is_process_alive(init_pid):
-        exit_ok()
+        exit_ok("PreToolUse")
 
     # Init PID is dead. Audit is over.
     _write_terminated_marker(cwd, init_pid, detected_by="_daemon_lifecycle")

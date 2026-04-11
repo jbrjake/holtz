@@ -6,6 +6,14 @@ set -euo pipefail
 
 PLUGIN_JSON=".claude-plugin/plugin.json"
 
+# Guard against double-bump: if plugin.json was already modified in this
+# commit (e.g., by the commit-msg hook), skip the post-commit bump.
+# Without this, install-hooks.sh (which installs both hooks) would cause
+# every feat/fix/perf commit to bump the version twice.
+if git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null | grep -qF "$PLUGIN_JSON"; then
+    exit 0
+fi
+
 # Read the just-created commit
 FIRST_LINE=$(git log -1 --pretty=%s)
 BODY=$(git log -1 --pretty=%b)

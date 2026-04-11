@@ -4,6 +4,6 @@
     "PostToolUse": ["post_tool_hook.py", "bash_guard.py", "protocol_tracker.py"],
     "UserPromptSubmit": ["primer.py"],
     "Stop": ["stop_hook.py"],
-    "SubagentStop": ["lens_quiz.py"]
+    "SubagentStop": ["lens_quiz.py", "subagent_findings_check.py"]
   }
 }

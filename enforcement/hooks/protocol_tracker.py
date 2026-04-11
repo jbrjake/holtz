@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from _common import exit_ok, read_event, resolve_config_dir  # noqa: E402
 from _protocol_cache import (  # noqa: E402
     empty_cache,
     is_enforcement_fresh,
@@ -27,17 +28,15 @@ from _protocol_cache import (  # noqa: E402
 )
 from _resolve import ensure_sahjhan  # noqa: E402
 
-from _common import exit_ok, read_event, resolve_config_dir  # noqa: E402
-
 
 def _is_tdd_cmd(cmd: str) -> bool:
     """Detect test, lint, and type-check commands (TDD workflow).
 
-    Checks each segment of chained commands (split on &&, ||, ;, |)
+    Checks each segment of chained commands (split on &&, ||, ;, |, newline)
     so that ``cd /project && python -m pytest`` is recognized.
     """
     _TDD_PREFIXES = ("pytest", "python -m pytest", "ruff check", "ruff format", "mypy")
-    for segment in re.split(r'&&|\|\||[;|]', cmd):
+    for segment in re.split(r'&&|\|\||[;|\n]', cmd):
         seg = segment.strip()
         if any(seg.startswith(p) for p in _TDD_PREFIXES):
             return True
@@ -49,10 +48,10 @@ def _is_sleep_cmd(cmd: str) -> bool:
 
     Returns True for sleep >5 seconds. Short sleeps (<=5s) are allowed
     for legitimate polling. Checks each segment of chained commands
-    (split on &&, ;, ||, |). Handles bash sleep suffixes (s/m/h/d).
+    (split on &&, ;, ||, |, newline). Handles bash sleep suffixes (s/m/h/d).
     """
     _SUFFIX_MULTIPLIER = {"s": 1, "m": 60, "h": 3600, "d": 86400}
-    for segment in re.split(r'[;&|]+', cmd):
+    for segment in re.split(r'[;&|\n]+', cmd):
         m = re.match(r"^\s*sleep\s+(\d+(?:\.\d+)?)([smhd])?", segment)
         if m:
             value = float(m.group(1))

@@ -257,9 +257,31 @@ def _check_bash_write(command: str) -> str | None:
                         "This path cannot be modified during an audit session."
                     )
 
-            # cp/mv/install check: protected path as LAST argument
-            if any(seg_cmd.startswith(c) for c in ("cp ", "mv ", "install ")):
+            # cp/mv/install check: protected path as target.
+            # Handles both standard form (target is last arg) and -t/--target-directory
+            # form where the target comes after the flag. Also handles full-path
+            # commands like /bin/cp, /usr/bin/mv by extracting the basename.
+            first_token = seg_cmd.split()[0] if seg_cmd.split() else ""
+            cmd_basename = first_token.rsplit("/", 1)[-1] if "/" in first_token else first_token
+            if any(cmd_basename == c.strip() for c in ("cp", "mv", "install")):
                 args = seg_cmd.split()
+                # Check -t / --target-directory flag (target is NOT last arg)
+                for i, arg in enumerate(args):
+                    if arg in ("-t", "--target-directory") and i + 1 < len(args):
+                        target = args[i + 1]
+                        if target == p or target.startswith(p):
+                            return (
+                                f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
+                                "This path cannot be modified during an audit session."
+                            )
+                    if arg.startswith("--target-directory="):
+                        target = arg.split("=", 1)[1]
+                        if target == p or target.startswith(p):
+                            return (
+                                f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
+                                "This path cannot be modified during an audit session."
+                            )
+                # Standard form: target is last argument
                 if len(args) >= 3:
                     dest = args[-1]
                     if dest == p or dest.startswith(p):
@@ -271,7 +293,8 @@ def _check_bash_write(command: str) -> str | None:
             # Issue #33: rm/rmdir check — destructive operations on protected paths
             # Also match trailing-slash-stripped form so that
             # "rm -rf docs/holtz/.sahjhan" matches "docs/holtz/.sahjhan/".
-            if any(seg_cmd.startswith(c) for c in ("rm ", "rm\t", "rmdir ")):
+            # Handle full-path commands (/bin/rm, /usr/bin/rmdir).
+            if cmd_basename in ("rm", "rmdir"):
                 p_stripped = p.rstrip("/")
                 ref = _segment_references_protected(seg, [p, p_stripped])
                 if ref:
@@ -411,24 +434,21 @@ def main() -> None:
 
 def _allow() -> None:
     print(json.dumps({
-        "continue": True,
-        "suppressOutput": True,
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "allow",
             "permissionDecisionReason": "",
         },
+        "suppressOutput": True,
     }))
     sys.exit(0)
 
 
 def _block(reason: str) -> None:
     print(json.dumps({
-        "continue": False,
-        "suppressOutput": False,
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
-            "permissionDecision": "block",
+            "permissionDecision": "deny",
             "permissionDecisionReason": reason,
         },
     }))
