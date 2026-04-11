@@ -12,7 +12,6 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
 sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))
 
 from _resolve import ensure_sahjhan  # noqa: E402
-
 from test_sahjhan_integration import run_enforcement_hook  # noqa: E402
 
 SAHJHAN = ensure_sahjhan()

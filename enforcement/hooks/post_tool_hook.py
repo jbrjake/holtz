@@ -23,9 +23,6 @@ from typing import Any
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
-from _resolve import ensure_sahjhan  # noqa: E402
-
 from _common import (  # noqa: E402
     exit_enforcement_error,
     exit_ok,
@@ -33,6 +30,8 @@ from _common import (  # noqa: E402
     read_event,
     resolve_config_dir,
 )
+from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
+from _resolve import ensure_sahjhan  # noqa: E402
 
 
 def _enrich_auto_record(

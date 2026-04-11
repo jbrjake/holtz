@@ -1177,6 +1177,7 @@ class TestStopHookDaemonCleanupGating:
         from unittest.mock import patch
 
         import pytest
+
         from _protocol_cache import empty_cache, write_cache
 
         cache = empty_cache()
@@ -1201,6 +1202,7 @@ class TestStopHookDaemonCleanupGating:
         from unittest.mock import patch
 
         import pytest
+
         from _protocol_cache import empty_cache, write_cache
 
         cache = empty_cache()
@@ -1226,6 +1228,7 @@ class TestStopHookDaemonCleanupGating:
         from unittest.mock import patch
 
         import pytest
+
         from _protocol_cache import empty_cache, write_cache
 
         cache = empty_cache()
@@ -1254,9 +1257,9 @@ class TestExitEnforcementError:
         from datetime import datetime, timezone  # noqa: UP017
 
         import pytest
-        from _protocol_cache import empty_cache, write_cache
 
         from _common import exit_enforcement_error
+        from _protocol_cache import empty_cache, write_cache
 
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True, exist_ok=True)
@@ -1280,9 +1283,9 @@ class TestExitEnforcementError:
         from datetime import datetime, timezone  # noqa: UP017
 
         import pytest
-        from _protocol_cache import empty_cache, write_cache
 
         from _common import exit_enforcement_error
+        from _protocol_cache import empty_cache, write_cache
 
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True, exist_ok=True)
@@ -1319,9 +1322,9 @@ class TestExitEnforcementError:
         import json
 
         import pytest
-        from _protocol_cache import empty_cache, write_cache
 
         from _common import exit_enforcement_error
+        from _protocol_cache import empty_cache, write_cache
 
         sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
         sahjhan_dir.mkdir(parents=True, exist_ok=True)

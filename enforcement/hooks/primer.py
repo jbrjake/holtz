@@ -18,10 +18,6 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _protocol_cache import format_state_line, parse_status_text  # noqa: E402
-from _protocol_cache import read_cache as read_enforcement_cache
-from _resolve import ensure_sahjhan  # noqa: E402
-
 from _common import (  # noqa: E402
     _is_process_alive,
     _read_init_pid,
@@ -32,6 +28,9 @@ from _common import (  # noqa: E402
     record_authed_event,
     resolve_config_dir,
 )
+from _protocol_cache import format_state_line, parse_status_text  # noqa: E402
+from _protocol_cache import read_cache as read_enforcement_cache
+from _resolve import ensure_sahjhan  # noqa: E402
 
 
 def main() -> None:

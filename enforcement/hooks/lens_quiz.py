@@ -20,13 +20,6 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _resolve import ensure_sahjhan  # noqa: E402
-from lens_evidence import (  # noqa: E402
-    check_artifact,
-    check_transcript,
-    parse_transcript_jsonl,
-)
-
 from _common import (  # noqa: E402
     _daemon_request,
     _get_daemon_socket_path,
@@ -36,6 +29,12 @@ from _common import (  # noqa: E402
     read_event,
     record_authed_event,
     resolve_config_dir,
+)
+from _resolve import ensure_sahjhan  # noqa: E402
+from lens_evidence import (  # noqa: E402
+    check_artifact,
+    check_transcript,
+    parse_transcript_jsonl,
 )
 
 # ── Vault helpers ──

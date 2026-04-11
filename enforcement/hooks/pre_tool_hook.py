@@ -18,11 +18,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from _common import exit_block, exit_enforcement_error, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
 from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
 from _sahjhan_bootstrap import MANAGED_DOCS  # noqa: E402
-
-from _common import exit_block, exit_enforcement_error, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
 
 
 def main() -> None:

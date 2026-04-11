@@ -21,9 +21,6 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
-from _resolve import ensure_sahjhan  # noqa: E402
-
 from _common import (  # noqa: E402
     _is_process_alive,
     _read_init_pid,
@@ -34,6 +31,8 @@ from _common import (  # noqa: E402
     read_event,
     resolve_config_dir,
 )
+from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
+from _resolve import ensure_sahjhan  # noqa: E402
 
 # Two sets because "allowed to stop" ≠ "safe to kill daemon".
 # awaiting_clear allows stop (the turn is done) but the daemon must

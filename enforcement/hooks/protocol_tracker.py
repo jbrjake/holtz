@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from _common import exit_ok, read_event, resolve_config_dir  # noqa: E402
 from _protocol_cache import (  # noqa: E402
     empty_cache,
     is_enforcement_fresh,
@@ -26,8 +27,6 @@ from _protocol_cache import (  # noqa: E402
     write_cache,
 )
 from _resolve import ensure_sahjhan  # noqa: E402
-
-from _common import exit_ok, read_event, resolve_config_dir  # noqa: E402
 
 
 def _is_tdd_cmd(cmd: str) -> bool:
