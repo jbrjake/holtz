@@ -35,17 +35,18 @@ scripts/install-hooks.sh
 2. Review commits since last release: `git log dev --not main --oneline`
 3. Read the version from `.claude-plugin/plugin.json` (already bumped by hook).
 4. Run hook smoke test: `scripts/smoke-test-hooks.sh --verbose`
-5. Run schema freshness check: `python -m pytest tests/test_hook_schema_freshness.py -v`
-6. Generate changelog: `python scripts/generate-changelog.py --write` (preview without `--write` first). Review the output in CHANGELOG.md, commit it.
-7. Create a release PR:
+5. Run contract gate: `python scripts/contract_gate.py`
+6. Run schema freshness check: `python -m pytest tests/test_hook_schema_freshness.py -v`
+7. Generate changelog: `python scripts/generate-changelog.py --write` (preview without `--write` first). Review the output in CHANGELOG.md, commit it.
+8. Create a release PR:
    ```
    gh pr create --base main --head dev \
      --title "chore: release vX.Y.Z" \
      --body "<highlights and commit summary>"
    ```
-8. Wait for CI to pass on the PR.
-9. Merge: `gh pr merge <number> --merge --subject "chore: release vX.Y.Z" --body "<summary>"`
-10. The release GitHub Action automatically creates the git tag and GitHub Release.
+9. Wait for CI to pass on the PR.
+10. Merge: `gh pr merge <number> --merge --subject "chore: release vX.Y.Z" --body "<summary>"`
+11. The release GitHub Action automatically creates the git tag and GitHub Release.
 
 ## Running Tests
 
@@ -64,3 +65,34 @@ mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/
 ```
 
 Coverage is excluded from default addopts because concurrent pytest processes (subagents, parallel sessions) deadlock on the SQLite `.coverage` file. Only the main agent should run with `--cov`.
+
+Targeted test commands:
+```bash
+# After skill file changes:
+pytest -m contract
+python scripts/contract_gate.py
+
+# After hook changes:
+pytest -m hook_e2e
+
+# Fast feedback (subagents):
+pytest -m "not slow and not machine_specific"
+```
+
+## Testing Methodology
+
+**Test categories:**
+
+| Category | When to Write | Marker | Example |
+|----------|--------------|--------|---------|
+| Contract | Skill file or hook command parsing changed | `@pytest.mark.contract` | Skill says `sahjhan status 2>&1`, test verifies hook allows it |
+| Hook E2E | Any enforcement/hooks/ change | `@pytest.mark.hook_e2e` | Hook subprocess receives JSON event, returns correct decision |
+| Unit | New utility function or parser | (none) | `_extract_sahjhan_subcmd` returns correct tuple |
+| Integration | Hook chain or cross-module behavior | `@pytest.mark.integration` | Full PreToolUse chain for a real command |
+
+**Rules:**
+
+1. Skill file changed → update contract tests in same commit. Run `python scripts/contract_gate.py` to verify.
+2. Hook changed → test via subprocess (`_run_hook(event)`), not function import. Subprocess tests the interface Claude Code actually uses.
+3. New shell idiom in a skill file → add it to the combinatorial matrix in `test_contract_commands.py` (`_SHELL_IDIOMS`, `_SHELL_WRAPPER_IDIOMS`, or `_SHELL_CHAIN_IDIOMS`). Parametrized tests auto-combine it with all subcommands.
+4. Coverage is necessary but not sufficient. 100% coverage with synthetic inputs is worse than 80% coverage with real inputs. Prefer testing real commands from skill files over hand-crafted examples.
