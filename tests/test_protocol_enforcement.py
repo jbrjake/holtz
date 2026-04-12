@@ -4,6 +4,10 @@ from __future__ import annotations
 import os
 import sys
 
+import pytest
+
+pytestmark = pytest.mark.hook_e2e
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
 sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))

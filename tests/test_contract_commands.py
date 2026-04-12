@@ -16,6 +16,8 @@ import sys
 
 import pytest
 
+pytestmark = pytest.mark.contract
+
 HOOK = "enforcement/hooks/_sahjhan_bootstrap.py"
 
 
@@ -523,6 +525,7 @@ class TestDenyMessageQuality:
 # Catches drift between skill instructions and hook enforcement.
 # ---------------------------------------------------------------------------
 
+@pytest.mark.slow
 class TestContractGate:
     """Run the contract gate script and verify it passes."""
 

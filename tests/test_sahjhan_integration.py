@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = [pytest.mark.hook_e2e, pytest.mark.integration]
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENFORCEMENT_HOOKS_DIR = os.path.join(REPO_ROOT, "enforcement", "hooks")
 

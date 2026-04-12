@@ -9,6 +9,8 @@ import json
 import subprocess
 import sys
 
+import pytest
+
 HOOK = "enforcement/hooks/_sahjhan_bootstrap.py"
 
 
@@ -24,6 +26,7 @@ def _run_hook(event: dict) -> dict:
     return json.loads(result.stdout)
 
 
+@pytest.mark.hook_e2e
 class TestSahjhanAllowlist:
     """Sahjhan subcommand allowlist: only permitted subcmds pass, all else blocked."""
 
@@ -169,6 +172,7 @@ class TestSahjhanAllowlist:
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
 
 
+@pytest.mark.hook_e2e
 class TestReadNoLongerGuarded:
     """With daemon vault, file reads are no longer blocked."""
 
@@ -202,6 +206,7 @@ class TestReadNoLongerGuarded:
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
 
 
+@pytest.mark.hook_e2e
 class TestWriteGuardsRetained:
     """Write protection must still work after read guard removal."""
 
@@ -376,6 +381,7 @@ class TestExtractSahjhanSubcmd:
         assert extract("sahjhan status 1>&2") == ("status", "")
 
 
+@pytest.mark.hook_e2e
 class TestHelpFlagAllowed:
     """Issue #53: sahjhan --help and -h must be allowed through the hook."""
 
@@ -422,6 +428,7 @@ class TestHelpFlagAllowed:
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
 
 
+@pytest.mark.hook_e2e
 class TestRedirectFragmentHandling:
     """Issue #53: shell redirect fragments must not become subcommand tokens."""
 
@@ -482,6 +489,7 @@ class TestRedirectFragmentHandling:
         )
 
 
+@pytest.mark.hook_e2e
 class TestEnvVarPrefixBypassesAllowlist:
     """Env var prefix before blocked sahjhan subcommand must still be blocked.
 
@@ -516,6 +524,7 @@ class TestEnvVarPrefixBypassesAllowlist:
         )
 
 
+@pytest.mark.hook_e2e
 class TestEnvVarPrefixBypassesWriteProtection:
     """Env var prefix before destructive commands bypasses write protection.
 
@@ -573,6 +582,7 @@ class TestEnvVarPrefixBypassesWriteProtection:
         )
 
 
+@pytest.mark.hook_e2e
 class TestManagedDataWriteProtection:
     """Issue #39 P2: Write/Edit to .sahjhan/ data dir must be blocked."""
 
@@ -628,6 +638,7 @@ class TestManagedDataWriteProtection:
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
 
 
+@pytest.mark.hook_e2e
 class TestCopyMoveTargetDirectoryBypass:
     """cp/mv -t and --target-directory bypass: target is NOT the last arg."""
 
@@ -672,6 +683,7 @@ class TestCopyMoveTargetDirectoryBypass:
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
+@pytest.mark.hook_e2e
 class TestFullPathCommandBypass:
     """Full-path commands (/bin/cp, /usr/bin/rm) must be caught."""
 

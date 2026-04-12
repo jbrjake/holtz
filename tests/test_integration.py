@@ -1,6 +1,10 @@
 """Integration tests: validate_punchlist + convergence_check parse the same format."""
 
+import pytest
+
 import convergence_check as cc
+
+pytestmark = pytest.mark.integration
 import validate_punchlist as vp
 
 # A realistic multi-status punchlist that both parsers must agree on.
