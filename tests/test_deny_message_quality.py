@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import timezone
 from pathlib import Path
 
 import pytest
@@ -184,7 +185,7 @@ class TestBootstrapDenyMessages:
         }
         output = _run_hook(BOOTSTRAP_HOOK, event)
         reason = _get_pre_tool_reason(output)
-        assert reason is not None, f"Expected block for Write to hooks.json"
+        assert reason is not None, "Expected block for Write to hooks.json"
         assert "BLOCKED" in reason
         _assert_no_parse_artifacts(reason, "bootstrap/write/hooks.json")
 
@@ -201,7 +202,7 @@ class TestBootstrapDenyMessages:
         }
         output = _run_hook(BOOTSTRAP_HOOK, event)
         reason = _get_pre_tool_reason(output)
-        assert reason is not None, f"Expected block for Write to .sahjhan/"
+        assert reason is not None, "Expected block for Write to .sahjhan/"
         assert "BLOCKED" in reason
         assert "sahjhan" in reason.lower() or "data" in reason.lower()
         _assert_no_parse_artifacts(reason, "bootstrap/write/.sahjhan")
@@ -294,18 +295,18 @@ class TestCommitGateDenyMessages:
 
     def test_unregistered_commits_message(self, mock_daemon, tmp_path):
         """Unregistered commits deny mentions the count and required action."""
-        from datetime import datetime, timezone
+        from datetime import datetime
         mock_daemon.state = {
             "active": True,
             "state": "fix_loop",
             "stall": 0,
             "unregistered_commits": ["abc1234", "def5678"],
-            "last_sahjhan_cmd": datetime.now(timezone.utc).isoformat(),
+            "last_sahjhan_cmd": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
             "fixes_since_pattern": 0,
             "perspective": "integration",
             "perspectives_done": 3,
             "perspectives_total": 13,
-            "last_refresh": datetime.now(timezone.utc).isoformat(),
+            "last_refresh": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
         }
 
         event = {
@@ -324,18 +325,18 @@ class TestCommitGateDenyMessages:
 
     def test_stall_message(self, mock_daemon, tmp_path):
         """Stall threshold deny mentions command count and required action."""
-        from datetime import datetime, timezone
+        from datetime import datetime
         mock_daemon.state = {
             "active": True,
             "state": "fix_loop",
             "stall": 20,
             "unregistered_commits": [],
-            "last_sahjhan_cmd": datetime.now(timezone.utc).isoformat(),
+            "last_sahjhan_cmd": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
             "fixes_since_pattern": 0,
             "perspective": "integration",
             "perspectives_done": 3,
             "perspectives_total": 13,
-            "last_refresh": datetime.now(timezone.utc).isoformat(),
+            "last_refresh": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
         }
 
         event = {

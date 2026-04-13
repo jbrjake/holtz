@@ -5,12 +5,12 @@ invariants hold under generated inputs.
 """
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
 import pytest
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 # Add enforcement/hooks to path for direct import
 REPO_ROOT = Path(__file__).parent.parent

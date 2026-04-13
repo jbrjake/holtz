@@ -346,7 +346,8 @@ class TestDaemonDeathMidSession:
         # Should have written terminated marker
         marker = os.path.join(sahjhan_dir, "terminated")
         assert os.path.isfile(marker)
-        content = open(marker).read()
+        with open(marker) as f:
+            content = f.read()
         assert "daemon_pid_dead" in content
         assert str(dead_pid) in content
 
@@ -564,12 +565,12 @@ class TestConcurrentCacheAccess:
             "state": "fix_loop",
             "stall": 0,
             "unregistered_commits": [],
-            "last_sahjhan_cmd": datetime.now(timezone.utc).isoformat(),
+            "last_sahjhan_cmd": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
             "fixes_since_pattern": 0,
             "perspective": "integration",
             "perspectives_done": 3,
             "perspectives_total": 13,
-            "last_refresh": datetime.now(timezone.utc).isoformat(),
+            "last_refresh": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
         }
 
         event = {
