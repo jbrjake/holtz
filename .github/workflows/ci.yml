@@ -19,6 +19,15 @@ jobs:
           python -m venv .venv
           source .venv/bin/activate
           pip install pytest pytest-cov ruff mypy
+      - name: Download sahjhan binary
+        run: |
+          source .venv/bin/activate
+          python -c "
+          import sys; sys.path.insert(0, 'enforcement/hooks')
+          from _resolve import ensure_sahjhan
+          path = ensure_sahjhan()
+          print(f'Binary at: {path}' if path else 'Download failed (integration tests will skip)')
+          "
       - name: Lint
         run: |
           source .venv/bin/activate
