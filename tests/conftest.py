@@ -160,8 +160,10 @@ def real_daemon(monkeypatch):
 
     config_dir = str(Path(__file__).parent.parent / "enforcement")
 
-    # Short /tmp path keeps socket under macOS 104-char AF_UNIX limit
-    project_root = tempfile.mkdtemp(prefix="sh-test-")
+    # Force /tmp (not $TMPDIR which resolves to /private/var/folders/... on
+    # macOS) so the daemon socket at docs/holtz/.sahjhan/daemon.sock stays
+    # under the 104-char AF_UNIX path limit.
+    project_root = tempfile.mkdtemp(prefix="sh-", dir="/tmp")
     sahjhan_dir = os.path.join(project_root, "docs", "holtz", ".sahjhan")
     sock_path = os.path.join(sahjhan_dir, "daemon.sock")
 
@@ -203,6 +205,7 @@ def real_daemon(monkeypatch):
         "sahjhan_dir": sahjhan_dir,
         "sock_path": sock_path,
         "pid": daemon_proc.pid,
+        "proc": daemon_proc,
     }
 
     # Cleanup: stop daemon, remove temp dir
