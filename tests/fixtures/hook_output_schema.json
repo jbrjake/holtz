@@ -1,0 +1,91 @@
+{
+  "_comment": "Expected hook output structures per event type. Regenerate with: python scripts/refresh_hook_schema.py --write",
+  "PreToolUse": {
+    "required_wrapper_key": "hookSpecificOutput",
+    "required_fields": [
+      "hookEventName",
+      "permissionDecision"
+    ],
+    "optional_fields": [
+      "additionalContext",
+      "permissionDecisionReason",
+      "updatedInput"
+    ],
+    "valid_decisions": [
+      "allow",
+      "ask",
+      "defer",
+      "deny"
+    ],
+    "decision_field": "permissionDecision",
+    "hookEventName": "PreToolUse",
+    "universal_fields": [
+      "continue",
+      "stopReason",
+      "suppressOutput",
+      "systemMessage"
+    ]
+  },
+  "PostToolUse": {
+    "required_wrapper_key": null,
+    "valid_top_level_decisions": [
+      "block"
+    ],
+    "hookSpecificOutput_fields": [
+      "additionalContext",
+      "hookEventName",
+      "updatedMCPToolOutput"
+    ],
+    "universal_fields": [
+      "continue",
+      "stopReason",
+      "suppressOutput",
+      "systemMessage"
+    ]
+  },
+  "Stop": {
+    "required_wrapper_key": null,
+    "valid_decisions": [
+      "block"
+    ],
+    "decision_field": "decision",
+    "forbidden_fields": [
+      "hookSpecificOutput"
+    ],
+    "universal_fields": [
+      "systemMessage",
+      "reason"
+    ]
+  },
+  "SubagentStop": {
+    "required_wrapper_key": null,
+    "valid_decisions": [
+      "block"
+    ],
+    "decision_field": "decision",
+    "forbidden_fields": [
+      "hookSpecificOutput"
+    ],
+    "universal_fields": [
+      "systemMessage",
+      "reason"
+    ]
+  },
+  "UserPromptSubmit": {
+    "required_wrapper_key": null,
+    "valid_top_level_decisions": [
+      "block"
+    ],
+    "hookSpecificOutput_fields": [
+      "additionalContext",
+      "hookEventName",
+      "sessionTitle"
+    ],
+    "universal_fields": [
+      "continue",
+      "stopReason",
+      "suppressOutput",
+      "systemMessage"
+    ]
+  }
+}
