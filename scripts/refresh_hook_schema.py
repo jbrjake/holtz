@@ -17,7 +17,7 @@ import sys
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))
 
-from hook_schema import (
+from hook_schema import (  # noqa: E402
     POSTTOOLUSE_HSO_FIELDS,
     POSTTOOLUSE_VALID_DECISIONS,
     PRETOOLUSE_HSO_FIELDS,

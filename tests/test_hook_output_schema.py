@@ -67,34 +67,34 @@ def _extract_script_path(command: str) -> str | None:
     return match.group(1) if match else None
 
 
+_EVENT_BUILDERS: dict[str, object] = {
+    "PreToolUse": lambda cwd: {
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo hello"},
+        "cwd": cwd,
+    },
+    "PostToolUse": lambda cwd: {
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo hello"},
+        "tool_response": {"exit_code": 0, "output": "hello\n"},
+        "cwd": cwd,
+    },
+    "Stop": lambda cwd: {"cwd": cwd},
+    "SubagentStop": lambda cwd: {
+        "tool_name": "Agent",
+        "tool_input": {"prompt": "test"},
+        "tool_output": "done",
+        "last_assistant_message": "done",
+        "cwd": cwd,
+    },
+    "UserPromptSubmit": lambda cwd: {"cwd": cwd, "user_prompt": "test"},
+}
+
+
 def _build_event(event_type: str, cwd: str) -> dict:
     """Build a representative event for the given event type."""
-    if event_type == "PreToolUse":
-        return {
-            "tool_name": "Bash",
-            "tool_input": {"command": "echo hello"},
-            "cwd": cwd,
-        }
-    elif event_type == "PostToolUse":
-        return {
-            "tool_name": "Bash",
-            "tool_input": {"command": "echo hello"},
-            "tool_response": {"exit_code": 0, "output": "hello\n"},
-            "cwd": cwd,
-        }
-    elif event_type == "Stop":
-        return {"cwd": cwd}
-    elif event_type == "SubagentStop":
-        return {
-            "tool_name": "Agent",
-            "tool_input": {"prompt": "test"},
-            "tool_output": "done",
-            "last_assistant_message": "done",
-            "cwd": cwd,
-        }
-    elif event_type == "UserPromptSubmit":
-        return {"cwd": cwd, "user_prompt": "test"}
-    return {"cwd": cwd}
+    builder = _EVENT_BUILDERS.get(event_type, lambda c: {"cwd": c})
+    return builder(cwd)
 
 
 # ── Collect all hook scripts per event type ──
