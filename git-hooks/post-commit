@@ -30,9 +30,9 @@ if [[ -f "$README" ]]; then
     # Test count badge (fast: --collect-only ~2s)
     ACTUAL_TESTS=$(python3 -m pytest --collect-only -q 2>/dev/null | tail -1 | grep -oE '^[0-9]+' || echo "")
     if [[ -n "$ACTUAL_TESTS" ]]; then
-        BADGE_TESTS=$(grep -oE 'tests-[0-9]+_total' "$README" | grep -oE '[0-9]+' || echo "")
+        BADGE_TESTS=$(sed -n 's/.*tests-\([0-9]*\)_total.*/\1/p' "$README" | head -1)
         if [[ -n "$BADGE_TESTS" ]] && [[ "$BADGE_TESTS" != "$ACTUAL_TESTS" ]]; then
-            sed -i '' "s/tests-${BADGE_TESTS}_total/tests-${ACTUAL_TESTS}_total/" "$README"
+            sed -i '' "s/${BADGE_TESTS} tests/${ACTUAL_TESTS} tests/;s/tests-${BADGE_TESTS}_total/tests-${ACTUAL_TESTS}_total/" "$README"
             NEEDS_AMEND=true
             echo "post-commit: updated test badge ${BADGE_TESTS} → ${ACTUAL_TESTS}" >&2
         fi
@@ -45,9 +45,9 @@ if [[ -f "$README" ]]; then
     if [[ -f ".coverage" ]]; then
         ACTUAL_COV=$($COV_PYTHON -m coverage report 2>/dev/null | grep '^TOTAL' | awk '{print int($NF)}' || echo "")
         if [[ -n "$ACTUAL_COV" ]]; then
-            BADGE_COV=$(grep -oE 'coverage-[0-9]+%25' "$README" | grep -oE '[0-9]+' || echo "")
+            BADGE_COV=$(sed -n 's/.*coverage-\([0-9]*\)%25.*/\1/p' "$README" | head -1)
             if [[ -n "$BADGE_COV" ]] && [[ "$BADGE_COV" != "$ACTUAL_COV" ]]; then
-                sed -i '' "s/coverage-${BADGE_COV}%25/coverage-${ACTUAL_COV}%25/" "$README"
+                sed -i '' "s/${BADGE_COV}% coverage/${ACTUAL_COV}% coverage/;s/coverage-${BADGE_COV}%25/coverage-${ACTUAL_COV}%25/" "$README"
                 NEEDS_AMEND=true
                 echo "post-commit: updated coverage badge ${BADGE_COV}% → ${ACTUAL_COV}%" >&2
             fi
