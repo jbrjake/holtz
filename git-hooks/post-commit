@@ -26,10 +26,14 @@ fi
 
 # --- Badge auto-update (runs on every commit) ---
 if [[ -f "$README" ]]; then
+    # Use venv python if available (system python may lack pytest/coverage)
+    BADGE_PYTHON="python3"
+    [[ -f ".venv/bin/python" ]] && BADGE_PYTHON=".venv/bin/python"
+
     # Test count badge (fast: --collect-only ~2s)
     # Do NOT use -q: the quiet flag suppresses the "N tests collected" summary
     # line, leaving only per-file counts that don't start with a digit.
-    ACTUAL_TESTS=$(python3 -m pytest --collect-only 2>/dev/null | tail -1 | grep -oE '^[0-9]+' || echo "")
+    ACTUAL_TESTS=$($BADGE_PYTHON -m pytest --collect-only 2>/dev/null | tail -1 | grep -oE '^[0-9]+' || echo "")
     if [[ -n "$ACTUAL_TESTS" ]]; then
         BADGE_TESTS=$(sed -n 's/.*tests-\([0-9]*\)_total.*/\1/p' "$README" | head -1)
         if [[ -n "$BADGE_TESTS" ]] && [[ "$BADGE_TESTS" != "$ACTUAL_TESTS" ]]; then
@@ -40,9 +44,7 @@ if [[ -f "$README" ]]; then
     fi
 
     # Coverage badge (reads existing .coverage database, <1s)
-    # Use venv python if available (system python may lack coverage)
-    COV_PYTHON="python3"
-    [[ -f ".venv/bin/python" ]] && COV_PYTHON=".venv/bin/python"
+    COV_PYTHON="$BADGE_PYTHON"
     if [[ -f ".coverage" ]]; then
         ACTUAL_COV=$($COV_PYTHON -m coverage report 2>/dev/null | grep '^TOTAL' | awk '{print int($NF)}' || echo "")
         if [[ -n "$ACTUAL_COV" ]]; then
