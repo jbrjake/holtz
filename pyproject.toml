@@ -15,6 +15,19 @@ python_version = "3.12"
 files = ["skills/holtz/scripts", "hooks", "enforcement/hooks"]
 ignore_missing_imports = true
 
+[tool.coverage.run]
+# parallel = true enables subprocess coverage collection.  Subprocess-invoked
+# hooks write .coverage.<host>.<pid> files that pytest-cov combines at the end.
+#
+# Do NOT set `source` here — subprocess cwd is often tmp_path, so relative
+# source paths won't resolve.  Use --cov= on the command line instead.
+parallel = true
+omit = [
+    "tests/*",
+    "scripts/*",
+    "*/site-packages/*",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--tb=short -q"

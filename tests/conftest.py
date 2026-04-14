@@ -5,9 +5,31 @@ from pathlib import Path
 
 import pytest
 
+REPO_ROOT = Path(__file__).parent.parent
 
-def pytest_configure(config):
+
+def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "network: tests that require network access")
+
+    # Enable subprocess coverage collection: when --cov is active, set
+    # COVERAGE_PROCESS_START so that subprocess-invoked hooks (the correct
+    # test interface per CLAUDE.md) register in coverage.  The .pth file
+    # installed with coverage calls coverage.process_startup() when this
+    # env var is present.
+    #
+    # COVERAGE_FILE ensures subprocess data files land in the project root
+    # (not tmp_path or wherever the subprocess cwd happens to be), so
+    # pytest-cov can find and combine them.
+    if config.pluginmanager.hasplugin("_cov"):
+        import os
+        os.environ.setdefault(
+            "COVERAGE_PROCESS_START",
+            str(REPO_ROOT / "pyproject.toml"),
+        )
+        os.environ.setdefault(
+            "COVERAGE_FILE",
+            str(REPO_ROOT / ".coverage"),
+        )
 
 # Add scripts directory to path so we can import the modules
 sys.path.insert(0, str(Path(__file__).parent.parent / "skills" / "holtz" / "scripts"))

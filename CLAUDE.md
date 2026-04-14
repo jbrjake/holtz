@@ -66,6 +66,8 @@ mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/
 
 Coverage is excluded from default addopts because concurrent pytest processes (subagents, parallel sessions) deadlock on the SQLite `.coverage` file. Only the main agent should run with `--cov`.
 
+Subprocess coverage: hooks are tested via subprocess (the correct approach — it tests the interface Claude Code actually uses). Coverage for these subprocess-invoked hooks is collected via `parallel = true` in `[tool.coverage.run]` and `COVERAGE_PROCESS_START` set in `conftest.py`. Never lower coverage thresholds — if coverage is low, fix the measurement or the code.
+
 Targeted test commands:
 ```bash
 # After skill file changes:
