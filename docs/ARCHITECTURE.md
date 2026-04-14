@@ -1,6 +1,6 @@
 # Holtz Architecture
 
-> v0.94.0 — Last verified: 2026-04-04
+> v0.132.3 — Last verified: 2026-04-13
 
 Holtz is a Claude Code plugin that audits codebases with TDD-driven bug hunting. Two auditors, 13 analytical lenses, a state machine to keep everyone honest. It keeps coming back until the codebase converges. It will steal your joy.
 
@@ -143,7 +143,7 @@ Python hooks in two locations:
 | Module | Purpose |
 |--------|---------|
 | `_protocol_cache.py` | Enforcement state cache, `is_enforcement_fresh()`, shell segment parsing |
-| `_resolve.py` | Sahjhan binary download/verification (pinned to v0.9.0 with SHA256 checksums) |
+| `_resolve.py` | Sahjhan binary download/verification (pinned to v0.13.1 with SHA256 checksums) |
 | `lens_evidence.py` | Validates subagent actually read files and found keywords |
 
 ---
@@ -247,7 +247,7 @@ STATUS.md and PUNCHLIST.md are **read-only** — rendered from the Sahjhan ledge
 ```
 holtz/
 ├── .claude-plugin/
-│   └── plugin.json           # Plugin manifest (v0.94.0)
+│   └── plugin.json           # Plugin manifest (v0.132.3)
 ├── agents/
 │   ├── holtz.md              # Primary auditor agent
 │   ├── justine.md            # Secondary auditor agent
@@ -308,7 +308,7 @@ mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/
 Full run with coverage gate:
 
 ```bash
-python -m pytest --cov=skills/holtz/scripts --cov=hooks --cov-report=term-missing --cov-fail-under=60
+python -m pytest --cov=skills/holtz/scripts --cov=hooks --cov=enforcement/hooks --cov-report=term-missing --cov-fail-under=80
 ```
 
 Coverage runs only from the main agent session. Concurrent pytest processes (subagents, parallel sessions) deadlock on the `.coverage` SQLite file.

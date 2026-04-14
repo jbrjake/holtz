@@ -16,7 +16,7 @@ By participating, you are expected to uphold it.
 
 - **Bug reports.** Holtz found a false positive? Missed something obvious?
   Filed a punchlist item against perfectly fine code? That's a bug. Report it.
-- **New lenses.** The nine analytical lenses that ship are defaults. If you've
+- **New lenses.** The thirteen analytical lenses that ship are defaults. If you've
   found a way of looking at code that catches things the existing lenses miss,
   that's exactly the kind of contribution that makes the registry better for
   everyone.
@@ -45,7 +45,7 @@ Run the test suite:
 ```bash
 python -m pytest --tb=short -q
 ruff check .
-mypy skills/holtz/scripts/ hooks/
+mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/
 ```
 
 ## Contribution Workflow
@@ -185,14 +185,14 @@ Holtz was built with TDD. Contributions follow the same discipline.
 
 These are the most impactful contributions. Each has a specific format:
 
-**Lenses:** Add to the registry file. A lens needs a name, a description of
-what it examines, and a detection methodology. See existing lenses in
-`skills/holtz/` for the format.
+**Lenses:** Add to the registry file at `skills/holtz/references/lens-registry.md`.
+A lens needs a Focus, Scope (per-file or cross-file), Audit priorities, Failure
+modes, and Entry point. See the existing thirteen lenses for the format.
 
-**Patterns:** Markdown file with a YAML header containing `id`, `name`,
-`severity`, and `category`. Body includes a description, an executable detection
-heuristic (a grep command or structural check), and at least one example. See
-the six seed patterns for reference.
+**Patterns:** Markdown file with a YAML header containing `name`, `version`,
+`discovered`, `languages`, and `categories`. Body includes a description, an
+executable detection heuristic (a grep command or structural check), and at
+least one example. See the sixteen seed patterns for reference.
 
 **Edge types:** Document the relationship type, when it applies, and how the
 impact graph should traverse it during blast radius analysis.
