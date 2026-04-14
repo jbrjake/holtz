@@ -1,5 +1,7 @@
 """Shared fixtures for holtz tests."""
+from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -123,7 +125,6 @@ import contextlib
 import os
 import shutil
 import signal
-import subprocess
 import tempfile
 import time
 

@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+
+from hook_runner import run_hook as _run_hook
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -32,25 +32,6 @@ POST_TOOL_TRACKER = str(REPO_ROOT / "enforcement" / "hooks" / "protocol_tracker.
 STOP_HOOK = str(REPO_ROOT / "enforcement" / "hooks" / "stop_hook.py")
 
 pytestmark = pytest.mark.integration
-
-
-def _run_hook(hook_path: str, event: dict) -> dict:
-    """Run a single hook via subprocess."""
-    result = subprocess.run(
-        [sys.executable, hook_path],
-        input=json.dumps(event),
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    stdout = result.stdout.strip()
-    if not stdout:
-        return {"_empty": True, "_returncode": result.returncode}
-    try:
-        return json.loads(stdout)
-    except json.JSONDecodeError:
-        return {"_parse_error": True, "_raw": stdout,
-                "_returncode": result.returncode}
 
 
 def _is_pre_tool_allowed(output: dict) -> bool:

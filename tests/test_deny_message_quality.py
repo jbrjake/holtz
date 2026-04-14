@@ -17,12 +17,12 @@ Each deny message must:
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 from datetime import timezone
 from pathlib import Path
 
 import pytest
+
+from hook_runner import run_hook as _run_hook
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -51,21 +51,6 @@ PARSE_ARTIFACT_FRAGMENTS = [
     "\\d",             # regex pattern
     "\\s",             # regex pattern
 ]
-
-
-def _run_hook(hook_path: str, event: dict) -> dict:
-    """Run a hook via subprocess, return parsed JSON output."""
-    result = subprocess.run(
-        [sys.executable, hook_path],
-        input=json.dumps(event),
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    stdout = result.stdout.strip()
-    if not stdout:
-        return {"_empty": True}
-    return json.loads(stdout)
 
 
 def _get_pre_tool_reason(output: dict) -> str | None:

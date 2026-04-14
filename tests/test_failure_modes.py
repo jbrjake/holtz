@@ -19,8 +19,6 @@ import os
 import shutil
 import signal
 import socket
-import subprocess
-import sys
 import tempfile
 import threading
 import time
@@ -28,6 +26,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+
+from hook_runner import run_hook as _run_hook
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -41,27 +41,6 @@ TRACKER_HOOK = str(REPO_ROOT / "enforcement" / "hooks" / "protocol_tracker.py")
 # ---------------------------------------------------------------------------
 # Assertion helpers — match the actual Claude Code hook output protocol
 # ---------------------------------------------------------------------------
-
-
-def _run_hook(hook_path: str, event: dict, timeout: int = 10) -> dict:
-    """Run a hook via subprocess (same interface Claude Code uses)."""
-    result = subprocess.run(
-        [sys.executable, hook_path],
-        input=json.dumps(event),
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
-    stdout = result.stdout.strip()
-    if not stdout:
-        # Empty stdout = stop allow (or PostToolUse with no output)
-        return {"_empty": True, "_returncode": result.returncode,
-                "_stderr": result.stderr}
-    try:
-        return json.loads(stdout)
-    except json.JSONDecodeError:
-        return {"_parse_error": True, "_raw_stdout": stdout,
-                "_stderr": result.stderr, "_returncode": result.returncode}
 
 
 def _assert_pre_tool_allowed(output: dict, msg: str = "") -> None:

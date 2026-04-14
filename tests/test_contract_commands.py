@@ -9,12 +9,13 @@ gets a test here. If a skill file changes, this file must be updated.
 """
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
 
 import pytest
+
+from hook_runner import run_hook
 
 pytestmark = pytest.mark.contract
 
@@ -23,14 +24,7 @@ HOOK = "enforcement/hooks/_sahjhan_bootstrap.py"
 
 def _run_hook(event: dict) -> dict:
     """Run the bootstrap hook with a given event dict, return parsed output."""
-    result = subprocess.run(
-        [sys.executable, HOOK],
-        input=json.dumps(event),
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    return json.loads(result.stdout)
+    return run_hook(HOOK, event)
 
 
 def _assert_allowed(command: str, context: str = "") -> None:

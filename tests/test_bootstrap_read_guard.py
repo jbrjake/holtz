@@ -5,25 +5,16 @@ These tests verify the new daemon command blocking and retained write guards.
 """
 from __future__ import annotations
 
-import json
-import subprocess
-import sys
-
 import pytest
+
+from hook_runner import run_hook
 
 HOOK = "enforcement/hooks/_sahjhan_bootstrap.py"
 
 
 def _run_hook(event: dict) -> dict:
     """Run the bootstrap hook with a given event dict, return parsed output."""
-    result = subprocess.run(
-        [sys.executable, HOOK],
-        input=json.dumps(event),
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    return json.loads(result.stdout)
+    return run_hook(HOOK, event)
 
 
 @pytest.mark.hook_e2e

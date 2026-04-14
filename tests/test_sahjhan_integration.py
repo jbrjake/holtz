@@ -7,7 +7,6 @@ for PreToolUse hooks, decision/reason for Stop hooks).
 
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -24,21 +23,15 @@ from mock_enforcement_daemon import MockEnforcementDaemon  # noqa: E402
 
 def run_enforcement_hook(hook_name, event, cwd=None, env=None):
     """Run an enforcement hook script with the given event JSON on stdin."""
+    from hook_runner import run_hook
     script = os.path.join(ENFORCEMENT_HOOKS_DIR, hook_name)
-    result = subprocess.run(
-        [sys.executable, script],
-        input=json.dumps(event),
-        capture_output=True,
-        text=True,
-        timeout=10,
-        cwd=cwd or REPO_ROOT,
-        env=env,
-    )
-    try:
-        output = json.loads(result.stdout) if result.stdout.strip() else {}
-    except json.JSONDecodeError:
-        output = {}
-    return result.returncode, output, result.stderr
+    output = run_hook(script, event, cwd=cwd or REPO_ROOT, env=env)
+    returncode = output.pop("_returncode", 0)
+    stderr = output.pop("_stderr", "")
+    output.pop("_empty", None)
+    output.pop("_parse_error", None)
+    output.pop("_raw_stdout", None)
+    return returncode, output, stderr
 
 
 def assert_allowed(code, output):
