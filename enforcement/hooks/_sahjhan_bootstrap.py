@@ -222,7 +222,7 @@ def _check_bash_write(command: str) -> str | None:
     # Env var regex handles quoted values: FOO="bar baz", FOO='x y', FOO=simple
     _ENV_RE = r'''(?:(?:export\s+)?\w+=(?:"[^"]*"|'[^']*'|\S*)\s*)+'''
     cmd_stripped = re.sub(r'^' + _ENV_RE, '', command.lstrip()).strip()
-    for interp in ("python ", "python3 ", "ruby ", "node "):
+    for interp in ("python ", "python3 ", "ruby ", "node ", "bash ", "sh "):
         if cmd_stripped.startswith(interp) and " -" in cmd_stripped:
             for p in ALL_PROTECTED:
                 if p in command:
@@ -267,6 +267,16 @@ def _check_bash_write(command: str) -> str | None:
                         return (
                             f"BLOCKED: Bash command redirects to protected path '{p}'. "
                             "This path cannot be modified during an audit session."
+                        )
+                    # Shell expansion ($VAR, $(cmd), `cmd`) in redirect targets
+                    # defeats static path analysis. Block when the full command
+                    # also references a protected path (e.g., TARGET=enforcement/...;
+                    # echo > $TARGET). This catches variable-assignment-then-redirect
+                    # bypasses without blocking unrelated $VAR redirects.
+                    if target and ("$" in target or "`" in target) and p in command:
+                        return (
+                            f"BLOCKED: Bash redirect uses shell expansion near protected path '{p}'. "
+                            "Redirect targets must be literal paths during an audit session."
                         )
                     start = idx + len(op)
 

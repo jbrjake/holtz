@@ -376,3 +376,70 @@ class TestVerifyAnswerFreshnessAsyncDef:
             "async def method falsely marked as stale — "
             "quiz question will be dropped, reducing quiz difficulty"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Bug 6: Shell expansion in redirect targets bypasses write protection
+#
+# Root cause: _check_bash_write extracts the redirect target as the
+# first whitespace-delimited token after > or >>, then compares it
+# literally against protected paths. Shell expansion ($VAR, $(cmd),
+# `cmd`) defeats this because the literal token doesn't match but
+# expands to a protected path at runtime.
+#
+# Impact: An agent can bypass write protection with patterns like:
+#   TARGET=enforcement/...; echo injected > $TARGET
+#   bash -c "echo test > $(printf enforcement/...)"
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestShellExpansionRedirectBypass:
+    """Write guard must block shell expansion in redirect targets near protected paths."""
+
+    @staticmethod
+    def _check(command):
+        bootstrap = _load_module("bootstrap_adv", _ENFORCEMENT_HOOKS / "_sahjhan_bootstrap.py")
+        return bootstrap._check_bash_write(command)
+
+    def test_env_var_redirect_to_protected_path(self):
+        """TARGET=enforcement/...; echo > $TARGET must be blocked."""
+        result = self._check(
+            "TARGET=enforcement/docs/holtz/STATUS.md; echo injected > $TARGET"
+        )
+        assert result is not None, (
+            "Env var redirect to protected path was not blocked — "
+            "agent can bypass write protection with variable indirection"
+        )
+
+    def test_command_substitution_in_redirect(self):
+        """bash -c 'echo > $(printf enforcement/...)' must be blocked."""
+        result = self._check(
+            'bash -c "echo test > $(printf enforcement/docs/holtz/STATUS.md)"'
+        )
+        assert result is not None, (
+            "Command substitution in bash -c with protected path was not blocked"
+        )
+
+    def test_sh_c_with_protected_path(self):
+        """sh -c 'echo > enforcement/...' must be blocked."""
+        result = self._check(
+            'sh -c "echo test > enforcement/docs/holtz/STATUS.md"'
+        )
+        assert result is not None, (
+            "sh -c with protected path literal was not blocked — "
+            "bash/sh were missing from the interpreter check"
+        )
+
+    def test_safe_env_var_redirect_allowed(self):
+        """echo > $UNRELATED_VAR must NOT be blocked (no protected path in command)."""
+        result = self._check("echo test > $SOME_OUTPUT_FILE")
+        assert result is None, (
+            f"Unrelated env var redirect was incorrectly blocked: {result}"
+        )
+
+    def test_literal_redirect_still_blocked(self):
+        """echo > enforcement/... must still be blocked (regression check)."""
+        result = self._check("echo test > enforcement/docs/holtz/STATUS.md")
+        assert result is not None, (
+            "Literal redirect to protected path was not blocked"
+        )
