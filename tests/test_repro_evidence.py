@@ -5,7 +5,6 @@ import subprocess
 import sys
 
 import pytest
-
 from enforcement.scripts.check_repro_evidence import check_repro_evidence
 
 

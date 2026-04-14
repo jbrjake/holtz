@@ -277,10 +277,22 @@ def test_readme_metrics_match_actual():
     actual_examples = len(list((root / "skills" / "holtz" / "examples").glob("*.md")))
     actual_scripts = len(list((root / "skills" / "holtz" / "scripts").glob("*.py")))
     actual_patterns = len(list((root / "skills" / "holtz" / "patterns").glob("*.md")))
-    actual_hooks = len([
-        f for f in (root / "enforcement" / "hooks").glob("*.py")
-        if not f.name.startswith("_")
-    ])
+    # Count distinct hook scripts registered in hooks.json (across both
+    # hooks/ and enforcement/hooks/ directories).
+    import json as _json
+    with open(root / "hooks" / "hooks.json") as _hf:
+        _hooks_data = _json.load(_hf)
+    _hook_scripts: set[str] = set()
+    for _event_hooks in _hooks_data.get("hooks", {}).values():
+        for _entry in _event_hooks:
+            for _hook in _entry.get("hooks", []):
+                _cmd = _hook.get("command", "")
+                # Extract the .py filename from the command
+                import re as _re
+                _m = _re.search(r'(\w+\.py)', _cmd)
+                if _m:
+                    _hook_scripts.add(_m.group(1))
+    actual_hooks = len(_hook_scripts)
 
     errors = []
     for label, claimed, actual in [

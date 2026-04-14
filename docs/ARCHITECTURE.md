@@ -94,7 +94,7 @@ The audit has 21 steps (0-20) across 6 phases. Each phase has its own reference 
 | Phase | Steps | Sahjhan States | Reference | What Happens |
 |-------|-------|----------------|-----------|--------------|
 | Recon | 0-4 | `idle` → `recon` | `phase-recon.md` | Map the codebase. Build impact graph. Generate predictions. Dispatch Justine. |
-| Audit | 5-8 | `audit` | `phase-audit.md` | Verify doc claims. Audit test quality against 17 anti-patterns. Adversarial code review through 13 lenses. |
+| Audit | 5-8 | `audit` | `phase-audit.md` | Verify doc claims. Audit test quality against 18 anti-patterns. Adversarial code review through 13 lenses. |
 | Merge | 9 | `merge_ready` → `merge_done` | `phase-merge.md` | Merge-agent reconciles Holtz + Justine punchlists. Produces unified worklist. |
 | Fix Loop | 10-14 | `fix_loop` | `phase-fix-loop.md` | TDD fix cycle: failing test → minimal fix → hardening → blast radius → pattern analysis. Per lens. |
 | Convergence | 15-16 | `all_perspectives_clean` → `final_sweep` | `phase-convergence.md` | Final sweep across all lenses. If dirty, back to fix loop. If clean, converge. |
@@ -140,7 +140,8 @@ Python hooks in two locations:
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `_sahjhan_bootstrap.py` | PreToolUse | Bootstraps Sahjhan binary on first use |
+| `_daemon_lifecycle.py` | PreToolUse | Detects daemon death, terminates audit (wildcard, fires on every tool) |
+| `_sahjhan_bootstrap.py` | PreToolUse | Protects enforcement infrastructure from modification |
 | `pre_tool_hook.py` | PreToolUse | Managed-path guard, TDD gate |
 | `commit_gate.py` | PreToolUse | Blocks commits with pending obligations |
 | `post_tool_hook.py` | PostToolUse | Auto-records tool use events |
@@ -300,10 +301,14 @@ holtz/
     ├── ARCHITECTURE.md       # You are here
     ├── holtz/                # Runtime artifacts (see above)
     ├── design/               # Design docs
-    ├── research/             # Case studies
-    └── superpowers/
-        ├── plans/            # Implementation plans
-        └── specs/            # Design specs
+    ├── research/             # Convergence data and analysis
+    ├── superpowers/
+    │   ├── plans/            # Implementation plans
+    │   └── specs/            # Design specs
+    ├── case-studies/         # External codebase audit case studies
+    ├── diagrams/             # SVG/DOT diagrams
+    ├── incidents/            # Containment breach postmortems
+    └── runs/                 # Session recordings and walkthroughs
 ```
 
 ---

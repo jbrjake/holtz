@@ -5,7 +5,6 @@ import subprocess
 import sys
 
 import pytest
-
 from enforcement.scripts.check_severity_change import check_downgrade
 
 
