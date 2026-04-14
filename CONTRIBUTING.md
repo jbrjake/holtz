@@ -102,6 +102,8 @@ git commit -s -m "fix: description"
 This adds `Signed-off-by: Your Name <your@email.com>` using your git
 `user.name` and `user.email` configuration.
 
+A DCO check runs on all PRs. Unsigned commits will be flagged.
+
 **What DCO means for AI-assisted code:** When you sign off, you are taking
 personal responsibility for the contribution — that it can be submitted under
 the MIT license, that you understand what it does, and that you can maintain it.
