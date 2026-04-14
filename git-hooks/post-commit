@@ -27,7 +27,9 @@ fi
 # --- Badge auto-update (runs on every commit) ---
 if [[ -f "$README" ]]; then
     # Test count badge (fast: --collect-only ~2s)
-    ACTUAL_TESTS=$(python3 -m pytest --collect-only -q 2>/dev/null | tail -1 | grep -oE '^[0-9]+' || echo "")
+    # Do NOT use -q: the quiet flag suppresses the "N tests collected" summary
+    # line, leaving only per-file counts that don't start with a digit.
+    ACTUAL_TESTS=$(python3 -m pytest --collect-only 2>/dev/null | tail -1 | grep -oE '^[0-9]+' || echo "")
     if [[ -n "$ACTUAL_TESTS" ]]; then
         BADGE_TESTS=$(sed -n 's/.*tests-\([0-9]*\)_total.*/\1/p' "$README" | head -1)
         if [[ -n "$BADGE_TESTS" ]] && [[ "$BADGE_TESTS" != "$ACTUAL_TESTS" ]]; then
