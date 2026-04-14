@@ -59,7 +59,7 @@ mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/
 
 Full (main agent, pre-commit, CI — includes coverage gate):
 ```bash
-python -m pytest --cov=skills/holtz/scripts --cov=hooks --cov=enforcement/hooks --cov-report=term-missing --cov-fail-under=70
+python -m pytest --cov=skills/holtz/scripts --cov=hooks --cov=enforcement/hooks --cov-report=term-missing --cov-fail-under=80
 ruff check .
 mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/
 ```
