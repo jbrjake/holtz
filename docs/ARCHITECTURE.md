@@ -169,7 +169,7 @@ Seven Python scripts in `skills/holtz/scripts/`. stdlib only, no external depend
 | Script | Purpose | Tests |
 |--------|---------|-------|
 | `validate_punchlist.py` | Validates punchlist format, fields, severity. Supports `--filter-status`, `--resolved-before`, `--render` for filtered reads during convergence. | `test_validate_punchlist.py` |
-| `impact_graph.py` | Knowledge graph for code entity relationships. 10 operations: add/prune nodes+edges, blast_radius (bidirectional BFS), risk_hotspots, drift_check. | `test_impact_graph.py` (56 tests) |
+| `impact_graph.py` | Knowledge graph for code entity relationships. 10 operations: add/prune nodes+edges, blast_radius (bidirectional BFS), risk_hotspots, drift_check. | `test_impact_graph.py` (81 tests) |
 | `convergence_check.py` | Parses punchlist status counts, detects test runner output, tracks convergence. | `test_convergence_check.py` |
 | `parse_lens_registry.py` | Extracts lens definitions from `lens-registry.md`. Classifies per-file vs cross-file scope. | `test_parse_lens_registry.py` |
 | `pattern_brief_compact.py` | Compresses pattern library into compact briefs for subagent consumption. Three formats: oneliner, twoliner, structured. | `test_pattern_brief_compact.py` |
@@ -267,7 +267,7 @@ holtz/
 │   ├── justine.md            # Secondary auditor agent
 │   └── merge-agent.md        # Punchlist merger agent
 ├── skills/holtz/
-│   ├── SKILL.md              # Main skill (rigid, 200 lines)
+│   ├── SKILL.md              # Main skill (rigid, 281 lines)
 │   ├── references/           # 24 reference docs (phase procedures, formats, protocols)
 │   ├── patterns/             # 16 bug pattern files
 │   ├── scripts/              # 7 Python scripts
@@ -291,12 +291,21 @@ holtz/
 │   ├── hooks/                # Enforcement Python modules
 │   └── scripts/              # Enforcement utilities
 ├── scripts/
-│   ├── generate-changelog.py # Changelog from conventional commits
-│   ├── session-to-cast.py    # Session → asciinema conversion
-│   ├── migrate_legacy.py     # Legacy archive migration
-│   ├── install-hooks.sh      # Git hook installer
-│   └── vendor-sahjhan.sh     # Binary vendoring
-├── tests/                    # 30+ test files
+│   ├── generate-changelog.py     # Changelog from conventional commits
+│   ├── contract_gate.py          # Skill-to-hook contract verification
+│   ├── refresh_hook_schema.py    # Hook output schema generator
+│   ├── pre-release-check.sh      # Pre-release gate (ruff, mypy, tests, coverage, smoke)
+│   ├── install-hooks.sh          # Git hook installer + settings.local.json setup
+│   ├── check_contract_test_sync.sh # CI gate: skill changes need contract test updates
+│   ├── smoke-test-hooks.sh       # Hook JSON validation via Claude CLI
+│   ├── vendor-sahjhan.sh         # Binary vendoring
+│   ├── session-to-cast.py        # Session → asciinema conversion
+│   ├── migrate_legacy.py         # Legacy archive migration
+│   ├── hash-trusted-callers.sh   # Compute SHA256 hashes for trusted-callers.toml
+│   ├── holtz_split_session.sh    # Session splitting orchestrator
+│   ├── capture_test_fixtures.sh  # Test fixture capture
+│   └── token_profiler/           # Token profiling toolkit (7 modules)
+├── tests/                        # 55 test files
 └── docs/
     ├── ARCHITECTURE.md       # You are here
     ├── holtz/                # Runtime artifacts (see above)
@@ -315,7 +324,7 @@ holtz/
 
 ## Test suite
 
-30+ test files. Quick run (no coverage):
+55 test files. Quick run (no coverage):
 
 ```bash
 python -m pytest
