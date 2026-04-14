@@ -29,24 +29,37 @@ Holtz (depth-first, methodical) and Justine (breadth-first, aggressive) independ
                 │  merge   │◄───│ merge-agent  │
                 │  ready   │    │ (sonnet)     │
                 └────┬─────┘    └─────────────┘
-                     │
+                     │ merge_complete
                 ┌────▼──────┐
-            ┌──►│ fix_loop  │◄──────────────────┐
-            │   └──┬───┬────┘                    │
-            │      │   │                         │
-            │      │   └──► pattern_analysis ────┘
-            │      │
-            │   ┌──▼──────────────┐
+                │ merge_done│
+                └────┬──────┘
+                     │
+                ┌────▼──────┐  iteration_boundary
+            ┌──►│ fix_loop  │──────► awaiting_clear
+            │   └──┬───┬────┘  ◄──── (resume after /clear)
+            │      │   │
+            │      │   └──► pattern_analysis ────┐
+            │      │                              │
+            │   ┌──▼──────────────┐               │
             │   │ perspective_    │──► lens_rotate ──► audit
             │   │ clean           │         (next lens)
             │   └──┬──────────────┘
             │      │ (all 13 done)
+            │   ┌──▼──────────────────┐
+            │   │ all_perspectives_   │
+            │   │ clean               │
+            │   └──┬──────────────────┘
+            │      │
             │   ┌──▼──────────────┐
             │   │ final_sweep     │
             │   └──┬──────┬───────┘
             │      │      │ (dirty)
             │      │      └───────────────────────┘
             │      │ (clean)
+            │   ┌──▼──────────────────┐
+            │   │ final_sweep_clean   │
+            │   └──┬──────────────────┘
+            │      │ converge
             │   ┌──▼──────────────┐
             └───│ converged       │
                 └──┬──────────────┘
