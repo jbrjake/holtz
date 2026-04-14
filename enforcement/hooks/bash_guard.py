@@ -58,9 +58,9 @@ def main() -> None:
         exit_ok()
 
     try:
-        cmd = [binary, "--config-dir", config_dir, "manifest", "verify"]
+        verify_cmd = [binary, "--config-dir", config_dir, "manifest", "verify"]
         result = subprocess.run(
-            cmd,
+            verify_cmd,
             capture_output=True,
             text=True,
             timeout=10,

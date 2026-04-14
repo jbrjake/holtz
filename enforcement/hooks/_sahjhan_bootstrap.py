@@ -188,12 +188,21 @@ def _bash_references_blocked_sahjhan(command: str) -> str | None:
     return None
 
 
+def _unquote(s: str) -> str:
+    """Strip surrounding single or double quotes from a shell token."""
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
+        return s[1:-1]
+    # Handle leading quote without closing (e.g., split mid-token)
+    return s.lstrip("'\"").rstrip("'\"")
+
+
 def _segment_references_protected(segment: str, protected: list[str]) -> str | None:
     """Check if any argument in a shell segment references a protected path."""
     args = segment.split()
     for arg in args:
+        bare = _unquote(arg)
         for p in protected:
-            if arg == p or arg.startswith(p) or ("/" + p) in arg:
+            if bare == p or bare.startswith(p) or ("/" + p) in bare:
                 return p
     return None
 
@@ -210,7 +219,9 @@ def _check_bash_write(command: str) -> str | None:
     # semicolons inside the string argument get split by the segment splitter,
     # causing the interpreter prefix and the path reference to appear in
     # different segments. Check the full command first.
-    cmd_stripped = re.sub(r'^(?:(?:export\s+)?\w+=\S*\s+)*', '', command.lstrip()).strip()
+    # Env var regex handles quoted values: FOO="bar baz", FOO='x y', FOO=simple
+    _ENV_RE = r'''(?:(?:export\s+)?\w+=(?:"[^"]*"|'[^']*'|\S*)\s*)+'''
+    cmd_stripped = re.sub(r'^' + _ENV_RE, '', command.lstrip()).strip()
     for interp in ("python ", "python3 ", "ruby ", "node "):
         if cmd_stripped.startswith(interp) and " -" in cmd_stripped:
             for p in ALL_PROTECTED:
@@ -229,9 +240,12 @@ def _check_bash_write(command: str) -> str | None:
         if not seg:
             continue
 
-        # Strip leading env var assignments (FOO=bar, export X=1, etc.)
+        # Strip leading env var assignments (FOO=bar, FOO="x y", export X=1, etc.)
         # so that startswith-based command detection isn't bypassed.
-        seg_cmd = re.sub(r'^(?:(?:export\s+)?\w+=\S*\s+)*', '', seg).strip()
+        # Handles quoted values with spaces: FOO="bar baz", FOO='bar baz'.
+        seg_cmd = re.sub(
+            r'^' + _ENV_RE, '', seg,
+        ).strip()
 
         for p in ALL_PROTECTED:
             # Redirect check: find ALL > and >> in the segment, not just first
@@ -248,7 +262,7 @@ def _check_bash_write(command: str) -> str | None:
                         continue
                     after_op = seg[idx + len(op):].strip()
                     # Take first whitespace-delimited token as the target
-                    target = after_op.split()[0] if after_op.split() else ""
+                    target = _unquote(after_op.split()[0]) if after_op.split() else ""
                     if target == p or target.startswith(p):
                         return (
                             f"BLOCKED: Bash command redirects to protected path '{p}'. "
@@ -260,7 +274,7 @@ def _check_bash_write(command: str) -> str | None:
             if "tee " in seg:
                 tee_idx = seg.find("tee ")
                 after_tee = seg[tee_idx + 4:].strip()
-                if any(arg == p or arg.startswith(p) for arg in after_tee.split()):
+                if any(_unquote(arg) == p or _unquote(arg).startswith(p) for arg in after_tee.split()):
                     return (
                         f"BLOCKED: Bash command tees to protected path '{p}'. "
                         "This path cannot be modified during an audit session."
@@ -277,14 +291,14 @@ def _check_bash_write(command: str) -> str | None:
                 # Check -t / --target-directory flag (target is NOT last arg)
                 for i, arg in enumerate(args):
                     if arg in ("-t", "--target-directory") and i + 1 < len(args):
-                        target = args[i + 1]
+                        target = _unquote(args[i + 1])
                         if target == p or target.startswith(p):
                             return (
                                 f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
                                 "This path cannot be modified during an audit session."
                             )
                     if arg.startswith("--target-directory="):
-                        target = arg.split("=", 1)[1]
+                        target = _unquote(arg.split("=", 1)[1])
                         if target == p or target.startswith(p):
                             return (
                                 f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
@@ -292,7 +306,7 @@ def _check_bash_write(command: str) -> str | None:
                             )
                 # Standard form: target is last argument
                 if len(args) >= 3:
-                    dest = args[-1]
+                    dest = _unquote(args[-1])
                     if dest == p or dest.startswith(p):
                         return (
                             f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
@@ -347,13 +361,13 @@ def _check_bash_write(command: str) -> str | None:
                 args = seg_cmd.split()
                 for i, arg in enumerate(args):
                     # BH-006 run 28: handle both -O <path> and --output-document=<path>
-                    if arg == "-O" and i + 1 < len(args) and args[i + 1].startswith(p):
+                    if arg == "-O" and i + 1 < len(args) and _unquote(args[i + 1]).startswith(p):
                         return (
                             f"BLOCKED: Bash command uses wget to write to protected path '{p}'. "
                             "This path cannot be modified during an audit session."
                         )
                     if arg.startswith("--output-document="):
-                        target = arg.split("=", 1)[1]
+                        target = _unquote(arg.split("=", 1)[1])
                         if target == p or target.startswith(p):
                             return (
                                 f"BLOCKED: Bash command uses wget to write to protected path '{p}'. "
@@ -363,13 +377,13 @@ def _check_bash_write(command: str) -> str | None:
             if seg_cmd.startswith("curl "):
                 args = seg_cmd.split()
                 for i, arg in enumerate(args):
-                    if arg in ("-o", "--output") and i + 1 < len(args) and args[i + 1].startswith(p):
+                    if arg in ("-o", "--output") and i + 1 < len(args) and _unquote(args[i + 1]).startswith(p):
                         return (
                             f"BLOCKED: Bash command uses curl to write to protected path '{p}'. "
                             "This path cannot be modified during an audit session."
                         )
                     if arg.startswith("--output="):
-                        target = arg.split("=", 1)[1]
+                        target = _unquote(arg.split("=", 1)[1])
                         if target == p or target.startswith(p):
                             return (
                                 f"BLOCKED: Bash command uses curl to write to protected path '{p}'. "

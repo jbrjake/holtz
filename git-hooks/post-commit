@@ -8,12 +8,11 @@ PLUGIN_JSON=".claude-plugin/plugin.json"
 README="README.md"
 NEEDS_AMEND=false
 
-# Guard against double-bump: if plugin.json was already modified in this
-# commit (e.g., by the commit-msg hook), skip the post-commit bump.
-# Without this, install-hooks.sh (which installs both hooks) would cause
-# every feat/fix/perf commit to bump the version twice.
+# Check if commit-msg hook already bumped plugin.json (used later to skip
+# the version bump section while still allowing badge updates to proceed).
+VERSION_ALREADY_BUMPED=false
 if git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null | grep -qF "$PLUGIN_JSON"; then
-    exit 0
+    VERSION_ALREADY_BUMPED=true
 fi
 
 # Read the just-created commit
@@ -60,6 +59,16 @@ if [[ -f "$README" ]]; then
 fi
 
 # --- Version bump (feat/fix/perf only) ---
+
+# Skip version bump if commit-msg hook already handled it.
+# Badge updates above still ran.
+if [[ "$VERSION_ALREADY_BUMPED" == "true" ]]; then
+    if [[ "$NEEDS_AMEND" == "true" ]]; then
+        export _HOLTZ_VERSION_BUMPED=1
+        git commit --amend --no-edit
+    fi
+    exit 0
+fi
 
 # Check for BREAKING CHANGE in body
 HAS_BREAKING=false
