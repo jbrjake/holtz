@@ -18,7 +18,7 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install pytest pytest-cov ruff mypy
+          pip install pytest pytest-cov ruff mypy hypothesis
       - name: Download sahjhan binary
         run: |
           source .venv/bin/activate

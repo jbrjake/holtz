@@ -36,7 +36,7 @@ By participating, you are expected to uphold it.
 ```bash
 git clone https://github.com/jbrjake/holtz.git
 cd holtz
-pip install ruff mypy pytest pytest-cov
+pip install ruff mypy pytest pytest-cov hypothesis
 scripts/install-hooks.sh
 ```
 
