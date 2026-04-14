@@ -37,4 +37,5 @@ markers = [
     "hook_e2e: tests that invoke hooks via subprocess (run after hook changes)",
     "integration: cross-module or hook-chain tests",
     "slow: tests taking >1s (network, real daemon, large fixtures)",
+    "network: tests that require network access (binary downloads, API calls)",
 ]

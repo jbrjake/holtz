@@ -11,8 +11,6 @@ REPO_ROOT = Path(__file__).parent.parent
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    config.addinivalue_line("markers", "network: tests that require network access")
-
     # Enable subprocess coverage collection: when --cov is active, set
     # COVERAGE_PROCESS_START so that subprocess-invoked hooks (the correct
     # test interface per CLAUDE.md) register in coverage.  The .pth file

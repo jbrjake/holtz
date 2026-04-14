@@ -45,9 +45,10 @@ jobs:
       - name: Create GitHub Release
         if: steps.check_tag.outputs.exists == 'false'
         run: |
+          echo "$RELEASE_BODY" > /tmp/release-notes.md
           gh release create "$TAG" \
             --title "$TAG" \
-            --notes-file <(echo "$RELEASE_BODY") \
+            --notes-file /tmp/release-notes.md \
             --target "$GITHUB_SHA"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
