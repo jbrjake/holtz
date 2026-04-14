@@ -727,3 +727,75 @@ class TestFullPathCommandBypass:
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+
+@pytest.mark.hook_e2e
+class TestQuotedPathBypass:
+    """Shell-quoted paths must not bypass write protection.
+
+    Prior bug: cp /tmp/evil "enforcement/hooks/foo.py" was allowed because
+    the target after split() was '"enforcement/hooks/foo.py"' with leading
+    quote, so startswith("enforcement/") failed. Fixed by _unquote().
+    """
+
+    def test_cp_double_quoted_target_blocked(self):
+        """cp to double-quoted enforcement path must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": 'cp /tmp/evil "enforcement/hooks/foo.py"'},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_cp_single_quoted_target_blocked(self):
+        """cp to single-quoted enforcement path must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "cp /tmp/evil 'enforcement/hooks/foo.py'"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_redirect_to_quoted_managed_path_blocked(self):
+        """Redirect to quoted managed path must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": 'echo pwned > "docs/holtz/STATUS.md"'},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_rm_quoted_sahjhan_dir_blocked(self):
+        """rm of quoted .sahjhan path must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": 'rm -rf "docs/holtz/.sahjhan/"'},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_tee_quoted_managed_path_blocked(self):
+        """tee to quoted managed path must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": 'echo pwned | tee "docs/holtz/STATUS.md"'},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_env_var_quoted_value_interpreter_blocked(self):
+        """FOO="bar baz" python3 -c "..." with protected path must be blocked."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": 'FOO="bar baz" python3 -c "open(\'enforcement/hooks/x\',\'w\')"',
+            },
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
