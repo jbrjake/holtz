@@ -39,8 +39,11 @@ if [[ -f "$README" ]]; then
     fi
 
     # Coverage badge (reads existing .coverage database, <1s)
+    # Use venv python if available (system python may lack coverage)
+    COV_PYTHON="python3"
+    [[ -f ".venv/bin/python" ]] && COV_PYTHON=".venv/bin/python"
     if [[ -f ".coverage" ]]; then
-        ACTUAL_COV=$(python3 -m coverage report 2>/dev/null | grep '^TOTAL' | awk '{print int($NF)}' || echo "")
+        ACTUAL_COV=$($COV_PYTHON -m coverage report 2>/dev/null | grep '^TOTAL' | awk '{print int($NF)}' || echo "")
         if [[ -n "$ACTUAL_COV" ]]; then
             BADGE_COV=$(grep -oE 'coverage-[0-9]+%25' "$README" | grep -oE '[0-9]+' || echo "")
             if [[ -n "$BADGE_COV" ]] && [[ "$BADGE_COV" != "$ACTUAL_COV" ]]; then
