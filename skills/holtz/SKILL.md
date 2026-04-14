@@ -68,7 +68,7 @@ Read the reference file for your current Sahjhan state. Run `sahjhan status` to 
 | `idle` / `recon` | Recon | 0-4 | [references/phase-recon.md](references/phase-recon.md) |
 | `audit` | Audit | 5-8 | [references/phase-audit.md](references/phase-audit.md) |
 | `merge_ready` / `merge_done` | Merge | 9 | [references/phase-merge.md](references/phase-merge.md) |
-| `fix_loop` / `awaiting_clear` / `pattern_analysis` | Fix Loop | 10-14 | [references/phase-fix-loop.md](references/phase-fix-loop.md) |
+| `fix_loop` / `awaiting_clear` / `pattern_analysis` / `perspective_clean` | Fix Loop | 10-14 | [references/phase-fix-loop.md](references/phase-fix-loop.md) |
 | `all_perspectives_clean` / `final_sweep` / `final_sweep_clean` | Convergence | 15-16 | [references/phase-convergence.md](references/phase-convergence.md) |
 | `converged` / `finalized` | Finalize | 17-20 | [references/phase-finalize.md](references/phase-finalize.md) |
 

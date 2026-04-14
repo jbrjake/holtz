@@ -19,6 +19,12 @@ Do NOT modify the Drift Log — it was already updated during Step 0.
 Write changes to docs/holtz/architecture-baseline.md. Report what sections changed and why.")
 ```
 
+After the subagent completes, record the event (required by the `finalize` gate):
+```
+sahjhan event baseline_updated --field project=<project> --field run=N \
+  --field auditor=holtz --field sections_changed="<comma-separated list of changed sections>"
+```
+
 ### Step 18: Pattern Library Contribution (Subagent)
 
 Read [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) and follow the protocol: discover new patterns from `docs/holtz/patterns-brief.md`, generalize, PII-scrub, ask user permission, then submit via `gh` CLI / MCP / manual staging. Record outcome: `sahjhan event pattern_contribution_complete --patterns_submitted N --outcome submitted|no_new_patterns|declined_by_user`.
@@ -34,6 +40,12 @@ Update `docs/holtz/LIVING-PUNCHLIST.md` (or create it on first run — see [refe
 5. Derive new proactive checks from patterns, hotspots, and drift
 6. Move cooled hotspots (risk_score below 0.3 for two consecutive converged runs) to History with note
 7. Append run summary to History section
+
+After the subagent completes, record the event (required by the `finalize` gate):
+```
+sahjhan event living_punchlist_updated --field project=<project> --field run=N \
+  --field auditor=holtz --field patterns_added=<count> --field hotspots_updated=<count>
+```
 
 ### Step 20: Finalize
 
@@ -51,8 +63,4 @@ Run `sahjhan transition finalize` — this transitions to the terminal `finalize
 | **Total**  | **N**     | **N**     | **N%**   |
 ```
 
-After finalization, stop the daemon:
-
-```
-sahjhan daemon stop
-```
+After finalization, the daemon is stopped automatically by the `stop_hook.py` and `protocol_tracker.py` hooks when the state reaches `finalized`. No manual `daemon stop` command is needed.

@@ -280,6 +280,67 @@ class TestSkillMdQuickReference:
 
 
 # ---------------------------------------------------------------------------
+# Contract commands: convergence flow transitions from phase-convergence.md
+# ---------------------------------------------------------------------------
+
+class TestConvergenceFlowTransitions:
+    """Every transition in the convergence flow must be allowed."""
+
+    def test_transition_all_perspectives(self):
+        _assert_allowed(
+            "sahjhan transition all_perspectives",
+            "phase-convergence.md: perspective_clean -> all_perspectives_clean",
+        )
+
+    def test_transition_final_sweep_start(self):
+        _assert_allowed(
+            "sahjhan transition final_sweep_start",
+            "phase-convergence.md: all_perspectives_clean -> final_sweep",
+        )
+
+    def test_transition_sweep_dirty(self):
+        _assert_allowed(
+            "sahjhan transition sweep_dirty",
+            "phase-convergence.md: final_sweep -> fix_loop (dirty sweep)",
+        )
+
+    def test_transition_confirm_convergence(self):
+        _assert_allowed(
+            "sahjhan transition confirm_convergence",
+            "phase-convergence.md: final_sweep_clean -> converged",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Contract commands: finalize events from phase-finalize.md
+# ---------------------------------------------------------------------------
+
+class TestFinalizeEvents:
+    """Events required by the finalize gate must be allowed."""
+
+    def test_event_baseline_updated(self):
+        _assert_allowed(
+            "sahjhan event baseline_updated --field project=holtz --field run=1 "
+            '--field auditor=holtz --field sections_changed="Module Dependencies"',
+            "phase-finalize.md: baseline_updated event after Step 17",
+        )
+
+    def test_event_living_punchlist_updated(self):
+        _assert_allowed(
+            "sahjhan event living_punchlist_updated --field project=holtz --field run=1 "
+            "--field auditor=holtz --field patterns_added=2 --field hotspots_updated=3",
+            "phase-finalize.md: living_punchlist_updated event after Step 19",
+        )
+
+    def test_event_pattern_contribution_complete(self):
+        _assert_allowed(
+            "sahjhan event pattern_contribution_complete --field project=holtz --field run=1 "
+            "--field auditor=holtz --field patterns_submitted=0 --field outcome=no_new_patterns",
+            "phase-finalize.md: pattern_contribution_complete event in Step 18",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Contract: commands that must remain BLOCKED
 # ---------------------------------------------------------------------------
 
