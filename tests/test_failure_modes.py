@@ -592,6 +592,13 @@ class TestBinaryUnavailable:
         monkeypatch.setenv("SAHJHAN_DAEMON_SOCKET", "/tmp/nonexistent.sock")
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(tmp_path))
         _make_sahjhan_dir(str(tmp_path))
+        # Place a bootstrap-failed marker so ensure_sahjhan() returns None
+        # immediately without attempting a network download (which would
+        # exceed the 10s subprocess timeout).
+        bin_dir = os.path.join(str(tmp_path), "bin")
+        os.makedirs(bin_dir, exist_ok=True)
+        with open(os.path.join(bin_dir, ".sahjhan-bootstrap-failed"), "w") as f:
+            f.write(str(time.time()))
 
         event = {"tool_name": "UserPromptSubmit", "cwd": str(tmp_path)}
         output = _run_hook(PRIMER_HOOK, event)
@@ -617,6 +624,11 @@ class TestBinaryUnavailable:
         """protocol_tracker exits ok when binary unavailable for refresh."""
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(tmp_path))
         monkeypatch.setenv("SAHJHAN_DAEMON_SOCKET", "/tmp/nonexistent.sock")
+        # Prevent network download attempt that could exceed subprocess timeout
+        bin_dir = os.path.join(str(tmp_path), "bin")
+        os.makedirs(bin_dir, exist_ok=True)
+        with open(os.path.join(bin_dir, ".sahjhan-bootstrap-failed"), "w") as f:
+            f.write(str(time.time()))
 
         event = {
             "tool_name": "Bash",
