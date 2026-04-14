@@ -9,8 +9,11 @@
 **Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
 
 ```
-claude --plugin-dir /path/to/holtz
+/plugin marketplace add jbrjake/claude-plugin-marketplace
+/plugin install holtz@jbrjake
 ```
+
+Or from a local clone: `claude --plugin-dir /path/to/holtz`
 
 <p align="center">
 
