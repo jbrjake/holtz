@@ -5,6 +5,8 @@ set -euo pipefail
 [[ "${_HOLTZ_VERSION_BUMPED:-}" == "1" ]] && exit 0
 
 PLUGIN_JSON=".claude-plugin/plugin.json"
+README="README.md"
+NEEDS_AMEND=false
 
 # Guard against double-bump: if plugin.json was already modified in this
 # commit (e.g., by the commit-msg hook), skip the post-commit bump.
@@ -23,6 +25,39 @@ if [[ "$FIRST_LINE" =~ ^Merge ]]; then
     exit 0
 fi
 
+# --- Badge auto-update (runs on every commit) ---
+if [[ -f "$README" ]]; then
+    # Test count badge (fast: --collect-only ~2s)
+    ACTUAL_TESTS=$(python3 -m pytest --collect-only -q 2>/dev/null | tail -1 | grep -oE '^[0-9]+' || echo "")
+    if [[ -n "$ACTUAL_TESTS" ]]; then
+        BADGE_TESTS=$(grep -oE 'tests-[0-9]+_total' "$README" | grep -oE '[0-9]+' || echo "")
+        if [[ -n "$BADGE_TESTS" ]] && [[ "$BADGE_TESTS" != "$ACTUAL_TESTS" ]]; then
+            sed -i '' "s/tests-${BADGE_TESTS}_total/tests-${ACTUAL_TESTS}_total/" "$README"
+            NEEDS_AMEND=true
+            echo "post-commit: updated test badge ${BADGE_TESTS} → ${ACTUAL_TESTS}" >&2
+        fi
+    fi
+
+    # Coverage badge (reads existing .coverage database, <1s)
+    if [[ -f ".coverage" ]]; then
+        ACTUAL_COV=$(python3 -m coverage report 2>/dev/null | grep '^TOTAL' | awk '{print int($NF)}' || echo "")
+        if [[ -n "$ACTUAL_COV" ]]; then
+            BADGE_COV=$(grep -oE 'coverage-[0-9]+%25' "$README" | grep -oE '[0-9]+' || echo "")
+            if [[ -n "$BADGE_COV" ]] && [[ "$BADGE_COV" != "$ACTUAL_COV" ]]; then
+                sed -i '' "s/coverage-${BADGE_COV}%25/coverage-${ACTUAL_COV}%25/" "$README"
+                NEEDS_AMEND=true
+                echo "post-commit: updated coverage badge ${BADGE_COV}% → ${ACTUAL_COV}%" >&2
+            fi
+        fi
+    fi
+
+    if [[ "$NEEDS_AMEND" == "true" ]]; then
+        git add "$README"
+    fi
+fi
+
+# --- Version bump (feat/fix/perf only) ---
+
 # Check for BREAKING CHANGE in body
 HAS_BREAKING=false
 if echo "$BODY" | grep -q "^BREAKING CHANGE" 2>/dev/null; then
@@ -36,6 +71,11 @@ if [[ "$FIRST_LINE" =~ $CONV_COMMIT_RE ]]; then
     TYPE="${BASH_REMATCH[1]}"
     BANG="${BASH_REMATCH[3]}"
 else
+    # Non-conventional commit — still amend if badge changed
+    if [[ "$NEEDS_AMEND" == "true" ]]; then
+        export _HOLTZ_VERSION_BUMPED=1
+        git commit --amend --no-edit
+    fi
     exit 0
 fi
 
@@ -48,13 +88,22 @@ elif [[ "$TYPE" == "feat" ]]; then
 elif [[ "$TYPE" == "fix" ]] || [[ "$TYPE" == "perf" ]]; then
     BUMP="patch"
 else
-    # docs, chore, refactor, test, ci, style — no bump
+    # docs, chore, refactor, test, ci, style — no version bump
+    # but still amend if badge changed
+    if [[ "$NEEDS_AMEND" == "true" ]]; then
+        export _HOLTZ_VERSION_BUMPED=1
+        git commit --amend --no-edit
+    fi
     exit 0
 fi
 
 # Check plugin.json exists
 if [[ ! -f "$PLUGIN_JSON" ]]; then
     echo "post-commit: $PLUGIN_JSON not found, skipping version bump." >&2
+    if [[ "$NEEDS_AMEND" == "true" ]]; then
+        export _HOLTZ_VERSION_BUMPED=1
+        git commit --amend --no-edit
+    fi
     exit 0
 fi
 
@@ -98,10 +147,14 @@ with open('$PLUGIN_JSON', 'w') as f:
 print(new_version)
 ") || {
     echo "post-commit: version bump failed" >&2
+    if [[ "$NEEDS_AMEND" == "true" ]]; then
+        export _HOLTZ_VERSION_BUMPED=1
+        git commit --amend --no-edit
+    fi
     exit 0
 }
 
-# Stage and amend the commit to include the version bump
+# Stage and amend the commit to include version bump + badge updates
 git add "$PLUGIN_JSON"
 export _HOLTZ_VERSION_BUMPED=1
 git commit --amend --no-edit

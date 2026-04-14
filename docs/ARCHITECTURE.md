@@ -1,6 +1,6 @@
 # Holtz Architecture
 
-> v0.132.3 — Last verified: 2026-04-13
+> v0.132.13 — Last verified: 2026-04-14
 
 Holtz is a Claude Code plugin that audits codebases with TDD-driven bug hunting. Two auditors, 13 analytical lenses, a state machine to keep everyone honest. It keeps coming back until the codebase converges. It will steal your joy.
 
@@ -197,13 +197,13 @@ Extended lenses (7 more):
 
 | Lens | Scope | What It Looks For |
 |------|-------|-------------------|
-| semantic-fidelity | per-file | Naming vs actual behavior mismatches |
+| semantic-fidelity | cross-file | Naming vs actual behavior mismatches |
 | temporal-protocol | cross-file | Ordering dependencies, lifecycle violations |
 | public-contract | cross-file | Published API surface stability |
 | concurrency | cross-file | Race conditions, shared mutable state |
 | resource-lifecycle | per-file | Leaks, dangling handles, cleanup failures |
 | idempotency | per-file | Non-idempotent operations that should be |
-| observability | cross-file | Missing logging, metrics, error attribution |
+| observability | per-file | Missing logging, metrics, error attribution |
 
 Per-file lenses run during initial file audits (Steps 7-8). Cross-file lenses get dedicated parallel subagents. Step 14 (lens sweep) does gap-fill for covered lenses and full sweeps for uncovered ones.
 
@@ -219,7 +219,7 @@ Current patterns: dual-parser-divergence, regex-newline-leak, doc-spec-drift, co
 
 New patterns are contributed through `references/pattern-contribution-protocol.md`. A compact brief (`docs/holtz/patterns-brief.md`) is generated for subagent consumption via `pattern_brief_compact.py`.
 
-17 test anti-patterns in `references/anti-patterns.md`, tiered by severity (actively harmful → false security → missed opportunities).
+18 test anti-patterns in `references/anti-patterns.md`, tiered by severity (actively harmful → false security → missed opportunities).
 
 ---
 
@@ -261,7 +261,7 @@ STATUS.md and PUNCHLIST.md are **read-only** — rendered from the Sahjhan ledge
 ```
 holtz/
 ├── .claude-plugin/
-│   └── plugin.json           # Plugin manifest (v0.132.3)
+│   └── plugin.json           # Plugin manifest
 ├── agents/
 │   ├── holtz.md              # Primary auditor agent
 │   ├── justine.md            # Secondary auditor agent
