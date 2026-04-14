@@ -53,13 +53,22 @@ def read_cache(cwd: str) -> dict[str, Any] | None:
 
     Returns None if the daemon is unreachable or has no enforcement state
     (fail-open, same behavior as the old "file not found" path).
+
+    Only catches expected daemon-unreachable errors. Bugs in parsing code
+    (e.g., bad base64, unexpected JSON structure) are NOT caught — they
+    should crash visibly rather than silently disabling all enforcement.
     """
     try:
         from _common import _daemon_request, _get_daemon_socket_path
         sock_path = _get_daemon_socket_path(cwd)
         resp = _daemon_request(sock_path, {"op": "enforcement_read"})
         return json.loads(base64.b64decode(resp["data"]))
-    except Exception:
+    except (OSError, ConnectionError, RuntimeError, KeyError, json.JSONDecodeError, ValueError):
+        # OSError/ConnectionError: daemon socket unreachable
+        # RuntimeError: daemon returned an error (from _daemon_request)
+        # KeyError: daemon response missing "data" field (no state stored)
+        # json.JSONDecodeError: daemon sent invalid/empty JSON (corrupt or dead)
+        # ValueError: base64 decode failure (corrupt daemon response)
         return None
 
 
