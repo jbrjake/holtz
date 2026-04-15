@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 .coverage
+.hypothesis/
 .claude/*
 !.claude/settings.local.json.example
 .venv/
