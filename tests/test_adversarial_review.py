@@ -443,3 +443,100 @@ class TestShellExpansionRedirectBypass:
         assert result is not None, (
             "Literal redirect to protected path was not blocked"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Bug 7: Write/Edit tools bypass MANAGED_DOCS protection
+#
+# Root cause: The path-resolution section in main() checks PROTECTED
+# (enforcement/, bin/sahjhan, etc.) and MANAGED_DATA (docs/holtz/.sahjhan/)
+# but not MANAGED_DOCS (STATUS.md, PUNCHLIST.md, etc.). The MANAGED_DOCS
+# list was only used inside _check_bash_write() for Bash commands.
+#
+# Impact: An agent can use Write or Edit tools to directly overwrite
+# sahjhan-rendered documents (STATUS.md, PUNCHLIST.md, SUMMARY.md,
+# MERGE-REPORT.md, PUNCHLIST-MERGED.md) without being blocked.
+# Bash redirect to the same paths IS blocked, creating an inconsistency.
+# ═══════════════════════════════════════════════════════════════════════
+
+
+import pytest
+
+from hook_runner import run_hook
+
+
+@pytest.mark.hook_e2e
+class TestManagedDocsWriteEditBypass:
+    """Write/Edit tools must be blocked on MANAGED_DOCS, not just Bash redirects."""
+
+    HOOK = "enforcement/hooks/_sahjhan_bootstrap.py"
+
+    def test_write_to_status_md_blocked(self):
+        """Write tool targeting STATUS.md must be blocked."""
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/STATUS.md"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = run_hook(self.HOOK, event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Write to STATUS.md was allowed — MANAGED_DOCS not enforced for Write tool"
+        )
+
+    def test_edit_to_punchlist_md_blocked(self):
+        """Edit tool targeting PUNCHLIST.md must be blocked."""
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": "docs/holtz/PUNCHLIST.md",
+                "old_string": "OPEN",
+                "new_string": "RESOLVED",
+            },
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = run_hook(self.HOOK, event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Edit to PUNCHLIST.md was allowed — agent can forge punchlist status changes"
+        )
+
+    def test_write_to_summary_md_blocked(self):
+        """Write tool targeting SUMMARY.md must be blocked."""
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/SUMMARY.md"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = run_hook(self.HOOK, event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_write_to_merge_report_blocked(self):
+        """Write tool targeting MERGE-REPORT.md must be blocked."""
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/MERGE-REPORT.md"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = run_hook(self.HOOK, event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_write_to_punchlist_merged_blocked(self):
+        """Write tool targeting PUNCHLIST-MERGED.md must be blocked."""
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/PUNCHLIST-MERGED.md"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = run_hook(self.HOOK, event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_write_to_non_managed_doc_allowed(self):
+        """Write to docs/holtz/notes.md must still be allowed."""
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/my-notes.md"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = run_hook(self.HOOK, event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "Non-managed doc was blocked — MANAGED_DOCS check is over-broad"
+        )

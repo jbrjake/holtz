@@ -615,6 +615,11 @@ class TestBinaryUnavailable:
         with open(os.path.join(sahjhan_dir, "terminated"), "w") as f:
             f.write("reason: daemon_pid_dead\ninit_pid: 12345\n")
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(tmp_path))
+        # Prevent network download attempt that could exceed subprocess timeout
+        bin_dir = os.path.join(str(tmp_path), "bin")
+        os.makedirs(bin_dir, exist_ok=True)
+        with open(os.path.join(bin_dir, ".sahjhan-bootstrap-failed"), "w") as f:
+            f.write(str(time.time()))
 
         event = {"tool_name": "Stop", "cwd": str(tmp_path)}
         output = _run_hook(STOP_HOOK, event)

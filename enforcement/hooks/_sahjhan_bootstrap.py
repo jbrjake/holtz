@@ -452,6 +452,17 @@ def main() -> None:
             )
             return
 
+    # MANAGED_DOCS: sahjhan-rendered files that must not be directly written.
+    # Paths are relative to cwd (same resolution as MANAGED_DATA).
+    for p in MANAGED_DOCS:
+        full = os.path.realpath(os.path.join(cwd, p))
+        if resolved == full:
+            _block(
+                f"BLOCKED: {path} is a Sahjhan-managed document. "
+                "This file is rendered from ledger state and cannot be modified directly."
+            )
+            return
+
     # MANAGED_DATA paths are relative to cwd (not _PLUGIN_ROOT)
     for p in MANAGED_DATA:
         full = os.path.realpath(os.path.join(cwd, p))
