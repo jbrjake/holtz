@@ -56,6 +56,7 @@ ALLOWED_SAHJHAN_SUBCMDS = {
     "gate",          # Gate check
     "defer",         # Defer findings
     "init",          # Initialize sahjhan
+    "set",           # Set perspective status, completion markers
 }
 
 # Second-level blocks: subcommand is allowed but specific sub-subcommands are not.
@@ -79,10 +80,14 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
     Skips leading wrappers (nohup, env) and flags (--config-dir X).
     Returns (subcommand, sub_subcommand) or None if not a sahjhan command.
     """
-    # Strip redirections and trailing & for backgrounding
+    # Strip shell redirections and trailing & for backgrounding.
+    # Order matters: fd duplication first (2>&1), then fd redirections (2>/dev/null),
+    # then combined redirects (&>file).  Issue #53: prior regexes left the leading
+    # digit of "2>&1" behind, turning it into a ghost subcommand token.
     import re as _re
-    clean = _re.sub(r'\s*[<>]\S*', '', segment)
-    clean = _re.sub(r'\s*\d*[<>]+\s*\S*', '', clean)
+    clean = _re.sub(r'\d*>&\d+', '', segment)           # fd dup: 2>&1, 1>&2
+    clean = _re.sub(r'\d*[<>]+\s*\S+', '', clean)       # fd redir: 2>/dev/null, >file, >>file, <in
+    clean = _re.sub(r'&>+\s*\S+', '', clean)             # combined: &>file, &>>file
     clean = clean.rstrip('& \t')
     tokens = clean.lower().split()
     if not tokens:
@@ -108,9 +113,13 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
 
     idx += 1
 
-    # Skip flags before the subcommand (e.g. --config-dir /some/path)
+    # Skip flags before the subcommand (e.g. --config-dir /some/path).
+    # Issue #53: --help / -h are not subcommands to enforce — allow through
+    # by returning None (treated as "not a sahjhan command" → allowed).
     while idx < len(tokens) and tokens[idx].startswith("-"):
         flag = tokens[idx]
+        if flag in ("--help", "-h", "--version"):
+            return None  # help/version requests bypass enforcement
         idx += 1
         # Only value-taking flags consume the next token
         if flag in _VALUE_FLAGS and idx < len(tokens):
@@ -179,12 +188,21 @@ def _bash_references_blocked_sahjhan(command: str) -> str | None:
     return None
 
 
+def _unquote(s: str) -> str:
+    """Strip surrounding single or double quotes from a shell token."""
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
+        return s[1:-1]
+    # Handle leading quote without closing (e.g., split mid-token)
+    return s.lstrip("'\"").rstrip("'\"")
+
+
 def _segment_references_protected(segment: str, protected: list[str]) -> str | None:
     """Check if any argument in a shell segment references a protected path."""
     args = segment.split()
     for arg in args:
+        bare = _unquote(arg)
         for p in protected:
-            if arg == p or arg.startswith(p) or ("/" + p) in arg:
+            if bare == p or bare.startswith(p) or ("/" + p) in bare:
                 return p
     return None
 
@@ -201,8 +219,10 @@ def _check_bash_write(command: str) -> str | None:
     # semicolons inside the string argument get split by the segment splitter,
     # causing the interpreter prefix and the path reference to appear in
     # different segments. Check the full command first.
-    cmd_stripped = re.sub(r'^(?:(?:export\s+)?\w+=\S*\s+)*', '', command.lstrip()).strip()
-    for interp in ("python ", "python3 ", "ruby ", "node "):
+    # Env var regex handles quoted values: FOO="bar baz", FOO='x y', FOO=simple
+    _ENV_RE = r'''(?:(?:export\s+)?\w+=(?:"[^"]*"|'[^']*'|\S*)\s*)+'''
+    cmd_stripped = re.sub(r'^' + _ENV_RE, '', command.lstrip()).strip()
+    for interp in ("python ", "python3 ", "ruby ", "node ", "bash ", "sh "):
         if cmd_stripped.startswith(interp) and " -" in cmd_stripped:
             for p in ALL_PROTECTED:
                 if p in command:
@@ -220,9 +240,12 @@ def _check_bash_write(command: str) -> str | None:
         if not seg:
             continue
 
-        # Strip leading env var assignments (FOO=bar, export X=1, etc.)
+        # Strip leading env var assignments (FOO=bar, FOO="x y", export X=1, etc.)
         # so that startswith-based command detection isn't bypassed.
-        seg_cmd = re.sub(r'^(?:(?:export\s+)?\w+=\S*\s+)*', '', seg).strip()
+        # Handles quoted values with spaces: FOO="bar baz", FOO='bar baz'.
+        seg_cmd = re.sub(
+            r'^' + _ENV_RE, '', seg,
+        ).strip()
 
         for p in ALL_PROTECTED:
             # Redirect check: find ALL > and >> in the segment, not just first
@@ -239,11 +262,21 @@ def _check_bash_write(command: str) -> str | None:
                         continue
                     after_op = seg[idx + len(op):].strip()
                     # Take first whitespace-delimited token as the target
-                    target = after_op.split()[0] if after_op.split() else ""
+                    target = _unquote(after_op.split()[0]) if after_op.split() else ""
                     if target == p or target.startswith(p):
                         return (
                             f"BLOCKED: Bash command redirects to protected path '{p}'. "
                             "This path cannot be modified during an audit session."
+                        )
+                    # Shell expansion ($VAR, $(cmd), `cmd`) in redirect targets
+                    # defeats static path analysis. Block when the full command
+                    # also references a protected path (e.g., TARGET=enforcement/...;
+                    # echo > $TARGET). This catches variable-assignment-then-redirect
+                    # bypasses without blocking unrelated $VAR redirects.
+                    if target and ("$" in target or "`" in target) and p in command:
+                        return (
+                            f"BLOCKED: Bash redirect uses shell expansion near protected path '{p}'. "
+                            "Redirect targets must be literal paths during an audit session."
                         )
                     start = idx + len(op)
 
@@ -251,7 +284,7 @@ def _check_bash_write(command: str) -> str | None:
             if "tee " in seg:
                 tee_idx = seg.find("tee ")
                 after_tee = seg[tee_idx + 4:].strip()
-                if any(arg == p or arg.startswith(p) for arg in after_tee.split()):
+                if any(_unquote(arg) == p or _unquote(arg).startswith(p) for arg in after_tee.split()):
                     return (
                         f"BLOCKED: Bash command tees to protected path '{p}'. "
                         "This path cannot be modified during an audit session."
@@ -268,14 +301,14 @@ def _check_bash_write(command: str) -> str | None:
                 # Check -t / --target-directory flag (target is NOT last arg)
                 for i, arg in enumerate(args):
                     if arg in ("-t", "--target-directory") and i + 1 < len(args):
-                        target = args[i + 1]
+                        target = _unquote(args[i + 1])
                         if target == p or target.startswith(p):
                             return (
                                 f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
                                 "This path cannot be modified during an audit session."
                             )
                     if arg.startswith("--target-directory="):
-                        target = arg.split("=", 1)[1]
+                        target = _unquote(arg.split("=", 1)[1])
                         if target == p or target.startswith(p):
                             return (
                                 f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
@@ -283,7 +316,7 @@ def _check_bash_write(command: str) -> str | None:
                             )
                 # Standard form: target is last argument
                 if len(args) >= 3:
-                    dest = args[-1]
+                    dest = _unquote(args[-1])
                     if dest == p or dest.startswith(p):
                         return (
                             f"BLOCKED: Bash command copies/moves to protected path '{p}'. "
@@ -323,7 +356,7 @@ def _check_bash_write(command: str) -> str | None:
             # BH-002 (run 27): Interpreter execution — python -c, dd, wget
             # These can write to arbitrary paths without using shell redirects.
             # Use substring match on full segment — paths may be inside quotes.
-            for interp in ("python ", "python3 ", "ruby ", "node "):
+            for interp in ("python ", "python3 ", "ruby ", "node ", "bash ", "sh "):
                 if seg_cmd.startswith(interp) and " -" in seg_cmd and p in seg:
                     return (
                             f"BLOCKED: Bash command uses interpreter to write to protected path '{p}'. "
@@ -338,13 +371,13 @@ def _check_bash_write(command: str) -> str | None:
                 args = seg_cmd.split()
                 for i, arg in enumerate(args):
                     # BH-006 run 28: handle both -O <path> and --output-document=<path>
-                    if arg == "-O" and i + 1 < len(args) and args[i + 1].startswith(p):
+                    if arg == "-O" and i + 1 < len(args) and _unquote(args[i + 1]).startswith(p):
                         return (
                             f"BLOCKED: Bash command uses wget to write to protected path '{p}'. "
                             "This path cannot be modified during an audit session."
                         )
                     if arg.startswith("--output-document="):
-                        target = arg.split("=", 1)[1]
+                        target = _unquote(arg.split("=", 1)[1])
                         if target == p or target.startswith(p):
                             return (
                                 f"BLOCKED: Bash command uses wget to write to protected path '{p}'. "
@@ -354,13 +387,13 @@ def _check_bash_write(command: str) -> str | None:
             if seg_cmd.startswith("curl "):
                 args = seg_cmd.split()
                 for i, arg in enumerate(args):
-                    if arg in ("-o", "--output") and i + 1 < len(args) and args[i + 1].startswith(p):
+                    if arg in ("-o", "--output") and i + 1 < len(args) and _unquote(args[i + 1]).startswith(p):
                         return (
                             f"BLOCKED: Bash command uses curl to write to protected path '{p}'. "
                             "This path cannot be modified during an audit session."
                         )
                     if arg.startswith("--output="):
-                        target = arg.split("=", 1)[1]
+                        target = _unquote(arg.split("=", 1)[1])
                         if target == p or target.startswith(p):
                             return (
                                 f"BLOCKED: Bash command uses curl to write to protected path '{p}'. "
@@ -416,6 +449,17 @@ def main() -> None:
             _block(
                 f"BLOCKED: {path} is protected enforcement infrastructure. "
                 "This file cannot be modified during an audit session."
+            )
+            return
+
+    # MANAGED_DOCS: sahjhan-rendered files that must not be directly written.
+    # Paths are relative to cwd (same resolution as MANAGED_DATA).
+    for p in MANAGED_DOCS:
+        full = os.path.realpath(os.path.join(cwd, p))
+        if resolved == full:
+            _block(
+                f"BLOCKED: {path} is a Sahjhan-managed document. "
+                "This file is rendered from ledger state and cannot be modified directly."
             )
             return
 

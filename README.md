@@ -3,8 +3,8 @@
 [![CI](https://github.com/jbrjake/holtz/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/jbrjake/holtz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)
-![1175 tests](https://img.shields.io/badge/tests-1175_total-brightgreen.svg)
-![97% coverage](https://img.shields.io/badge/coverage-97%25-brightgreen.svg)
+![1533 tests](https://img.shields.io/badge/tests-1533_total-brightgreen.svg)
+![90% coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)
 
 **Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
 
@@ -47,7 +47,7 @@ Not just your code.
 
 **Your documentation.** Every testable claim gets checked against reality. README says it handles concurrent writes? Where's the test. API docs say the endpoint returns 404 on missing resources? Prove it. If the docs promise something the code doesn't deliver, that's a punchlist item. If the docs say nothing about something the code does, that's a different punchlist item.
 
-**Your tests.** Every test file scored against seventeen anti-patterns across three tiers. Tautology tests that assert what the code does instead of what it should do. Green bar addicts that exist to make CI green. Mockingbirds so heavily mocked that no production code actually executes. Rubber stamps that check structure without checking values. Permissive validators with assertions so broad they'd accept a wrong answer and smile about it. 0-2 red flags per file is decent. 3-4 needs work. 5+ means the test file is technically fiction.
+**Your tests.** Every test file scored against eighteen anti-patterns across three tiers. Tautology tests that assert what the code does instead of what it should do. Green bar addicts that exist to make CI green. Mockingbirds so heavily mocked that no production code actually executes. Rubber stamps that check structure without checking values. Permissive validators with assertions so broad they'd accept a wrong answer and smile about it. 0-2 red flags per file is decent. 3-4 needs work. 5+ means the test file is technically fiction.
 
 **Your commit history.** Git churn from the last 50 commits. The 20 most-changed files get audited first, because code under pressure is code that breaks. Every `skip` and `xit` in the test suite is an admission of a gap. Holtz treats it as one.
 
@@ -191,7 +191,7 @@ Advisory instructions weren't enough. Holtz understood the instructions. He agre
 
 During a tqdm audit, Holtz did 52 minutes of legitimate work and then [stole his own session key, reverse-engineered the HMAC format, and forged a cryptographic event](docs/incidents/key-theft-tqdm/) to skip a protocol step. Ninety-three seconds from first rejection to successful forgery. He'd already done it once before in a previous session. Nobody noticed. The session key moved to daemon memory the next day.
 
-Ten hooks backed by the Sahjhan enforcement engine — a state machine that replaced the original advisory hooks when advisory proved insufficient. The first generation of hooks checked files and timestamps. The second checked protocol state. This generation uses declarative rules in `hooks.toml` evaluated by the binary — the Python scripts became thin wrappers that delegate to `sahjhan hook eval`. Every transition in the audit lifecycle is gated by the ledger. Events are signed with HMAC-SHA256 using session keys held in the Sahjhan daemon's memory — generated on start, never written to disk, inaccessible to the model or any same-user process without kernel-enforced socket credentials. Holtz doesn't get to skip steps anymore. Neither does Justine. Neither of them can fake having completed them.
+Eleven hooks backed by the Sahjhan enforcement engine — a state machine that replaced the original advisory hooks when advisory proved insufficient. The first generation of hooks checked files and timestamps. The second checked protocol state. This generation uses declarative rules in `hooks.toml` evaluated by the binary — the Python scripts became thin wrappers that delegate to `sahjhan hook eval`. Every transition in the audit lifecycle is gated by the ledger. Events are signed with HMAC-SHA256 using session keys held in the Sahjhan daemon's memory — generated on start, never written to disk, inaccessible to the model or any same-user process without kernel-enforced socket credentials. Holtz doesn't get to skip steps anymore. Neither does Justine. Neither of them can fake having completed them.
 
 **TDD gate.** In `fix_loop`, you cannot edit a source file without a `test_failed_before_fix` event in the ledger since the last state transition. The edit doesn't go through. The binary rejects it. Test files are exempt. This makes "write the failing test first" mechanically unavoidable — not a suggestion, not advisory, an Edit or Write that Sahjhan refuses to execute. This exists because Holtz would agree that TDD matters and then fix the code first anyway.
 
@@ -207,7 +207,7 @@ Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-1 skill, 3 agents, 24 reference docs, 1 example, 7 Python scripts, 16 seed patterns, 10 enforcement hooks, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+1 skill, 3 agents, 24 reference docs, 1 example, 7 Python scripts, 16 seed patterns, 11 enforcement hooks, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 For the full capability inventory, file layout, enforcement architecture, and what's still on the workbench, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.132.24] - 2026-04-14
+
+_Changes since v0.131.5_
+
+### Added
+- **testing:** add contract gate, expand shell idiom fuzzing, fix --version bypass
+
+### Fixed
+- add bash/sh to per-segment interpreter check in write guard
+- enforce MANAGED_DOCS protection for Write/Edit tools
+- block shell expansion bypass in bootstrap write guard
+- prevent network download in binary-unavailable tests
+- release workflow process substitution and missing network marker
+- post-commit badge uses venv python for test count extraction
+- post-commit test badge extraction broken by -q flag
+- quoted path bypass in bootstrap guard and post-commit badge skipping
+- post-commit badge update handles alt text and URL encoding
+- post-commit hook uses venv python for coverage report
+- stale ARCHITECTURE.md, trusted-caller hashes, and badge automation
+- document missing convergence/finalize transitions and events
+- add missing states to ARCHITECTURE.md phase table
+- update stale counts in ARCHITECTURE.md
+- restore DCO check claim removed in error
+- restore marketplace install instructions
+- update coverage badge to 90% (measured 89.75%)
+- correct fabricated claims, stale counts, and missing entries
+- narrow read_cache exception handling and update test badge to 1500
+- add 4 missing states to ARCHITECTURE.md state machine diagram
+- add hypothesis to CI deps and normalize sleep detection regex
+- correct stale counts and commands in README, ARCHITECTURE, CONTRIBUTING
+- enable subprocess coverage collection and fix smoke test bash compat
+- lint fixes and update test badge count to 1488
+- **ci:** correct coverage gate to 70% and fix lint
+- resolve bootstrap hook blocking --help, redirect parsing, missing init (#53)
+
+### Changed
+- consolidate 7 _run_hook implementations into tests/hook_runner.py
+
+### Documentation
+- add testing methodology and contract gate to CLAUDE.md
+
+### Infrastructure
+- gitignore .hypothesis/ directory
+- add E2E tests for quoted path bypass in bootstrap guard
+- add sweep evidence tests for flat format, env var discovery, and edge cases
+- add subprocess CLI tests for check_repro_evidence and check_severity_change
+- raise coverage gate from 70% to 80%
+- add pre-release gate script and simplify release checklist
+- add hook chain integration tests for multi-hook sequences
+- add deny message quality tests for all blocking hooks
+- add property-based tests for parsers and enforcement invariants
+- add failure mode tests for hook degradation scenarios
+- add real captured test runner fixtures
+- add real daemon integration tests
+- download sahjhan binary before tests
+- add real_daemon fixture for integration tests
+- **ci:** add offline hook output schema validation
+- add contract gate, sync check, and raise coverage to 80%
+- add pytest markers for contract, hook_e2e, integration, and slow
+
 ## [0.131.5] - 2026-04-11
 
 _Changes since v0.127.6_

@@ -51,7 +51,7 @@ def _is_sleep_cmd(cmd: str) -> bool:
     (split on &&, ;, ||, |, newline). Handles bash sleep suffixes (s/m/h/d).
     """
     _SUFFIX_MULTIPLIER = {"s": 1, "m": 60, "h": 3600, "d": 86400}
-    for segment in re.split(r'[;&|\n]+', cmd):
+    for segment in re.split(r'&&|\|\||[;|\n]', cmd):
         m = re.match(r"^\s*sleep\s+(\d+(?:\.\d+)?)([smhd])?", segment)
         if m:
             value = float(m.group(1))

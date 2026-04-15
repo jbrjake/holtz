@@ -30,22 +30,25 @@ if ! command -v claude &>/dev/null; then
     exit 0
 fi
 
-# Map each hook to its event type and a trigger prompt
-declare -A HOOK_EVENTS
-HOOK_EVENTS["enforcement/hooks/_daemon_lifecycle.py"]="PreToolUse"
-HOOK_EVENTS["enforcement/hooks/_sahjhan_bootstrap.py"]="PreToolUse"
-HOOK_EVENTS["enforcement/hooks/pre_tool_hook.py"]="PreToolUse"
-HOOK_EVENTS["enforcement/hooks/commit_gate.py"]="PreToolUse"
-HOOK_EVENTS["enforcement/hooks/post_tool_hook.py"]="PostToolUse"
-HOOK_EVENTS["enforcement/hooks/bash_guard.py"]="PostToolUse"
-HOOK_EVENTS["enforcement/hooks/protocol_tracker.py"]="PostToolUse"
-HOOK_EVENTS["enforcement/hooks/stop_hook.py"]="Stop"
-HOOK_EVENTS["enforcement/hooks/primer.py"]="UserPromptSubmit"
-HOOK_EVENTS["hooks/subagent_findings_check.py"]="SubagentStop"
+# Hook path:event pairs (bash 3 compatible — no associative arrays)
+HOOKS="
+enforcement/hooks/_daemon_lifecycle.py:PreToolUse
+enforcement/hooks/_sahjhan_bootstrap.py:PreToolUse
+enforcement/hooks/pre_tool_hook.py:PreToolUse
+enforcement/hooks/commit_gate.py:PreToolUse
+enforcement/hooks/post_tool_hook.py:PostToolUse
+enforcement/hooks/bash_guard.py:PostToolUse
+enforcement/hooks/protocol_tracker.py:PostToolUse
+enforcement/hooks/stop_hook.py:Stop
+enforcement/hooks/primer.py:UserPromptSubmit
+hooks/subagent_findings_check.py:SubagentStop
+"
 
 SKIPPED=0
-for hook_path in "${!HOOK_EVENTS[@]}"; do
-    event="${HOOK_EVENTS[$hook_path]}"
+for entry in $HOOKS; do
+    [ -z "$entry" ] && continue
+    hook_path="${entry%%:*}"
+    event="${entry##*:}"
     hook_name=$(basename "$hook_path" .py)
 
     # Build a settings.json that registers just this one hook

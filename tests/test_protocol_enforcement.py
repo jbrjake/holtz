@@ -4,6 +4,10 @@ from __future__ import annotations
 import os
 import sys
 
+import pytest
+
+pytestmark = pytest.mark.hook_e2e
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
 sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))
@@ -193,16 +197,15 @@ class TestProtocolCache:
         assert not is_sahjhan_cmd("export PATH=/usr/bin:$PATH && git commit -m 'fix'")
 
     def test_sahjhan_cmd_with_multiple_env_vars(self):
-        """Multiple inline env vars must not break sahjhan detection.
+        """Multiple inline env vars are correctly stripped before sahjhan detection.
 
-        _split_shell_segments only strips ONE env var assignment per segment.
-        FOO=bar BAZ=1 sahjhan status → strips FOO=bar → leaves BAZ=1 sahjhan status
-        → parts[0] = 'BAZ=1' → not recognized as sahjhan → returns False.
+        _split_shell_segments strips ALL leading env var assignments (regex uses +):
+        FOO=bar BAZ=1 sahjhan status → strips both → leaves 'sahjhan status'
+        → parts[0] = 'sahjhan' → recognized → returns True.
         """
         from _protocol_cache import is_sahjhan_cmd
         assert is_sahjhan_cmd("FOO=bar BAZ=1 sahjhan status"), (
-            "Multiple env var prefixes broke sahjhan detection — "
-            "_split_shell_segments only strips one assignment"
+            "Multiple env var prefixes broke sahjhan detection"
         )
 
     def test_split_shell_segments_strips_multiple_env_vars(self):

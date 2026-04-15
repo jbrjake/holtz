@@ -1,6 +1,6 @@
 # Holtz Architecture
 
-> v0.94.0 — Last verified: 2026-04-04
+> v0.132.13 — Last verified: 2026-04-14
 
 Holtz is a Claude Code plugin that audits codebases with TDD-driven bug hunting. Two auditors, 13 analytical lenses, a state machine to keep everyone honest. It keeps coming back until the codebase converges. It will steal your joy.
 
@@ -29,24 +29,37 @@ Holtz (depth-first, methodical) and Justine (breadth-first, aggressive) independ
                 │  merge   │◄───│ merge-agent  │
                 │  ready   │    │ (sonnet)     │
                 └────┬─────┘    └─────────────┘
-                     │
+                     │ merge_complete
                 ┌────▼──────┐
-            ┌──►│ fix_loop  │◄──────────────────┐
-            │   └──┬───┬────┘                    │
-            │      │   │                         │
-            │      │   └──► pattern_analysis ────┘
-            │      │
-            │   ┌──▼──────────────┐
+                │ merge_done│
+                └────┬──────┘
+                     │
+                ┌────▼──────┐  iteration_boundary
+            ┌──►│ fix_loop  │──────► awaiting_clear
+            │   └──┬───┬────┘  ◄──── (resume after /clear)
+            │      │   │
+            │      │   └──► pattern_analysis ────┐
+            │      │                              │
+            │   ┌──▼──────────────┐               │
             │   │ perspective_    │──► lens_rotate ──► audit
             │   │ clean           │         (next lens)
             │   └──┬──────────────┘
             │      │ (all 13 done)
+            │   ┌──▼──────────────────┐
+            │   │ all_perspectives_   │
+            │   │ clean               │
+            │   └──┬──────────────────┘
+            │      │
             │   ┌──▼──────────────┐
             │   │ final_sweep     │
             │   └──┬──────┬───────┘
             │      │      │ (dirty)
             │      │      └───────────────────────┘
             │      │ (clean)
+            │   ┌──▼──────────────────┐
+            │   │ final_sweep_clean   │
+            │   └──┬──────────────────┘
+            │      │ converge
             │   ┌──▼──────────────┐
             └───│ converged       │
                 └──┬──────────────┘
@@ -81,10 +94,10 @@ The audit has 21 steps (0-20) across 6 phases. Each phase has its own reference 
 | Phase | Steps | Sahjhan States | Reference | What Happens |
 |-------|-------|----------------|-----------|--------------|
 | Recon | 0-4 | `idle` → `recon` | `phase-recon.md` | Map the codebase. Build impact graph. Generate predictions. Dispatch Justine. |
-| Audit | 5-8 | `audit` | `phase-audit.md` | Verify doc claims. Audit test quality against 17 anti-patterns. Adversarial code review through 13 lenses. |
+| Audit | 5-8 | `audit` | `phase-audit.md` | Verify doc claims. Audit test quality against 18 anti-patterns. Adversarial code review through 13 lenses. |
 | Merge | 9 | `merge_ready` → `merge_done` | `phase-merge.md` | Merge-agent reconciles Holtz + Justine punchlists. Produces unified worklist. |
-| Fix Loop | 10-14 | `fix_loop` | `phase-fix-loop.md` | TDD fix cycle: failing test → minimal fix → hardening → blast radius → pattern analysis. Per lens. |
-| Convergence | 15-16 | `all_perspectives_clean` → `final_sweep` | `phase-convergence.md` | Final sweep across all lenses. If dirty, back to fix loop. If clean, converge. |
+| Fix Loop | 10-14 | `fix_loop`, `awaiting_clear`, `pattern_analysis`, `perspective_clean` | `phase-fix-loop.md` | TDD fix cycle: failing test → minimal fix → hardening → blast radius → pattern analysis. Per lens. |
+| Convergence | 15-16 | `all_perspectives_clean` → `final_sweep` → `final_sweep_clean` | `phase-convergence.md` | Final sweep across all lenses. If dirty, back to fix loop. If clean, converge. |
 | Finalize | 17-20 | `converged` → `finalized` | `phase-finalize.md` | Update architecture baseline, living punchlist, pattern library. Write summary. |
 
 All reference files live in `skills/holtz/references/`.
@@ -127,7 +140,8 @@ Python hooks in two locations:
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `_sahjhan_bootstrap.py` | PreToolUse | Bootstraps Sahjhan binary on first use |
+| `_daemon_lifecycle.py` | PreToolUse | Detects daemon death, terminates audit (wildcard, fires on every tool) |
+| `_sahjhan_bootstrap.py` | PreToolUse | Protects enforcement infrastructure from modification |
 | `pre_tool_hook.py` | PreToolUse | Managed-path guard, TDD gate |
 | `commit_gate.py` | PreToolUse | Blocks commits with pending obligations |
 | `post_tool_hook.py` | PostToolUse | Auto-records tool use events |
@@ -143,7 +157,7 @@ Python hooks in two locations:
 | Module | Purpose |
 |--------|---------|
 | `_protocol_cache.py` | Enforcement state cache, `is_enforcement_fresh()`, shell segment parsing |
-| `_resolve.py` | Sahjhan binary download/verification (pinned to v0.9.0 with SHA256 checksums) |
+| `_resolve.py` | Sahjhan binary download/verification (pinned to v0.13.1 with SHA256 checksums) |
 | `lens_evidence.py` | Validates subagent actually read files and found keywords |
 
 ---
@@ -155,7 +169,7 @@ Seven Python scripts in `skills/holtz/scripts/`. stdlib only, no external depend
 | Script | Purpose | Tests |
 |--------|---------|-------|
 | `validate_punchlist.py` | Validates punchlist format, fields, severity. Supports `--filter-status`, `--resolved-before`, `--render` for filtered reads during convergence. | `test_validate_punchlist.py` |
-| `impact_graph.py` | Knowledge graph for code entity relationships. 10 operations: add/prune nodes+edges, blast_radius (bidirectional BFS), risk_hotspots, drift_check. | `test_impact_graph.py` (56 tests) |
+| `impact_graph.py` | Knowledge graph for code entity relationships. 10 operations: add/prune nodes+edges, blast_radius (bidirectional BFS), risk_hotspots, drift_check. | `test_impact_graph.py` (81 tests) |
 | `convergence_check.py` | Parses punchlist status counts, detects test runner output, tracks convergence. | `test_convergence_check.py` |
 | `parse_lens_registry.py` | Extracts lens definitions from `lens-registry.md`. Classifies per-file vs cross-file scope. | `test_parse_lens_registry.py` |
 | `pattern_brief_compact.py` | Compresses pattern library into compact briefs for subagent consumption. Three formats: oneliner, twoliner, structured. | `test_pattern_brief_compact.py` |
@@ -183,13 +197,13 @@ Extended lenses (7 more):
 
 | Lens | Scope | What It Looks For |
 |------|-------|-------------------|
-| semantic-fidelity | per-file | Naming vs actual behavior mismatches |
+| semantic-fidelity | cross-file | Naming vs actual behavior mismatches |
 | temporal-protocol | cross-file | Ordering dependencies, lifecycle violations |
 | public-contract | cross-file | Published API surface stability |
 | concurrency | cross-file | Race conditions, shared mutable state |
 | resource-lifecycle | per-file | Leaks, dangling handles, cleanup failures |
 | idempotency | per-file | Non-idempotent operations that should be |
-| observability | cross-file | Missing logging, metrics, error attribution |
+| observability | per-file | Missing logging, metrics, error attribution |
 
 Per-file lenses run during initial file audits (Steps 7-8). Cross-file lenses get dedicated parallel subagents. Step 14 (lens sweep) does gap-fill for covered lenses and full sweeps for uncovered ones.
 
@@ -205,7 +219,7 @@ Current patterns: dual-parser-divergence, regex-newline-leak, doc-spec-drift, co
 
 New patterns are contributed through `references/pattern-contribution-protocol.md`. A compact brief (`docs/holtz/patterns-brief.md`) is generated for subagent consumption via `pattern_brief_compact.py`.
 
-17 test anti-patterns in `references/anti-patterns.md`, tiered by severity (actively harmful → false security → missed opportunities).
+18 test anti-patterns in `references/anti-patterns.md`, tiered by severity (actively harmful → false security → missed opportunities).
 
 ---
 
@@ -247,13 +261,13 @@ STATUS.md and PUNCHLIST.md are **read-only** — rendered from the Sahjhan ledge
 ```
 holtz/
 ├── .claude-plugin/
-│   └── plugin.json           # Plugin manifest (v0.94.0)
+│   └── plugin.json           # Plugin manifest
 ├── agents/
 │   ├── holtz.md              # Primary auditor agent
 │   ├── justine.md            # Secondary auditor agent
 │   └── merge-agent.md        # Punchlist merger agent
 ├── skills/holtz/
-│   ├── SKILL.md              # Main skill (rigid, 200 lines)
+│   ├── SKILL.md              # Main skill (rigid, 281 lines)
 │   ├── references/           # 24 reference docs (phase procedures, formats, protocols)
 │   ├── patterns/             # 16 bug pattern files
 │   ├── scripts/              # 7 Python scripts
@@ -277,27 +291,40 @@ holtz/
 │   ├── hooks/                # Enforcement Python modules
 │   └── scripts/              # Enforcement utilities
 ├── scripts/
-│   ├── generate-changelog.py # Changelog from conventional commits
-│   ├── session-to-cast.py    # Session → asciinema conversion
-│   ├── migrate_legacy.py     # Legacy archive migration
-│   ├── install-hooks.sh      # Git hook installer
-│   └── vendor-sahjhan.sh     # Binary vendoring
-├── tests/                    # 30+ test files
+│   ├── generate-changelog.py     # Changelog from conventional commits
+│   ├── contract_gate.py          # Skill-to-hook contract verification
+│   ├── refresh_hook_schema.py    # Hook output schema generator
+│   ├── pre-release-check.sh      # Pre-release gate (ruff, mypy, tests, coverage, smoke)
+│   ├── install-hooks.sh          # Git hook installer + settings.local.json setup
+│   ├── check_contract_test_sync.sh # CI gate: skill changes need contract test updates
+│   ├── smoke-test-hooks.sh       # Hook JSON validation via Claude CLI
+│   ├── vendor-sahjhan.sh         # Binary vendoring
+│   ├── session-to-cast.py        # Session → asciinema conversion
+│   ├── migrate_legacy.py         # Legacy archive migration
+│   ├── hash-trusted-callers.sh   # Compute SHA256 hashes for trusted-callers.toml
+│   ├── holtz_split_session.sh    # Session splitting orchestrator
+│   ├── capture_test_fixtures.sh  # Test fixture capture
+│   └── token_profiler/           # Token profiling toolkit (7 modules)
+├── tests/                        # 55 test files
 └── docs/
     ├── ARCHITECTURE.md       # You are here
     ├── holtz/                # Runtime artifacts (see above)
     ├── design/               # Design docs
-    ├── research/             # Case studies
-    └── superpowers/
-        ├── plans/            # Implementation plans
-        └── specs/            # Design specs
+    ├── research/             # Convergence data and analysis
+    ├── superpowers/
+    │   ├── plans/            # Implementation plans
+    │   └── specs/            # Design specs
+    ├── case-studies/         # External codebase audit case studies
+    ├── diagrams/             # SVG/DOT diagrams
+    ├── incidents/            # Containment breach postmortems
+    └── runs/                 # Session recordings and walkthroughs
 ```
 
 ---
 
 ## Test suite
 
-30+ test files. Quick run (no coverage):
+55 test files. Quick run (no coverage):
 
 ```bash
 python -m pytest
@@ -308,7 +335,7 @@ mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/
 Full run with coverage gate:
 
 ```bash
-python -m pytest --cov=skills/holtz/scripts --cov=hooks --cov-report=term-missing --cov-fail-under=60
+python -m pytest --cov=skills/holtz/scripts --cov=hooks --cov=enforcement/hooks --cov-report=term-missing --cov-fail-under=80
 ```
 
 Coverage runs only from the main agent session. Concurrent pytest processes (subagents, parallel sessions) deadlock on the `.coverage` SQLite file.

@@ -376,3 +376,213 @@ class TestVerifyAnswerFreshnessAsyncDef:
             "async def method falsely marked as stale — "
             "quiz question will be dropped, reducing quiz difficulty"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Bug 6: Shell expansion in redirect targets bypasses write protection
+#
+# Root cause: _check_bash_write extracts the redirect target as the
+# first whitespace-delimited token after > or >>, then compares it
+# literally against protected paths. Shell expansion ($VAR, $(cmd),
+# `cmd`) defeats this because the literal token doesn't match but
+# expands to a protected path at runtime.
+#
+# Impact: An agent can bypass write protection with patterns like:
+#   TARGET=enforcement/...; echo injected > $TARGET
+#   bash -c "echo test > $(printf enforcement/...)"
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestShellExpansionRedirectBypass:
+    """Write guard must block shell expansion in redirect targets near protected paths."""
+
+    @staticmethod
+    def _check(command):
+        bootstrap = _load_module("bootstrap_adv", _ENFORCEMENT_HOOKS / "_sahjhan_bootstrap.py")
+        return bootstrap._check_bash_write(command)
+
+    def test_env_var_redirect_to_protected_path(self):
+        """TARGET=enforcement/...; echo > $TARGET must be blocked."""
+        result = self._check(
+            "TARGET=enforcement/docs/holtz/STATUS.md; echo injected > $TARGET"
+        )
+        assert result is not None, (
+            "Env var redirect to protected path was not blocked — "
+            "agent can bypass write protection with variable indirection"
+        )
+
+    def test_command_substitution_in_redirect(self):
+        """bash -c 'echo > $(printf enforcement/...)' must be blocked."""
+        result = self._check(
+            'bash -c "echo test > $(printf enforcement/docs/holtz/STATUS.md)"'
+        )
+        assert result is not None, (
+            "Command substitution in bash -c with protected path was not blocked"
+        )
+
+    def test_sh_c_with_protected_path(self):
+        """sh -c 'echo > enforcement/...' must be blocked."""
+        result = self._check(
+            'sh -c "echo test > enforcement/docs/holtz/STATUS.md"'
+        )
+        assert result is not None, (
+            "sh -c with protected path literal was not blocked — "
+            "bash/sh were missing from the interpreter check"
+        )
+
+    def test_safe_env_var_redirect_allowed(self):
+        """echo > $UNRELATED_VAR must NOT be blocked (no protected path in command)."""
+        result = self._check("echo test > $SOME_OUTPUT_FILE")
+        assert result is None, (
+            f"Unrelated env var redirect was incorrectly blocked: {result}"
+        )
+
+    def test_literal_redirect_still_blocked(self):
+        """echo > enforcement/... must still be blocked (regression check)."""
+        result = self._check("echo test > enforcement/docs/holtz/STATUS.md")
+        assert result is not None, (
+            "Literal redirect to protected path was not blocked"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Bug 8: Chained bash/sh -c bypasses per-segment interpreter check
+#
+# Root cause: The pre-split interpreter check (before segment splitting)
+# added "bash " and "sh " to the interpreter list, but the per-segment
+# check only had python/ruby/node. In a chained command like
+# "echo foo; bash -c 'cp /tmp/evil enforcement/hooks/foo.py'", the
+# pre-split check fails (command starts with "echo", not "bash") and
+# the per-segment check also fails (bash not in its interpreter list).
+#
+# Impact: Chained shell interpreter commands bypass write protection.
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestChainedInterpreterBypass:
+    """Chained bash/sh -c must be caught by the per-segment interpreter check."""
+
+    @staticmethod
+    def _check(command):
+        bootstrap = _load_module("bootstrap_adv", _ENFORCEMENT_HOOKS / "_sahjhan_bootstrap.py")
+        return bootstrap._check_bash_write(command)
+
+    def test_chained_bash_c_cp_to_enforcement_blocked(self):
+        """echo foo; bash -c 'cp /tmp/evil enforcement/hooks/foo.py' must be blocked."""
+        result = self._check('echo foo; bash -c "cp /tmp/evil enforcement/hooks/foo.py"')
+        assert result is not None, (
+            "Chained bash -c cp to enforcement/ was allowed — "
+            "per-segment interpreter check missing bash"
+        )
+
+    def test_chained_sh_c_cp_to_enforcement_blocked(self):
+        """echo foo; sh -c 'cp /tmp/evil enforcement/hooks/foo.py' must be blocked."""
+        result = self._check('echo foo; sh -c "cp /tmp/evil enforcement/hooks/foo.py"')
+        assert result is not None, (
+            "Chained sh -c cp to enforcement/ was allowed — "
+            "per-segment interpreter check missing sh"
+        )
+
+    def test_chained_bash_c_safe_target_allowed(self):
+        """echo foo; bash -c 'cp /tmp/a /tmp/b' must be allowed (no protected path)."""
+        result = self._check('echo foo; bash -c "cp /tmp/a /tmp/b"')
+        assert result is None, (
+            f"Chained bash -c with safe target was incorrectly blocked: {result}"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Bug 7: Write/Edit tools bypass MANAGED_DOCS protection
+#
+# Root cause: The path-resolution section in main() checks PROTECTED
+# (enforcement/, bin/sahjhan, etc.) and MANAGED_DATA (docs/holtz/.sahjhan/)
+# but not MANAGED_DOCS (STATUS.md, PUNCHLIST.md, etc.). The MANAGED_DOCS
+# list was only used inside _check_bash_write() for Bash commands.
+#
+# Impact: An agent can use Write or Edit tools to directly overwrite
+# sahjhan-rendered documents (STATUS.md, PUNCHLIST.md, SUMMARY.md,
+# MERGE-REPORT.md, PUNCHLIST-MERGED.md) without being blocked.
+# Bash redirect to the same paths IS blocked, creating an inconsistency.
+# ═══════════════════════════════════════════════════════════════════════
+
+
+import pytest
+
+from hook_runner import run_hook
+
+
+@pytest.mark.hook_e2e
+class TestManagedDocsWriteEditBypass:
+    """Write/Edit tools must be blocked on MANAGED_DOCS, not just Bash redirects."""
+
+    HOOK = "enforcement/hooks/_sahjhan_bootstrap.py"
+
+    def test_write_to_status_md_blocked(self):
+        """Write tool targeting STATUS.md must be blocked."""
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/STATUS.md"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = run_hook(self.HOOK, event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Write to STATUS.md was allowed — MANAGED_DOCS not enforced for Write tool"
+        )
+
+    def test_edit_to_punchlist_md_blocked(self):
+        """Edit tool targeting PUNCHLIST.md must be blocked."""
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": "docs/holtz/PUNCHLIST.md",
+                "old_string": "OPEN",
+                "new_string": "RESOLVED",
+            },
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = run_hook(self.HOOK, event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Edit to PUNCHLIST.md was allowed — agent can forge punchlist status changes"
+        )
+
+    def test_write_to_summary_md_blocked(self):
+        """Write tool targeting SUMMARY.md must be blocked."""
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/SUMMARY.md"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = run_hook(self.HOOK, event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_write_to_merge_report_blocked(self):
+        """Write tool targeting MERGE-REPORT.md must be blocked."""
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/MERGE-REPORT.md"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = run_hook(self.HOOK, event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_write_to_punchlist_merged_blocked(self):
+        """Write tool targeting PUNCHLIST-MERGED.md must be blocked."""
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/PUNCHLIST-MERGED.md"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = run_hook(self.HOOK, event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_write_to_non_managed_doc_allowed(self):
+        """Write to docs/holtz/notes.md must still be allowed."""
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/my-notes.md"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = run_hook(self.HOOK, event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "Non-managed doc was blocked — MANAGED_DOCS check is over-broad"
+        )

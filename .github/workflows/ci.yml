@@ -18,7 +18,16 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install pytest pytest-cov ruff mypy
+          pip install pytest pytest-cov ruff mypy hypothesis
+      - name: Download sahjhan binary
+        run: |
+          source .venv/bin/activate
+          python -c "
+          import sys; sys.path.insert(0, 'enforcement/hooks')
+          from _resolve import ensure_sahjhan
+          path = ensure_sahjhan()
+          print(f'Binary at: {path}' if path else 'Download failed (integration tests will skip)')
+          "
       - name: Lint
         run: |
           source .venv/bin/activate
@@ -30,4 +39,11 @@ jobs:
       - name: Test
         run: |
           source .venv/bin/activate
-          python -m pytest --cov=skills/holtz/scripts --cov=hooks --cov=enforcement/hooks --cov-report=term-missing --cov-fail-under=60 --tb=short -q
+          python -m pytest --cov=skills/holtz/scripts --cov=hooks --cov=enforcement/hooks --cov-report=term-missing --cov-fail-under=80 --tb=short -q
+      - name: Contract gate
+        run: |
+          source .venv/bin/activate
+          python scripts/contract_gate.py
+      - name: Contract test sync check
+        if: github.event_name == 'pull_request'
+        run: bash scripts/check_contract_test_sync.sh

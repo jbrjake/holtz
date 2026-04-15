@@ -22,6 +22,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.hook_e2e
+
 REPO_ROOT = Path(__file__).parent.parent
 HOOKS_JSON = REPO_ROOT / "hooks" / "hooks.json"
 

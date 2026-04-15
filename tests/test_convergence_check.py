@@ -914,3 +914,34 @@ Time:        1.234 s
     assert result["failed"] == 3
     assert result["skipped"] == 2
 
+
+# =============================================================================
+# Real captured output — tests against this project's actual test runner output
+# =============================================================================
+
+import os
+
+_FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
+
+
+def _load_fixture(name):
+    """Load a real captured fixture file."""
+    path = os.path.join(_FIXTURES_DIR, name)
+    with open(path) as f:
+        return f.read()
+
+
+def test_real_pytest_output(monkeypatch):
+    """Parser handles real pytest output captured from this project's test suite.
+
+    Uses fixtures/real_pytest_verbose.txt which contains actual pytest output
+    with the summary line (e.g., '1 failed, 636 passed, 22 deselected in 18.34s').
+    """
+    output = _load_fixture("real_pytest_verbose.txt")
+    monkeypatch.setattr(subprocess, "run", _fake_run(output))
+    result = cc.get_test_counts("pytest")
+    assert result is not None, "Real pytest output should be parseable"
+    assert result["passed"] > 0, "Real output should have passing tests"
+    assert isinstance(result["failed"], int)
+    assert isinstance(result["skipped"], int)
+

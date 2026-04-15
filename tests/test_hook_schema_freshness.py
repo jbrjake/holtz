@@ -11,6 +11,8 @@ import urllib.request
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 from hook_schema import (
     PRETOOLUSE_VALID_DECISIONS,
     SPEC_URL,
