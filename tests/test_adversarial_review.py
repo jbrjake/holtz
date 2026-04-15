@@ -446,6 +446,52 @@ class TestShellExpansionRedirectBypass:
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Bug 8: Chained bash/sh -c bypasses per-segment interpreter check
+#
+# Root cause: The pre-split interpreter check (before segment splitting)
+# added "bash " and "sh " to the interpreter list, but the per-segment
+# check only had python/ruby/node. In a chained command like
+# "echo foo; bash -c 'cp /tmp/evil enforcement/hooks/foo.py'", the
+# pre-split check fails (command starts with "echo", not "bash") and
+# the per-segment check also fails (bash not in its interpreter list).
+#
+# Impact: Chained shell interpreter commands bypass write protection.
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class TestChainedInterpreterBypass:
+    """Chained bash/sh -c must be caught by the per-segment interpreter check."""
+
+    @staticmethod
+    def _check(command):
+        bootstrap = _load_module("bootstrap_adv", _ENFORCEMENT_HOOKS / "_sahjhan_bootstrap.py")
+        return bootstrap._check_bash_write(command)
+
+    def test_chained_bash_c_cp_to_enforcement_blocked(self):
+        """echo foo; bash -c 'cp /tmp/evil enforcement/hooks/foo.py' must be blocked."""
+        result = self._check('echo foo; bash -c "cp /tmp/evil enforcement/hooks/foo.py"')
+        assert result is not None, (
+            "Chained bash -c cp to enforcement/ was allowed — "
+            "per-segment interpreter check missing bash"
+        )
+
+    def test_chained_sh_c_cp_to_enforcement_blocked(self):
+        """echo foo; sh -c 'cp /tmp/evil enforcement/hooks/foo.py' must be blocked."""
+        result = self._check('echo foo; sh -c "cp /tmp/evil enforcement/hooks/foo.py"')
+        assert result is not None, (
+            "Chained sh -c cp to enforcement/ was allowed — "
+            "per-segment interpreter check missing sh"
+        )
+
+    def test_chained_bash_c_safe_target_allowed(self):
+        """echo foo; bash -c 'cp /tmp/a /tmp/b' must be allowed (no protected path)."""
+        result = self._check('echo foo; bash -c "cp /tmp/a /tmp/b"')
+        assert result is None, (
+            f"Chained bash -c with safe target was incorrectly blocked: {result}"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Bug 7: Write/Edit tools bypass MANAGED_DOCS protection
 #
 # Root cause: The path-resolution section in main() checks PROTECTED

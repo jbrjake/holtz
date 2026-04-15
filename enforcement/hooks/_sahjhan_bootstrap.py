@@ -356,7 +356,7 @@ def _check_bash_write(command: str) -> str | None:
             # BH-002 (run 27): Interpreter execution — python -c, dd, wget
             # These can write to arbitrary paths without using shell redirects.
             # Use substring match on full segment — paths may be inside quotes.
-            for interp in ("python ", "python3 ", "ruby ", "node "):
+            for interp in ("python ", "python3 ", "ruby ", "node ", "bash ", "sh "):
                 if seg_cmd.startswith(interp) and " -" in seg_cmd and p in seg:
                     return (
                             f"BLOCKED: Bash command uses interpreter to write to protected path '{p}'. "
