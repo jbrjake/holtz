@@ -6,6 +6,13 @@ set -euo pipefail
 # Compare against the merge base, not just HEAD~1, so PRs with
 # multiple commits are handled correctly.
 BASE="${GITHUB_BASE_REF:-main}"
+
+# Shallow clones (default in GitHub Actions) don't have origin/<base> or
+# parent commits.  Fetch just enough history to compute the diff.
+if ! git rev-parse "origin/${BASE}" >/dev/null 2>&1; then
+    git fetch --depth=1 origin "${BASE}" 2>/dev/null || true
+fi
+
 CHANGED_FILES=$(git diff --name-only "origin/${BASE}...HEAD" 2>/dev/null || git diff --name-only HEAD~1)
 
 SKILL_CHANGED=$(echo "$CHANGED_FILES" | grep -c 'skills/.*\.md\|references/.*\.md' || true)
