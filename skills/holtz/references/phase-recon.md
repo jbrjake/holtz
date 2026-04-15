@@ -10,15 +10,18 @@
 
 Determine the run number N (check `docs/holtz/runs/` for existing runs, or start at 1). Then initialize Sahjhan, start the daemon, and set up the run ledger and protocol state — **all five commands must succeed before any events are recorded:**
 
+> **`--config-dir` is required** when running as an installed plugin. The enforcement config lives in the plugin cache at `$CLAUDE_PLUGIN_ROOT/enforcement`, not in the target project. All sahjhan commands must include `--config-dir "$CLAUDE_PLUGIN_ROOT/enforcement"`. Without it, sahjhan looks for `enforcement/` relative to CWD (the target project) and fails.
+
 ```bash
 # Initialize the .sahjhan data directory and manifest.json.
 # Safe to re-run — on an already-initialized project this is a no-op.
-sahjhan init
+sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" init
 
 # sahjhan daemon start runs in the foreground — you MUST background it.
-# Use nohup + & so it survives shell exit, and wait briefly for the
-# socket and PID file to appear before proceeding.
-nohup sahjhan daemon start > /dev/null 2>&1 &
+# Use nohup + & so it survives shell exit. Stderr goes to /tmp log
+# (NOT /dev/null) so crashes can be diagnosed.
+nohup sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" daemon start \
+  > /tmp/sahjhan-daemon.log 2>&1 &
 
 # Wait for daemon to be ready (socket + PID file)
 sleep 1
@@ -26,8 +29,8 @@ sleep 1
 # Copy daemon.pid → daemon-init-pid so lifecycle hooks can detect daemon death
 cp docs/holtz/.sahjhan/daemon.pid docs/holtz/.sahjhan/daemon-init-pid
 
-sahjhan ledger create --from run N --activate
-sahjhan transition run_start
+sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" ledger create --from run N --activate
+sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition run_start
 ```
 
 > **Warning:** `sahjhan init` must run before `daemon start` on first-ever runs. Without it, `manifest.json` is never created and every subsequent sahjhan command fails with "Cannot load manifest." On projects that already have a `.sahjhan/` directory, `init` is a safe no-op.
@@ -35,6 +38,8 @@ sahjhan transition run_start
 > **Warning:** Skipping `sahjhan ledger create --from run N --activate` causes "no ledger found for template 'run'; using default ledger" warnings on every subsequent `sahjhan render` and `sahjhan transition` (~20+ times per audit). Always create and activate the ledger before `run_start`.
 
 **Why nohup?** `sahjhan daemon start` is foreground-only — it does not fork. Without `nohup ... &`, the Bash tool blocks until timeout and then kills the daemon. The `daemon-init-pid` copy is required by `_daemon_lifecycle.py` to distinguish "original daemon" from "restarted daemon with different key."
+
+**Why /tmp log instead of /dev/null?** If the daemon crashes, the log file contains the error. Check `/tmp/sahjhan-daemon.log` when the daemon dies unexpectedly. The log goes to /tmp because the write guard protects `docs/holtz/.sahjhan/`.
 
 The `--activate` flag sets the active-ledger marker so all subsequent sahjhan commands automatically target this run's ledger. No `--ledger run-N` needed on individual commands.
 

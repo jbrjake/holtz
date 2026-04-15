@@ -71,10 +71,22 @@ class TestPhaseReconInitSequence:
     def test_sahjhan_init(self):
         _assert_allowed("sahjhan init", "phase-recon.md: first command in init sequence")
 
+    def test_sahjhan_init_with_config_dir(self):
+        _assert_allowed(
+            'sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" init',
+            "phase-recon.md: init with --config-dir (plugin context)",
+        )
+
     def test_nohup_daemon_start(self):
         _assert_allowed(
             "nohup sahjhan daemon start > /dev/null 2>&1 &",
-            "phase-recon.md: daemon start with nohup + redirect + background",
+            "phase-recon.md: daemon start with nohup + redirect + background (legacy)",
+        )
+
+    def test_nohup_daemon_start_with_config_dir(self):
+        _assert_allowed(
+            'nohup sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" daemon start > /tmp/sahjhan-daemon.log 2>&1 &',
+            "phase-recon.md: daemon start with --config-dir and log capture",
         )
 
     def test_ledger_create(self):
@@ -502,12 +514,14 @@ class TestFirstRunInitSequence:
     issue #53.
     """
 
-    # The exact commands from phase-recon.md Step 0, in order
+    # The exact commands from phase-recon.md Step 0, in order.
+    # Both the --config-dir variant (plugin context) and the bare variant
+    # (local dev) must be allowed.
     INIT_SEQUENCE = [
-        "sahjhan init",
-        "nohup sahjhan daemon start > /dev/null 2>&1 &",
-        "sahjhan ledger create --from run 1 --activate",
-        "sahjhan transition run_start",
+        'sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" init',
+        'nohup sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" daemon start > /tmp/sahjhan-daemon.log 2>&1 &',
+        'sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" ledger create --from run 1 --activate',
+        'sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition run_start',
     ]
 
     @pytest.mark.parametrize("command", INIT_SEQUENCE)

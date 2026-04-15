@@ -78,6 +78,8 @@ Read the reference file for your current Sahjhan state. Run `sahjhan status` to 
 
 All protocol state is managed by the Sahjhan enforcement engine. Use these canonical CLI commands instead of writing to managed files directly.
 
+> **`--config-dir` is required** when running as an installed plugin. Use `--config-dir "$CLAUDE_PLUGIN_ROOT/enforcement"` on every sahjhan command. Without it, sahjhan looks for `enforcement/` in the target project (which doesn't exist) and fails. The examples below omit it for brevity — always include it.
+
 ```
 # First-run initialization — creates .sahjhan/ dir and manifest.json (no-op if exists)
 sahjhan init
