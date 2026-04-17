@@ -140,7 +140,7 @@ Python hooks in two locations:
 
 | Hook | Event | Purpose |
 |------|-------|---------|
-| `_daemon_lifecycle.py` | PreToolUse | Detects daemon death, terminates audit (wildcard, fires on every tool) |
+| `_daemon_lifecycle.py` | PreToolUse | Detects daemon death, terminates audit. Matcher: `Bash\|Write\|Edit\|NotebookEdit`. Read-only tools and recovery commands (`sahjhan daemon start/stop`) pass through so the session remains usable for diagnosis. |
 | `_sahjhan_bootstrap.py` | PreToolUse | Protects enforcement infrastructure from modification |
 | `pre_tool_hook.py` | PreToolUse | Managed-path guard, TDD gate |
 | `commit_gate.py` | PreToolUse | Blocks commits with pending obligations |
