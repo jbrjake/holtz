@@ -650,16 +650,21 @@ _RUNBOOK_FILES = (
 def _extract_runbook_sahjhan_lines(md_path: str) -> list[tuple[int, str]]:
     """Extract executable sahjhan command lines from a runbook markdown file.
 
-    Only matches lines inside fenced code blocks (```...```) — those are
-    the lines Claude copy-pastes literally when walking through a phase.
-    Inline backtick references in prose are descriptive, not executable,
-    and are excluded.
+    Matches two patterns Claude executes literally:
+    1. Lines inside fenced code blocks (```...```) that start a sahjhan
+       invocation.
+    2. Inline "Run `sahjhan ...`" or "run: `sahjhan ...`" prose
+       instructions — the agent reads the prose and invokes the backticked
+       command directly.
 
     Excludes:
-    - Dot/graphviz label strings (`label="sahjhan ..."`) — these are
-      diagrams, not executable instructions.
-    - Shell comments (lines starting with `#`).
+    - Dot/graphviz label strings (`label="sahjhan ..."`) — diagrams,
+      not executable instructions.
+    - Shell comments (lines starting with `#`) inside fences.
     - Line continuations that aren't the first line of a command.
+    - Descriptive inline backticks like "``sahjhan init`` must run
+      before ``daemon start``" where the agent isn't told to execute
+      the command — only ``[Rr]un:? `sahjhan ...```` counts.
     """
     with open(md_path, encoding="utf-8") as f:
         lines = f.readlines()
@@ -669,6 +674,10 @@ def _extract_runbook_sahjhan_lines(md_path: str) -> list[tuple[int, str]]:
     prev_was_continuation = False
 
     fenced_cmd_re = re.compile(r"(?:^|\s|nohup\s+)sahjhan\s")
+    # Prose instruction pattern: "Run `sahjhan ...`" or "run: `sahjhan ...`"
+    # The `Run` / `run` word signals an instruction to execute the command,
+    # distinguishing from descriptive inline backticks.
+    prose_instruction_re = re.compile(r"\b[Rr]un:?\s+`(sahjhan\s[^`]+)`")
 
     for i, raw in enumerate(lines, 1):
         stripped = raw.strip()
@@ -677,22 +686,25 @@ def _extract_runbook_sahjhan_lines(md_path: str) -> list[tuple[int, str]]:
             prev_was_continuation = False
             continue
 
-        if not in_fence:
-            continue
-
-        if stripped.startswith("#"):
-            prev_was_continuation = stripped.endswith("\\")
-            continue
-        if prev_was_continuation:
-            prev_was_continuation = stripped.endswith("\\")
-            continue
-        if fenced_cmd_re.search(stripped):
-            # Skip graphviz labels: `recover [label="sahjhan status..."]`
-            if 'label="sahjhan' in stripped or "label='sahjhan" in stripped:
+        if in_fence:
+            if stripped.startswith("#"):
                 prev_was_continuation = stripped.endswith("\\")
                 continue
-            results.append((i, stripped))
-        prev_was_continuation = stripped.endswith("\\")
+            if prev_was_continuation:
+                prev_was_continuation = stripped.endswith("\\")
+                continue
+            if fenced_cmd_re.search(stripped):
+                # Skip graphviz labels: `recover [label="sahjhan status..."]`
+                if 'label="sahjhan' in stripped or "label='sahjhan" in stripped:
+                    prev_was_continuation = stripped.endswith("\\")
+                    continue
+                results.append((i, stripped))
+            prev_was_continuation = stripped.endswith("\\")
+            continue
+
+        # Outside fences: only flag prose instructions, not descriptive refs.
+        for match in prose_instruction_re.finditer(raw):
+            results.append((i, match.group(1).strip()))
 
     return results
 

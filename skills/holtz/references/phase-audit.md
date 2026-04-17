@@ -37,7 +37,7 @@ If any is missing, STOP and complete Steps 0-4 first. Run `ls docs/holtz/impact-
 4. **Prioritize predicted areas first** — process claims matching HIGH-confidence predictions before others, then MEDIUM, then LOW, then unpredicted areas. No audit work is skipped; predictions change the order, not the scope.
 5. **For each claim** (or batch of 3-5 related claims): check if a real test exists, record findings via `sahjhan event finding` IMMEDIATELY, then move to next batch. When a finding matches a prediction, include `predicted_by` in the finding event and mark the prediction CONFIRMED in `step4-predictions.md`.
 6. **Add semantic edges** (`assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). After the step, run `stats` — if edge count did not increase and you processed 5+ claims, STOP and re-examine for missed relationships.
-7. Run `sahjhan transition recon_complete` to advance protocol state. Mark unconfirmed predictions as UNCONFIRMED in `step4-predictions.md`.
+7. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition recon_complete` to advance protocol state. Mark unconfirmed predictions as UNCONFIRMED in `step4-predictions.md`.
 
 ### Lens Assignment for Steps 7-8
 
@@ -108,6 +108,6 @@ Same subagent strategy. Partition source modules into batches.
 
    Record: `sahjhan event lens_coverage_recorded --field per_file_lenses_covered=N --field cross_file_lenses_covered=N --field artifact_path=docs/holtz/audit/lens-coverage.md`
 
-6. Run `sahjhan transition audit_complete` to advance protocol state. Mark remaining unconfirmed predictions as UNCONFIRMED in `step4-predictions.md`.
+6. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition audit_complete` to advance protocol state. Mark remaining unconfirmed predictions as UNCONFIRMED in `step4-predictions.md`.
 
 Priority order: error paths, boundaries, state transitions, external integrations, security.

@@ -22,4 +22,4 @@ Agent(subagent_type="merge-agent", prompt="Merge Holtz's punchlist at docs/holtz
 4. **After the merge completes:** Read `docs/holtz/MERGE-REPORT.md` for blind spot analysis and contradiction flags. Read `docs/holtz/PUNCHLIST-MERGED.md` — this is your worklist for Step 10. **Spot-check 2-3 items** against the original punchlists if the merge report shows disagreements or contradictions.
 5. **If no Justine output exists** (she wasn't dispatched or produced nothing), proceed with `docs/holtz/PUNCHLIST.md` as the worklist.
 
-Run `sahjhan transition merge_complete` to advance protocol state.
+Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition merge_complete` to advance protocol state.

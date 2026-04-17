@@ -92,8 +92,8 @@ Log every attempt in the investigation file. Failed reproduction attempts are ev
 If not reproducible after structured attempts:
 
 1. Ensure reproduction attempts are documented in `docs/holtz/investigations/{item_id}.md`
-2. Run: `sahjhan defer cant-reproduce {item_id}`
-3. Run: `sahjhan event finding_deferred --field id={item_id} --field reason=cant_reproduce --field evidence_path=docs/holtz/investigations/{item_id}.md`
+2. Run: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer cant-reproduce {item_id}`
+3. Run: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding_deferred --field id={item_id} --field reason=cant_reproduce --field evidence_path=docs/holtz/investigations/{item_id}.md`
 4. Update PUNCHLIST.md status to DEFERRED
 
 Do not silently drop the item.

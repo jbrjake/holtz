@@ -51,7 +51,7 @@ sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event living_punchlist_up
 
 This is the LAST step — nothing comes after it.
 
-Run `sahjhan transition finalize` — this transitions to the terminal `finalized` state and renders SUMMARY.md from the ledger. The finalize gate verifies: architecture baseline updated (Step 17), living punchlist updated (Step 19), pattern contribution completed (Step 18). SUMMARY.md includes a Prediction Accuracy table:
+Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition finalize` — this transitions to the terminal `finalized` state and renders SUMMARY.md from the ledger. The finalize gate verifies: architecture baseline updated (Step 17), living punchlist updated (Step 19), pattern contribution completed (Step 18). SUMMARY.md includes a Prediction Accuracy table:
 
 ```markdown
 ## Prediction Accuracy

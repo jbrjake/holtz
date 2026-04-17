@@ -114,13 +114,13 @@ For each lens sweep, record: `sahjhan event lens_sweep_started --field perspecti
 4. Dispatch a subagent with the focused path list and lens audit priorities
 5. Write findings to `docs/holtz/audit/lens-{name}.md` (append or replace)
 
-After completing a lens sweep (any type), return to Step 10 (fix loop) for any new findings. When a perspective passes clean, run `sahjhan set complete perspective`. Then `sahjhan transition lens_rotate` to switch to the next perspective.
+After completing a lens sweep (any type), return to Step 10 (fix loop) for any new findings. When a perspective passes clean, run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" set complete perspective`. Then run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition lens_rotate` to switch to the next perspective.
 
 **Circuit Breakers:**
 - **MAX_ITERATIONS:** 15 total fix-loop iterations. Enforced by Sahjhan's `fix_commit` gate (`max_count = 15`). After 15, the gate blocks — report remaining items to the user.
 - **SAME_ITEM:** 3 attempts on the same punchlist item. After 3, escalate to the user.
 - **NO_PROGRESS:** 3 consecutive iterations with no items resolved. Stop and report.
-- **CONTEXT_BUDGET:** If context utilization exceeds 60%, wrap up the current item and proceed to the convergence boundary — run `sahjhan transition iteration_boundary` and instruct `/clear`. Do not wait for compaction.
+- **CONTEXT_BUDGET:** If context utilization exceeds 60%, wrap up the current item and proceed to the convergence boundary — run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition iteration_boundary` and instruct `/clear`. Do not wait for compaction.
 
 ```dot
 digraph {

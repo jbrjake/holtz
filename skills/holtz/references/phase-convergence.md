@@ -8,13 +8,15 @@ Each iteration gets fresh context. At the end of each iteration — regardless o
 
 When all 13 lenses pass clean, the convergence flow requires these transitions in order:
 
-1. From `perspective_clean`: run `sahjhan transition all_perspectives` — gate checks all 13 lenses are marked complete. Transitions to `all_perspectives_clean`.
-2. From `all_perspectives_clean`: run `sahjhan transition final_sweep_start` — transitions to `final_sweep`.
-3. From `final_sweep`: run `sahjhan transition converge` — Sahjhan checks all gates: all perspectives complete, suite passes, linters pass, zero open items, no protocol violations.
-4. **`sahjhan transition converge` MUST succeed before SUMMARY.md is rendered.** If gates fail, Sahjhan reports which gates are blocking. Run `sahjhan gate check converge` for details.
-5. If the final sweep found new issues: run `sahjhan transition sweep_dirty` to return to `fix_loop`. Fix the issues and repeat the convergence flow.
-6. If not converged for other reasons: run `sahjhan ledger checkpoint --snapshot pre-clear` then `sahjhan transition iteration_boundary`. Tell the user: *"Not converged. `/clear` then any message to continue."* Stop. The stop gate hook enforces this: blocks premature stops until the protocol reaches a terminal state.
-7. If converged: run `sahjhan transition confirm_convergence` — transitions from `final_sweep_clean` to `converged`. Proceed to Step 16.
+All sahjhan commands below must include `--config-dir "$CLAUDE_PLUGIN_ROOT/enforcement"` when running as an installed plugin (see SKILL.md). The flag is shown in every example so the agent can copy-paste literally.
+
+1. From `perspective_clean`: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition all_perspectives` — gate checks all 13 lenses are marked complete. Transitions to `all_perspectives_clean`.
+2. From `all_perspectives_clean`: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition final_sweep_start` — transitions to `final_sweep`.
+3. From `final_sweep`: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition converge` — Sahjhan checks all gates: all perspectives complete, suite passes, linters pass, zero open items, no protocol violations.
+4. **`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition converge` MUST succeed before SUMMARY.md is rendered.** If gates fail, Sahjhan reports which gates are blocking. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" gate check converge` for details.
+5. If the final sweep found new issues: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition sweep_dirty` to return to `fix_loop`. Fix the issues and repeat the convergence flow.
+6. If not converged for other reasons: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" ledger checkpoint --snapshot pre-clear` then `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition iteration_boundary`. Tell the user: *"Not converged. `/clear` then any message to continue."* Stop. The stop gate hook enforces this: blocks premature stops until the protocol reaches a terminal state.
+7. If converged: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition confirm_convergence` — transitions from `final_sweep_clean` to `converged`. Proceed to Step 16.
 
 After `/clear`, the primer hook injects resume context and records a `context_reset` event — the user types anything and the model resumes from `sahjhan status`.
 
