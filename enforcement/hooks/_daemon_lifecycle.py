@@ -41,18 +41,33 @@ _PASSTHROUGH_TOOLS = frozenset({
 
 # Pattern matching sahjhan daemon start/stop commands, with optional
 # nohup prefix, --config-dir flag, and shell redirections.
+# Anchored with \A and terminated by an end-of-segment lookahead so that
+# `rm -rf /tmp/x && sahjhan daemon start` does NOT match — the recovery
+# exemption is for genuine recovery commands, not arbitrary work chained
+# around them. Trailing redirects, background &, and inline assignments
+# are still allowed since they're part of the recovery invocation itself.
 _DAEMON_RECOVERY_RE = re.compile(
-    r"(?:nohup\s+)?(?:env\s+\S+=\S+\s+)*"
-    r"sahjhan\s+(?:--config-dir\s+\S+\s+)?daemon\s+(?:start|stop)\b"
+    r"\A\s*(?:nohup\s+)?(?:(?:env\s+)?\S+=\S+\s+)*"
+    r"(?:\\)?sahjhan\s+(?:--config-dir\s+\S+\s+)?daemon\s+(?:start|stop)"
+    r"(?:\s+\S+)*\s*\Z"
 )
 
 
 def _is_recovery_command(event: dict) -> bool:
-    """Check if a Bash event is a sahjhan daemon start/stop command."""
+    """Check if a Bash event is a sahjhan daemon start/stop command.
+
+    Splits on shell operators (&&, ||, ;, |, newline) and requires that
+    every non-empty segment matches the recovery pattern. A single
+    chained segment that does anything else converts the whole command
+    into "arbitrary work disguised as recovery" and is denied.
+    """
     if event.get("tool_name") != "Bash":
         return False
     cmd = event.get("tool_input", {}).get("command", "")
-    return bool(_DAEMON_RECOVERY_RE.search(cmd))
+    segments = [s for s in re.split(r"&&|\|\||[;|\n]", cmd) if s.strip()]
+    if not segments:
+        return False
+    return all(_DAEMON_RECOVERY_RE.match(seg) for seg in segments)
 
 
 def main() -> None:

@@ -247,6 +247,64 @@ class TestGraduatedBlocking:
         assert code == 0
         assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
 
+    # -- Recovery regex must NOT match commands that merely contain a
+    #    sahjhan daemon invocation chained after arbitrary work.
+
+    def test_blocks_chained_command_with_recovery_suffix(self, tmp_path):
+        """`rm -rf /tmp/x && sahjhan daemon start` must remain blocked.
+
+        The recovery exemption is for genuine recovery commands only, not
+        for arbitrary work prepended to a recovery suffix. Allowing this
+        lets a terminated audit run side-effects under the cover of
+        "I'm just restarting the daemon."
+        """
+        self._make_terminated_audit(tmp_path)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf /tmp/everything && sahjhan daemon start"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
+        assert code == 0
+        decision = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert decision == "deny", (
+            "Chained command with a recovery suffix bypassed the daemon-lifecycle "
+            "block — only bare recovery commands should pass through."
+        )
+
+    def test_blocks_chained_command_with_recovery_prefix(self, tmp_path):
+        """`sahjhan daemon start && rm -rf /tmp/x` must remain blocked.
+
+        Symmetric to the suffix case — the recovery command alone is fine,
+        but chaining destructive work after it converts a recovery into
+        arbitrary execution.
+        """
+        self._make_terminated_audit(tmp_path)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan daemon start && rm -rf /tmp/everything"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
+        assert code == 0
+        decision = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert decision == "deny", (
+            "Recovery prefix followed by chained command bypassed the block."
+        )
+
+    def test_blocks_subshell_recovery_wrapping(self, tmp_path):
+        """`echo pwn; sahjhan daemon start` must remain blocked."""
+        self._make_terminated_audit(tmp_path)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo pwn; sahjhan daemon start"},
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
+        assert code == 0
+        decision = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert decision == "deny"
+
     # -- Recovery commands when daemon JUST died (no marker yet) --
 
     def test_allows_daemon_start_when_pid_just_died(self, tmp_path):
