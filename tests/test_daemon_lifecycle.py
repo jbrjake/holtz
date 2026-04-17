@@ -281,6 +281,55 @@ class TestGraduatedBlocking:
         reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
         assert "/stop" not in reason
 
+    def test_error_message_does_not_suggest_restart_as_recovery(self, tmp_path):
+        """Restarting the daemon does NOT recover the audit — new daemon = new key.
+
+        The module docstring explicitly says "Never restarts the daemon — a new
+        daemon has a new key." The termination message must not tell the user
+        to "restart the daemon" as if that would fix anything.
+        """
+        self._make_terminated_audit(tmp_path)
+        event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
+        reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
+        # "restart the daemon" as a recovery instruction is misleading because
+        # a new daemon has a new session key and cannot resume the old ledger.
+        assert "restart the daemon" not in reason.lower(), (
+            f"Error message suggests restarting the daemon as recovery, but a "
+            f"new daemon has a new key — restart does not recover the audit. "
+            f"Got: {reason!r}"
+        )
+
+    def test_error_messages_consistent_with_primer(self, tmp_path):
+        """Both hooks share the same termination scenario — their guidance
+        must not contradict. Issue #55 left _daemon_lifecycle.py and primer.py
+        with divergent recovery instructions after the /stop fix was applied
+        piecemeal. Sample both and check the core guidance aligns.
+        """
+        self._make_terminated_audit(tmp_path)
+        event = {"tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("_daemon_lifecycle.py", event, cwd=str(tmp_path))
+        lifecycle_msg = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
+
+        primer_event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("primer.py", primer_event, cwd=str(tmp_path))
+        primer_msg = output.get("hookSpecificOutput", {}).get("additionalContext", "")
+
+        # Both must point to /plugin as the primary recovery action
+        assert "/plugin" in lifecycle_msg, (
+            f"_daemon_lifecycle.py message must reference /plugin as recovery. Got: {lifecycle_msg!r}"
+        )
+        assert "/plugin" in primer_msg, (
+            f"primer.py message must reference /plugin as recovery. Got: {primer_msg!r}"
+        )
+        # Both must reference the daemon log for diagnosis
+        assert "sahjhan-daemon.log" in lifecycle_msg, (
+            f"_daemon_lifecycle.py must mention daemon log for diagnosis. Got: {lifecycle_msg!r}"
+        )
+        assert "sahjhan-daemon.log" in primer_msg, (
+            f"primer.py must mention daemon log for diagnosis. Got: {primer_msg!r}"
+        )
+
 
 class TestWriteTerminatedMarker:
     """Tests for _write_terminated_marker shared helper."""

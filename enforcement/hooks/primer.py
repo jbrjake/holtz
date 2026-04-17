@@ -55,8 +55,9 @@ def main() -> None:
             "AUDIT TERMINATED: daemon died — session key lost. "
             "The ledger is unwritable. This audit cannot be completed. "
             "Check /tmp/sahjhan-daemon.log for crash output. "
-            "Disable the plugin with /plugin or stop the daemon "
-            "manually with ! sahjhan daemon stop, then start a new audit.",
+            "A new daemon has a new key and cannot resume this ledger. "
+            "Disable the plugin with /plugin to restore tool access; "
+            "to start a new audit, remove docs/holtz/.sahjhan/ first.",
             "UserPromptSubmit",
         )
 
@@ -120,8 +121,9 @@ def main() -> None:
             "AUDIT TERMINATED: daemon died during awaiting_clear — session key lost. "
             "The ledger is unwritable. This audit cannot be completed. "
             "Check /tmp/sahjhan-daemon.log for crash output. "
-            "Disable the plugin with /plugin or stop the daemon "
-            "manually with ! sahjhan daemon stop, then start a new audit.",
+            "A new daemon has a new key and cannot resume this ledger. "
+            "Disable the plugin with /plugin to restore tool access; "
+            "to start a new audit, remove docs/holtz/.sahjhan/ first.",
             "UserPromptSubmit",
         )
 

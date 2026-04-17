@@ -76,10 +76,10 @@ def main() -> None:
             exit_ok("PreToolUse")
         exit_block(
             "AUDIT TERMINATED: daemon died — session key lost. "
-            "The audit cannot be completed. Check "
+            "The audit cannot be completed. A new daemon would have "
+            "a new key and cannot resume this ledger. Check "
             "/tmp/sahjhan-daemon.log for crash output. "
-            "Disable the plugin with /plugin or restart the daemon "
-            "manually with ! sahjhan daemon start"
+            "Disable the plugin with /plugin to restore tool access."
         )
 
     # Check init PID
@@ -98,10 +98,10 @@ def main() -> None:
         exit_ok("PreToolUse")
     exit_block(
         f"AUDIT TERMINATED: daemon (PID {init_pid}) died — session key lost, "
-        "ledger unwritable. The audit cannot be completed. Check "
+        "ledger unwritable. The audit cannot be completed. A new daemon "
+        "would have a new key and cannot resume this ledger. Check "
         "/tmp/sahjhan-daemon.log for crash output. "
-        "Disable the plugin with /plugin or restart the daemon "
-        "manually with ! sahjhan daemon start"
+        "Disable the plugin with /plugin to restore tool access."
     )
 
 
