@@ -35,7 +35,7 @@ jobs:
       - name: Type check
         run: |
           source .venv/bin/activate
-          mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/
+          mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/ scripts/ enforcement/scripts/
       - name: Test
         run: |
           source .venv/bin/activate
