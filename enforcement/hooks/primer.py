@@ -54,7 +54,9 @@ def main() -> None:
         exit_warn(
             "AUDIT TERMINATED: daemon died — session key lost. "
             "The ledger is unwritable. This audit cannot be completed. "
-            "Use /stop to exit, then start a new audit.",
+            "Check /tmp/sahjhan-daemon.log for crash output. "
+            "Disable the plugin with /plugin or stop the daemon "
+            "manually with ! sahjhan daemon stop, then start a new audit.",
             "UserPromptSubmit",
         )
 
@@ -117,7 +119,9 @@ def main() -> None:
         exit_warn(
             "AUDIT TERMINATED: daemon died during awaiting_clear — session key lost. "
             "The ledger is unwritable. This audit cannot be completed. "
-            "Use /stop to exit, then start a new audit.",
+            "Check /tmp/sahjhan-daemon.log for crash output. "
+            "Disable the plugin with /plugin or stop the daemon "
+            "manually with ! sahjhan daemon stop, then start a new audit.",
             "UserPromptSubmit",
         )
 

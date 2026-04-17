@@ -99,3 +99,38 @@ class TestPrimerNoAudit:
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
         assert code == 0
+
+
+class TestPrimerErrorMessageQuality:
+    """Error messages must reference real recovery commands (issue #55)."""
+
+    def test_terminated_marker_message_no_slash_stop(self, tmp_path):
+        """/stop doesn't exist as a CC command — must not appear in terminated message."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "terminated").write_text("reason: daemon_pid_dead\n")
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
+        assert code == 0
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
+        assert "/stop" not in context, (
+            f"primer.py references nonexistent /stop command in terminated message. "
+            f"Use /plugin or ! sahjhan daemon stop instead. Got: {context!r}"
+        )
+
+    def test_awaiting_clear_death_message_no_slash_stop(self, tmp_path):
+        """The awaiting_clear → dead-daemon branch must not reference /stop."""
+        _init_sahjhan(tmp_path)
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        # Dead PID triggers the awaiting_clear death branch (primer.py:112-122)
+        (sahjhan_dir / "daemon-init-pid").write_text("99999999\n")
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
+        assert code == 0
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
+        assert "/stop" not in context, (
+            f"primer.py references nonexistent /stop command in awaiting_clear death message. "
+            f"Use /plugin or ! sahjhan daemon stop instead. Got: {context!r}"
+        )
