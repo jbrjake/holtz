@@ -107,8 +107,16 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
     if idx >= len(tokens):
         return None
 
+    # Normalize escaped/quoted command name (\\sahjhan, "sahjhan", 'sahjhan')
+    # so the literal-invocation forms can't bypass the subcommand allowlist.
+    cmd_token = tokens[idx]
+    if cmd_token.startswith("\\"):
+        cmd_token = cmd_token[1:]
+    if len(cmd_token) >= 2 and cmd_token[0] == cmd_token[-1] and cmd_token[0] in ('"', "'"):
+        cmd_token = cmd_token[1:-1]
+
     # The next token should be "sahjhan" (or end with /sahjhan)
-    if tokens[idx] != "sahjhan" and not tokens[idx].endswith("/sahjhan"):
+    if cmd_token != "sahjhan" and not cmd_token.endswith("/sahjhan"):
         return None
 
     idx += 1
@@ -207,6 +215,30 @@ def _segment_references_protected(segment: str, protected: list[str]) -> str | N
     return None
 
 
+def _strip_cmd_escapes(seg: str) -> str:
+    """Normalize the command name at the start of a segment.
+
+    Shell forms like ``\\cp``, ``"cp"``, and ``'cp'`` invoke the literal
+    command (escaping skips alias/function lookup). This strips a single
+    leading backslash and any matched quotes around the first whitespace
+    token so downstream startswith / basename checks see the canonical
+    name.
+    """
+    seg = seg.lstrip()
+    if not seg:
+        return seg
+    if seg[0] == "\\":
+        seg = seg[1:]
+    if seg[:1] in ('"', "'"):
+        quote = seg[0]
+        end = seg.find(quote, 1)
+        # Only strip if the quotes wrap the entire first token
+        # (i.e., the closing quote is followed by whitespace or EOL).
+        if end > 0 and (end == len(seg) - 1 or seg[end + 1].isspace()):
+            seg = seg[1:end] + seg[end + 1:]
+    return seg
+
+
 def _check_bash_write(command: str) -> str | None:
     """Check if a bash command writes to any protected or managed path.
 
@@ -221,7 +253,7 @@ def _check_bash_write(command: str) -> str | None:
     # different segments. Check the full command first.
     # Env var regex handles quoted values: FOO="bar baz", FOO='x y', FOO=simple
     _ENV_RE = r'''(?:(?:export\s+)?\w+=(?:"[^"]*"|'[^']*'|\S*)\s*)+'''
-    cmd_stripped = re.sub(r'^' + _ENV_RE, '', command.lstrip()).strip()
+    cmd_stripped = _strip_cmd_escapes(re.sub(r'^' + _ENV_RE, '', command.lstrip()).strip())
     for interp in ("python ", "python3 ", "ruby ", "node ", "bash ", "sh "):
         if cmd_stripped.startswith(interp) and " -" in cmd_stripped:
             for p in ALL_PROTECTED:
@@ -243,9 +275,11 @@ def _check_bash_write(command: str) -> str | None:
         # Strip leading env var assignments (FOO=bar, FOO="x y", export X=1, etc.)
         # so that startswith-based command detection isn't bypassed.
         # Handles quoted values with spaces: FOO="bar baz", FOO='bar baz'.
-        seg_cmd = re.sub(
+        # Also normalize the command name (\\cp, "cp", 'cp' → cp) so escaped
+        # or quoted invocations of cp/rm/python/etc. don't slip past detection.
+        seg_cmd = _strip_cmd_escapes(re.sub(
             r'^' + _ENV_RE, '', seg,
-        ).strip()
+        ).strip())
 
         for p in ALL_PROTECTED:
             # Redirect check: find ALL > and >> in the segment, not just first

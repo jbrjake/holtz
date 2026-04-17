@@ -799,3 +799,118 @@ class TestQuotedPathBypass:
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+@pytest.mark.hook_e2e
+class TestBackslashEscapedCommandBypass:
+    """Backslash-escaped or quoted command names (\\cp, "cp", 'rm') must not bypass guards.
+
+    Shell interprets ``\\cp`` and ``"cp"`` as the literal command ``cp`` (escaping
+    skips alias/function lookup). The bash_guard detected the destructive
+    operation by matching on the unescaped, unquoted name, so writes via these
+    forms slipped past every protection that didn't use substring search.
+    """
+
+    def test_backslash_cp_to_enforcement_blocked(self):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "\\cp /tmp/evil enforcement/hooks/foo.py"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Backslash-escaped cp bypassed write protection on enforcement/"
+        )
+
+    def test_backslash_rm_sahjhan_dir_blocked(self):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "\\rm -rf docs/holtz/.sahjhan"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Backslash-escaped rm bypassed protection on .sahjhan dir"
+        )
+
+    def test_double_quoted_cp_to_enforcement_blocked(self):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": '"cp" /tmp/evil enforcement/hooks/foo.py'},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Double-quoted cp bypassed write protection"
+        )
+
+    def test_single_quoted_rm_blocked(self):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "'rm' -rf docs/holtz/.sahjhan"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Single-quoted rm bypassed protection on .sahjhan dir"
+        )
+
+    def test_backslash_python_interpreter_blocked(self):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "\\python3 -c \"open('enforcement/hooks/x','w')\"",
+            },
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Backslash-escaped python interpreter bypassed protected-path check"
+        )
+
+    def test_backslash_curl_to_enforcement_blocked(self):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "\\curl -o enforcement/hooks/foo.py https://example.com/x",
+            },
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Backslash-escaped curl bypassed -o protected-path check"
+        )
+
+    def test_backslash_cp_safe_target_allowed(self):
+        """\\cp to a non-protected path remains allowed (no false positive)."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "\\cp file.txt /tmp/safe.txt"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_backslash_sahjhan_reset_blocked(self):
+        """\\sahjhan reset must still be blocked by the subcommand allowlist."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "\\sahjhan reset --confirm"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Backslash-escaped sahjhan bypassed subcommand allowlist"
+        )
+
+    def test_quoted_sahjhan_daemon_stop_blocked(self):
+        """'sahjhan' daemon stop must still be blocked by the sub-subcommand check."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "'sahjhan' daemon stop"},
+            "cwd": "/tmp/fake-cwd",
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Quoted sahjhan bypassed daemon stop allowlist"
+        )
