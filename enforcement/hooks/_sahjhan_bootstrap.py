@@ -239,13 +239,45 @@ def _strip_cmd_escapes(seg: str) -> str:
     return seg
 
 
-def _check_bash_write(command: str) -> str | None:
+def _cwd_is_inside_plugin(cwd: str) -> bool:
+    """Return True if cwd is inside the plugin root.
+
+    PROTECTED paths (enforcement/, hooks/hooks.json, bin/sahjhan, …) are
+    plugin-relative. When an installed plugin runs against a target project,
+    cwd is the target, so those names collide with unrelated directories in
+    the user's own tree (many frameworks have an ``enforcement/`` or
+    ``hooks/`` folder). Gate the PROTECTED substring checks on cwd actually
+    being inside the plugin — the only place those paths matter.
+    """
+    try:
+        cwd_real = os.path.realpath(cwd)
+        plugin_real = os.path.realpath(_PLUGIN_ROOT)
+    except (OSError, ValueError):
+        return False
+    return cwd_real == plugin_real or cwd_real.startswith(plugin_real + os.sep)
+
+
+def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
     """Check if a bash command writes to any protected or managed path.
 
     Returns a block reason string if blocked, None if allowed.
     Splits on shell operators (&&, ||, ;, |, newline) and checks each segment.
+
+    ``cwd`` determines whether plugin-relative PROTECTED paths are enforced:
+    only when the agent is operating inside the plugin tree itself. Managed
+    paths (MANAGED_DOCS, MANAGED_DATA) are always cwd-relative and always
+    enforced — they live inside the target project's docs/holtz/.
     """
     import re
+
+    # Default cwd=None preserves legacy test/dev behavior (check all paths).
+    # Hook callers pass the real cwd so PROTECTED isn't enforced against
+    # a target project that happens to have a same-named directory.
+    protected = (
+        list(ALL_PROTECTED)
+        if cwd is None or _cwd_is_inside_plugin(cwd)
+        else list(MANAGED_DOCS + MANAGED_DATA)
+    )
 
     # Issue #33: Pre-split interpreter check — python3 -c commands with
     # semicolons inside the string argument get split by the segment splitter,
@@ -256,7 +288,7 @@ def _check_bash_write(command: str) -> str | None:
     cmd_stripped = _strip_cmd_escapes(re.sub(r'^' + _ENV_RE, '', command.lstrip()).strip())
     for interp in ("python ", "python3 ", "ruby ", "node ", "bash ", "sh "):
         if cmd_stripped.startswith(interp) and " -" in cmd_stripped:
-            for p in ALL_PROTECTED:
+            for p in protected:
                 if p in command:
                     return (
                         f"BLOCKED: Bash command uses interpreter to write to protected path '{p}'. "
@@ -281,7 +313,7 @@ def _check_bash_write(command: str) -> str | None:
             r'^' + _ENV_RE, '', seg,
         ).strip())
 
-        for p in ALL_PROTECTED:
+        for p in protected:
             # Redirect check: find ALL > and >> in the segment, not just first
             # BH-002 (run 27): quoted > before real redirect bypassed old check
             for op in (">>", ">"):  # check >> before > to avoid partial match
@@ -456,7 +488,7 @@ def main() -> None:
         if sahjhan_block:
             _block(sahjhan_block)
             return
-        result = _check_bash_write(command)
+        result = _check_bash_write(command, cwd)
         if result:
             _block(result)
             return
