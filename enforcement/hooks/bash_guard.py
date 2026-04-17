@@ -42,20 +42,24 @@ def main() -> None:
 
     cwd = event.get("cwd", os.getcwd())
 
-    binary = ensure_sahjhan()
-    if binary is None:
-        exit_enforcement_error(cwd, "Sahjhan binary unavailable", "PostToolUse")
-    config_dir, _ = resolve_config_dir(cwd)
-
-    # Check if there's an active Sahjhan run (data dir exists)
+    # Check if there's an active Sahjhan run (data dir exists) BEFORE
+    # triggering ensure_sahjhan(). Without this ordering, projects without
+    # an audit pay the ~100MB binary download on the first Bash command.
     data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
     if not os.path.isdir(data_dir):
         exit_ok()
 
-    # Stale enforcement: skip manifest verification for abandoned audits
+    # Stale enforcement: skip manifest verification for abandoned audits.
+    # read_cache() talks to the daemon socket inside data_dir, so this
+    # check is correct to run before the binary bootstrap too.
     cache = read_cache(cwd)
     if not is_enforcement_fresh(cache):
         exit_ok()
+
+    binary = ensure_sahjhan()
+    if binary is None:
+        exit_enforcement_error(cwd, "Sahjhan binary unavailable", "PostToolUse")
+    config_dir, _ = resolve_config_dir(cwd)
 
     try:
         verify_cmd = [binary, "--config-dir", config_dir, "manifest", "verify"]
