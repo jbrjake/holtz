@@ -27,7 +27,7 @@ sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event baseline_updated --
 
 ### Step 18: Pattern Library Contribution (Subagent)
 
-Read [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) and follow the protocol: discover new patterns from `docs/holtz/patterns-brief.md`, generalize, PII-scrub, ask user permission, then submit via `gh` CLI / MCP / manual staging. Record outcome: `sahjhan event pattern_contribution_complete --patterns_submitted N --outcome submitted|no_new_patterns|declined_by_user`.
+Read [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) and follow the protocol: discover new patterns from `docs/holtz/patterns-brief.md`, generalize, PII-scrub, ask user permission, then submit via `gh` CLI / MCP / manual staging. Record outcome: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event pattern_contribution_complete --patterns_submitted N --outcome submitted|no_new_patterns|declined_by_user`.
 
 ### Step 19: Living Punchlist Update (Subagent)
 

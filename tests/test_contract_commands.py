@@ -650,12 +650,16 @@ _RUNBOOK_FILES = (
 def _extract_runbook_sahjhan_lines(md_path: str) -> list[tuple[int, str]]:
     """Extract executable sahjhan command lines from a runbook markdown file.
 
-    Matches two patterns Claude executes literally:
+    Matches patterns Claude executes literally:
     1. Lines inside fenced code blocks (```...```) that start a sahjhan
        invocation.
-    2. Inline "Run `sahjhan ...`" or "run: `sahjhan ...`" prose
-       instructions — the agent reads the prose and invokes the backticked
-       command directly.
+    2. Inline prose instructions where a backticked sahjhan command is
+       flagged as imperative by its surrounding syntax. Imperative markers:
+       - "Run `sahjhan ...`" / "run: `sahjhan ...`"
+       - "Record `sahjhan ...`" / "Record: `sahjhan ...`" / "**Record:**"
+       - "record findings via `sahjhan ...`" / "e.g., `sahjhan ...`"
+       - Numbered list item: "1. `sahjhan ...`"
+       - Lone-line backticked command (line contains only the command)
 
     Excludes:
     - Dot/graphviz label strings (`label="sahjhan ..."`) — diagrams,
@@ -664,20 +668,31 @@ def _extract_runbook_sahjhan_lines(md_path: str) -> list[tuple[int, str]]:
     - Line continuations that aren't the first line of a command.
     - Descriptive inline backticks like "``sahjhan init`` must run
       before ``daemon start``" where the agent isn't told to execute
-      the command — only ``[Rr]un:? `sahjhan ...```` counts.
+      the command. The imperative markers above distinguish instructions
+      from descriptions.
     """
     with open(md_path, encoding="utf-8") as f:
         lines = f.readlines()
 
     results: list[tuple[int, str]] = []
+    seen_on_line: set[tuple[int, str]] = set()
     in_fence = False
     prev_was_continuation = False
 
     fenced_cmd_re = re.compile(r"(?:^|\s|nohup\s+)sahjhan\s")
-    # Prose instruction pattern: "Run `sahjhan ...`" or "run: `sahjhan ...`"
-    # The `Run` / `run` word signals an instruction to execute the command,
-    # distinguishing from descriptive inline backticks.
-    prose_instruction_re = re.compile(r"\b[Rr]un:?\s+`(sahjhan\s[^`]+)`")
+    # Imperative-context patterns outside fences. Each captures the
+    # backticked sahjhan command that follows the imperative signal.
+    # `\b[Rr]ecord\b` does NOT match "records"/"recorded" (no word
+    # boundary between 'd' and the following letter), so present-tense
+    # descriptive prose like "records a `context_reset` event" is
+    # correctly ignored.
+    prose_patterns = (
+        re.compile(r"\b[Rr]un:?\s+`(sahjhan\s[^`]+)`"),
+        re.compile(r"\b[Rr]ecord\b[^`\n]{0,60}`(sahjhan\s[^`]+)`"),
+        re.compile(r"\be\.g\.,?\s+`(sahjhan\s[^`]+)`"),
+        re.compile(r"^\s*\d+\.\s+`(sahjhan\s[^`]+)`"),
+        re.compile(r"^\s*`(sahjhan\s[^`]+)`\s*$"),
+    )
 
     for i, raw in enumerate(lines, 1):
         stripped = raw.strip()
@@ -702,9 +717,15 @@ def _extract_runbook_sahjhan_lines(md_path: str) -> list[tuple[int, str]]:
             prev_was_continuation = stripped.endswith("\\")
             continue
 
-        # Outside fences: only flag prose instructions, not descriptive refs.
-        for match in prose_instruction_re.finditer(raw):
-            results.append((i, match.group(1).strip()))
+        # Outside fences: flag imperative-context backticks, not descriptive.
+        for pat in prose_patterns:
+            for match in pat.finditer(raw):
+                cmd = match.group(1).strip()
+                key = (i, cmd)
+                if key in seen_on_line:
+                    continue
+                seen_on_line.add(key)
+                results.append((i, cmd))
 
     return results
 
@@ -726,9 +747,7 @@ def _needs_config_dir(cmd: str) -> bool:
         return False
     rest = tokens[1:]
     # Help/version flags don't touch config at all.
-    if rest and rest[0] in {"--help", "-h", "--version"}:
-        return False
-    return True
+    return not (rest and rest[0] in {"--help", "-h", "--version"})
 
 
 class TestRunbookConfigDirRequired:
