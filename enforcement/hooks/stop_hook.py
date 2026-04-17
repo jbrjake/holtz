@@ -83,6 +83,7 @@ def _read_status_cache_state(cwd: str) -> str | None:
 def main() -> None:
     event = read_event()
     cwd = event.get("cwd", os.getcwd())
+    config_dir, _ = resolve_config_dir(cwd)
 
     # No active run — allow stop
     if not _has_active_audit(cwd):
@@ -131,7 +132,7 @@ def main() -> None:
         exit_stop_warn(
             "Sahjhan data directory exists but enforcement state is unavailable "
             "(daemon cache and status-cache.json both unreadable). "
-            "Run `sahjhan status` to check audit state."
+            f"Run `sahjhan --config-dir {config_dir} status` to check audit state."
         )
 
     current_state = cache.get("state", "")

@@ -144,8 +144,9 @@ def main() -> None:
         context += f"\nLens: {perspective}. Quiz on exit. Failures restart."
 
     context += (
-        f"\nRun `{binary} status` for full state. "
-        f"Run `{binary} gate check <transition>` to see what gates are blocking."
+        f"\nRun `{binary} --config-dir {config_dir} status` for full state. "
+        f"Run `{binary} --config-dir {config_dir} gate check <transition>` "
+        f"to see what gates are blocking."
     )
 
     # Append enforcement state line if cache exists

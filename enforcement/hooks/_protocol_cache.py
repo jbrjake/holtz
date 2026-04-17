@@ -317,8 +317,17 @@ def is_fix_loop_state(cache: dict[str, Any] | None) -> bool:
     return cache.get("state") == "fix_loop"
 
 
-def compute_obligations(cache: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Compute current protocol obligations from cache state."""
+def compute_obligations(
+    cache: dict[str, Any] | None,
+    config_dir: str = "",
+) -> list[dict[str, Any]]:
+    """Compute current protocol obligations from cache state.
+
+    When ``config_dir`` is given, the ``Run ...`` / ``sahjhan ...`` command
+    hints in obligation messages include ``--config-dir <config_dir>`` so
+    Claude can execute them directly in the plugin-installed layout.
+    Without it (legacy callers / tests), hints stay bare.
+    """
     if cache is None or not cache.get("active"):
         return []
 
@@ -334,9 +343,11 @@ def compute_obligations(cache: dict[str, Any] | None) -> list[dict[str, Any]]:
     p_done = cache.get("perspectives_done", 0)
     p_total = cache.get("perspectives_total", 13)
 
+    cfg = f" --config-dir {config_dir}" if config_dir else ""
+
     if commits:
         obligations.append({
-            "msg": f"{len(commits)} unregistered commits. sahjhan fix_commit required. "
+            "msg": f"{len(commits)} unregistered commits. sahjhan{cfg} fix_commit required. "
                    f"{perspective} ({p_done}/{p_total})",
             "blocks_commit": True,
             "blocks_all": False,
@@ -344,14 +355,14 @@ def compute_obligations(cache: dict[str, Any] | None) -> list[dict[str, Any]]:
 
     if stall > 15:
         obligations.append({
-            "msg": f"{stall} commands without protocol event. Run sahjhan status.",
+            "msg": f"{stall} commands without protocol event. Run sahjhan{cfg} status.",
             "blocks_commit": True,
             "blocks_all": True,
         })
 
     if fixes >= 3 and not commits and state == "fix_loop":
         obligations.append({
-            "msg": f"pattern_check due ({fixes} fixes). sahjhan transition pattern_check",
+            "msg": f"pattern_check due ({fixes} fixes). sahjhan{cfg} transition pattern_check",
             "blocks_commit": False,
             "blocks_all": False,
         })
