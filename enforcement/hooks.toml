@@ -12,7 +12,7 @@ event = "PreToolUse"
 tools = ["Edit", "Write"]
 states = ["fix_loop"]
 action = "block"
-message = "TDD violation: write and run a failing test before editing source files. Record with: sahjhan event test_failed_before_fix --field finding_id=BH-NNN --field test_name=..."
+message = "TDD violation: write and run a failing test before editing source files. Record with: sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" event test_failed_before_fix --field finding_id=BH-NNN --field test_name=..."
 
 [hooks.gate]
 type = "ledger_has_event_since"
@@ -29,7 +29,7 @@ path_not_matches = "tests/**"
 event = "Stop"
 states_not = ["converged", "finalized"]
 action = "block"
-message = "You are claiming completion but sahjhan state is {current_state}, not converged/finalized. Run `sahjhan status` to check your position. Continue the protocol."
+message = "You are claiming completion but sahjhan state is {current_state}, not converged/finalized. Run `sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" status` to check your position. Continue the protocol."
 
 [hooks.check]
 type = "output_contains_any"
@@ -58,7 +58,7 @@ event = "PostToolUse"
 tools = ["Edit"]
 states = ["fix_loop"]
 action = "warn"
-message = "High activity: {count} events since your last fix_commit. Each fix must be committed atomically. Run: sahjhan transition fix_commit --item-id BH-NNN"
+message = "High activity: {count} events since your last fix_commit. Each fix must be committed atomically. Run: sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" transition fix_commit --item-id BH-NNN"
 
 [hooks.check]
 type = "event_count_since_last_transition"
@@ -100,7 +100,7 @@ fields = { file_path = "{tool.file_path}" }
 name = "fix_loop_stall"
 states = ["fix_loop"]
 action = "warn"
-message = "{count} events since last state transition. Run `sahjhan status`. If you have been fixing bugs without committing, stop and commit each fix atomically."
+message = "{count} events since last state transition. Run `sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" status`. If you have been fixing bugs without committing, stop and commit each fix atomically."
 
 [monitors.trigger]
 type = "event_count_since_last_transition"
@@ -110,7 +110,7 @@ threshold = 20
 name = "audit_stall"
 states = ["audit"]
 action = "warn"
-message = "{count} events in audit state without advancing. Run `sahjhan status` to check progress."
+message = "{count} events in audit state without advancing. Run `sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" status` to check progress."
 
 [monitors.trigger]
 type = "event_count_since_last_transition"
