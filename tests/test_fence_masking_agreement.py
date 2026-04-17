@@ -19,15 +19,28 @@ BH-007 run 18: no cross-implementation test existed
 PAT-004: dual-implementation divergence
 """
 
+import importlib.util
 import re
 import sys
 from pathlib import Path
 
-# Import both implementations
+# Import both implementations. hooks/_common.py is loaded via importlib under
+# a unique module name to avoid polluting sys.modules['_common'] — enforcement
+# hooks also use the bare name `_common` and getting the hooks version cached
+# there breaks their `from _common import exit_enforcement_error` under
+# pytest collection orderings like `pytest -m hook_e2e`.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "holtz" / "scripts"))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hooks"))
 
-from _common import mask_fenced_blocks  # noqa: E402
+_hooks_common_path = Path(__file__).resolve().parent.parent / "hooks" / "_common.py"
+_hooks_common_spec = importlib.util.spec_from_file_location(
+    "_hooks_common_for_fence_test", str(_hooks_common_path)
+)
+if _hooks_common_spec is None or _hooks_common_spec.loader is None:
+    raise RuntimeError(f"Cannot load {_hooks_common_path}")
+_hooks_common = importlib.util.module_from_spec(_hooks_common_spec)
+_hooks_common_spec.loader.exec_module(_hooks_common)
+mask_fenced_blocks = _hooks_common.mask_fenced_blocks
+
 from markdown_utils import mask_code_fences  # noqa: E402
 
 # Matches CommonMark fence delimiters (backtick or tilde, optionally indented 0-3 spaces)
