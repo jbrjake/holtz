@@ -9,5 +9,5 @@
 "enforcement/hooks/_common.py" = "sha256:0845abd355e807b68e2391f127564f53dcaf9b34df3574b9c9ea6b8ae41ca5d6"
 "enforcement/hooks/lens_quiz.py" = "sha256:2a9212d54526aad1607ac24158783a7faefb982a0bf85d24a5abd9fc0beed69d"
 "enforcement/hooks/stop_hook.py" = "sha256:952aeba885f8a70e1a57300d5e22f8eae6e39defca24ad1e8c3c625a12ceeb88"
-"enforcement/hooks/primer.py" = "sha256:9bdf3d5cfac01cc32f4449d369c01c8cfdf9c237f363c3f5a3d7f3a5c8f77d3d"
+"enforcement/hooks/primer.py" = "sha256:9d2df2607c0aea144edd53cccb458a73707487fec3d94775e7419f9e7a96f92a"
 "hooks/subagent_findings_check.py" = "sha256:f97d12f1d431dad0f9a88ea25c24e923acb3d0a6f4722c0bfb4d047fb161d921"

@@ -86,7 +86,7 @@ for entry in $HOOKS; do
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "python \"$REPO_ROOT/$hook_path\""
+                        "command": "python3 \"$REPO_ROOT/$hook_path\""
                     }
                 ]
             }

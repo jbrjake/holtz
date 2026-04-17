@@ -57,7 +57,7 @@ def invoke_hook(command: str, event: dict, plugin_root: str, cwd: str | None = N
     if len(parts) == 1:
         # Simple case: python "/path/to/script.py"
         # Strip quotes from the path
-        match = re.match(r'python\s+"?([^"]+)"?', expanded)
+        match = re.match(r'python[0-9.]*\s+"?([^"]+)"?', expanded)
         if match:
             script_path = match.group(1)
             cmd = [sys.executable, script_path]
@@ -306,7 +306,7 @@ class TestHooksJsonValid:
                     cmd = hook["command"]
                     expanded = expand_command(cmd, plugin_root)
                     # Extract the script path
-                    match = re.search(r'python\s+"?([^"]+)"?', expanded)
+                    match = re.search(r'python[0-9.]*\s+"?([^"]+)"?', expanded)
                     if match:
                         script_path = match.group(1)
                         if not os.path.isfile(script_path):
@@ -631,7 +631,7 @@ class TestHookCrashResilience:
                     seen_commands.add(cmd)
 
                     expanded = expand_command(cmd, plugin_root)
-                    match = re.search(r'python\s+"?([^"]+)"?', expanded)
+                    match = re.search(r'python[0-9.]*\s+"?([^"]+)"?', expanded)
                     if not match:
                         continue
                     script_path = match.group(1)
@@ -671,7 +671,7 @@ class TestHookCrashResilience:
                     seen_commands.add(cmd)
 
                     expanded = expand_command(cmd, plugin_root)
-                    match = re.search(r'python\s+"?([^"]+)"?', expanded)
+                    match = re.search(r'python[0-9.]*\s+"?([^"]+)"?', expanded)
                     if not match:
                         continue
                     script_path = match.group(1)
@@ -713,7 +713,7 @@ class TestHookCrashResilience:
                     seen_commands.add(cmd)
 
                     expanded = expand_command(cmd, plugin_root)
-                    match = re.search(r'python\s+"?([^"]+)"?', expanded)
+                    match = re.search(r'python[0-9.]*\s+"?([^"]+)"?', expanded)
                     if not match:
                         continue
                     script_path = match.group(1)
