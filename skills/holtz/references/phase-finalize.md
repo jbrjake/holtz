@@ -21,7 +21,7 @@ Write changes to docs/holtz/architecture-baseline.md. Report what sections chang
 
 After the subagent completes, record the event (required by the `finalize` gate):
 ```
-sahjhan event baseline_updated --field project=<project> --field run=N \
+sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event baseline_updated --field project=<project> --field run=N \
   --field auditor=holtz --field sections_changed="<comma-separated list of changed sections>"
 ```
 
@@ -43,7 +43,7 @@ Update `docs/holtz/LIVING-PUNCHLIST.md` (or create it on first run — see [refe
 
 After the subagent completes, record the event (required by the `finalize` gate):
 ```
-sahjhan event living_punchlist_updated --field project=<project> --field run=N \
+sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event living_punchlist_updated --field project=<project> --field run=N \
   --field auditor=holtz --field patterns_added=<count> --field hotspots_updated=<count>
 ```
 

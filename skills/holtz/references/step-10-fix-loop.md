@@ -105,15 +105,15 @@ For LOW and MEDIUM findings where the fix is legitimate but lower priority than 
 **LOW severity:** All LOW findings may be deferred.
 
 ```
-sahjhan defer low {item_id}
-sahjhan event finding_deferred --field id={item_id} --field reason=low_priority
+sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer low {item_id}
+sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding_deferred --field id={item_id} --field reason=low_priority
 ```
 
 **MEDIUM severity:** Up to half of MEDIUM findings may be deferred. The budget is enforced at deferral time — if the cap is reached, the transition is blocked.
 
 ```
-sahjhan defer medium {item_id}
-sahjhan event finding_deferred --field id={item_id} --field reason=medium_budget
+sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer medium {item_id}
+sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding_deferred --field id={item_id} --field reason=medium_budget
 ```
 
 HIGH and CRITICAL findings are never deferrable via priority (only via can't-reproduce with evidence).

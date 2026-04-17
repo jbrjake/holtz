@@ -10,7 +10,7 @@ Before starting any fix work, check whether Justine has produced results:
 2. **If Justine is still running** (no `docs/holtz/justine/SUMMARY.md` and no `docs/holtz/justine/PUNCHLIST.md`), check her output files for stall indicators: no updates in >30 minutes, or 3 consecutive fix iterations with no progress. If stalled, proceed with whatever she has. If she's still actively working, wait — her breadth-first pass is fast.
 3. **If Justine has results**, first record the dispatch event (required by the `merge_complete` gate):
    ```
-   sahjhan event merge_agent_dispatched --field project=holtz --field run=N \
+   sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event merge_agent_dispatched --field project=holtz --field run=N \
      --field auditor=holtz --field phase=merge --field step=9
    ```
    Then dispatch the merge agent:

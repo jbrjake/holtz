@@ -10,6 +10,7 @@ gets a test here. If a skill file changes, this file must be updated.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 
@@ -611,4 +612,135 @@ class TestContractGate:
         )
         assert result.returncode == 0, (
             f"Contract gate FAILED:\n{result.stdout}\n{result.stderr}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Issue #55 regression: runbook-style reference files must pass --config-dir.
+#
+# Background: the skill's SKILL.md has a disclaimer (line ~81) that examples
+# are brief and --config-dir must always be included. Runbook-style phase
+# and step files are different — they are consumed literally by agents
+# walking through a phase, often without re-reading SKILL.md first. Missing
+# --config-dir in a runbook command causes silent sahjhan failures when
+# enforcement/ lives in the plugin cache (the normal installed case).
+#
+# Commit d7a4244 fixed phase-recon.md but the other phase/step files were
+# left untouched. This test catches regressions across all of them.
+# ---------------------------------------------------------------------------
+
+_SKILLS_ROOT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "skills", "holtz", "references",
+)
+
+# Files that must have --config-dir on every executable sahjhan command.
+# SKILL.md is NOT in this list because its examples are documented as brief.
+_RUNBOOK_FILES = (
+    "phase-recon.md",
+    "phase-audit.md",
+    "phase-convergence.md",
+    "phase-fix-loop.md",
+    "phase-merge.md",
+    "phase-finalize.md",
+    "step-10-fix-loop.md",
+)
+
+
+def _extract_runbook_sahjhan_lines(md_path: str) -> list[tuple[int, str]]:
+    """Extract executable sahjhan command lines from a runbook markdown file.
+
+    Only matches lines inside fenced code blocks (```...```) — those are
+    the lines Claude copy-pastes literally when walking through a phase.
+    Inline backtick references in prose are descriptive, not executable,
+    and are excluded.
+
+    Excludes:
+    - Dot/graphviz label strings (`label="sahjhan ..."`) — these are
+      diagrams, not executable instructions.
+    - Shell comments (lines starting with `#`).
+    - Line continuations that aren't the first line of a command.
+    """
+    with open(md_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    results: list[tuple[int, str]] = []
+    in_fence = False
+    prev_was_continuation = False
+
+    fenced_cmd_re = re.compile(r"(?:^|\s|nohup\s+)sahjhan\s")
+
+    for i, raw in enumerate(lines, 1):
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            prev_was_continuation = False
+            continue
+
+        if not in_fence:
+            continue
+
+        if stripped.startswith("#"):
+            prev_was_continuation = stripped.endswith("\\")
+            continue
+        if prev_was_continuation:
+            prev_was_continuation = stripped.endswith("\\")
+            continue
+        if fenced_cmd_re.search(stripped):
+            # Skip graphviz labels: `recover [label="sahjhan status..."]`
+            if 'label="sahjhan' in stripped or "label='sahjhan" in stripped:
+                prev_was_continuation = stripped.endswith("\\")
+                continue
+            results.append((i, stripped))
+        prev_was_continuation = stripped.endswith("\\")
+
+    return results
+
+
+def _needs_config_dir(cmd: str) -> bool:
+    """A sahjhan command needs --config-dir unless it's a no-op like --help/--version."""
+    tokens = cmd.split()
+    # Strip nohup prefix
+    if tokens and tokens[0] == "nohup":
+        tokens = tokens[1:]
+    # Skip env prefix
+    while tokens and "=" in tokens[0] and not tokens[0].startswith("-"):
+        tokens = tokens[1:]
+    if tokens and tokens[0] == "env":
+        tokens = tokens[1:]
+        while tokens and "=" in tokens[0] and not tokens[0].startswith("-"):
+            tokens = tokens[1:]
+    if not tokens or tokens[0] != "sahjhan":
+        return False
+    rest = tokens[1:]
+    # Help/version flags don't touch config at all.
+    if rest and rest[0] in {"--help", "-h", "--version"}:
+        return False
+    return True
+
+
+class TestRunbookConfigDirRequired:
+    """Every executable sahjhan command in a runbook file must include --config-dir.
+
+    Regression for issue #55: commit d7a4244 fixed phase-recon.md but left
+    phase-merge.md, phase-finalize.md, and step-10-fix-loop.md with bare
+    sahjhan commands that silently fail in the plugin-installed case.
+    """
+
+    @pytest.mark.parametrize("filename", _RUNBOOK_FILES)
+    def test_runbook_commands_include_config_dir(self, filename):
+        md_path = os.path.join(_SKILLS_ROOT, filename)
+        if not os.path.isfile(md_path):
+            pytest.skip(f"{filename} not present in this tree")
+        lines = _extract_runbook_sahjhan_lines(md_path)
+        offenders = [
+            (line_no, cmd)
+            for line_no, cmd in lines
+            if _needs_config_dir(cmd) and "--config-dir" not in cmd
+        ]
+        assert not offenders, (
+            f"{filename}: executable sahjhan commands missing --config-dir. "
+            f"Plugin-installed sahjhan fails without it. Fix with "
+            f"`--config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\"`.\n"
+            + "\n".join(f"  line {n}: {c}" for n, c in offenders)
         )
