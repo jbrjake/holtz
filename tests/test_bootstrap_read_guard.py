@@ -929,3 +929,120 @@ class TestBackslashEscapedCommandBypass:
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
             "Quoted sahjhan bypassed daemon stop allowlist"
         )
+
+
+@pytest.mark.hook_e2e
+class TestTerminatedMarkerRecoveryPath:
+    """When the `terminated` marker exists, the audit is dead (session key
+    lost, ledger unwritable). The primer and stop_hook both direct the user
+    to ``remove docs/holtz/.sahjhan/`` as the recovery step — but the
+    bash_guard blocks that exact command.
+
+    The guard exists to prevent Holtz from nuking the ledger during an
+    ACTIVE audit (see run 25 postmortem). When the audit is already
+    terminated, the guard is guarding nothing — it only traps the user in
+    an instruction they're told to follow but can't execute. Lift the
+    ``docs/holtz/.sahjhan/`` + managed-doc guards when the marker is
+    present so the recovery path the plugin documents actually works.
+    """
+
+    def _with_terminated_marker(self, tmp_path):
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "terminated").write_text(
+            "reason: daemon_pid_dead\ninit_pid: 99999\n"
+        )
+        return str(tmp_path)
+
+    def test_rm_sahjhan_dir_allowed_when_terminated(self, tmp_path):
+        """rm -rf docs/holtz/.sahjhan/ must be allowed after termination."""
+        cwd = self._with_terminated_marker(tmp_path)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf docs/holtz/.sahjhan/"},
+            "cwd": cwd,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "Terminated audit recovery blocked — primer tells the user to "
+            "remove docs/holtz/.sahjhan/ but the guard refuses the command"
+        )
+
+    def test_rm_sahjhan_dir_blocked_without_marker(self, tmp_path):
+        """Without the terminated marker, rm must still be blocked (active audit)."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)  # audit present, no termination
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf docs/holtz/.sahjhan/"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Active audit lost its guard on .sahjhan — the ledger is still live "
+            "and Holtz could destroy it mid-run (the run 25 failure mode)"
+        )
+
+    def test_rm_sahjhan_file_allowed_when_terminated(self, tmp_path):
+        """Deleting individual files inside .sahjhan/ is part of recovery too."""
+        cwd = self._with_terminated_marker(tmp_path)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm docs/holtz/.sahjhan/daemon.pid"},
+            "cwd": cwd,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "Recovery on a terminated audit must allow cleanup of .sahjhan contents"
+        )
+
+    def test_rm_status_md_allowed_when_terminated(self, tmp_path):
+        """Managed docs (STATUS.md/PUNCHLIST.md) are re-rendered — deletable on recovery."""
+        cwd = self._with_terminated_marker(tmp_path)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm docs/holtz/STATUS.md"},
+            "cwd": cwd,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "After termination, managed docs exist as stale artifacts and "
+            "blocking their deletion leaves the project in a half-state"
+        )
+
+    def test_write_to_enforcement_still_blocked_when_terminated(self, tmp_path):
+        """PROTECTED plugin-internal paths are always off-limits, even after termination.
+
+        The terminated marker lifts audit-state protections, not plugin integrity
+        protections. An agent that tries to modify enforcement/ in any state is
+        attempting to rewrite its own guards.
+        """
+        # Termination doesn't matter here — PROTECTED check fires on plugin cwd
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm enforcement/hooks/bash_guard.py"},
+            "cwd": REPO_ROOT,
+        }
+        # Set up terminated marker in the plugin's own tree just to verify it
+        # doesn't accidentally grant access to enforcement/.
+        sahjhan_dir = os.path.join(REPO_ROOT, "docs", "holtz", ".sahjhan")
+        marker = os.path.join(sahjhan_dir, "terminated")
+        created_dir = False
+        created_marker = False
+        try:
+            if not os.path.isdir(sahjhan_dir):
+                os.makedirs(sahjhan_dir)
+                created_dir = True
+            if not os.path.isfile(marker):
+                with open(marker, "w") as f:
+                    f.write("reason: test\n")
+                created_marker = True
+            output = _run_hook(event)
+            assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+                "Terminated marker must not lift PROTECTED guards on enforcement/"
+            )
+        finally:
+            if created_marker:
+                os.unlink(marker)
+            if created_dir:
+                os.rmdir(sahjhan_dir)

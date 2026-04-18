@@ -257,6 +257,18 @@ def _cwd_is_inside_plugin(cwd: str) -> bool:
     return cwd_real == plugin_real or cwd_real.startswith(plugin_real + os.sep)
 
 
+def _audit_terminated(cwd: str) -> bool:
+    """Return True when the audit in ``cwd`` is terminated (daemon dead).
+
+    The guard on MANAGED paths exists to stop Holtz from nuking the ledger
+    mid-run. Once the daemon is dead the ledger is already unwritable — the
+    primer and stop_hook both instruct the user to remove .sahjhan/ as the
+    recovery step, and keeping the guard active traps them in a dead-end.
+    """
+    marker = os.path.join(cwd, "docs", "holtz", ".sahjhan", "terminated")
+    return os.path.isfile(marker)
+
+
 def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
     """Check if a bash command writes to any protected or managed path.
 
@@ -273,11 +285,20 @@ def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
     # Default cwd=None preserves legacy test/dev behavior (check all paths).
     # Hook callers pass the real cwd so PROTECTED isn't enforced against
     # a target project that happens to have a same-named directory.
-    protected = (
-        list(ALL_PROTECTED)
-        if cwd is None or _cwd_is_inside_plugin(cwd)
-        else list(MANAGED_DOCS + MANAGED_DATA)
-    )
+    if cwd is None or _cwd_is_inside_plugin(cwd):
+        protected = list(ALL_PROTECTED)
+        # Keep plugin integrity guards on enforcement/, hooks/hooks.json,
+        # bin/sahjhan regardless of audit state — those protect the hook
+        # code itself, not audit state.
+        if cwd is not None and _audit_terminated(cwd):
+            protected = list(PROTECTED)
+    elif cwd is not None and _audit_terminated(cwd):
+        # Terminated audit in a target project — the MANAGED guards exist
+        # to preserve a live ledger; the ledger is already dead. Recovery
+        # requires removing .sahjhan/ (per the primer's own instructions).
+        protected = []
+    else:
+        protected = list(MANAGED_DOCS + MANAGED_DATA)
 
     # Issue #33: Pre-split interpreter check — python3 -c commands with
     # semicolons inside the string argument get split by the segment splitter,
@@ -553,26 +574,32 @@ def main() -> None:
             )
             return
 
+    # Terminated audit → ledger dead → MANAGED guards guard nothing.
+    # Skip them so the recovery path the primer advertises actually works.
+    audit_is_terminated = _audit_terminated(cwd)
+
     # MANAGED_DOCS: sahjhan-rendered files that must not be directly written.
     # Paths are relative to cwd (same resolution as MANAGED_DATA).
-    for p in MANAGED_DOCS:
-        full = os.path.realpath(os.path.join(cwd, p))
-        if resolved == full:
-            _block(
-                f"BLOCKED: {path} is a Sahjhan-managed document. "
-                "This file is rendered from ledger state and cannot be modified directly."
-            )
-            return
+    if not audit_is_terminated:
+        for p in MANAGED_DOCS:
+            full = os.path.realpath(os.path.join(cwd, p))
+            if resolved == full:
+                _block(
+                    f"BLOCKED: {path} is a Sahjhan-managed document. "
+                    "This file is rendered from ledger state and cannot be modified directly."
+                )
+                return
 
     # MANAGED_DATA paths are relative to cwd (not _PLUGIN_ROOT)
-    for p in MANAGED_DATA:
-        full = os.path.realpath(os.path.join(cwd, p))
-        if resolved == full or resolved.startswith(full + os.sep):
-            _block(
-                f"BLOCKED: {path} is in the Sahjhan data directory. "
-                "This path cannot be modified during an audit session."
-            )
-            return
+    if not audit_is_terminated:
+        for p in MANAGED_DATA:
+            full = os.path.realpath(os.path.join(cwd, p))
+            if resolved == full or resolved.startswith(full + os.sep):
+                _block(
+                    f"BLOCKED: {path} is in the Sahjhan data directory. "
+                    "This path cannot be modified during an audit session."
+                )
+                return
 
     _allow()
 
