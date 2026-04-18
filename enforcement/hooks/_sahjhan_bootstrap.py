@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import sys
 
 PROTECTED = [
@@ -73,6 +74,133 @@ _PLUGIN_ROOT = os.environ.get(
 
 
 _VALUE_FLAGS = {"--config-dir", "--data-dir", "-c"}
+
+
+# Interpreter → inline-code flags. These are the ONLY invocations whose
+# executable content can be inspected on the command line (the flag takes
+# the code as the following argument). Bare script execution
+# (`python3 script.py`, `bash script.sh`) cannot be analyzed statically
+# without reading the script, so those are out of scope for this check —
+# see the Write/Edit hook for direct-write protection.
+#
+# The historical check keyed on ``" -" in cmd`` which fires on any flag
+# (``-u``, ``-m``, ``--cov=``, …) and produced false positives on
+# legitimate commands like ``python3 enforcement/hooks/primer.py`` and
+# ``python -m pytest --cov=enforcement/hooks``. Matching only the
+# inline-code flags eliminates those FPs while still catching the real
+# write attempts (``python3 -c "open('enforcement/x','w').write(...)"``).
+_INTERP_INLINE_FLAGS: dict[str, tuple[str, ...]] = {
+    "python ":  (" -c ",),
+    "python3 ": (" -c ",),
+    "bash ":    (" -c ",),
+    "sh ":      (" -c ",),
+    "ruby ":    (" -e ",),
+    "node ":    (" -e ", " --eval "),
+}
+
+
+# Interpreters whose command line may carry a script path to execute.
+_SCRIPT_INTERPS = {"python", "python3", "bash", "sh", "ruby", "node"}
+
+
+def _script_path_from_command(seg_cmd: str) -> str | None:
+    """Return the script-path argument from an interpreter invocation, or None.
+
+    Recognizes ``python[3] [flags] <script>``, ``bash [flags] <script>``,
+    etc. Returns None when:
+    - first token isn't a known interpreter
+    - inline-code flags (-c, -e, --eval) are present (code is on the
+      command line, not in a script file — handled by the inline check)
+    - module invocation (``python -m modname``) — no script path
+    - stdin invocation (``bash -``) — no script path
+    - no positional arg after the interpreter and its flags
+
+    We only need this for the out-of-tree-script FN defense, so we err
+    on the side of returning None (skip check) when parsing is ambiguous.
+    """
+    try:
+        tokens = shlex.split(seg_cmd)
+    except ValueError:
+        return None
+    if len(tokens) < 2:
+        return None
+    interp = os.path.basename(tokens[0])
+    if interp not in _SCRIPT_INTERPS:
+        return None
+    i = 1
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok in {"-c", "-e", "--eval", "-m"}:
+            return None
+        if tok == "-":
+            return None
+        if tok.startswith("-"):
+            i += 1
+            continue
+        return tok
+    return None
+
+
+def _out_of_tree_script_block(
+    seg_cmd: str, cwd: str | None, protected: list[str],
+) -> str | None:
+    """Block interpreter invocations of out-of-tree scripts that write to protected paths.
+
+    Closes the wrapper-script bypass: ``bash /tmp/x.sh`` where the script
+    contents write to ``enforcement/``. Since the command string doesn't
+    mention the protected path, the per-segment checks miss it. Reading
+    the script and scanning its contents is the only way to catch this
+    without a full sandbox.
+
+    Scope is limited to scripts OUTSIDE the plugin tree — in-tree scripts
+    are already protected by the same Write/Edit hooks guarding the rest
+    of the plugin, so they're part of the trusted base. Out-of-tree
+    scripts (/tmp/x.sh, $HOME/bin/evil) have no such protection.
+    """
+    if cwd is None:
+        return None
+    script_path = _script_path_from_command(seg_cmd)
+    if not script_path:
+        return None
+    # Resolve path relative to cwd if not absolute.
+    resolved = script_path if os.path.isabs(script_path) else os.path.join(cwd, script_path)
+    try:
+        resolved_real = os.path.realpath(resolved)
+        plugin_real = os.path.realpath(_PLUGIN_ROOT)
+    except (OSError, ValueError):
+        return None
+    # In-tree scripts are trusted (their own modification is protected
+    # by the Write/Edit hooks). Only out-of-tree scripts need this guard.
+    in_tree = (
+        resolved_real == plugin_real
+        or resolved_real.startswith(plugin_real + os.sep)
+    )
+    if in_tree:
+        return None
+    try:
+        with open(resolved_real, encoding="utf-8", errors="replace") as f:
+            contents = f.read()
+    except OSError:
+        # Script can't be read — block conservatively. The agent should
+        # either bring the script into the tree or invoke inline code
+        # (where the content is visible on the command line).
+        return (
+            f"BLOCKED: Bash command invokes unreadable out-of-tree script "
+            f"'{script_path}'. During an audit session, scripts executed via "
+            "an interpreter must either be in-tree (committed to the repo, "
+            "so their own writes are protected) or their contents must be "
+            "readable for enforcement verification."
+        )
+    for p in protected:
+        if p in contents:
+            return (
+                f"BLOCKED: Bash command invokes out-of-tree script "
+                f"'{script_path}' that references protected path '{p}'. "
+                "During an audit session, only in-tree scripts may touch "
+                "protected paths — move the script into the repo or inline "
+                "the command so its effect is visible on the command line."
+            )
+    return None
 
 
 def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
@@ -371,14 +499,18 @@ def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
     # Env var regex handles quoted values: FOO="bar baz", FOO='x y', FOO=simple
     _ENV_RE = r'''(?:(?:export\s+)?\w+=(?:"[^"]*"|'[^']*'|\S*)\s*)+'''
     cmd_stripped = _strip_cmd_escapes(re.sub(r'^' + _ENV_RE, '', command.lstrip()).strip())
-    for interp in ("python ", "python3 ", "ruby ", "node ", "bash ", "sh "):
-        if cmd_stripped.startswith(interp) and " -" in cmd_stripped:
+    # Pad with a leading space so flag matches like ``" -c "`` work at the
+    # start of a token without needing a separate first-token branch.
+    _cmd_padded = " " + cmd_stripped
+    for interp, flags in _INTERP_INLINE_FLAGS.items():
+        if cmd_stripped.startswith(interp) and any(f in _cmd_padded for f in flags):
             for p in protected:
                 if p in command:
                     return (
                         f"BLOCKED: Bash command uses interpreter to write to protected path '{p}'. "
                         "This path cannot be modified during an audit session."
                     )
+            break
 
     # Split on shell operators to handle chained commands (BH-004 run 27)
     # BH-005 run 28: bare newline is a valid shell command separator — include \n
@@ -403,6 +535,14 @@ def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
         seg_cmd = _strip_cmd_escapes(re.sub(
             r'^' + _ENV_RE, '', seg,
         ).strip())
+
+        # Wrapper-script bypass defense (closes the FN twin of the
+        # interpreter-write check): if seg invokes an interpreter on an
+        # out-of-tree script, read the script and block when it references
+        # a protected path. See _out_of_tree_script_block for scope.
+        script_block = _out_of_tree_script_block(seg_cmd, cwd, protected)
+        if script_block:
+            return script_block
 
         for p in protected:
             # Redirect check: find ALL > and >> in the segment, not just first
@@ -530,8 +670,12 @@ def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
             # BH-002 (run 27): Interpreter execution — python -c, dd, wget
             # These can write to arbitrary paths without using shell redirects.
             # Use substring match on full segment — paths may be inside quotes.
-            for interp in ("python ", "python3 ", "ruby ", "node ", "bash ", "sh "):
-                if seg_cmd.startswith(interp) and " -" in seg_cmd and p in seg:
+            # Only the inline-code flags (-c, -e, --eval) produce statically
+            # visible executable content; script-path execution is not
+            # inspectable here (see _INTERP_INLINE_FLAGS docstring).
+            _seg_padded = " " + seg_cmd
+            for interp, flags in _INTERP_INLINE_FLAGS.items():
+                if seg_cmd.startswith(interp) and any(f in _seg_padded for f in flags) and p in seg:
                     return (
                             f"BLOCKED: Bash command uses interpreter to write to protected path '{p}'. "
                             "This path cannot be modified during an audit session."

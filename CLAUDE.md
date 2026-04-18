@@ -1,5 +1,49 @@
 # Holtz — Development Guide
 
+## Before claiming anything works
+
+**Do not report success, "in-flight," "should pass," "likely fixed," or
+any future-tense verification claim without observed evidence.**
+
+Banned phrases when reporting status:
+- "should work" / "should pass" / "should fix it" / "likely passes"
+- "CI runs in-flight" (as a stand-in for "I don't know, but probably OK")
+- "good to go" / "ready to push" before gates ran
+- "I think this is fixed" without pasted output
+
+A claim of "CI passed" must be backed by `gh run view <id>` showing
+`conclusion=success`. A claim of "tests pass" must be backed by an
+observed `pytest` exit 0. A claim of "no type errors" must be backed
+by an observed `mypy` exit 0. Assertion without evidence is the
+violation — not just inaccurate prediction.
+
+The local gate *is* the CI gate. `git-hooks/pre-commit` runs the fast
+CI subset; `git-hooks/pre-push` runs the full CI-equivalent for
+pushes to `main` or `dev`. If you've bypassed a hook with
+`--no-verify`, say so explicitly.
+
+## Don't run the plugin against itself
+
+`scripts/install-hooks.sh` defaults to **dev mode**: it installs git
+hooks and the sahjhan binary but does NOT wire the plugin's
+`PreToolUse`/`PostToolUse` hooks into this repo's Claude Code session.
+Running the plugin against its own development repo creates circular
+blocks — the hooks protect `enforcement/`, but dev work edits
+`enforcement/`.
+
+To simulate a downstream consumer (e.g. verify the hooks still block
+what they should), run:
+
+```bash
+scripts/install-hooks.sh --simulate-downstream
+```
+
+To return to dev mode after simulating:
+
+```bash
+scripts/install-hooks.sh --no-simulate-downstream
+```
+
 ## Branch Model
 
 - **`main`** — default branch, releases only. What users see on GitHub.
