@@ -73,13 +73,44 @@ class TestBootstrapHook:
         assert_blocked(code, output, "protected enforcement infrastructure")
 
     def test_blocks_binary_modification(self):
-        """Bootstrap hook blocks edits to bin/sahjhan*."""
+        """Bootstrap hook blocks edits to bin/sahjhan (the symlink itself).
+
+        ``bin/sahjhan`` is the canonical protected path. On macOS it's a
+        symlink to the aarch64 binary, on Linux to the x86_64 one — the
+        exact name matches PROTECTED without any arch-dependent path
+        comparison.
+        """
         event = {
-            "tool_input": {"file_path": "bin/sahjhan-aarch64-apple-darwin"},
+            "tool_input": {"file_path": "bin/sahjhan"},
             "cwd": REPO_ROOT,
         }
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_blocked(code, output, "protected enforcement infrastructure")
+
+    def test_blocks_all_arch_binaries(self):
+        """Every bin/sahjhan-<arch> sibling must be blocked, not just the
+        one matching the current machine.
+
+        Pre-existing bug: the check used ``os.path.realpath`` on the
+        PROTECTED prefix, which followed ``bin/sahjhan`` to the
+        arch-specific target, making the block depend on which arch's
+        binary happened to exist locally. macOS blocked aarch64 and
+        missed x86_64; Linux did the reverse. The boundary-aware prefix
+        check now catches every sibling.
+        """
+        for arch in (
+            "bin/sahjhan-aarch64-apple-darwin",
+            "bin/sahjhan-x86_64-unknown-linux-gnu",
+            "bin/sahjhan-aarch64-unknown-linux-gnu",
+        ):
+            event = {
+                "tool_input": {"file_path": arch},
+                "cwd": REPO_ROOT,
+            }
+            code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+            assert_blocked(
+                code, output, "protected enforcement infrastructure",
+            ), f"expected block for {arch}, got allow"
 
     def test_blocks_self_modification(self):
         """Bootstrap hook blocks edits to itself."""

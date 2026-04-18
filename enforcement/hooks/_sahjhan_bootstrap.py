@@ -792,18 +792,47 @@ def main() -> None:
         _allow()
         return
 
-    # Resolve both absolute and relative paths
-    resolved = os.path.realpath(path) if os.path.isabs(path) else os.path.realpath(os.path.join(cwd, path))
+    # Two resolutions of the input path:
+    # - ``resolved_literal`` (no symlink follow) drives the PROTECTED
+    #   prefix match. ``bin/sahjhan`` is a symlink to the arch-specific
+    #   binary, so symlink-following only catches the local machine's
+    #   arch and misses sibling binaries — the literal prefix catches
+    #   every ``bin/sahjhan-<arch>``.
+    # - ``resolved_real`` (full symlink follow) drives the MANAGED_DOCS
+    #   and MANAGED_DATA checks. Those compare against realpath of
+    #   ``<cwd>/<managed-path>``, and macOS /tmp → /private/tmp means
+    #   test fixtures under /tmp need symlink-following on both sides
+    #   or the equality check fails spuriously.
+    resolved_literal = (
+        os.path.normpath(os.path.abspath(path))
+        if os.path.isabs(path)
+        else os.path.normpath(os.path.join(cwd, path))
+    )
+    resolved = os.path.realpath(resolved_literal)
 
-    # Protected paths are relative to plugin root, not cwd
+    # Protected paths are relative to plugin root, not cwd. For each
+    # protected prefix, match on strict boundary characters:
+    #   - os.sep → directory containment (``enforcement/foo``)
+    #   - ``-`` or ``.`` → suffix on the same base name
+    #     (``bin/sahjhan-arm64``, ``bin/sahjhan.bak``)
+    # A bare startswith would also match ``enforcement_evil``, which the
+    # existing ``test_allows_enforcement_prefix_collision`` test forbids.
     for p in PROTECTED:
-        full = os.path.realpath(os.path.join(_PLUGIN_ROOT, p))
-        if resolved == full or resolved.startswith(full + os.sep):
+        full = os.path.normpath(os.path.join(_PLUGIN_ROOT, p))
+        if resolved_literal == full:
             _block(
                 f"BLOCKED: {path} is protected enforcement infrastructure. "
                 "This file cannot be modified during an audit session."
             )
             return
+        if resolved_literal.startswith(full):
+            boundary = resolved_literal[len(full):len(full) + 1]
+            if boundary in (os.sep, "-", "."):
+                _block(
+                    f"BLOCKED: {path} is protected enforcement infrastructure. "
+                    "This file cannot be modified during an audit session."
+                )
+                return
 
     # Terminated audit → ledger dead → MANAGED guards guard nothing.
     # Skip them so the recovery path the primer advertises actually works.
