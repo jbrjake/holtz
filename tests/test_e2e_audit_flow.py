@@ -1,0 +1,270 @@
+"""End-to-end audit flow tests — run the actual hook chain against a real
+daemon and walk transitions the way Claude Code would during a Holtz audit.
+
+These tests are how we know the whole machine actually works — not just that
+individual hooks handle JSON correctly, but that a Write/Edit in fix_loop
+is actually blocked, that Stop in a non-terminal state is actually blocked,
+and that the TDD message the user sees is the *correct* one, not a generic
+"enforcement degraded" replacement.
+
+If these pass, the core enforcement claim of Holtz — "you cannot fix without
+a failing test first" — holds end-to-end. If they fail, that claim is theater.
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+
+import pytest
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENFORCEMENT_HOOKS_DIR = os.path.join(REPO_ROOT, "enforcement", "hooks")
+
+sys.path.insert(0, os.path.join(REPO_ROOT, "tests"))
+from hook_runner import run_hook  # noqa: E402
+
+pytestmark = [pytest.mark.slow, pytest.mark.integration, pytest.mark.hook_e2e]
+
+
+def _run_sahjhan(real_daemon, *args, check=True):
+    cmd = [
+        real_daemon["binary"],
+        "--config-dir", real_daemon["config_dir"],
+        *args,
+    ]
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        cwd=real_daemon["project_root"],
+        timeout=10,
+    )
+    if check and result.returncode != 0:
+        raise RuntimeError(
+            f"sahjhan failed (exit {result.returncode}):\n"
+            f"cmd: {' '.join(cmd)}\n"
+            f"stdout: {result.stdout}\n"
+            f"stderr: {result.stderr}"
+        )
+    return result
+
+
+def _hook_env(real_daemon):
+    env = os.environ.copy()
+    env["SAHJHAN_DAEMON_SOCKET"] = real_daemon["sock_path"]
+    env["CLAUDE_PLUGIN_ROOT"] = REPO_ROOT
+    return env
+
+
+def _invoke_hook(hook_name, event, real_daemon, *, capture_diag=False):
+    script = os.path.join(ENFORCEMENT_HOOKS_DIR, hook_name)
+    out = run_hook(
+        script, event,
+        cwd=real_daemon["project_root"],
+        env=_hook_env(real_daemon),
+    )
+    if capture_diag and "_stderr" not in out:
+        # run_hook already strips these on successful JSON parse; re-invoke
+        # with subprocess directly when the caller wants stderr for debugging.
+        import subprocess as _sp
+        res = _sp.run(
+            [sys.executable, script],
+            input=json.dumps(event),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=real_daemon["project_root"],
+            env=_hook_env(real_daemon),
+        )
+        out["_stderr"] = res.stderr
+        out["_returncode"] = res.returncode
+    return out
+
+
+def _read_enforcement_cache_via_daemon(real_daemon) -> dict | None:
+    """Read the enforcement cache directly from the daemon socket.
+
+    This is the exact call path pre_tool_hook takes — if this returns None
+    in tests, pre_tool_hook will skip hook eval as stale.
+    """
+    sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
+    # Force clean import so the test picks up any recent edits to the module.
+    for modname in ("_protocol_cache", "_common"):
+        sys.modules.pop(modname, None)
+    from _protocol_cache import read_cache  # noqa: E402
+    return read_cache(real_daemon["project_root"])
+
+
+def _fast_forward_to_fix_loop(real_daemon) -> None:
+    """Fast-forward the real daemon's ledger into fix_loop state.
+
+    Full protocol flow (recon → audit → merge → fix_loop) requires many
+    gates. For isolated E2E validation of a single gate, we:
+    1. Transition idle → recon via the normal CLI
+    2. Record a state_transition event directly so sahjhan's state resolver
+       sees the ledger as being in fix_loop
+
+    This bypasses the gate checks intentionally — the gate checks are
+    orthogonal to what this test covers (hook wrapper correctly
+    propagates sahjhan's decision to Claude Code).
+    """
+    _run_sahjhan(real_daemon, "ledger", "create", "--from", "run", "1", "--activate")
+    _run_sahjhan(real_daemon, "transition", "run_start")
+    # Manually record a transition event so the ledger state advances to fix_loop.
+    _run_sahjhan(
+        real_daemon, "event", "state_transition",
+        "--field", "from=recon",
+        "--field", "to=fix_loop",
+        "--field", "run=1",
+        "--field", "auditor=holtz",
+        "--field", "project=holtz",
+    )
+    result = _run_sahjhan(real_daemon, "--json", "status")
+    data = json.loads(result.stdout)
+    assert data["data"]["state"] == "fix_loop", (
+        f"Fast-forward to fix_loop did not land in expected state: {data}"
+    )
+
+
+def _freshen_enforcement_cache(real_daemon) -> None:
+    """Run protocol_tracker against a sahjhan command so the enforcement
+    cache gets the `last_sahjhan_cmd` timestamp. Without this, pre_tool_hook
+    sees stale enforcement and skips hook eval.
+    """
+    event = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "sahjhan status"},
+        "tool_response": {"exit_code": 0, "output": "recon"},
+        "cwd": real_daemon["project_root"],
+    }
+    _invoke_hook("protocol_tracker.py", event, real_daemon)
+
+
+class TestTddGateBlocksWriteInFixLoop:
+    """The flagship enforcement: Write/Edit in fix_loop without a failing test
+    must be blocked with a message telling the model to record
+    test_failed_before_fix first.
+
+    If this test fails, Holtz's core TDD discipline is theater.
+    """
+
+    def test_write_blocked_in_fix_loop_without_failing_test(self, real_daemon):
+        """pre_tool_hook must block a source Write in fix_loop with the
+        TDD violation message."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _freshen_enforcement_cache(real_daemon)
+
+        # Sanity probe — confirm sahjhan's own hook eval reports block
+        # before we blame the wrapper for the outcome. sahjhan exits 1 on
+        # block, so don't treat that as failure here.
+        probe = _run_sahjhan(
+            real_daemon, "--json", "hook", "eval",
+            "--event", "PreToolUse",
+            "--tool", "Write",
+            "--file", os.path.join(real_daemon["project_root"], "src", "app.py"),
+            check=False,
+        )
+        probe_data = json.loads(probe.stdout)
+        assert probe_data["data"]["decision"] == "block", (
+            f"Sahjhan hook eval should block, but returned: {probe_data}"
+        )
+
+        event = {
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": os.path.join(real_daemon["project_root"], "src", "app.py"),
+                "content": "print('hi')\n",
+            },
+            "cwd": real_daemon["project_root"],
+        }
+        output = _invoke_hook("pre_tool_hook.py", event, real_daemon)
+
+        hook_out = output.get("hookSpecificOutput", {})
+        assert hook_out.get("permissionDecision") == "deny", (
+            f"Expected deny, got: {output}"
+        )
+        reason = hook_out.get("permissionDecisionReason", "")
+        assert "TDD" in reason or "failing test" in reason.lower(), (
+            f"Block reason should surface the TDD violation instruction "
+            f"so the model knows to record test_failed_before_fix. Got: {reason!r}"
+        )
+
+    def test_edit_blocked_in_fix_loop_without_failing_test(self, real_daemon):
+        """Same enforcement for Edit: in fix_loop, block with TDD message."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _freshen_enforcement_cache(real_daemon)
+
+        event = {
+            "tool_name": "Edit",
+            "tool_input": {
+                "file_path": os.path.join(real_daemon["project_root"], "src", "app.py"),
+                "old_string": "print('hi')",
+                "new_string": "print('hello')",
+            },
+            "cwd": real_daemon["project_root"],
+        }
+        output = _invoke_hook("pre_tool_hook.py", event, real_daemon)
+
+        hook_out = output.get("hookSpecificOutput", {})
+        assert hook_out.get("permissionDecision") == "deny", (
+            f"Expected deny, got: {output}"
+        )
+        reason = hook_out.get("permissionDecisionReason", "")
+        assert "TDD" in reason or "failing test" in reason.lower(), (
+            f"Block reason should surface the TDD violation instruction. "
+            f"Got: {reason!r}"
+        )
+
+    def test_write_allowed_after_test_failed_before_fix_event(self, real_daemon):
+        """After recording test_failed_before_fix, the same Write should pass."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _freshen_enforcement_cache(real_daemon)
+
+        # Record the required event to release the gate.
+        _run_sahjhan(
+            real_daemon, "event", "test_failed_before_fix",
+            "--field", "finding_id=BH-001",
+            "--field", "test_name=test_something",
+            "--field", "run=1",
+            "--field", "auditor=holtz",
+            "--field", "project=holtz",
+        )
+
+        event = {
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": os.path.join(real_daemon["project_root"], "src", "app.py"),
+                "content": "print('hi')\n",
+            },
+            "cwd": real_daemon["project_root"],
+        }
+        output = _invoke_hook("pre_tool_hook.py", event, real_daemon)
+
+        hook_out = output.get("hookSpecificOutput", {})
+        assert hook_out.get("permissionDecision") == "allow", (
+            f"After test_failed_before_fix event, Write should be allowed. Got: {output}"
+        )
+
+    def test_test_file_write_allowed_in_fix_loop(self, real_daemon):
+        """Writing test files is allowed in fix_loop (filter exempts tests/**)."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _freshen_enforcement_cache(real_daemon)
+
+        event = {
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": os.path.join(
+                    real_daemon["project_root"], "tests", "test_new.py",
+                ),
+                "content": "def test_x(): assert False\n",
+            },
+            "cwd": real_daemon["project_root"],
+        }
+        output = _invoke_hook("pre_tool_hook.py", event, real_daemon)
+
+        hook_out = output.get("hookSpecificOutput", {})
+        assert hook_out.get("permissionDecision") == "allow", (
+            f"Test file writes should be exempt from TDD gate. Got: {output}"
+        )
