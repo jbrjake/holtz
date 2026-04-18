@@ -348,6 +348,41 @@ def test_hooks_json_registers_enforcement_hooks():
     )
 
 
+def test_trusted_callers_keys_match_daemon_path_strip():
+    """Manifest keys must match how the daemon identifies caller scripts.
+
+    The sahjhan daemon identifies a caller by taking the caller's absolute
+    script path and stripping its ``--config-dir`` prefix (which is
+    ``<plugin_root>/enforcement``). So a script at
+    ``<plugin_root>/enforcement/hooks/primer.py`` is identified as
+    ``hooks/primer.py`` — NOT ``enforcement/hooks/primer.py``.
+
+    A previous version of the manifest used plugin-root-relative keys with
+    an ``enforcement/`` prefix. Every daemon auth request silently failed
+    with "caller not in manifest", and the whole enforcement layer
+    collapsed to fail-open in the installed-plugin case — read_cache
+    returned None everywhere, is_enforcement_fresh returned False, every
+    protocol gate fell through to exit_ok. No tests caught this because
+    no tests hit the real authed-event path.
+
+    Pin the format so the regression can't repeat silently.
+    """
+    repo_root = Path(__file__).parent.parent
+    manifest_path = repo_root / "enforcement" / "trusted-callers.toml"
+    manifest = tomllib.loads(manifest_path.read_text())
+
+    bad_keys = [
+        k for k in manifest.get("callers", {})
+        if k.startswith("enforcement/")
+    ]
+    assert not bad_keys, (
+        "trusted-callers.toml keys must be relative to --config-dir "
+        "(which is enforcement/), not relative to plugin root. "
+        f"These keys will be rejected by the daemon: {bad_keys}. "
+        "Regenerate with scripts/hash-trusted-callers.sh."
+    )
+
+
 def test_trusted_callers_hashes_match_files():
     """Every hash in trusted-callers.toml must match the current file content.
 
@@ -372,9 +407,20 @@ def test_trusted_callers_hashes_match_files():
             mismatches.append(f"{rel_path}: manifest entry missing sha256: prefix")
             continue
         expected_hash = expected.removeprefix("sha256:")
-        full_path = repo_root / rel_path
-        if not full_path.is_file():
-            mismatches.append(f"{rel_path}: file not found at {full_path}")
+        # Manifest keys match the daemon's caller-identification path, which
+        # strips the --config-dir prefix: `hooks/primer.py` really lives at
+        # `enforcement/hooks/primer.py`, while `hooks/subagent_findings_check.py`
+        # lives at the plugin-root path of the same name. Try both.
+        candidates = [
+            repo_root / "enforcement" / rel_path,
+            repo_root / rel_path,
+        ]
+        full_path = next((p for p in candidates if p.is_file()), None)
+        if full_path is None:
+            mismatches.append(
+                f"{rel_path}: file not found at any of "
+                + ", ".join(str(p) for p in candidates)
+            )
             continue
         actual_hash = hashlib.sha256(full_path.read_bytes()).hexdigest()
         if actual_hash != expected_hash:

@@ -75,7 +75,10 @@ def _read_status_cache_state(cwd: str) -> str | None:
     try:
         with open(cache_path, encoding="utf-8") as f:
             data = json.load(f)
-        return data.get("state", "")
+        # Sahjhan's status-cache.json writes the protocol state under
+        # ``current_state``. Older docs/tests assumed a bare ``state`` key;
+        # keep that as a fallback in case the on-disk layout evolves.
+        return data.get("current_state") or data.get("state") or ""
     except (OSError, ValueError, KeyError):
         return None
 

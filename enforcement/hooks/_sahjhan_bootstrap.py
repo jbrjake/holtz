@@ -469,6 +469,40 @@ def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
     return None
 
 
+def _maybe_bootstrap_binary(command: str) -> None:
+    """Trigger the binary bootstrap on a first invocation of `sahjhan …`.
+
+    The rest of the hook chain defers `ensure_sahjhan()` until a Sahjhan
+    audit is already active (primer.py, bash_guard.py, post_tool_hook.py),
+    which avoids 100 MB downloads in projects that never use Holtz. That
+    ordering is right for steady state but wrong for the first run: the
+    skill instructs the model to invoke `sahjhan init` before any audit
+    dir exists, and without the binary the command dies with
+    "command not found".
+
+    Do the bootstrap here — this hook is PreToolUse, so we run before
+    Bash executes. Only fires when the user is actually typing a sahjhan
+    command, so uninvolved projects still pay zero download cost.
+    Failures are swallowed: if the download doesn't work (offline,
+    checksum mismatch) the Bash command fails naturally with a clear
+    error Claude can surface to the user.
+    """
+    import re as _re
+    segments = _re.split(r'\s*(?:&&|\|\||[;|\n])\s*', command)
+    for seg in segments:
+        seg = seg.strip()
+        if not seg:
+            continue
+        if _extract_sahjhan_subcmd(seg) is None:
+            continue
+        try:
+            from _resolve import ensure_sahjhan  # local import keeps non-sahjhan Bash fast
+            ensure_sahjhan()
+        except Exception:
+            pass
+        return
+
+
 def main() -> None:
     try:
         event = json.loads(sys.stdin.read())
@@ -483,6 +517,7 @@ def main() -> None:
 
     # Bash tool: check for write operations and privileged daemon commands
     if command and not path:
+        _maybe_bootstrap_binary(command)
         # Allowlist check for sahjhan subcommands (defense-in-depth)
         sahjhan_block = _bash_references_blocked_sahjhan(command)
         if sahjhan_block:
