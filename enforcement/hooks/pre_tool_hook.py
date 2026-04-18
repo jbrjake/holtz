@@ -102,6 +102,7 @@ def main() -> None:
     if data is None:
         exit_enforcement_error(cwd, "Hook eval returned invalid JSON")
 
+    assert data is not None  # exit_enforcement_error is NoReturn; help mypy
     eval_data = data.get("data", data)
     decision = eval_data.get("decision", "allow")
     messages = eval_data.get("messages", [])

@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 import re
 import sys
-from typing import Any
+from typing import Any, NoReturn
 
 
 def read_event() -> dict[str, Any]:
@@ -42,7 +42,7 @@ def read_event() -> dict[str, Any]:
         return {}
 
 
-def exit_ok(event_name: str = "") -> None:
+def exit_ok(event_name: str = "") -> NoReturn:
     """Allow the tool call silently, exit 0.
 
     For PreToolUse hooks, pass event_name="PreToolUse" to emit
@@ -65,7 +65,7 @@ def exit_ok(event_name: str = "") -> None:
     sys.exit(0)
 
 
-def exit_warn(msg: str, event_name: str = "") -> None:
+def exit_warn(msg: str, event_name: str = "") -> NoReturn:
     """Warn but allow, exit 0.
 
     When event_name is provided, emits hookSpecificOutput with
@@ -103,7 +103,7 @@ def exit_warn(msg: str, event_name: str = "") -> None:
     sys.exit(0)
 
 
-def exit_block(msg: str) -> None:
+def exit_block(msg: str) -> NoReturn:
     """Block the tool call (PreToolUse only), exit 0.
 
     Emits hookSpecificOutput with permissionDecision "deny".
@@ -124,7 +124,7 @@ def exit_block(msg: str) -> None:
     sys.exit(0)
 
 
-def exit_stop_allow() -> None:
+def exit_stop_allow() -> NoReturn:
     """Allow a Stop event. No output, exit 0.
 
     Stop hooks use a different protocol than PreToolUse hooks:
@@ -191,7 +191,7 @@ def mask_fenced_blocks(text: str) -> str:
     return "\n".join(result)
 
 
-def exit_stop_warn(message: str) -> None:
+def exit_stop_warn(message: str) -> NoReturn:
     """Allow a Stop event but surface a warning message.
 
     Used when enforcement is degraded (e.g., config not found) — the
@@ -207,7 +207,7 @@ def exit_stop_warn(message: str) -> None:
     sys.exit(0)
 
 
-def exit_stop_block(reason: str) -> None:
+def exit_stop_block(reason: str) -> NoReturn:
     """Block a Stop event. Stop-format JSON on stdout, exit 0.
 
     The reason is shown to the model, which must then address it

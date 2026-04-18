@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)
 ![1608 tests](https://img.shields.io/badge/tests-1608_total-brightgreen.svg)
-![84% coverage](https://img.shields.io/badge/coverage-84%25-brightgreen.svg)
+![83% coverage](https://img.shields.io/badge/coverage-83%25-brightgreen.svg)
 
 **Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
 

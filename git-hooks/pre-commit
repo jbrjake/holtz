@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Pre-commit gate: lint + type-check the things CI will check.
+#
+# Exists because CI kept failing on mypy/ruff issues that would have been
+# caught by a two-second local check. If you need to bypass (e.g. emergency
+# commit with a known CI-side fix), use `git commit --no-verify`.
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Activate venv if present so ruff/mypy are on PATH.
+if [[ -f .venv/bin/activate ]]; then
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+fi
+
+# Only run on Python changes — no point blocking commits that only touch
+# markdown, JSON, or TOML on mypy's behalf.
+CHANGED_PY=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.py$' || true)
+if [[ -z "$CHANGED_PY" ]]; then
+    exit 0
+fi
+
+echo "pre-commit: ruff check"
+if ! ruff check .; then
+    echo "pre-commit: ruff failed. Fix and re-commit (or --no-verify to bypass)." >&2
+    exit 1
+fi
+
+echo "pre-commit: mypy"
+if ! mypy --explicit-package-bases \
+        skills/holtz/scripts/ \
+        hooks/ \
+        enforcement/hooks/ \
+        scripts/ \
+        enforcement/scripts/; then
+    echo "pre-commit: mypy failed. Fix and re-commit (or --no-verify to bypass)." >&2
+    exit 1
+fi
