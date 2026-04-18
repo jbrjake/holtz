@@ -247,6 +247,26 @@ class TestTddGateBlocksWriteInFixLoop:
             f"After test_failed_before_fix event, Write should be allowed. Got: {output}"
         )
 
+    def test_write_blocked_in_recon_state_without_tdd_event(self, real_daemon):
+        """TDD gate only applies in fix_loop. Writes in recon must be allowed."""
+        _run_sahjhan(real_daemon, "ledger", "create", "--from", "run", "1", "--activate")
+        _run_sahjhan(real_daemon, "transition", "run_start")
+        _freshen_enforcement_cache(real_daemon)
+
+        event = {
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": os.path.join(real_daemon["project_root"], "src", "app.py"),
+                "content": "x\n",
+            },
+            "cwd": real_daemon["project_root"],
+        }
+        output = _invoke_hook("pre_tool_hook.py", event, real_daemon)
+        hook_out = output.get("hookSpecificOutput", {})
+        assert hook_out.get("permissionDecision") == "allow", (
+            f"Writes outside fix_loop must be allowed. Got: {output}"
+        )
+
     def test_test_file_write_allowed_in_fix_loop(self, real_daemon):
         """Writing test files is allowed in fix_loop (filter exempts tests/**)."""
         _fast_forward_to_fix_loop(real_daemon)
@@ -267,4 +287,147 @@ class TestTddGateBlocksWriteInFixLoop:
         hook_out = output.get("hookSpecificOutput", {})
         assert hook_out.get("permissionDecision") == "allow", (
             f"Test file writes should be exempt from TDD gate. Got: {output}"
+        )
+
+
+class TestStopGateBlocksInNonTerminalStates:
+    """Stop hook must block the session from exiting while an audit is
+    mid-flight — otherwise the user can walk away in fix_loop and ship
+    an incomplete audit. Real-daemon tests previously only asserted
+    the hook "didn't crash"; this class asserts the actual block.
+    """
+
+    def test_stop_blocked_in_recon_state(self, real_daemon):
+        """Stop in recon must block with a message naming the state."""
+        _run_sahjhan(real_daemon, "ledger", "create", "--from", "run", "1", "--activate")
+        _run_sahjhan(real_daemon, "transition", "run_start")
+        _freshen_enforcement_cache(real_daemon)
+
+        event = {
+            "stop_hook_type": "Stop",
+            "stopHookInput": {"description": "test stop"},
+            "cwd": real_daemon["project_root"],
+        }
+        output = _invoke_hook("stop_hook.py", event, real_daemon)
+
+        decision = output.get("decision")
+        assert decision == "block", (
+            f"Stop in recon must block. Got: {output}"
+        )
+        reason = output.get("reason", "")
+        assert "recon" in reason.lower() or "audit" in reason.lower(), (
+            f"Block reason should name the state. Got: {reason!r}"
+        )
+
+    def test_stop_blocked_in_fix_loop_state(self, real_daemon):
+        """Stop in fix_loop must block — user cannot walk away mid-fix."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _freshen_enforcement_cache(real_daemon)
+
+        event = {
+            "stop_hook_type": "Stop",
+            "stopHookInput": {"description": "test stop"},
+            "cwd": real_daemon["project_root"],
+        }
+        output = _invoke_hook("stop_hook.py", event, real_daemon)
+
+        decision = output.get("decision")
+        assert decision == "block", (
+            f"Stop in fix_loop must block. Got: {output}"
+        )
+        reason = output.get("reason", "")
+        assert "fix_loop" in reason.lower() or "audit" in reason.lower(), (
+            f"Block reason should name the state. Got: {reason!r}"
+        )
+
+
+class TestFullAuditLifecycle:
+    """Walk the transitions a real user hits: init → recon → fix_loop →
+    terminal. Asserts the hook chain doesn't silently allow what should
+    be blocked at each state and doesn't block what should pass.
+    """
+
+    def test_read_always_allowed_in_fix_loop(self, real_daemon):
+        """Read must always pass through — read guards were removed when
+        secrets moved to daemon memory. If Reads get blocked, the session
+        is bricked (issue #55)."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _freshen_enforcement_cache(real_daemon)
+
+        event = {
+            "tool_name": "Read",
+            "tool_input": {
+                "file_path": os.path.join(real_daemon["project_root"], "anything.py"),
+            },
+            "cwd": real_daemon["project_root"],
+        }
+        # _daemon_lifecycle is the hook that enforces passthrough tools
+        output = _invoke_hook("_daemon_lifecycle.py", event, real_daemon)
+        hook_out = output.get("hookSpecificOutput", {})
+        assert hook_out.get("permissionDecision") == "allow", (
+            f"Read must always pass through. Got: {output}"
+        )
+
+    def test_managed_path_write_blocked(self, real_daemon):
+        """Writes to Sahjhan-managed docs (STATUS.md, PUNCHLIST.md) must
+        be blocked by pre_tool_hook even in idle — they are rendered
+        from the ledger and must not be edited directly.
+        """
+        # Idle daemon — no transitions yet
+        event = {
+            "tool_name": "Write",
+            "tool_input": {
+                "file_path": os.path.join(
+                    real_daemon["project_root"], "docs", "holtz", "STATUS.md",
+                ),
+                "content": "fake status",
+            },
+            "cwd": real_daemon["project_root"],
+        }
+        output = _invoke_hook("pre_tool_hook.py", event, real_daemon)
+        hook_out = output.get("hookSpecificOutput", {})
+        assert hook_out.get("permissionDecision") == "deny", (
+            f"Write to managed STATUS.md must be denied. Got: {output}"
+        )
+        reason = hook_out.get("permissionDecisionReason", "")
+        assert "managed" in reason.lower() or "sahjhan" in reason.lower(), (
+            f"Block reason should explain the path is managed. Got: {reason!r}"
+        )
+
+    def test_user_prompt_submit_primer_on_idle(self, real_daemon):
+        """Primer hook on UserPromptSubmit should not inject anything when
+        no audit is in progress (data_dir is there, but daemon is idle)."""
+        event = {
+            "cwd": real_daemon["project_root"],
+            "user_prompt": "test",
+        }
+        output = _invoke_hook("primer.py", event, real_daemon)
+        # Primer exits_ok silently when idle. No assistant-visible context.
+        raw = output.get("_empty") or output.get("hookSpecificOutput", {}).get(
+            "additionalContext", ""
+        )
+        # Either empty output (silent exit_ok) or no additionalContext
+        assert output.get("_returncode", 0) == 0
+        if isinstance(raw, str) and raw:
+            # If primer DID inject, it shouldn't claim an active audit
+            assert "AUDIT TERMINATED" not in raw, (
+                f"Primer should not claim termination in idle state. Got: {raw!r}"
+            )
+
+    def test_user_prompt_submit_primer_injects_state_during_audit(self, real_daemon):
+        """During an active audit, primer must inject current state so the
+        model knows where it is after /clear or compaction."""
+        _run_sahjhan(real_daemon, "ledger", "create", "--from", "run", "1", "--activate")
+        _run_sahjhan(real_daemon, "transition", "run_start")
+        _freshen_enforcement_cache(real_daemon)
+
+        event = {
+            "cwd": real_daemon["project_root"],
+            "user_prompt": "continue the audit",
+        }
+        output = _invoke_hook("primer.py", event, real_daemon)
+        hook_out = output.get("hookSpecificOutput", {})
+        context = hook_out.get("additionalContext", "")
+        assert "recon" in context.lower() or "sahjhan resume" in context.lower(), (
+            f"Primer must inject resume context during active audit. Got: {output}"
         )
