@@ -269,6 +269,42 @@ def _audit_terminated(cwd: str) -> bool:
     return os.path.isfile(marker)
 
 
+def _arg_contains_managed(arg: str, cwd: str, managed: list[str]) -> str | None:
+    """Return a managed path name if ``arg`` resolves to an ancestor of it.
+
+    ``rm -rf docs/holtz`` bypasses the exact-path guard on
+    ``docs/holtz/.sahjhan/`` — the literal path doesn't match because the
+    longer managed path doesn't start with the shorter argument. The rm
+    still destroys the ledger. This helper catches that shape: an argument
+    that resolves to a directory that contains a managed path on disk.
+
+    The on-disk existence check is load-bearing — without it, a project
+    with no audit at all would be blocked from ``rm -rf docs/`` because
+    the literal ``docs/holtz/.sahjhan/`` path is always a logical ancestor.
+    """
+    arg_bare = _unquote(arg).rstrip("/")
+    if not arg_bare or arg_bare in (".", ".."):
+        return None
+    arg_abs = arg_bare if os.path.isabs(arg_bare) else os.path.join(cwd, arg_bare)
+    try:
+        arg_real = os.path.realpath(arg_abs)
+    except (OSError, ValueError):
+        return None
+    arg_boundary = arg_real.rstrip(os.sep) + os.sep
+    for p in managed:
+        p_rel = p.rstrip("/")
+        p_abs = os.path.join(cwd, p_rel)
+        if not os.path.exists(p_abs):
+            continue
+        try:
+            p_real = os.path.realpath(p_abs)
+        except (OSError, ValueError):
+            continue
+        if p_real == arg_real or p_real.startswith(arg_boundary):
+            return p
+    return None
+
+
 def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
     """Check if a bash command writes to any protected or managed path.
 
@@ -422,6 +458,23 @@ def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
                         f"BLOCKED: Bash command removes protected path '{p}'. "
                         "This path cannot be deleted during an audit session."
                     )
+                # Ancestor check: rm -rf docs/holtz nukes .sahjhan/ without
+                # matching the literal managed path. Only check when the
+                # managed path actually exists on disk (avoids false positives
+                # on projects with no audit). The cwd-scoped check matches
+                # MANAGED paths; PROTECTED (plugin-internal) is already
+                # covered by the startswith check above.
+                if cwd is not None:
+                    for arg in seg.split():
+                        ancestor_ref = _arg_contains_managed(
+                            arg, cwd, [p] if p in MANAGED_DATA or p in MANAGED_DOCS else [],
+                        )
+                        if ancestor_ref:
+                            return (
+                                f"BLOCKED: Bash command removes a directory that contains "
+                                f"'{ancestor_ref}'. Delete managed state directly after termination; "
+                                "during an active audit the ledger must not be destroyed by proxy."
+                            )
 
             # In-place modification tools: sed -i, perl -pi, patch
             for prefix in ("sed ", "perl "):

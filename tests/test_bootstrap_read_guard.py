@@ -932,6 +932,95 @@ class TestBackslashEscapedCommandBypass:
 
 
 @pytest.mark.hook_e2e
+class TestParentDirectoryRemovalBypass:
+    """Destructive commands targeting the parent of a MANAGED path bypass
+    the guard.
+
+    Root cause: the rm check matches the literal MANAGED_DATA path
+    (``docs/holtz/.sahjhan/``) against command arguments with
+    ``startswith``. A parent path like ``docs/holtz`` does not start
+    with the longer managed path, so the check skips it — even though
+    ``rm -rf docs/holtz`` destroys the audit state just as thoroughly.
+
+    Run 25 postmortem: Holtz ran ``rm -rf docs/holtz/.sahjhan``
+    mid-audit, obliterating 1,110 ledger events. The guard was added
+    to stop that exact move. A parent-dir rm is the same move with
+    one extra slash — the guard must catch it.
+    """
+
+    def test_rm_docs_holtz_parent_blocked_on_active_audit(self, tmp_path):
+        """rm -rf docs/holtz must be blocked when .sahjhan/ lives inside it."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf docs/holtz"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "rm -rf docs/holtz bypassed the guard — it destroys "
+            "docs/holtz/.sahjhan/ even though the literal path doesn't match"
+        )
+
+    def test_rm_docs_holtz_trailing_slash_blocked(self, tmp_path):
+        """rm -rf docs/holtz/ must be blocked — same bypass with trailing slash."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf docs/holtz/"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_rm_docs_grandparent_blocked(self, tmp_path):
+        """rm -rf docs must be blocked when it contains the audit state."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf docs"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_rm_relative_parent_blocked(self, tmp_path):
+        """rm -rf ./docs/holtz must be blocked (relative path form)."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf ./docs/holtz/"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_rm_parent_allowed_when_terminated(self, tmp_path):
+        """Recovery: parent-dir rm is fine once the audit is terminated."""
+        sahjhan = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan.mkdir(parents=True)
+        (sahjhan / "terminated").write_text("reason: test\n")
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf docs/holtz"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_rm_unrelated_dir_still_allowed(self, tmp_path):
+        """Non-audit dirs must remain deletable — no false positives."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf build"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+
+@pytest.mark.hook_e2e
 class TestTerminatedMarkerRecoveryPath:
     """When the `terminated` marker exists, the audit is dead (session key
     lost, ledger unwritable). The primer and stop_hook both direct the user
