@@ -414,6 +414,127 @@ class TestFullAuditLifecycle:
                 f"Primer should not claim termination in idle state. Got: {raw!r}"
             )
 
+    def test_commit_gate_blocks_unregistered_git_commit_in_fix_loop(self, real_daemon):
+        """In fix_loop, git commit without prior `transition fix_commit`
+        must be blocked by commit_gate so the fix isn't atomic-escaped
+        (see CHANGELOG for run 19 incidents)."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _freshen_enforcement_cache(real_daemon)
+
+        # Simulate a prior PostToolUse for a git commit that wasn't registered
+        # through a fix_commit transition — this populates the enforcement
+        # cache with an unregistered_commits entry the commit_gate checks.
+        git_commit_event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "git commit -m 'fix: something'"},
+            "tool_response": {
+                "exit_code": 0,
+                "output": "[main abc1234] fix: something\n",
+            },
+            "cwd": real_daemon["project_root"],
+        }
+        _invoke_hook("protocol_tracker.py", git_commit_event, real_daemon)
+
+        # Now attempting another git commit without fix_commit should block
+        commit_event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "git commit -m 'fix: another'"},
+            "cwd": real_daemon["project_root"],
+        }
+        output = _invoke_hook("commit_gate.py", commit_event, real_daemon)
+        hook_out = output.get("hookSpecificOutput", {})
+        assert hook_out.get("permissionDecision") == "deny", (
+            f"commit_gate must block unregistered git commit in fix_loop. "
+            f"Got: {output}"
+        )
+        reason = hook_out.get("permissionDecisionReason", "")
+        assert "fix_commit" in reason.lower() or "unregistered" in reason.lower(), (
+            f"Block reason should name the missing transition. Got: {reason!r}"
+        )
+
+    def test_managed_dir_writes_other_than_setup_still_blocked(self, tmp_path):
+        """The daemon-init-pid exemption must be narrow. Attempts to cp
+        OTHER files into .sahjhan/ still need to be denied — otherwise
+        the exemption becomes a bypass for writing to the ledger."""
+        import subprocess
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+
+        hostile_commands = [
+            # Copying something OTHER than daemon.pid → init pid
+            "cp /etc/hostname docs/holtz/.sahjhan/daemon-init-pid",
+            # Copying daemon.pid to a DIFFERENT filename
+            "cp docs/holtz/.sahjhan/daemon.pid docs/holtz/.sahjhan/ledger.jsonl",
+            # Writing to ledger directly
+            "cp /tmp/forged docs/holtz/.sahjhan/ledger.jsonl",
+            # Chained form that tries to smuggle the exemption
+            "cp docs/holtz/.sahjhan/daemon.pid docs/holtz/.sahjhan/daemon-init-pid && cp /tmp/x docs/holtz/.sahjhan/ledger.jsonl",
+        ]
+        hook = os.path.join(ENFORCEMENT_HOOKS_DIR, "_sahjhan_bootstrap.py")
+        for cmd in hostile_commands:
+            event = {
+                "tool_name": "Bash",
+                "tool_input": {"command": cmd},
+                "cwd": str(tmp_path),
+            }
+            result = subprocess.run(
+                [sys.executable, hook],
+                input=json.dumps(event),
+                capture_output=True, text=True, timeout=5,
+                cwd=str(tmp_path),
+                env={**os.environ, "CLAUDE_PLUGIN_ROOT": REPO_ROOT},
+            )
+            output = json.loads(result.stdout) if result.stdout.strip() else {}
+            decision = output.get("hookSpecificOutput", {}).get("permissionDecision")
+            assert decision == "deny", (
+                f"Hostile command should be denied: {cmd!r}. Got: {output}"
+            )
+
+    def test_daemon_init_pid_setup_cp_is_allowed(self, tmp_path):
+        """phase-recon.md tells the user to run:
+
+            cp docs/holtz/.sahjhan/daemon.pid docs/holtz/.sahjhan/daemon-init-pid
+
+        This is a protocol-setup step — _daemon_lifecycle.py needs the
+        daemon-init-pid file to distinguish the original daemon from a
+        restart. The bootstrap hook's MANAGED_DATA guard protects the
+        .sahjhan/ directory from arbitrary writes, but this specific cp
+        is exactly what the skill prescribes. If the guard blocks it,
+        the model follows the skill and gets stuck on the very first
+        session before the audit even starts.
+        """
+        import subprocess
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "daemon.pid").write_text("12345\n")
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": (
+                    "cp docs/holtz/.sahjhan/daemon.pid "
+                    "docs/holtz/.sahjhan/daemon-init-pid"
+                ),
+            },
+            "cwd": str(tmp_path),
+        }
+        hook = os.path.join(ENFORCEMENT_HOOKS_DIR, "_sahjhan_bootstrap.py")
+        result = subprocess.run(
+            [sys.executable, hook],
+            input=json.dumps(event),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=str(tmp_path),
+            env={**os.environ, "CLAUDE_PLUGIN_ROOT": REPO_ROOT},
+        )
+        output = json.loads(result.stdout) if result.stdout.strip() else {}
+        hook_out = output.get("hookSpecificOutput", {})
+        decision = hook_out.get("permissionDecision")
+        assert decision == "allow", (
+            f"The SKILL-prescribed daemon-init-pid setup cp must be "
+            f"allowed by _sahjhan_bootstrap. Got: {hook_out!r}"
+        )
+
     def test_user_prompt_submit_primer_injects_state_during_audit(self, real_daemon):
         """During an active audit, primer must inject current state so the
         model knows where it is after /clear or compaction."""

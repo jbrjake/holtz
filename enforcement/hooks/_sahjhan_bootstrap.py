@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 
 PROTECTED = [
@@ -305,6 +306,33 @@ def _arg_contains_managed(arg: str, cwd: str, managed: list[str]) -> str | None:
     return None
 
 
+_DAEMON_INIT_PID_CP_RE = re.compile(
+    r"\A\s*(?:(?:env\s+)?\S+=\S+\s+)*"
+    r"(?:\\)?cp\s+(?:-[a-zA-Z]+\s+)*"
+    r"(?:\"|\')?docs/holtz/\.sahjhan/daemon\.pid(?:\"|\')?\s+"
+    r"(?:\"|\')?docs/holtz/\.sahjhan/daemon-init-pid(?:\"|\')?\s*\Z"
+)
+
+
+def _is_daemon_init_pid_setup(segment: str) -> bool:
+    """Recognize the SKILL-prescribed daemon-init-pid setup copy.
+
+    phase-recon.md instructs::
+
+        cp docs/holtz/.sahjhan/daemon.pid docs/holtz/.sahjhan/daemon-init-pid
+
+    This is a one-shot protocol setup step that ``_daemon_lifecycle.py``
+    relies on — without the init-pid file, daemon death detection can't
+    distinguish "original daemon" from "restarted daemon with a new key."
+
+    The generic MANAGED_DATA guard would block this because the target
+    is inside ``docs/holtz/.sahjhan/``, so we exempt exactly this shape
+    (and only this shape — any ``cp`` that lands elsewhere in the
+    managed dir is still denied).
+    """
+    return bool(_DAEMON_INIT_PID_CP_RE.match(segment))
+
+
 def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
     """Check if a bash command writes to any protected or managed path.
 
@@ -359,6 +387,12 @@ def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
     for seg in segments:
         seg = seg.strip()
         if not seg:
+            continue
+
+        # Protocol-setup exemption: the SKILL-prescribed daemon-init-pid
+        # copy is a one-shot setup step that must be allowed to land
+        # inside the managed data dir. See _is_daemon_init_pid_setup.
+        if _is_daemon_init_pid_setup(seg):
             continue
 
         # Strip leading env var assignments (FOO=bar, FOO="x y", export X=1, etc.)
