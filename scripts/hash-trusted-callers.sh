@@ -7,12 +7,22 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 MANIFEST="$REPO_ROOT/enforcement/trusted-callers.toml"
 
-# Hook scripts that connect to the sahjhan daemon (sign or vault operations)
+# Hook scripts that connect to the sahjhan daemon (sign, vault, or
+# enforcement_read/write/update operations). Every hook that talks to
+# the daemon socket needs to be listed here — the daemon rejects
+# unlisted callers with "caller not authenticated" and the hook falls
+# back to cache=None / is_enforcement_fresh=False, which silently
+# disables enforcement.
 TRUSTED_SCRIPTS=(
     "enforcement/hooks/_common.py"
     "enforcement/hooks/lens_quiz.py"
     "enforcement/hooks/stop_hook.py"
     "enforcement/hooks/primer.py"
+    "enforcement/hooks/pre_tool_hook.py"
+    "enforcement/hooks/post_tool_hook.py"
+    "enforcement/hooks/commit_gate.py"
+    "enforcement/hooks/bash_guard.py"
+    "enforcement/hooks/protocol_tracker.py"
     "hooks/subagent_findings_check.py"
 )
 
