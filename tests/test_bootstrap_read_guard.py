@@ -1010,6 +1010,48 @@ class TestTerminatedMarkerRecoveryPath:
             "blocking their deletion leaves the project in a half-state"
         )
 
+    def test_write_to_managed_doc_allowed_when_terminated(self, tmp_path):
+        """Write/Edit on STATUS.md/PUNCHLIST.md works once audit is terminated."""
+        cwd = self._with_terminated_marker(tmp_path)
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/STATUS.md"},
+            "cwd": cwd,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "Write to managed doc must be permitted during recovery so users "
+            "can replace stale STATUS.md content"
+        )
+
+    def test_write_to_managed_doc_blocked_without_marker(self, tmp_path):
+        """Without marker, Write to managed doc still blocked (live render)."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)  # no terminated marker
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/STATUS.md"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Active audit must keep STATUS.md read-only (rendered from ledger)"
+        )
+
+    def test_write_to_sahjhan_data_allowed_when_terminated(self, tmp_path):
+        """Write to .sahjhan/ contents works on a terminated audit."""
+        cwd = self._with_terminated_marker(tmp_path)
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/.sahjhan/notes.txt"},
+            "cwd": cwd,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "Writing inside .sahjhan/ is blocked on live audits, but once the "
+            "ledger is dead, the directory is user-owned state"
+        )
+
     def test_write_to_enforcement_still_blocked_when_terminated(self, tmp_path):
         """PROTECTED plugin-internal paths are always off-limits, even after termination.
 
