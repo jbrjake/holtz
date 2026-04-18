@@ -38,3 +38,16 @@ if ! mypy --explicit-package-bases \
     echo "pre-commit: mypy failed. Fix and re-commit (or --no-verify to bypass)." >&2
     exit 1
 fi
+
+# Trusted-callers manifest: enforcement/trusted-callers.toml and
+# scripts/hash-trusted-callers.sh both claim "CI gate: the pre-commit
+# hook verifies this manifest is up to date." Honor that claim.
+CHANGED_TRUSTED=$(git diff --cached --name-only --diff-filter=ACMR \
+    | grep -E '^(enforcement/trusted-callers\.toml|enforcement/hooks/.*\.py|hooks/.*\.py|skills/holtz/scripts/.*\.py)$' || true)
+if [[ -n "$CHANGED_TRUSTED" ]]; then
+    echo "pre-commit: trusted-callers manifest hash check"
+    if ! python -m pytest -q tests/test_enforcement_config.py::test_trusted_callers_hashes_match_files; then
+        echo "pre-commit: trusted-callers hashes stale. Run scripts/hash-trusted-callers.sh and re-stage." >&2
+        exit 1
+    fi
+fi
