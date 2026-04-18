@@ -521,6 +521,35 @@ class TestFullAuditLifecycle:
             f"Block reason should name the missing transition. Got: {reason!r}"
         )
 
+    def test_nohup_sahjhan_is_recognized_as_sahjhan_cmd(self):
+        """phase-recon.md prescribes:
+
+            nohup sahjhan --config-dir X daemon start > /tmp/log 2>&1 &
+
+        ``is_sahjhan_cmd`` is the shared helper that lets commit_gate,
+        bash_guard, and protocol_tracker skip the stall/manifest-verify
+        paths for legitimate sahjhan invocations. If ``nohup sahjhan``
+        isn't recognized, protocol_tracker won't record the
+        last_sahjhan_cmd timestamp (so enforcement looks stale), the
+        stall counter ticks on the daemon start, and bash_guard runs a
+        spurious manifest verify against a half-written state dir.
+        """
+        sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
+        # Clear prior imports in case they leaked from other tests.
+        for m in ("_protocol_cache", "_common"):
+            sys.modules.pop(m, None)
+        from _protocol_cache import is_sahjhan_cmd  # noqa: E402
+
+        cases = [
+            "nohup sahjhan --config-dir enforcement daemon start",
+            "nohup sahjhan --config-dir enforcement daemon start > /tmp/sahjhan-daemon.log 2>&1 &",
+            "env SAHJHAN_DAEMON_SOCKET=x nohup sahjhan daemon start",
+        ]
+        for cmd in cases:
+            assert is_sahjhan_cmd(cmd), (
+                f"is_sahjhan_cmd should recognize nohup-wrapped sahjhan: {cmd!r}"
+            )
+
     def test_managed_dir_writes_other_than_setup_still_blocked(self, tmp_path):
         """The daemon-init-pid exemption must be narrow. Attempts to cp
         OTHER files into .sahjhan/ still need to be denied — otherwise

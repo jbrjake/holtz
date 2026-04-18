@@ -298,7 +298,24 @@ def is_sahjhan_cmd(cmd: str) -> bool:
         return False
     for seg in segments:
         parts = seg.split()
-        p0 = parts[0] if parts else ""
+        # phase-recon.md prescribes ``nohup sahjhan ... daemon start &`` for
+        # the daemon-start step. Skip ``nohup``/``env`` wrappers so the
+        # downstream hooks (commit_gate, bash_guard, protocol_tracker) still
+        # treat it as a sahjhan invocation — otherwise protocol_tracker
+        # never stamps last_sahjhan_cmd, enforcement looks stale, and the
+        # stall counter ticks on a legitimate setup command.
+        idx = 0
+        while idx < len(parts):
+            tok = parts[idx]
+            if tok in ("nohup", "env"):
+                idx += 1
+            elif "=" in tok and not tok.startswith("-"):
+                # env var assignment form: ``env FOO=bar sahjhan …`` or
+                # bare ``FOO=bar sahjhan …``
+                idx += 1
+            else:
+                break
+        p0 = parts[idx] if idx < len(parts) else ""
         is_sahjhan = (
             p0 == "sahjhan"
             or p0.endswith("/sahjhan")
