@@ -341,6 +341,75 @@ class TestStopGateBlocksInNonTerminalStates:
         )
 
 
+class TestTerminatedAuditRecovery:
+    """When the daemon dies mid-audit, the ledger is unrecoverable.
+    Primer writes a terminated marker; subsequent tool calls are
+    guided toward removing .sahjhan/ to start fresh. This test
+    class verifies the recovery path the primer advertises actually
+    works — the user can rm the data dir to unstick themselves.
+    """
+
+    def _make_terminated_project(self, tmp_path) -> str:
+        """Create a terminated-audit fixture (no real daemon needed)."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "terminated").write_text(
+            "reason: daemon_pid_dead\n"
+            "detected_by: test\n"
+        )
+        return str(tmp_path)
+
+    def test_primer_announces_termination_and_recovery(self, tmp_path):
+        import subprocess
+        project = self._make_terminated_project(tmp_path)
+        event = {"cwd": project, "user_prompt": "anything"}
+        hook = os.path.join(ENFORCEMENT_HOOKS_DIR, "primer.py")
+        result = subprocess.run(
+            [sys.executable, hook],
+            input=json.dumps(event),
+            capture_output=True, text=True, timeout=5,
+            cwd=project,
+            env={**os.environ, "CLAUDE_PLUGIN_ROOT": REPO_ROOT},
+        )
+        output = json.loads(result.stdout) if result.stdout.strip() else {}
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
+        assert "AUDIT TERMINATED" in context, (
+            f"Primer must announce termination when marker exists. "
+            f"Got: {output}"
+        )
+        # Recovery path must be discoverable from the message.
+        assert ".sahjhan" in context, (
+            f"Primer must tell the user where the recovery directory is. "
+            f"Got: {context!r}"
+        )
+
+    def test_rm_recovery_allowed_when_audit_terminated(self, tmp_path):
+        """Once the audit is terminated, ``rm -rf docs/holtz/.sahjhan/``
+        is the recovery step. The primer instructs the user to do it
+        and the bash_guard/managed-path guards must not block it."""
+        import subprocess
+        project = self._make_terminated_project(tmp_path)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf docs/holtz/.sahjhan/"},
+            "cwd": project,
+        }
+        hook = os.path.join(ENFORCEMENT_HOOKS_DIR, "_sahjhan_bootstrap.py")
+        result = subprocess.run(
+            [sys.executable, hook],
+            input=json.dumps(event),
+            capture_output=True, text=True, timeout=5,
+            cwd=project,
+            env={**os.environ, "CLAUDE_PLUGIN_ROOT": REPO_ROOT},
+        )
+        output = json.loads(result.stdout) if result.stdout.strip() else {}
+        decision = output.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert decision == "allow", (
+            f"Recovery rm must be allowed when audit is terminated. "
+            f"Got: {output}"
+        )
+
+
 class TestFullAuditLifecycle:
     """Walk the transitions a real user hits: init → recon → fix_loop →
     terminal. Asserts the hook chain doesn't silently allow what should
