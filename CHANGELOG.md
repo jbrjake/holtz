@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.132.62] - 2026-04-19
+
+_Changes since v0.132.26_
+
+### Fixed
+- **enforcement:** make protected-path check arch-independent
+- close local-gate/CI gap and patch enforcement hook FP + FN
+- extend pre-commit to verify trusted-callers manifest hashes
+- annotate exit helpers NoReturn and add local pre-commit gate
+- recognize nohup/env-wrapped sahjhan as a sahjhan command
+- allow SKILL-prescribed daemon-init-pid setup copy
+- surface TDD violation reason and fix tests/** filter
+- block parent-dir rm that destroys managed state
+- lift MANAGED guards when audit is terminated
+- add every daemon-talking hook to the trusted-callers manifest
+- critical first-run bugs — daemon auth, status-cache key, binary bootstrap
+- bootstrap creates \`sahjhan\` symlink so bare invocations resolve
+- scope PROTECTED path guard to plugin-internal cwds
+- invoke hooks via python3 for macOS compatibility
+- skip binary bootstrap on non-audit projects
+- **scripts:** smoke-test-hooks.sh used invalid --no-input flag
+- daemon recovery exemption matched chained commands
+- bash_guard bypass via backslash-escaped or quoted command names
+- enforcement/hooks.toml sealed templates emitted bare sahjhan commands (#55)
+- hook-injected messages told Claude to run bare sahjhan commands (#55)
+- **tests:** prevent _common module pollution breaking hook_e2e marker
+- **ci:** extend mypy scope to scripts/ and enforcement/scripts/
+- broaden runbook --config-dir detector beyond 'Run' prose (#55)
+- termination messages suggested ineffective recovery actions (#55)
+- inline prose "Run \`sahjhan X\`" instructions missing --config-dir (#55)
+- stale trusted-callers.toml hash for primer.py (#55 followup)
+- runbook files missing --config-dir on executable sahjhan commands (#55)
+- primer.py referenced nonexistent /stop command (#55)
+- add --config-dir to all skill sahjhan commands and capture daemon stderr (#55)
+- graduated daemon lifecycle blocking — read-only tools and recovery commands pass through (#55)
+
+### Documentation
+- update daemon-liveness hook description for graduated blocking (#55)
+
+### Infrastructure
+- cover terminated-audit recovery path end-to-end
+- expand E2E audit coverage — stop gate, primer, managed writes
+- cover Write/Edit paths for terminated-audit recovery
+- restore coverage badge to actual 90% (subset-run side effect)
+- restore coverage badge to actual 90% (subset-run side effect)
+
 ## [0.132.24] - 2026-04-14
 
 _Changes since v0.131.5_
