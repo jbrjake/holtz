@@ -9,49 +9,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.132.62] - 2026-04-19
 
-_Changes since v0.132.26_
+36 commits since v0.132.26. This is a hardening release: graduated daemon-lifecycle blocking, several enforcement-hook bypass patches, first-run correctness on fresh installs, and a full overhaul of the local dev loop so CI-breaking regressions fail in pre-commit and pre-push instead of in GitHub Actions.
 
-### Fixed
-- **enforcement:** make protected-path check arch-independent
-- close local-gate/CI gap and patch enforcement hook FP + FN
-- extend pre-commit to verify trusted-callers manifest hashes
-- annotate exit helpers NoReturn and add local pre-commit gate
-- recognize nohup/env-wrapped sahjhan as a sahjhan command
-- allow SKILL-prescribed daemon-init-pid setup copy
-- surface TDD violation reason and fix tests/** filter
-- block parent-dir rm that destroys managed state
-- lift MANAGED guards when audit is terminated
-- add every daemon-talking hook to the trusted-callers manifest
-- critical first-run bugs — daemon auth, status-cache key, binary bootstrap
-- bootstrap creates \`sahjhan\` symlink so bare invocations resolve
-- scope PROTECTED path guard to plugin-internal cwds
-- invoke hooks via python3 for macOS compatibility
-- skip binary bootstrap on non-audit projects
-- **scripts:** smoke-test-hooks.sh used invalid --no-input flag
-- daemon recovery exemption matched chained commands
-- bash_guard bypass via backslash-escaped or quoted command names
-- enforcement/hooks.toml sealed templates emitted bare sahjhan commands (#55)
-- hook-injected messages told Claude to run bare sahjhan commands (#55)
-- **tests:** prevent _common module pollution breaking hook_e2e marker
-- **ci:** extend mypy scope to scripts/ and enforcement/scripts/
-- broaden runbook --config-dir detector beyond 'Run' prose (#55)
-- termination messages suggested ineffective recovery actions (#55)
-- inline prose "Run \`sahjhan X\`" instructions missing --config-dir (#55)
-- stale trusted-callers.toml hash for primer.py (#55 followup)
-- runbook files missing --config-dir on executable sahjhan commands (#55)
-- primer.py referenced nonexistent /stop command (#55)
-- add --config-dir to all skill sahjhan commands and capture daemon stderr (#55)
-- graduated daemon lifecycle blocking — read-only tools and recovery commands pass through (#55)
+### Issue #55 — Graduated daemon-lifecycle blocking
 
-### Documentation
-- update daemon-liveness hook description for graduated blocking (#55)
+The previous behavior blocked every tool the moment the daemon stopped responding, which broke recovery — the agent needed to read files and run `sahjhan daemon start` to recover, but those very actions were blocked. The new model lets read-only tools (Read, Grep, Glob, sahjhan status/gate/lockhaven-*) pass through while Write/Edit/Bash-with-writes stay blocked, so the agent can diagnose and restart without tripping guards on the recovery path.
 
-### Infrastructure
-- cover terminated-audit recovery path end-to-end
-- expand E2E audit coverage — stop gate, primer, managed writes
-- cover Write/Edit paths for terminated-audit recovery
-- restore coverage badge to actual 90% (subset-run side effect)
-- restore coverage badge to actual 90% (subset-run side effect)
+- Read-only tools and daemon recovery commands pass through even during a dead-daemon window (#55)
+- Every skill-vended and runbook-vended `sahjhan ...` invocation now includes `--config-dir ${CLAUDE_PLUGIN_ROOT}/enforcement` so Claude doesn't have to guess it
+- Daemon stderr is captured and surfaced on failure so the agent sees the actual error, not a generic "daemon unreachable"
+- Termination messages now suggest recovery actions that actually work (previously pointed at a nonexistent `/stop` command and other dead ends)
+- `--config-dir` detector broadened to catch inline "Run `sahjhan X`" prose, not just code blocks tagged `Run:`
+- `enforcement/hooks.toml` sealed templates regenerated to emit the `--config-dir`-qualified commands
+
+### Issue #33 — Terminated-audit recovery
+
+When an audit terminates (daemon dies, sealed state goes corrupt), the primer tells the user to `rm docs/holtz/.sahjhan/` and start over. The MANAGED_DATA guard blocked that very command, trapping the user in a dead-end. Now when a terminated marker is present, the MANAGED guards lift so recovery proceeds, while the PROTECTED guards (enforcement/, bin/sahjhan) stay on — recovery doesn't mean free rein.
+
+- MANAGED guards lift when the audit is terminated
+- Parent-dir `rm` that would destroy managed state by proxy (`rm -rf docs/holtz`) stays blocked — the lift is narrow
+- The SKILL-prescribed `cp daemon.pid daemon-init-pid` setup step is exempted explicitly (first-run users hit this on Bash #1)
+- E2E tests walk both the block-during-active-audit and the allow-after-termination paths
+
+### First-run correctness
+
+A cluster of bugs that bit fresh installs on a downstream consumer's machine, none of which surfaced in dev because the dev environment already had the relevant state primed.
+
+- Daemon-auth first-run bug: trusted-callers manifest was loaded at daemon start, so the first authed event after install-hooks.sh would reject because the in-memory map was empty
+- Status-cache key mismatch: the cache indexed by protocol name but some callers queried by protocol version, causing silent miss-then-fallback-to-allow on the first audit
+- Binary bootstrap skipped on non-audit projects (installing the plugin in a non-audit repo would try to rehash trusted-callers against paths that didn't exist)
+- `bin/sahjhan` symlink creation moved to install-hooks.sh so `sahjhan ...` (bare) resolves on first boot, not after the first `ln -s`
+- Hooks now invoked as `python3` instead of `python` — macOS's default `python` is often the Xcode 2.7 stub
+- `smoke-test-hooks.sh` had been passing an invalid `--no-input` flag that masked real failures with a usage-error exit code
+
+### Enforcement-hook hardening
+
+Three bypass vectors closed and one false-positive removed, all under `_sahjhan_bootstrap.py`.
+
+- **Interpreter-execute FP (closed):** the check that blocks `python -c "open(...).write(...)"` was firing on *any* interpreter command with a `-` flag and a protected-path substring. Legitimate calls like `python3 enforcement/hooks/primer.py` and `python -m pytest --cov=enforcement/hooks` were being blocked. Narrowed to the inline-code flags (`-c`, `-e`, `--eval`) that are the only invocations whose executable content is visible on the command line.
+- **Wrapper-script FN (closed):** `bash /tmp/wrapper.sh` where the script itself writes to `enforcement/` slipped through — the command string had no protected-path reference. New `_out_of_tree_script_block` reads out-of-tree scripts, scans contents for protected-path references, and blocks if found (or if the script is unreadable — fails closed).
+- **Protected-path arch dependence (closed):** the check used `realpath` on `bin/sahjhan`, following the symlink to the arch-specific binary. That made the block arch-dependent: macOS caught aarch64 but missed x86_64; Linux the reverse. Now a literal-prefix + boundary-char match (`os.sep` / `-` / `.`) catches every `bin/sahjhan-<arch>` regardless of which binary the symlink points at.
+- **PROTECTED path guard scope:** restricted to cwds inside the plugin root so downstream projects with their own `enforcement/` or `hooks/` directories don't get false blocks from the plugin's PROTECTED prefixes.
+- **Daemon-recovery exemption:** the exemption matched `sahjhan daemon start` anywhere in a chained command, letting `sahjhan daemon stop && sahjhan daemon start` slip past the block on `daemon stop`. Exemption is now segment-scoped.
+- **Bash_guard bypass (closed):** backslash-escaped (`\cp`) and quoted (`"cp"`, `'cp'`) command-name forms now normalize before detection.
+- **Nohup/env-wrapped sahjhan (fixed):** `nohup sahjhan ... daemon start` and `env FOO=bar sahjhan ...` were not recognized as sahjhan commands, so protocol_tracker, commit_gate, and bash_guard all missed their early-exit for daemon-start. Skipping leading wrappers and env-var assignments fixes it.
+
+### TDD gate correctness
+
+- `pre_tool_hook` treated sahjhan's block-exit (exit 1) as "daemon error" and collapsed the TDD-violation reason into a generic "ENFORCEMENT DEGRADED" message — the model couldn't tell it needed to record `test_failed_before_fix` first. Now the JSON payload from `hook eval` is parsed regardless of exit code.
+- Absolute paths from Claude Code were forwarded verbatim to `hook eval`, so hooks.toml's `path_not_matches = "tests/**"` never matched. Paths are now normalized to cwd-relative before forwarding, restoring the tests/** exemption.
+- New real-daemon E2E coverage walks through recon → fix_loop states, asserts the TDD gate blocks source edits with the canonical message, allows them after `test_failed_before_fix` is recorded, and exempts tests/** writes.
+
+### Local dev loop ≡ CI gate
+
+CI kept catching regressions (mypy, stale manifests, arch-dependent paths) that should have failed locally. The fix is mechanical, not procedural.
+
+- **pre-commit** runs ruff + mypy + fast pytest subset + contract gate, and auto-regenerates `enforcement/trusted-callers.toml` (plus re-stages it) when staged changes touch tracked callers. No more "oh I forgot to rerun `hash-trusted-callers.sh`".
+- **pre-push** runs `scripts/pre-release-check.sh` (full CI-equivalent) on pushes to main/dev; feature-branch pushes get the fast subset.
+- `scripts/install-hooks.sh` **defaults to dev mode** — it installs git hooks and the sahjhan binary but does NOT wire enforcement hooks into `.claude/settings.local.json`. Running the plugin's hooks against its own dev session was the source of circular blocks that kept pushing work toward command-laundering hacks. `--simulate-downstream` opts in for explicit downstream verification; `--no-simulate-downstream` reverts.
+- Exit helpers (`exit_ok`, `exit_warn`, `exit_block`, `exit_stop_*`) typed `NoReturn` so mypy narrows past exit guards — previously the `importlib` re-export in `enforcement/hooks/_common.py` erased the annotations, which led to a pattern of spurious `Item "None" of "Any | None" has no attribute` errors.
+- `CLAUDE.md` now documents the dev-vs-simulate-downstream distinction and includes a "Before claiming anything works" section banning future-tense verification language ("should work", "in-flight", "good to go") without observed evidence.
+
+### Trusted-callers manifest
+
+- Every daemon-talking hook is now in the manifest (previously only the original five were, so new hooks silently had authed events rejected).
+- Stale-hash fixes for hooks that were edited without manifest regeneration — the new pre-commit automation prevents this recurring.
+
+### Test coverage
+
+1618 → 1619 tests, 90.66% line coverage. New coverage:
+
+- Terminated-audit recovery (E2E + managed-docs Write/Edit paths)
+- Real-daemon audit flow (recon → fix_loop → terminal state transitions)
+- Interpreter-execute FP (5 cases: script execution, `-m pytest --cov=`, `-u script`)
+- Wrapper-script FN (5 cases: bash/python wrappers, in-tree trust, unreadable script fail-closed)
+- Protected-path arch independence (every sibling arch binary)
+- Stop gate, primer idle vs. active, managed-doc writes as individual E2E assertions
+
+### CI
+
+- mypy scope extended to `scripts/` and `enforcement/scripts/` (previously only the hook dirs were checked)
+- Test isolation: `_common` module pollution no longer breaks the `hook_e2e` marker
+- Coverage badge restored to actual value after subset-run side effects drifted it
+
+### Pre-release checks
+
+All passing:
+- ruff: PASS
+- mypy: PASS (44 source files)
+- contract gate: PASS (39 commands)
+- schema freshness: PASS
+- full test suite: PASS (1619 tests, 90.66% coverage)
+- hook smoke test: PASS (9/9 hooks)
+- version: 0.132.62
 
 ## [0.132.24] - 2026-04-14
 
