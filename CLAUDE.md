@@ -17,10 +17,13 @@ observed `pytest` exit 0. A claim of "no type errors" must be backed
 by an observed `mypy` exit 0. Assertion without evidence is the
 violation — not just inaccurate prediction.
 
-The local gate *is* the CI gate. `git-hooks/pre-commit` runs the fast
-CI subset; `git-hooks/pre-push` runs the full CI-equivalent for
-pushes to `main` or `dev`. If you've bypassed a hook with
-`--no-verify`, say so explicitly.
+`git-hooks/pre-commit` runs the fast CI subset (ruff + mypy + fast
+pytest + contract gate) so trivial regressions fail locally in
+seconds instead of in CI minutes later. `git-hooks/pre-push` runs
+the same fast subset again — CI handles the full test suite on dev
+pushes, and main is PR-only so release-gate checks happen on the
+release PR, not on push. If you've bypassed a hook with
+`--no-verify`, say so explicitly when reporting status.
 
 ## Don't run the plugin against itself
 

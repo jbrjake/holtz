@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
-# Pre-push gate: CI-equivalent check on pushes to main or dev.
+# Pre-push gate — fast subset only.
 #
-# The pre-commit hook keeps the fast gate close to commit time, but it
-# deliberately skips slow tests to stay snappy. The real CI bar is full
-# pytest + coverage + contract gate + schema freshness + hook smoke
-# test, which is what scripts/pre-release-check.sh runs.
+# Goal: catch trivial regressions (lint, type, unit-test) before they
+# hit CI. Not a replacement for CI — dev pushes trigger the full GitHub
+# Actions run, and main is merge-only via release PR (where CI has
+# already gated the dev branch). So the local gate's job is "fail in
+# seconds, not minutes," not "run the full suite again."
 #
-# This hook enforces that bar before anything lands on a branch CI will
-# see. Feature-branch pushes still run the fast subset so iterative
-# work isn't gated on a 5-minute check; only dev/main pushes pay the
-# full cost — which matches where CI cares.
+# Runs: ruff + mypy + fast pytest subset + contract gate. ~30s.
 #
 # Bypass (emergency only): `git push --no-verify`.
 set -euo pipefail
@@ -22,27 +20,7 @@ if [[ -f .venv/bin/activate ]]; then
     source .venv/bin/activate
 fi
 
-# Figure out whether any ref we're pushing targets a protected branch.
-# git passes `<local ref> <local sha> <remote ref> <remote sha>` per line.
-PUSH_TO_PROTECTED=0
-while read -r _local_ref _local_sha remote_ref _remote_sha; do
-    [[ -z "$remote_ref" ]] && continue
-    case "$remote_ref" in
-        refs/heads/main|refs/heads/dev) PUSH_TO_PROTECTED=1 ;;
-    esac
-done
-
-if (( PUSH_TO_PROTECTED )); then
-    echo "pre-push: pushing to main/dev — running full CI-equivalent (scripts/pre-release-check.sh)"
-    if ! bash scripts/pre-release-check.sh; then
-        echo "pre-push: pre-release-check failed. Fix before pushing, or --no-verify to bypass." >&2
-        exit 1
-    fi
-    exit 0
-fi
-
-# Feature-branch push: run the fast subset (same bar as pre-commit).
-echo "pre-push: feature branch — running fast subset (ruff, mypy, fast pytest, contract gate)"
+echo "pre-push: fast gate (ruff, mypy, fast pytest, contract gate)"
 FAIL=0
 ruff check . || FAIL=1
 mypy --explicit-package-bases \
