@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.132.62] - 2026-04-19
+## [0.132.64] - 2026-04-19
 
-36 commits since v0.132.26. This is a hardening release: graduated daemon-lifecycle blocking, several enforcement-hook bypass patches, first-run correctness on fresh installs, and a full overhaul of the local dev loop so CI-breaking regressions fail in pre-commit and pre-push instead of in GitHub Actions.
+37 commits since v0.132.26. This is a hardening release: graduated daemon-lifecycle blocking, several enforcement-hook bypass patches, first-run correctness on fresh installs, and a full overhaul of the local dev loop so CI-breaking regressions fail in pre-commit and pre-push instead of in GitHub Actions.
 
 ### Issue #55 — Graduated daemon-lifecycle blocking
 
@@ -65,7 +65,7 @@ Three bypass vectors closed and one false-positive removed, all under `_sahjhan_
 CI kept catching regressions (mypy, stale manifests, arch-dependent paths) that should have failed locally. The fix is mechanical, not procedural.
 
 - **pre-commit** runs ruff + mypy + fast pytest subset + contract gate, and auto-regenerates `enforcement/trusted-callers.toml` (plus re-stages it) when staged changes touch tracked callers. No more "oh I forgot to rerun `hash-trusted-callers.sh`".
-- **pre-push** runs `scripts/pre-release-check.sh` (full CI-equivalent) on pushes to main/dev; feature-branch pushes get the fast subset.
+- **pre-push** runs the same fast subset on every push (ruff + mypy + fast pytest + contract gate, ~30s). CI runs the full test suite on dev pushes, so duplicating it locally is wasted time; the release-gate check (`scripts/pre-release-check.sh`) is run manually before cutting the release PR, not in the push path.
 - `scripts/install-hooks.sh` **defaults to dev mode** — it installs git hooks and the sahjhan binary but does NOT wire enforcement hooks into `.claude/settings.local.json`. Running the plugin's hooks against its own dev session was the source of circular blocks that kept pushing work toward command-laundering hacks. `--simulate-downstream` opts in for explicit downstream verification; `--no-simulate-downstream` reverts.
 - Exit helpers (`exit_ok`, `exit_warn`, `exit_block`, `exit_stop_*`) typed `NoReturn` so mypy narrows past exit guards — previously the `importlib` re-export in `enforcement/hooks/_common.py` erased the annotations, which led to a pattern of spurious `Item "None" of "Any | None" has no attribute` errors.
 - `CLAUDE.md` now documents the dev-vs-simulate-downstream distinction and includes a "Before claiming anything works" section banning future-tense verification language ("should work", "in-flight", "good to go") without observed evidence.
@@ -101,7 +101,7 @@ All passing:
 - schema freshness: PASS
 - full test suite: PASS (1619 tests, 90.66% coverage)
 - hook smoke test: PASS (9/9 hooks)
-- version: 0.132.62
+- version: 0.132.64
 
 ## [0.132.24] - 2026-04-14
 
