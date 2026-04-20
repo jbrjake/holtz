@@ -21,13 +21,13 @@ Write changes to docs/holtz/architecture-baseline.md. Report what sections chang
 
 After the subagent completes, record the event (required by the `finalize` gate):
 ```
-sahjhan event baseline_updated --field project=<project> --field run=N \
+sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event baseline_updated --field project=<project> --field run=N \
   --field auditor=holtz --field sections_changed="<comma-separated list of changed sections>"
 ```
 
 ### Step 18: Pattern Library Contribution (Subagent)
 
-Read [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) and follow the protocol: discover new patterns from `docs/holtz/patterns-brief.md`, generalize, PII-scrub, ask user permission, then submit via `gh` CLI / MCP / manual staging. Record outcome: `sahjhan event pattern_contribution_complete --patterns_submitted N --outcome submitted|no_new_patterns|declined_by_user`.
+Read [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) and follow the protocol: discover new patterns from `docs/holtz/patterns-brief.md`, generalize, PII-scrub, ask user permission, then submit via `gh` CLI / MCP / manual staging. Record outcome: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event pattern_contribution_complete --patterns_submitted N --outcome submitted|no_new_patterns|declined_by_user`.
 
 ### Step 19: Living Punchlist Update (Subagent)
 
@@ -43,7 +43,7 @@ Update `docs/holtz/LIVING-PUNCHLIST.md` (or create it on first run — see [refe
 
 After the subagent completes, record the event (required by the `finalize` gate):
 ```
-sahjhan event living_punchlist_updated --field project=<project> --field run=N \
+sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event living_punchlist_updated --field project=<project> --field run=N \
   --field auditor=holtz --field patterns_added=<count> --field hotspots_updated=<count>
 ```
 
@@ -51,7 +51,7 @@ sahjhan event living_punchlist_updated --field project=<project> --field run=N \
 
 This is the LAST step — nothing comes after it.
 
-Run `sahjhan transition finalize` — this transitions to the terminal `finalized` state and renders SUMMARY.md from the ledger. The finalize gate verifies: architecture baseline updated (Step 17), living punchlist updated (Step 19), pattern contribution completed (Step 18). SUMMARY.md includes a Prediction Accuracy table:
+Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition finalize` — this transitions to the terminal `finalized` state and renders SUMMARY.md from the ledger. The finalize gate verifies: architecture baseline updated (Step 17), living punchlist updated (Step 19), pattern contribution completed (Step 18). SUMMARY.md includes a Prediction Accuracy table:
 
 ```markdown
 ## Prediction Accuracy

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Pre-push gate — fast subset only.
+#
+# Goal: catch trivial regressions (lint, type, unit-test) before they
+# hit CI. Not a replacement for CI — dev pushes trigger the full GitHub
+# Actions run, and main is merge-only via release PR (where CI has
+# already gated the dev branch). So the local gate's job is "fail in
+# seconds, not minutes," not "run the full suite again."
+#
+# Runs: ruff + mypy + fast pytest subset + contract gate. ~30s.
+#
+# Bypass (emergency only): `git push --no-verify`.
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+if [[ -f .venv/bin/activate ]]; then
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+fi
+
+echo "pre-push: fast gate (ruff, mypy, fast pytest, contract gate)"
+FAIL=0
+ruff check . || FAIL=1
+mypy --explicit-package-bases \
+    skills/holtz/scripts/ hooks/ enforcement/hooks/ scripts/ enforcement/scripts/ || FAIL=1
+python -m pytest -q --tb=short -m "not slow and not machine_specific" || FAIL=1
+python scripts/contract_gate.py || FAIL=1
+if (( FAIL )); then
+    echo "pre-push: fast gate failed. Fix before pushing, or --no-verify to bypass." >&2
+    exit 1
+fi

@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import exit_block, exit_ok, exit_warn, read_event  # noqa: E402
+from _common import exit_block, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
 from _protocol_cache import (  # noqa: E402
     compute_obligations,
     format_injection,
@@ -44,6 +44,7 @@ def main() -> None:
     event = read_event()
     cmd = event.get("tool_input", {}).get("command", "")
     cwd = event.get("cwd", os.getcwd())
+    config_dir, _ = resolve_config_dir(cwd)
 
     cache = read_cache(cwd)
 
@@ -61,10 +62,10 @@ def main() -> None:
         if commits:
             exit_block(
                 f"BLOCKED: {len(commits)} unregistered commit(s). "
-                "Run sahjhan transition fix_commit before committing again."
+                f"Run sahjhan --config-dir {config_dir} transition fix_commit before committing again."
             )
 
-    obligations = compute_obligations(cache)
+    obligations = compute_obligations(cache, config_dir=config_dir)
 
     if not obligations:
         exit_ok("PreToolUse")
@@ -78,7 +79,7 @@ def main() -> None:
         exit_block(
             "BLOCKED: Pattern analysis overdue "
             f"({cache['fixes_since_pattern']} fixes since last analysis). "
-            "Run: sahjhan transition pattern_check"
+            f"Run: sahjhan --config-dir {config_dir} transition pattern_check"
         )
 
     blocks_commit = any(o.get("blocks_commit") for o in obligations)

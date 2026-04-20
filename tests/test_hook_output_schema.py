@@ -63,7 +63,7 @@ def _invoke_hook(script_path: str, event: dict, cwd: str) -> tuple[int, dict, st
 def _extract_script_path(command: str) -> str | None:
     """Extract the script path from a hooks.json command string."""
     expanded = command.replace("${CLAUDE_PLUGIN_ROOT}", str(REPO_ROOT))
-    match = re.search(r'python\s+"?([^"]+)"?', expanded)
+    match = re.search(r'python[0-9.]*\s+"?([^"]+)"?', expanded)
     return match.group(1) if match else None
 
 

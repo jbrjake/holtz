@@ -10,6 +10,7 @@ gets a test here. If a skill file changes, this file must be updated.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 
@@ -71,10 +72,22 @@ class TestPhaseReconInitSequence:
     def test_sahjhan_init(self):
         _assert_allowed("sahjhan init", "phase-recon.md: first command in init sequence")
 
+    def test_sahjhan_init_with_config_dir(self):
+        _assert_allowed(
+            'sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" init',
+            "phase-recon.md: init with --config-dir (plugin context)",
+        )
+
     def test_nohup_daemon_start(self):
         _assert_allowed(
             "nohup sahjhan daemon start > /dev/null 2>&1 &",
-            "phase-recon.md: daemon start with nohup + redirect + background",
+            "phase-recon.md: daemon start with nohup + redirect + background (legacy)",
+        )
+
+    def test_nohup_daemon_start_with_config_dir(self):
+        _assert_allowed(
+            'nohup sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" daemon start > /tmp/sahjhan-daemon.log 2>&1 &',
+            "phase-recon.md: daemon start with --config-dir and log capture",
         )
 
     def test_ledger_create(self):
@@ -502,12 +515,14 @@ class TestFirstRunInitSequence:
     issue #53.
     """
 
-    # The exact commands from phase-recon.md Step 0, in order
+    # The exact commands from phase-recon.md Step 0, in order.
+    # Both the --config-dir variant (plugin context) and the bare variant
+    # (local dev) must be allowed.
     INIT_SEQUENCE = [
-        "sahjhan init",
-        "nohup sahjhan daemon start > /dev/null 2>&1 &",
-        "sahjhan ledger create --from run 1 --activate",
-        "sahjhan transition run_start",
+        'sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" init',
+        'nohup sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" daemon start > /tmp/sahjhan-daemon.log 2>&1 &',
+        'sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" ledger create --from run 1 --activate',
+        'sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition run_start',
     ]
 
     @pytest.mark.parametrize("command", INIT_SEQUENCE)
@@ -597,4 +612,166 @@ class TestContractGate:
         )
         assert result.returncode == 0, (
             f"Contract gate FAILED:\n{result.stdout}\n{result.stderr}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Issue #55 regression: runbook-style reference files must pass --config-dir.
+#
+# Background: the skill's SKILL.md has a disclaimer (line ~81) that examples
+# are brief and --config-dir must always be included. Runbook-style phase
+# and step files are different — they are consumed literally by agents
+# walking through a phase, often without re-reading SKILL.md first. Missing
+# --config-dir in a runbook command causes silent sahjhan failures when
+# enforcement/ lives in the plugin cache (the normal installed case).
+#
+# Commit d7a4244 fixed phase-recon.md but the other phase/step files were
+# left untouched. This test catches regressions across all of them.
+# ---------------------------------------------------------------------------
+
+_SKILLS_ROOT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "skills", "holtz", "references",
+)
+
+# Files that must have --config-dir on every executable sahjhan command.
+# SKILL.md is NOT in this list because its examples are documented as brief.
+_RUNBOOK_FILES = (
+    "phase-recon.md",
+    "phase-audit.md",
+    "phase-convergence.md",
+    "phase-fix-loop.md",
+    "phase-merge.md",
+    "phase-finalize.md",
+    "step-10-fix-loop.md",
+)
+
+
+def _extract_runbook_sahjhan_lines(md_path: str) -> list[tuple[int, str]]:
+    """Extract executable sahjhan command lines from a runbook markdown file.
+
+    Matches patterns Claude executes literally:
+    1. Lines inside fenced code blocks (```...```) that start a sahjhan
+       invocation.
+    2. Inline prose instructions where a backticked sahjhan command is
+       flagged as imperative by its surrounding syntax. Imperative markers:
+       - "Run `sahjhan ...`" / "run: `sahjhan ...`"
+       - "Record `sahjhan ...`" / "Record: `sahjhan ...`" / "**Record:**"
+       - "record findings via `sahjhan ...`" / "e.g., `sahjhan ...`"
+       - Numbered list item: "1. `sahjhan ...`"
+       - Lone-line backticked command (line contains only the command)
+
+    Excludes:
+    - Dot/graphviz label strings (`label="sahjhan ..."`) — diagrams,
+      not executable instructions.
+    - Shell comments (lines starting with `#`) inside fences.
+    - Line continuations that aren't the first line of a command.
+    - Descriptive inline backticks like "``sahjhan init`` must run
+      before ``daemon start``" where the agent isn't told to execute
+      the command. The imperative markers above distinguish instructions
+      from descriptions.
+    """
+    with open(md_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    results: list[tuple[int, str]] = []
+    seen_on_line: set[tuple[int, str]] = set()
+    in_fence = False
+    prev_was_continuation = False
+
+    fenced_cmd_re = re.compile(r"(?:^|\s|nohup\s+)sahjhan\s")
+    # Imperative-context patterns outside fences. Each captures the
+    # backticked sahjhan command that follows the imperative signal.
+    # `\b[Rr]ecord\b` does NOT match "records"/"recorded" (no word
+    # boundary between 'd' and the following letter), so present-tense
+    # descriptive prose like "records a `context_reset` event" is
+    # correctly ignored.
+    prose_patterns = (
+        re.compile(r"\b[Rr]un:?\s+`(sahjhan\s[^`]+)`"),
+        re.compile(r"\b[Rr]ecord\b[^`\n]{0,60}`(sahjhan\s[^`]+)`"),
+        re.compile(r"\be\.g\.,?\s+`(sahjhan\s[^`]+)`"),
+        re.compile(r"^\s*\d+\.\s+`(sahjhan\s[^`]+)`"),
+        re.compile(r"^\s*`(sahjhan\s[^`]+)`\s*$"),
+    )
+
+    for i, raw in enumerate(lines, 1):
+        stripped = raw.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            prev_was_continuation = False
+            continue
+
+        if in_fence:
+            if stripped.startswith("#"):
+                prev_was_continuation = stripped.endswith("\\")
+                continue
+            if prev_was_continuation:
+                prev_was_continuation = stripped.endswith("\\")
+                continue
+            if fenced_cmd_re.search(stripped):
+                # Skip graphviz labels: `recover [label="sahjhan status..."]`
+                if 'label="sahjhan' in stripped or "label='sahjhan" in stripped:
+                    prev_was_continuation = stripped.endswith("\\")
+                    continue
+                results.append((i, stripped))
+            prev_was_continuation = stripped.endswith("\\")
+            continue
+
+        # Outside fences: flag imperative-context backticks, not descriptive.
+        for pat in prose_patterns:
+            for match in pat.finditer(raw):
+                cmd = match.group(1).strip()
+                key = (i, cmd)
+                if key in seen_on_line:
+                    continue
+                seen_on_line.add(key)
+                results.append((i, cmd))
+
+    return results
+
+
+def _needs_config_dir(cmd: str) -> bool:
+    """A sahjhan command needs --config-dir unless it's a no-op like --help/--version."""
+    tokens = cmd.split()
+    # Strip nohup prefix
+    if tokens and tokens[0] == "nohup":
+        tokens = tokens[1:]
+    # Skip env prefix
+    while tokens and "=" in tokens[0] and not tokens[0].startswith("-"):
+        tokens = tokens[1:]
+    if tokens and tokens[0] == "env":
+        tokens = tokens[1:]
+        while tokens and "=" in tokens[0] and not tokens[0].startswith("-"):
+            tokens = tokens[1:]
+    if not tokens or tokens[0] != "sahjhan":
+        return False
+    rest = tokens[1:]
+    # Help/version flags don't touch config at all.
+    return not (rest and rest[0] in {"--help", "-h", "--version"})
+
+
+class TestRunbookConfigDirRequired:
+    """Every executable sahjhan command in a runbook file must include --config-dir.
+
+    Regression for issue #55: commit d7a4244 fixed phase-recon.md but left
+    phase-merge.md, phase-finalize.md, and step-10-fix-loop.md with bare
+    sahjhan commands that silently fail in the plugin-installed case.
+    """
+
+    @pytest.mark.parametrize("filename", _RUNBOOK_FILES)
+    def test_runbook_commands_include_config_dir(self, filename):
+        md_path = os.path.join(_SKILLS_ROOT, filename)
+        if not os.path.isfile(md_path):
+            pytest.skip(f"{filename} not present in this tree")
+        lines = _extract_runbook_sahjhan_lines(md_path)
+        offenders = [
+            (line_no, cmd)
+            for line_no, cmd in lines
+            if _needs_config_dir(cmd) and "--config-dir" not in cmd
+        ]
+        assert not offenders, (
+            f"{filename}: executable sahjhan commands missing --config-dir. "
+            f"Plugin-installed sahjhan fails without it. Fix with "
+            f"`--config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\"`.\n"
+            + "\n".join(f"  line {n}: {c}" for n, c in offenders)
         )

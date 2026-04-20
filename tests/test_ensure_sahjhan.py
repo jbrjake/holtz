@@ -160,6 +160,35 @@ class TestEnsureSahjhan:
         assert result == str(binary)
         mock_urlopen.assert_not_called()
 
+    def test_bootstrap_creates_sahjhan_symlink(self, tmp_path):
+        """Successful bootstrap creates a `sahjhan` symlink → platform binary.
+
+        Claude Code prepends $CLAUDE_PLUGIN_ROOT/bin/ to PATH. The SKILL.md
+        tells the model to invoke bare `sahjhan …`, so the symlink is what
+        makes that actually resolve after a fresh hook-driven download.
+        """
+        triple = _resolve.platform_triple()
+        binary = tmp_path / "bin" / f"sahjhan-{triple}"
+        binary.parent.mkdir(parents=True)
+        fake_content = b"ELF-bin"
+        expected_hash = hashlib.sha256(fake_content).hexdigest()
+
+        mock_checksums = {triple: expected_hash}
+        mock_resp = mock.MagicMock()
+        mock_resp.read.side_effect = [fake_content, b""]
+        mock_resp.__enter__ = mock.Mock(return_value=mock_resp)
+        mock_resp.__exit__ = mock.Mock(return_value=False)
+
+        with mock.patch.object(_resolve, 'sahjhan_binary', return_value=str(binary)), \
+             mock.patch.object(_resolve, 'SAHJHAN_CHECKSUMS', mock_checksums), \
+             mock.patch.object(_resolve, 'urlopen', return_value=mock_resp):
+            result = _resolve.ensure_sahjhan()
+
+        assert result == str(binary)
+        link = tmp_path / "bin" / "sahjhan"
+        assert link.is_symlink()
+        assert os.readlink(str(link)) == f"sahjhan-{triple}"
+
     def test_atomic_rename_no_partial_binary(self, tmp_path):
         """Download writes to temp file first, not directly to target."""
         triple = _resolve.platform_triple()

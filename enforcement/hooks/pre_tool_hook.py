@@ -65,7 +65,22 @@ def main() -> None:
     if tool_name:
         cmd.extend(["--tool", tool_name])
     if file_path:
-        cmd.extend(["--file", file_path])
+        # hooks.toml globs (``tests/**``, ``src/**``) are evaluated against
+        # what we pass here. Claude Code always sends absolute tool paths,
+        # and those never match a relative glob — so the TDD gate's
+        # ``path_not_matches = "tests/**"`` exemption silently fails and
+        # every test-file Write in fix_loop gets blocked. Normalize to
+        # cwd-relative when the file is inside the project tree.
+        eval_file = file_path
+        try:
+            if os.path.isabs(file_path):
+                rel = os.path.relpath(file_path, cwd)
+                if not rel.startswith(".."):
+                    eval_file = rel
+        except ValueError:
+            # Different drive on Windows — leave the absolute path.
+            pass
+        cmd.extend(["--file", eval_file])
 
     try:
         result = subprocess.run(
@@ -74,14 +89,20 @@ def main() -> None:
     except (OSError, subprocess.TimeoutExpired):
         exit_enforcement_error(cwd, "Hook eval subprocess failed")
 
-    if result.returncode != 0:
-        exit_enforcement_error(cwd, "Hook eval returned error")
-
+    # Sahjhan's CLI exits non-zero when the eval decision is ``block``
+    # (exit code as a secondary signal for wrappers that don't parse JSON).
+    # The JSON payload on stdout is authoritative — parse it first and
+    # only fall through to the enforcement-error path if stdout is missing
+    # or unparseable.
     try:
-        data = json.loads(result.stdout)
+        data = json.loads(result.stdout) if result.stdout.strip() else None
     except (json.JSONDecodeError, ValueError):
+        data = None
+
+    if data is None:
         exit_enforcement_error(cwd, "Hook eval returned invalid JSON")
 
+    assert data is not None  # exit_enforcement_error is NoReturn; help mypy
     eval_data = data.get("data", data)
     decision = eval_data.get("decision", "allow")
     messages = eval_data.get("messages", [])

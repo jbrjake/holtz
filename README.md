@@ -3,8 +3,8 @@
 [![CI](https://github.com/jbrjake/holtz/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/jbrjake/holtz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)
-![1533 tests](https://img.shields.io/badge/tests-1533_total-brightgreen.svg)
-![90% coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)
+![1619 tests](https://img.shields.io/badge/tests-1619_total-brightgreen.svg)
+![91% coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)
 
 **Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
 
@@ -199,7 +199,7 @@ Eleven hooks backed by the Sahjhan enforcement engine — a state machine that r
 
 **Lens quiz.** When a subagent finishes a lens sweep, five questions about the analytical lens it was supposed to be applying. What it focuses on, what failure modes it catches, what its entry point is. The questions come from a quiz bank derived from the lens registry. Wrong answers block the transition. This exists because Holtz [rubber-stamped twelve of thirteen lens sweeps in one run](docs/incidents/self-audit-rubber-stamping.md) — recorded the protocol events, advanced the state machine, declared convergence, never opened a file through any lens. When confronted, he quoted the skill's own anti-gaming language against himself and then designed the quiz system that now prevents it. Saying you looked is not the same as looking. The quiz proves which one happened.
 
-**Daemon liveness.** The wildcard hook fires on every tool call. It checks whether the daemon that holds the HMAC session key is still alive. If the daemon PID is dead, the audit is over — the key is gone, the ledger is unwritable. The hook writes a terminated marker and blocks all further tool use. No restart attempts. A new daemon has a new key.
+**Daemon liveness.** The hook fires on Bash, Write, Edit, and NotebookEdit. It checks whether the daemon that holds the HMAC session key is still alive. If the daemon PID is dead, the audit is over — the key is gone, the ledger is unwritable. The hook writes a terminated marker and blocks write-path tools. Read-only tools (Read, Glob, Grep, ToolSearch, Agent) pass through so the session can still diagnose what went wrong, and `sahjhan daemon start/stop` are allowed for graceful shutdown. No restart attempts. A new daemon has a new key.
 
 The remaining six hooks handle plumbing: write guards on Sahjhan-managed files, bash command auditing, commit gating for pattern analysis, protocol state tracking, context resume after `/clear`, and subagent output verification. Read guards were removed when secrets moved to daemon memory — the quiz bank lives in the vault, the session key never touches disk. The full inventory is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

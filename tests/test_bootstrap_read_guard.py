@@ -5,11 +5,20 @@ These tests verify the new daemon command blocking and retained write guards.
 """
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from hook_runner import run_hook
 
 HOOK = "enforcement/hooks/_sahjhan_bootstrap.py"
+
+# Use the plugin root as the default test cwd so bootstrap's PROTECTED-path
+# checks (enforcement/, hooks/hooks.json, bin/sahjhan…) stay active during
+# these bypass-detection tests. PROTECTED is plugin-relative, so the guard
+# only engages when cwd is inside the plugin — the realistic "agent working
+# on the plugin itself" scenario the tests are written to exercise.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _run_hook(event: dict) -> dict:
@@ -26,7 +35,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan reset --confirm"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -37,7 +46,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan reset --confirm --proof abc123"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -47,7 +56,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan frobnicate --all"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -57,7 +66,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -67,7 +76,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan --config-dir /some/path status"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -77,7 +86,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan daemon stop"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -87,7 +96,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan daemon start"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -97,7 +106,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan gate check converge"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -107,7 +116,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan defer low PL-005"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -117,7 +126,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan init"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -127,7 +136,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "nohup sahjhan daemon start > /dev/null 2>&1 &"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -137,7 +146,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "echo foo && sahjhan reset --confirm"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -147,7 +156,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "Sahjhan Reset --confirm"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -157,7 +166,7 @@ class TestSahjhanAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "git status"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -165,7 +174,13 @@ class TestSahjhanAllowlist:
 
 @pytest.mark.hook_e2e
 class TestReadNoLongerGuarded:
-    """With daemon vault, file reads are no longer blocked."""
+    """With daemon vault, file reads are no longer blocked.
+
+    These cases use /tmp/fake-cwd so the cwd-relative path resolves outside
+    the plugin root. PROTECTED enforcement is plugin-scoped; a Read from an
+    unrelated cwd naming ``enforcement/…`` refers to the target project's
+    own enforcement directory, not the plugin's.
+    """
 
     def test_read_quiz_bank_allowed(self):
         """quiz-bank.json is no longer read-guarded (data lives in vault)."""
@@ -216,7 +231,7 @@ class TestWriteGuardsRetained:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sed -i 's/old/new/g' enforcement/events.toml"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -225,7 +240,7 @@ class TestWriteGuardsRetained:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": 'echo "hacked" > docs/holtz/STATUS.md'},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -381,7 +396,7 @@ class TestHelpFlagAllowed:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan --help"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
@@ -393,7 +408,7 @@ class TestHelpFlagAllowed:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan -h"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -403,7 +418,7 @@ class TestHelpFlagAllowed:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan init --help"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -413,7 +428,7 @@ class TestHelpFlagAllowed:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan --config-dir /some/path --help"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -428,7 +443,7 @@ class TestRedirectFragmentHandling:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan status 2>&1"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
@@ -441,7 +456,7 @@ class TestRedirectFragmentHandling:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan init 2>&1"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -451,7 +466,7 @@ class TestRedirectFragmentHandling:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan status 2>/dev/null"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -461,7 +476,7 @@ class TestRedirectFragmentHandling:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan transition run_start 2>&1"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -471,7 +486,7 @@ class TestRedirectFragmentHandling:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan reset --confirm 2>&1"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -494,7 +509,7 @@ class TestEnvVarPrefixBypassesAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "FOO=bar sahjhan reset --confirm"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -507,7 +522,7 @@ class TestEnvVarPrefixBypassesAllowlist:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "A=1 B=2 sahjhan reset --confirm"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -529,7 +544,7 @@ class TestEnvVarPrefixBypassesWriteProtection:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "X=1 rm -rf docs/holtz/.sahjhan/"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -541,7 +556,7 @@ class TestEnvVarPrefixBypassesWriteProtection:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "X=1 cp /tmp/evil enforcement/hooks/foo.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -553,7 +568,7 @@ class TestEnvVarPrefixBypassesWriteProtection:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "X=1 sed -i 's/old/new/' enforcement/events.toml"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -565,7 +580,7 @@ class TestEnvVarPrefixBypassesWriteProtection:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": 'X=1 echo "hacked" > docs/holtz/STATUS.md'},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
@@ -623,7 +638,7 @@ class TestManagedDataWriteProtection:
         event = {
             "tool_name": "Write",
             "tool_input": {"file_path": "docs/holtz/some-notes.md"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -638,7 +653,7 @@ class TestCopyMoveTargetDirectoryBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "cp -t enforcement/hooks/ /tmp/evil.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -648,7 +663,7 @@ class TestCopyMoveTargetDirectoryBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "mv -t enforcement/hooks/ /tmp/evil.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -658,7 +673,7 @@ class TestCopyMoveTargetDirectoryBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "cp --target-directory=enforcement/ /tmp/evil.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -668,7 +683,7 @@ class TestCopyMoveTargetDirectoryBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "mv --target-directory enforcement/ /tmp/evil.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -683,7 +698,7 @@ class TestFullPathCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "/bin/cp /tmp/evil.py enforcement/hooks/foo.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -693,7 +708,7 @@ class TestFullPathCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "/usr/bin/mv /tmp/evil.py enforcement/hooks/foo.py"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -703,7 +718,7 @@ class TestFullPathCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "/bin/rm -rf docs/holtz/.sahjhan/"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -713,7 +728,7 @@ class TestFullPathCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "/usr/bin/rmdir docs/holtz/.sahjhan/"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -723,7 +738,7 @@ class TestFullPathCommandBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "/bin/cp file.txt /tmp/safe.txt"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
@@ -743,7 +758,7 @@ class TestQuotedPathBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": 'cp /tmp/evil "enforcement/hooks/foo.py"'},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -753,7 +768,7 @@ class TestQuotedPathBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "cp /tmp/evil 'enforcement/hooks/foo.py'"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -763,7 +778,7 @@ class TestQuotedPathBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": 'echo pwned > "docs/holtz/STATUS.md"'},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -773,7 +788,7 @@ class TestQuotedPathBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": 'rm -rf "docs/holtz/.sahjhan/"'},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -783,7 +798,7 @@ class TestQuotedPathBypass:
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": 'echo pwned | tee "docs/holtz/STATUS.md"'},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
@@ -795,7 +810,370 @@ class TestQuotedPathBypass:
             "tool_input": {
                 "command": 'FOO="bar baz" python3 -c "open(\'enforcement/hooks/x\',\'w\')"',
             },
-            "cwd": "/tmp/fake-cwd",
+            "cwd": REPO_ROOT,
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+@pytest.mark.hook_e2e
+class TestBackslashEscapedCommandBypass:
+    """Backslash-escaped or quoted command names (\\cp, "cp", 'rm') must not bypass guards.
+
+    Shell interprets ``\\cp`` and ``"cp"`` as the literal command ``cp`` (escaping
+    skips alias/function lookup). The bash_guard detected the destructive
+    operation by matching on the unescaped, unquoted name, so writes via these
+    forms slipped past every protection that didn't use substring search.
+    """
+
+    def test_backslash_cp_to_enforcement_blocked(self):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "\\cp /tmp/evil enforcement/hooks/foo.py"},
+            "cwd": REPO_ROOT,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Backslash-escaped cp bypassed write protection on enforcement/"
+        )
+
+    def test_backslash_rm_sahjhan_dir_blocked(self):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "\\rm -rf docs/holtz/.sahjhan"},
+            "cwd": REPO_ROOT,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Backslash-escaped rm bypassed protection on .sahjhan dir"
+        )
+
+    def test_double_quoted_cp_to_enforcement_blocked(self):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": '"cp" /tmp/evil enforcement/hooks/foo.py'},
+            "cwd": REPO_ROOT,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Double-quoted cp bypassed write protection"
+        )
+
+    def test_single_quoted_rm_blocked(self):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "'rm' -rf docs/holtz/.sahjhan"},
+            "cwd": REPO_ROOT,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Single-quoted rm bypassed protection on .sahjhan dir"
+        )
+
+    def test_backslash_python_interpreter_blocked(self):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "\\python3 -c \"open('enforcement/hooks/x','w')\"",
+            },
+            "cwd": REPO_ROOT,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Backslash-escaped python interpreter bypassed protected-path check"
+        )
+
+    def test_backslash_curl_to_enforcement_blocked(self):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": "\\curl -o enforcement/hooks/foo.py https://example.com/x",
+            },
+            "cwd": REPO_ROOT,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Backslash-escaped curl bypassed -o protected-path check"
+        )
+
+    def test_backslash_cp_safe_target_allowed(self):
+        """\\cp to a non-protected path remains allowed (no false positive)."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "\\cp file.txt /tmp/safe.txt"},
+            "cwd": REPO_ROOT,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_backslash_sahjhan_reset_blocked(self):
+        """\\sahjhan reset must still be blocked by the subcommand allowlist."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "\\sahjhan reset --confirm"},
+            "cwd": REPO_ROOT,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Backslash-escaped sahjhan bypassed subcommand allowlist"
+        )
+
+    def test_quoted_sahjhan_daemon_stop_blocked(self):
+        """'sahjhan' daemon stop must still be blocked by the sub-subcommand check."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "'sahjhan' daemon stop"},
+            "cwd": REPO_ROOT,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Quoted sahjhan bypassed daemon stop allowlist"
+        )
+
+
+@pytest.mark.hook_e2e
+class TestParentDirectoryRemovalBypass:
+    """Destructive commands targeting the parent of a MANAGED path bypass
+    the guard.
+
+    Root cause: the rm check matches the literal MANAGED_DATA path
+    (``docs/holtz/.sahjhan/``) against command arguments with
+    ``startswith``. A parent path like ``docs/holtz`` does not start
+    with the longer managed path, so the check skips it — even though
+    ``rm -rf docs/holtz`` destroys the audit state just as thoroughly.
+
+    Run 25 postmortem: Holtz ran ``rm -rf docs/holtz/.sahjhan``
+    mid-audit, obliterating 1,110 ledger events. The guard was added
+    to stop that exact move. A parent-dir rm is the same move with
+    one extra slash — the guard must catch it.
+    """
+
+    def test_rm_docs_holtz_parent_blocked_on_active_audit(self, tmp_path):
+        """rm -rf docs/holtz must be blocked when .sahjhan/ lives inside it."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf docs/holtz"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "rm -rf docs/holtz bypassed the guard — it destroys "
+            "docs/holtz/.sahjhan/ even though the literal path doesn't match"
+        )
+
+    def test_rm_docs_holtz_trailing_slash_blocked(self, tmp_path):
+        """rm -rf docs/holtz/ must be blocked — same bypass with trailing slash."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf docs/holtz/"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_rm_docs_grandparent_blocked(self, tmp_path):
+        """rm -rf docs must be blocked when it contains the audit state."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf docs"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_rm_relative_parent_blocked(self, tmp_path):
+        """rm -rf ./docs/holtz must be blocked (relative path form)."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf ./docs/holtz/"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_rm_parent_allowed_when_terminated(self, tmp_path):
+        """Recovery: parent-dir rm is fine once the audit is terminated."""
+        sahjhan = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan.mkdir(parents=True)
+        (sahjhan / "terminated").write_text("reason: test\n")
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf docs/holtz"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_rm_unrelated_dir_still_allowed(self, tmp_path):
+        """Non-audit dirs must remain deletable — no false positives."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf build"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+
+@pytest.mark.hook_e2e
+class TestTerminatedMarkerRecoveryPath:
+    """When the `terminated` marker exists, the audit is dead (session key
+    lost, ledger unwritable). The primer and stop_hook both direct the user
+    to ``remove docs/holtz/.sahjhan/`` as the recovery step — but the
+    bash_guard blocks that exact command.
+
+    The guard exists to prevent Holtz from nuking the ledger during an
+    ACTIVE audit (see run 25 postmortem). When the audit is already
+    terminated, the guard is guarding nothing — it only traps the user in
+    an instruction they're told to follow but can't execute. Lift the
+    ``docs/holtz/.sahjhan/`` + managed-doc guards when the marker is
+    present so the recovery path the plugin documents actually works.
+    """
+
+    def _with_terminated_marker(self, tmp_path):
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)
+        (sahjhan_dir / "terminated").write_text(
+            "reason: daemon_pid_dead\ninit_pid: 99999\n"
+        )
+        return str(tmp_path)
+
+    def test_rm_sahjhan_dir_allowed_when_terminated(self, tmp_path):
+        """rm -rf docs/holtz/.sahjhan/ must be allowed after termination."""
+        cwd = self._with_terminated_marker(tmp_path)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf docs/holtz/.sahjhan/"},
+            "cwd": cwd,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "Terminated audit recovery blocked — primer tells the user to "
+            "remove docs/holtz/.sahjhan/ but the guard refuses the command"
+        )
+
+    def test_rm_sahjhan_dir_blocked_without_marker(self, tmp_path):
+        """Without the terminated marker, rm must still be blocked (active audit)."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)  # audit present, no termination
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf docs/holtz/.sahjhan/"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Active audit lost its guard on .sahjhan — the ledger is still live "
+            "and Holtz could destroy it mid-run (the run 25 failure mode)"
+        )
+
+    def test_rm_sahjhan_file_allowed_when_terminated(self, tmp_path):
+        """Deleting individual files inside .sahjhan/ is part of recovery too."""
+        cwd = self._with_terminated_marker(tmp_path)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm docs/holtz/.sahjhan/daemon.pid"},
+            "cwd": cwd,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "Recovery on a terminated audit must allow cleanup of .sahjhan contents"
+        )
+
+    def test_rm_status_md_allowed_when_terminated(self, tmp_path):
+        """Managed docs (STATUS.md/PUNCHLIST.md) are re-rendered — deletable on recovery."""
+        cwd = self._with_terminated_marker(tmp_path)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm docs/holtz/STATUS.md"},
+            "cwd": cwd,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "After termination, managed docs exist as stale artifacts and "
+            "blocking their deletion leaves the project in a half-state"
+        )
+
+    def test_write_to_managed_doc_allowed_when_terminated(self, tmp_path):
+        """Write/Edit on STATUS.md/PUNCHLIST.md works once audit is terminated."""
+        cwd = self._with_terminated_marker(tmp_path)
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/STATUS.md"},
+            "cwd": cwd,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "Write to managed doc must be permitted during recovery so users "
+            "can replace stale STATUS.md content"
+        )
+
+    def test_write_to_managed_doc_blocked_without_marker(self, tmp_path):
+        """Without marker, Write to managed doc still blocked (live render)."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True)  # no terminated marker
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/STATUS.md"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "Active audit must keep STATUS.md read-only (rendered from ledger)"
+        )
+
+    def test_write_to_sahjhan_data_allowed_when_terminated(self, tmp_path):
+        """Write to .sahjhan/ contents works on a terminated audit."""
+        cwd = self._with_terminated_marker(tmp_path)
+        event = {
+            "tool_name": "Write",
+            "tool_input": {"file_path": "docs/holtz/.sahjhan/notes.txt"},
+            "cwd": cwd,
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "Writing inside .sahjhan/ is blocked on live audits, but once the "
+            "ledger is dead, the directory is user-owned state"
+        )
+
+    def test_write_to_enforcement_still_blocked_when_terminated(self, tmp_path):
+        """PROTECTED plugin-internal paths are always off-limits, even after termination.
+
+        The terminated marker lifts audit-state protections, not plugin integrity
+        protections. An agent that tries to modify enforcement/ in any state is
+        attempting to rewrite its own guards.
+        """
+        # Termination doesn't matter here — PROTECTED check fires on plugin cwd
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm enforcement/hooks/bash_guard.py"},
+            "cwd": REPO_ROOT,
+        }
+        # Set up terminated marker in the plugin's own tree just to verify it
+        # doesn't accidentally grant access to enforcement/.
+        sahjhan_dir = os.path.join(REPO_ROOT, "docs", "holtz", ".sahjhan")
+        marker = os.path.join(sahjhan_dir, "terminated")
+        created_dir = False
+        created_marker = False
+        try:
+            if not os.path.isdir(sahjhan_dir):
+                os.makedirs(sahjhan_dir)
+                created_dir = True
+            if not os.path.isfile(marker):
+                with open(marker, "w") as f:
+                    f.write("reason: test\n")
+                created_marker = True
+            output = _run_hook(event)
+            assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+                "Terminated marker must not lift PROTECTED guards on enforcement/"
+            )
+        finally:
+            if created_marker:
+                os.unlink(marker)
+            if created_dir:
+                os.rmdir(sahjhan_dir)

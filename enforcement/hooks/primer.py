@@ -35,28 +35,34 @@ from _resolve import ensure_sahjhan  # noqa: E402
 
 def main() -> None:
     event = read_event()
-    binary = ensure_sahjhan()
-
-    if binary is None:
-        exit_ok()
-
     cwd = event.get("cwd", os.getcwd())
-    config_dir, _ = resolve_config_dir(cwd)
 
-    # No active run — nothing to inject
+    # No active run — nothing to inject. Check this BEFORE ensure_sahjhan()
+    # so projects without an audit don't trigger the ~100MB binary download.
     data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
     if not os.path.isdir(data_dir):
         exit_ok()
 
-    # Terminated audit — inject termination message, skip everything else
+    # Terminated audit — inject termination message, skip everything else.
+    # Also precedes the binary bootstrap so a terminated audit doesn't pay
+    # the download cost to announce its own death.
     terminated = os.path.join(data_dir, "terminated")
     if os.path.isfile(terminated):
         exit_warn(
             "AUDIT TERMINATED: daemon died — session key lost. "
             "The ledger is unwritable. This audit cannot be completed. "
-            "Use /stop to exit, then start a new audit.",
+            "Check /tmp/sahjhan-daemon.log for crash output. "
+            "A new daemon has a new key and cannot resume this ledger. "
+            "Disable the plugin with /plugin to restore tool access; "
+            "to start a new audit, remove docs/holtz/.sahjhan/ first.",
             "UserPromptSubmit",
         )
+
+    binary = ensure_sahjhan()
+    if binary is None:
+        exit_ok()
+
+    config_dir, _ = resolve_config_dir(cwd)
 
     # Get current status
     try:
@@ -117,7 +123,10 @@ def main() -> None:
         exit_warn(
             "AUDIT TERMINATED: daemon died during awaiting_clear — session key lost. "
             "The ledger is unwritable. This audit cannot be completed. "
-            "Use /stop to exit, then start a new audit.",
+            "Check /tmp/sahjhan-daemon.log for crash output. "
+            "A new daemon has a new key and cannot resume this ledger. "
+            "Disable the plugin with /plugin to restore tool access; "
+            "to start a new audit, remove docs/holtz/.sahjhan/ first.",
             "UserPromptSubmit",
         )
 
@@ -138,8 +147,9 @@ def main() -> None:
         context += f"\nLens: {perspective}. Quiz on exit. Failures restart."
 
     context += (
-        f"\nRun `{binary} status` for full state. "
-        f"Run `{binary} gate check <transition>` to see what gates are blocking."
+        f"\nRun `{binary} --config-dir {config_dir} status` for full state. "
+        f"Run `{binary} --config-dir {config_dir} gate check <transition>` "
+        f"to see what gates are blocking."
     )
 
     # Append enforcement state line if cache exists

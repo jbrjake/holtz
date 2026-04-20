@@ -4,7 +4,7 @@
 
 <HARD-GATE>
 Before entering the fix loop, read [references/step-10-fix-loop.md](references/step-10-fix-loop.md) and record:
-`sahjhan event reference_read --field path=step-10-fix-loop.md`
+`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event reference_read --field path=step-10-fix-loop.md`
 The `fix_loop_start` transition will not pass without this event.
 </HARD-GATE>
 
@@ -22,17 +22,17 @@ This shows all OPEN/IN PROGRESS items plus the 3 most recently resolved items (f
 
 For EACH punchlist item, in order:
 
-1. `sahjhan event fix_start --field finding_id=BH-NNN`
+1. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event fix_start --field finding_id=BH-NNN`
 2. Write a failing test. Run it. Confirm it FAILS.
-3. `sahjhan event test_failed_before_fix --field finding_id=BH-NNN --field test_name=...`
+3. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event test_failed_before_fix --field finding_id=BH-NNN --field test_name=...`
 4. Write the fix. Run the failing test. Confirm it PASSES.
 5. Run full suite. Confirm all pass.
 6. Run blast radius: `python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json blast_radius <node> --depth 2`
-7. `sahjhan event blast_radius --field finding_id=BH-NNN --field affected_count=N`
+7. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field finding_id=BH-NNN --field affected_count=N`
 8. Write edge-case hardening tests (minimum 1).
-9. `sahjhan event hardening_complete --field finding_id=BH-NNN --field edge_cases_tested=N`
+9. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event hardening_complete --field finding_id=BH-NNN --field edge_cases_tested=N`
 10. `git commit` with finding ID in body. Format: `fix(<scope>): <desc>`
-11. `sahjhan transition fix_commit --item-id BH-NNN`
+11. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit --item-id BH-NNN`
 12. Move to next item.
 
 **You cannot do step 4 before step 3.** The pre-edit hook enforces this.
@@ -55,7 +55,7 @@ Use extended thinking (ultrathink) for this step — cross-finding pattern disco
 2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify pattern, search for siblings, write new items to punchlist IMMEDIATELY
 3. Write pattern blocks to punchlist per format spec
 4. **Update impact graph:** Add `shares_pattern` edges between all instances of the same pattern (e.g., if BH-003 and BH-007 are both PAT-001 instances, link the functions they involve with `shares_pattern` edges including the pattern ID in the note).
-5. **Record:** `sahjhan event pattern_analysis_complete --patterns_found N --siblings_found M`. Add new PAT-NNN entries to `docs/holtz/patterns-brief.md`.
+5. **Record:** `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event pattern_analysis_complete --patterns_found N --siblings_found M`. Add new PAT-NNN entries to `docs/holtz/patterns-brief.md`.
 6. **Update `docs/holtz/patterns-brief.md`:** Read `docs/holtz/patterns-brief.md` first (if it exists) to check for existing entries. For each newly identified pattern, append an entry to the patterns brief. Use this format:
 
    ```markdown
@@ -99,7 +99,7 @@ Read [references/lens-registry.md](references/lens-registry.md) for the full set
 | cross-file | covered | **Focused:** Re-trace entry points from lens registry using updated impact graph. Focus on paths affected by fixes since initial audit. Record `sweep_type=cross-file-focused`. |
 | cross-file | not covered | **Full:** Standard Steps 6-8 scoped to this lens entry point. Record `sweep_type=full`. |
 
-For each lens sweep, record: `sahjhan event lens_sweep_started --field perspective={lens} --field sweep_type={type}`
+For each lens sweep, record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event lens_sweep_started --field perspective={lens} --field sweep_type={type}`
 
 **Gap-fill sweep procedure (per-file lenses with initial coverage):**
 1. Read `docs/holtz/audit/lens-coverage.md` for which files were covered
@@ -114,13 +114,13 @@ For each lens sweep, record: `sahjhan event lens_sweep_started --field perspecti
 4. Dispatch a subagent with the focused path list and lens audit priorities
 5. Write findings to `docs/holtz/audit/lens-{name}.md` (append or replace)
 
-After completing a lens sweep (any type), return to Step 10 (fix loop) for any new findings. When a perspective passes clean, run `sahjhan set complete perspective`. Then `sahjhan transition lens_rotate` to switch to the next perspective.
+After completing a lens sweep (any type), return to Step 10 (fix loop) for any new findings. When a perspective passes clean, run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" set complete perspective`. Then run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition lens_rotate` to switch to the next perspective.
 
 **Circuit Breakers:**
 - **MAX_ITERATIONS:** 15 total fix-loop iterations. Enforced by Sahjhan's `fix_commit` gate (`max_count = 15`). After 15, the gate blocks — report remaining items to the user.
 - **SAME_ITEM:** 3 attempts on the same punchlist item. After 3, escalate to the user.
 - **NO_PROGRESS:** 3 consecutive iterations with no items resolved. Stop and report.
-- **CONTEXT_BUDGET:** If context utilization exceeds 60%, wrap up the current item and proceed to the convergence boundary — run `sahjhan transition iteration_boundary` and instruct `/clear`. Do not wait for compaction.
+- **CONTEXT_BUDGET:** If context utilization exceeds 60%, wrap up the current item and proceed to the convergence boundary — run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition iteration_boundary` and instruct `/clear`. Do not wait for compaction.
 
 ```dot
 digraph {

@@ -86,7 +86,7 @@ for entry in $HOOKS; do
                 "hooks": [
                     {
                         "type": "command",
-                        "command": "python \"$REPO_ROOT/$hook_path\""
+                        "command": "python3 \"$REPO_ROOT/$hook_path\""
                     }
                 ]
             }
@@ -95,12 +95,22 @@ for entry in $HOOKS; do
 }
 SETTINGS_EOF
 
-    # Run claude with the hook active
-    OUTPUT=$(cd "$WORK_DIR" && claude -p "$PROMPT" --no-input 2>&1) || true
+    # Run claude with the hook active. `-p` is print mode (single-shot,
+    # exits when done); redirect stdin from /dev/null so claude doesn't
+    # block waiting on a TTY when invoked from CI.
+    OUTPUT=$(cd "$WORK_DIR" && claude -p "$PROMPT" </dev/null 2>&1) || true
 
-    # Check for validation failures
+    # Check for validation failures or claude itself failing to start
+    # (unknown flags, missing API key, etc.) — both must fail the test
+    # so we don't silently report PASS when claude never ran the hook.
     if echo "$OUTPUT" | grep -qi "json.*validation.*failed\|hook.*error.*validation"; then
         echo "FAIL $hook_name ($event): json validation failed"
+        if [[ "$VERBOSE" == "--verbose" ]]; then
+            echo "  Output: ${OUTPUT:0:500}"
+        fi
+        FAILURES=$((FAILURES + 1))
+    elif echo "$OUTPUT" | grep -qE "^error:|unknown option|usage:.*claude"; then
+        echo "FAIL $hook_name ($event): claude failed to start"
         if [[ "$VERBOSE" == "--verbose" ]]; then
             echo "  Output: ${OUTPUT:0:500}"
         fi

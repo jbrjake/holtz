@@ -73,13 +73,44 @@ class TestBootstrapHook:
         assert_blocked(code, output, "protected enforcement infrastructure")
 
     def test_blocks_binary_modification(self):
-        """Bootstrap hook blocks edits to bin/sahjhan*."""
+        """Bootstrap hook blocks edits to bin/sahjhan (the symlink itself).
+
+        ``bin/sahjhan`` is the canonical protected path. On macOS it's a
+        symlink to the aarch64 binary, on Linux to the x86_64 one — the
+        exact name matches PROTECTED without any arch-dependent path
+        comparison.
+        """
         event = {
-            "tool_input": {"file_path": "bin/sahjhan-aarch64-apple-darwin"},
+            "tool_input": {"file_path": "bin/sahjhan"},
             "cwd": REPO_ROOT,
         }
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_blocked(code, output, "protected enforcement infrastructure")
+
+    def test_blocks_all_arch_binaries(self):
+        """Every bin/sahjhan-<arch> sibling must be blocked, not just the
+        one matching the current machine.
+
+        Pre-existing bug: the check used ``os.path.realpath`` on the
+        PROTECTED prefix, which followed ``bin/sahjhan`` to the
+        arch-specific target, making the block depend on which arch's
+        binary happened to exist locally. macOS blocked aarch64 and
+        missed x86_64; Linux did the reverse. The boundary-aware prefix
+        check now catches every sibling.
+        """
+        for arch in (
+            "bin/sahjhan-aarch64-apple-darwin",
+            "bin/sahjhan-x86_64-unknown-linux-gnu",
+            "bin/sahjhan-aarch64-unknown-linux-gnu",
+        ):
+            event = {
+                "tool_input": {"file_path": arch},
+                "cwd": REPO_ROOT,
+            }
+            code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+            assert_blocked(
+                code, output, "protected enforcement infrastructure",
+            ), f"expected block for {arch}, got allow"
 
     def test_blocks_self_modification(self):
         """Bootstrap hook blocks edits to itself."""
@@ -413,6 +444,135 @@ class TestBootstrapHook:
         }
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_blocked(code, output, "protected")
+
+    # --- Interpreter-execute-vs-write FP tests ---
+    # Historical bug: the interpreter-write check fired on ANY `-` flag,
+    # blocking legitimate script execution like ``python3 enforcement/hooks/x.py``
+    # and ``python -m pytest --cov=enforcement/hooks``. These tests lock in
+    # the narrowed check (inline-code flags only: -c, -e, --eval).
+
+    def test_allows_python_executing_enforcement_script(self):
+        """python3 enforcement/hooks/primer.py executes a script, not a write."""
+        event = {
+            "tool_input": {"command": "python3 enforcement/hooks/primer.py --help"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_allowed(code, output)
+
+    def test_allows_python_module_with_enforcement_coverage_target(self):
+        """python -m pytest --cov=enforcement/hooks is coverage config, not a write."""
+        event = {
+            "tool_input": {
+                "command": (
+                    "python -m pytest --cov=skills/holtz/scripts "
+                    "--cov=hooks --cov=enforcement/hooks --cov-fail-under=80"
+                )
+            },
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_allowed(code, output)
+
+    def test_allows_python_with_unbuffered_flag_executing_enforcement_script(self):
+        """python3 -u enforcement/hooks/x.py is unbuffered execution, not a write."""
+        event = {
+            "tool_input": {"command": "python3 -u enforcement/hooks/primer.py"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_allowed(code, output)
+
+    def test_blocks_bash_c_write_to_enforcement(self):
+        """bash -c with a write to enforcement/ inside the inline code is a write."""
+        event = {
+            "tool_input": {
+                "command": "bash -c 'echo hostile > enforcement/protocol.toml'"
+            },
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "protected")
+
+    def test_blocks_node_eval_write_to_enforcement(self):
+        """node --eval with fs.writeFileSync targeting enforcement/ is a write."""
+        event = {
+            "tool_input": {
+                "command": (
+                    "node --eval \"require('fs').writeFileSync("
+                    "'enforcement/hooks/evil.js', 'x')\""
+                )
+            },
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "protected")
+
+    # --- Out-of-tree wrapper-script bypass tests ---
+    # Historical bypass: ``bash /tmp/wrapper.sh`` where the script writes
+    # to enforcement/ — the command string itself has no protected-path
+    # reference, so per-segment checks miss it. The _out_of_tree_script_block
+    # defense reads the script and blocks based on its contents.
+
+    def test_blocks_bash_wrapper_script_that_writes_to_enforcement(self, tmp_path):
+        """Out-of-tree bash wrapper that writes to enforcement/ must be blocked."""
+        wrapper = tmp_path / "wrapper.sh"
+        wrapper.write_text(
+            "#!/usr/bin/env bash\n"
+            "echo hostile > enforcement/protocol.toml\n"
+        )
+        event = {
+            "tool_input": {"command": f"bash {wrapper}"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "out-of-tree script")
+
+    def test_blocks_python_wrapper_script_that_writes_to_enforcement(self, tmp_path):
+        """Out-of-tree python script referencing enforcement/ must be blocked."""
+        wrapper = tmp_path / "evil.py"
+        wrapper.write_text("open('enforcement/x', 'w').write('x')\n")
+        event = {
+            "tool_input": {"command": f"python3 {wrapper}"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "out-of-tree script")
+
+    def test_allows_in_tree_script_that_touches_enforcement(self):
+        """In-tree scripts (committed to the repo) are trusted.
+
+        scripts/hash-trusted-callers.sh legitimately writes to
+        enforcement/trusted-callers.toml as part of the dev loop;
+        the out-of-tree guard must not block it.
+        """
+        event = {
+            "tool_input": {"command": "bash scripts/hash-trusted-callers.sh"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_allowed(code, output)
+
+    def test_allows_out_of_tree_script_that_does_not_touch_protected(self, tmp_path):
+        """Out-of-tree script with no protected-path reference is allowed."""
+        wrapper = tmp_path / "harmless.sh"
+        wrapper.write_text("#!/usr/bin/env bash\necho hello\n")
+        event = {
+            "tool_input": {"command": f"bash {wrapper}"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_allowed(code, output)
+
+    def test_blocks_unreadable_out_of_tree_script(self, tmp_path):
+        """Fail-closed: if the referenced script can't be read, block conservatively."""
+        missing = tmp_path / "does-not-exist.sh"
+        event = {
+            "tool_input": {"command": f"bash {missing}"},
+            "cwd": REPO_ROOT,
+        }
+        code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
+        assert_blocked(code, output, "unreadable out-of-tree script")
 
 
 # --- bash_guard.py (PostToolUse) ---

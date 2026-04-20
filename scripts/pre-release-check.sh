@@ -29,7 +29,7 @@ run_check() {
 
 # --- Static analysis ---
 run_check "Ruff" ruff check .
-run_check "Mypy" mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/
+run_check "Mypy" mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/ scripts/ enforcement/scripts/
 
 # --- Contract and schema gates ---
 run_check "Contract Gate" python scripts/contract_gate.py

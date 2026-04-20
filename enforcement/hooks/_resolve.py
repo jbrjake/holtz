@@ -133,6 +133,18 @@ def _bootstrap(dest: str) -> str | None:
         with open(version_file, "w", encoding="utf-8") as f:
             f.write(SAHJHAN_VERSION + "\n")
 
+        # Create platform-neutral `sahjhan` symlink so bare invocations via
+        # PATH (Claude Code prepends the plugin's bin/ to PATH) resolve to
+        # the platform binary. Without this, the SKILL.md instructions that
+        # say ``sahjhan init`` fail with "command not found" after a fresh
+        # bootstrap download on machines that don't ship with a pre-made
+        # symlink.
+        link_path = os.path.join(bin_dir, "sahjhan")
+        with contextlib.suppress(OSError):
+            if os.path.islink(link_path) or os.path.exists(link_path):
+                os.unlink(link_path)
+            os.symlink(os.path.basename(dest), link_path)
+
         # Clear any failure marker
         _clear_failed(bin_dir)
         return dest

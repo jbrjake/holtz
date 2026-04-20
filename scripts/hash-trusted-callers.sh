@@ -7,18 +7,33 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 MANIFEST="$REPO_ROOT/enforcement/trusted-callers.toml"
 
-# Hook scripts that connect to the sahjhan daemon (sign or vault operations)
+# Hook scripts that connect to the sahjhan daemon (sign, vault, or
+# enforcement_read/write/update operations). Every hook that talks to
+# the daemon socket needs to be listed here — the daemon rejects
+# unlisted callers with "caller not authenticated" and the hook falls
+# back to cache=None / is_enforcement_fresh=False, which silently
+# disables enforcement.
 TRUSTED_SCRIPTS=(
     "enforcement/hooks/_common.py"
     "enforcement/hooks/lens_quiz.py"
     "enforcement/hooks/stop_hook.py"
     "enforcement/hooks/primer.py"
+    "enforcement/hooks/pre_tool_hook.py"
+    "enforcement/hooks/post_tool_hook.py"
+    "enforcement/hooks/commit_gate.py"
+    "enforcement/hooks/bash_guard.py"
+    "enforcement/hooks/protocol_tracker.py"
     "hooks/subagent_findings_check.py"
 )
 
 cat > "$MANIFEST" << 'HEADER'
 # Trusted callers manifest for sahjhan daemon authentication.
-# Paths are relative to the plugin root (config directory's parent).
+# Keys match how the daemon identifies caller scripts at runtime:
+# it strips the config directory prefix from the caller's absolute
+# path, so `enforcement/hooks/primer.py` is keyed as `hooks/primer.py`.
+# Paths outside the config tree (e.g., the plugin-root `hooks/` dir)
+# keep their plugin-root-relative form — the daemon falls back to a
+# suffix match for those.
 # Hashes are SHA-256 of file contents at build/release time.
 #
 # Regenerate with: scripts/hash-trusted-callers.sh
@@ -34,7 +49,12 @@ for script in "${TRUSTED_SCRIPTS[@]}"; do
         continue
     fi
     hash=$(shasum -a 256 "$full_path" | cut -d' ' -f1)
-    echo "\"$script\" = \"sha256:$hash\"" >> "$MANIFEST"
+    # Key scripts under enforcement/ relative to enforcement/ — that's what
+    # the daemon matches against (strips --config-dir prefix from the
+    # caller's absolute path). Scripts outside enforcement/ keep their
+    # plugin-root-relative form.
+    key="${script#enforcement/}"
+    echo "\"$key\" = \"sha256:$hash\"" >> "$MANIFEST"
 done
 
 echo "Updated $MANIFEST"

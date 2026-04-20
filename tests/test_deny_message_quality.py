@@ -199,11 +199,17 @@ class TestBootstrapDenyMessages:
         ("rm -rf docs/holtz/.sahjhan/", "docs/holtz/.sahjhan/"),
     ])
     def test_bash_write_guard_names_path(self, cmd, protected):
-        """Bash write guard messages name the protected path."""
+        """Bash write guard messages name the protected path.
+
+        Uses REPO_ROOT so PROTECTED plugin-relative paths (enforcement/,
+        hooks/hooks.json) remain in scope — the guard only engages when the
+        agent is operating inside the plugin tree. MANAGED paths
+        (docs/holtz/…) are cwd-relative and engage from any cwd.
+        """
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": cmd},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": str(REPO_ROOT),
         }
         output = _run_hook(BOOTSTRAP_HOOK, event)
         reason = _get_pre_tool_reason(output)

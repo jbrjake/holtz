@@ -17,7 +17,9 @@ import json
 import os
 import socket
 import subprocess
+from collections.abc import Callable
 from datetime import datetime, timezone
+from typing import NoReturn
 
 _HOOKS_COMMON = os.path.join(
     os.path.dirname(__file__), '..', '..', 'hooks', '_common.py'
@@ -28,15 +30,18 @@ if _spec is None or _spec.loader is None:
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 
-# Re-export all public names
-read_event = _mod.read_event
-exit_ok = _mod.exit_ok
-exit_warn = _mod.exit_warn
-exit_block = _mod.exit_block
-exit_stop_allow = _mod.exit_stop_allow
-exit_stop_warn = _mod.exit_stop_warn
-exit_stop_block = _mod.exit_stop_block
-mask_fenced_blocks = _mod.mask_fenced_blocks
+# Re-export all public names. The `importlib` loader gives mypy `Any` for
+# every attribute on `_mod`, which loses the `NoReturn` annotation on the
+# exit helpers and lets callers' narrowing silently disappear. Annotate
+# the re-exports so mypy knows these never return.
+read_event: Callable[..., dict] = _mod.read_event
+exit_ok: Callable[..., NoReturn] = _mod.exit_ok
+exit_warn: Callable[..., NoReturn] = _mod.exit_warn
+exit_block: Callable[[str], NoReturn] = _mod.exit_block
+exit_stop_allow: Callable[[], NoReturn] = _mod.exit_stop_allow
+exit_stop_warn: Callable[[str], NoReturn] = _mod.exit_stop_warn
+exit_stop_block: Callable[[str], NoReturn] = _mod.exit_stop_block
+mask_fenced_blocks: Callable[[str], str] = _mod.mask_fenced_blocks
 
 
 def _enforcement_root() -> str:
@@ -110,7 +115,7 @@ def exit_enforcement_error(
     cwd: str,
     reason: str,
     hook_type: str = "PreToolUse",
-) -> None:
+) -> NoReturn:
     """Block if active audit + fresh enforcement, else allow.
 
     Replaces exit_ok() at daemon-failure fallback paths. During an active,

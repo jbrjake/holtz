@@ -190,12 +190,14 @@ def _is_plugin_class(cls: type) -> bool:
     Uses isinstance on a sentinel instance for @runtime_checkable Protocols,
     with hasattr fallback for classes that can't be instantiated without args.
     """
-    # Try Protocol-based check first (BH-015: use @runtime_checkable instead of manual set)
+    # Try Protocol-based check first (BH-015: use @runtime_checkable instead of manual set).
+    # object.__new__ avoids invoking a custom __new__ that may require args — we just
+    # want a bare instance for structural isinstance() against the runtime-checkable Protocol.
     try:
-        sentinel = cls.__new__(cls)
+        sentinel: object = object.__new__(cls)
         return isinstance(sentinel, ProfilerPlugin)
     except TypeError:
-        # Fallback: class can't be instantiated — check structural conformance
+        # Fallback: class can't be instantiated (e.g., abstract) — check structural conformance
         if not hasattr(cls, "name"):
             return False
         for method in ("detect", "label_phases", "name_subagent", "enrich_profile", "optimization_patterns"):

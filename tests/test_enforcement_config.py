@@ -346,3 +346,91 @@ def test_hooks_json_registers_enforcement_hooks():
     assert any("protocol_tracker" in c for c in all_post_commands), (
         "protocol_tracker.py not registered in hooks.json PostToolUse"
     )
+
+
+def test_trusted_callers_keys_match_daemon_path_strip():
+    """Manifest keys must match how the daemon identifies caller scripts.
+
+    The sahjhan daemon identifies a caller by taking the caller's absolute
+    script path and stripping its ``--config-dir`` prefix (which is
+    ``<plugin_root>/enforcement``). So a script at
+    ``<plugin_root>/enforcement/hooks/primer.py`` is identified as
+    ``hooks/primer.py`` — NOT ``enforcement/hooks/primer.py``.
+
+    A previous version of the manifest used plugin-root-relative keys with
+    an ``enforcement/`` prefix. Every daemon auth request silently failed
+    with "caller not in manifest", and the whole enforcement layer
+    collapsed to fail-open in the installed-plugin case — read_cache
+    returned None everywhere, is_enforcement_fresh returned False, every
+    protocol gate fell through to exit_ok. No tests caught this because
+    no tests hit the real authed-event path.
+
+    Pin the format so the regression can't repeat silently.
+    """
+    repo_root = Path(__file__).parent.parent
+    manifest_path = repo_root / "enforcement" / "trusted-callers.toml"
+    manifest = tomllib.loads(manifest_path.read_text())
+
+    bad_keys = [
+        k for k in manifest.get("callers", {})
+        if k.startswith("enforcement/")
+    ]
+    assert not bad_keys, (
+        "trusted-callers.toml keys must be relative to --config-dir "
+        "(which is enforcement/), not relative to plugin root. "
+        f"These keys will be rejected by the daemon: {bad_keys}. "
+        "Regenerate with scripts/hash-trusted-callers.sh."
+    )
+
+
+def test_trusted_callers_hashes_match_files():
+    """Every hash in trusted-callers.toml must match the current file content.
+
+    The daemon authenticates hook scripts by SHA-256 against this manifest.
+    If a hook is edited but the hash isn't regenerated via
+    scripts/hash-trusted-callers.sh, daemon auth silently fails and the
+    hook can't record authed events.
+
+    The file's own comment claims "the pre-commit hook verifies this
+    manifest is up to date" — no such hook exists. This test is that
+    check, running in pytest instead.
+    """
+    import hashlib
+
+    repo_root = Path(__file__).parent.parent
+    manifest_path = repo_root / "enforcement" / "trusted-callers.toml"
+    manifest = tomllib.loads(manifest_path.read_text())
+
+    mismatches: list[str] = []
+    for rel_path, expected in manifest.get("callers", {}).items():
+        if not expected.startswith("sha256:"):
+            mismatches.append(f"{rel_path}: manifest entry missing sha256: prefix")
+            continue
+        expected_hash = expected.removeprefix("sha256:")
+        # Manifest keys match the daemon's caller-identification path, which
+        # strips the --config-dir prefix: `hooks/primer.py` really lives at
+        # `enforcement/hooks/primer.py`, while `hooks/subagent_findings_check.py`
+        # lives at the plugin-root path of the same name. Try both.
+        candidates = [
+            repo_root / "enforcement" / rel_path,
+            repo_root / rel_path,
+        ]
+        full_path = next((p for p in candidates if p.is_file()), None)
+        if full_path is None:
+            mismatches.append(
+                f"{rel_path}: file not found at any of "
+                + ", ".join(str(p) for p in candidates)
+            )
+            continue
+        actual_hash = hashlib.sha256(full_path.read_bytes()).hexdigest()
+        if actual_hash != expected_hash:
+            mismatches.append(
+                f"{rel_path}: manifest has {expected_hash[:12]}..., "
+                f"file is {actual_hash[:12]}.... "
+                f"Regenerate with scripts/hash-trusted-callers.sh."
+            )
+
+    assert not mismatches, (
+        "trusted-callers.toml is stale. The daemon will reject these callers:\n  "
+        + "\n  ".join(mismatches)
+    )

@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Pre-commit gate: fast CI-equivalent checks.
+#
+# The CI workflow (.github/workflows/ci.yml) runs, in order: ruff → mypy
+# → pytest with coverage → contract gate. Divergence between local
+# gates and CI is how trivial failures ship: "I ran mypy" turned into
+# broken pushes because pytest was never run locally. This hook's job
+# is to make the local bar match CI for the fast subset; the slow
+# subset (full pytest) runs in pre-push (scripts/pre-release-check.sh).
+#
+# Order matches CI: the fastest gates run first so we fail early.
+#
+# On staged-file changes under hooks/ or enforcement/hooks/, we also
+# auto-regenerate trusted-callers.toml and re-stage it — the manifest
+# protects daemon auth and must match the hashes of these files.
+#
+# Bypass (emergency only, e.g. known CI-side fix): `git commit --no-verify`.
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Activate venv so ruff/mypy/pytest are on PATH.
+if [[ -f .venv/bin/activate ]]; then
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+fi
+
+CHANGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
+CHANGED_PY=$(echo "$CHANGED_FILES" | grep -E '\.py$' || true)
+
+# ── Auto-regen trusted-callers manifest when its inputs changed ──
+#
+# Anything under hooks/ or enforcement/hooks/ that's in the manifest
+# needs re-hashing. The dev shouldn't have to remember to run
+# scripts/hash-trusted-callers.sh — the hook does it and re-stages
+# the result so the commit stays coherent.
+CHANGED_TRACKED_CALLER=$(echo "$CHANGED_FILES" \
+    | grep -E '^(enforcement/hooks/.*\.py|hooks/.*\.py|skills/holtz/scripts/.*\.py)$' || true)
+if [[ -n "$CHANGED_TRACKED_CALLER" ]]; then
+    echo "pre-commit: tracked caller(s) changed — regenerating trusted-callers.toml"
+    bash scripts/hash-trusted-callers.sh >/dev/null
+    git add enforcement/trusted-callers.toml
+fi
+
+# Skip the Python-targeted gates if no Python changed. A doc-only commit
+# shouldn't pay the mypy/pytest cost.
+if [[ -z "$CHANGED_PY" ]]; then
+    exit 0
+fi
+
+echo "pre-commit: ruff check"
+if ! ruff check .; then
+    echo "pre-commit: ruff failed. Fix and re-commit (or --no-verify to bypass)." >&2
+    exit 1
+fi
+
+echo "pre-commit: mypy"
+if ! mypy --explicit-package-bases \
+        skills/holtz/scripts/ \
+        hooks/ \
+        enforcement/hooks/ \
+        scripts/ \
+        enforcement/scripts/; then
+    echo "pre-commit: mypy failed. Fix and re-commit (or --no-verify to bypass)." >&2
+    exit 1
+fi
+
+# Fast pytest subset: skip the slow/machine-specific tests. The full
+# suite runs in pre-push. This keeps pre-commit snappy (seconds) while
+# still catching the common regressions — including the trusted-callers
+# hash freshness test, which is what surfaces stale manifests without
+# needing a separate gate.
+echo "pre-commit: pytest (fast subset)"
+if ! python -m pytest -q --tb=short \
+        -m "not slow and not machine_specific" \
+        2>&1 | tail -30; then
+    echo "pre-commit: pytest failed. Fix and re-commit (or --no-verify to bypass)." >&2
+    exit 1
+fi
+
+echo "pre-commit: contract gate"
+if ! python scripts/contract_gate.py; then
+    echo "pre-commit: contract gate failed. Fix and re-commit (or --no-verify to bypass)." >&2
+    exit 1
+fi

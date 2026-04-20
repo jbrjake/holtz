@@ -1,13 +1,23 @@
 # Trusted callers manifest for sahjhan daemon authentication.
-# Paths are relative to the plugin root (config directory's parent).
+# Keys match how the daemon identifies caller scripts at runtime:
+# it strips the config directory prefix from the caller's absolute
+# path, so `enforcement/hooks/primer.py` is keyed as `hooks/primer.py`.
+# Paths outside the config tree (e.g., the plugin-root `hooks/` dir)
+# keep their plugin-root-relative form — the daemon falls back to a
+# suffix match for those.
 # Hashes are SHA-256 of file contents at build/release time.
 #
 # Regenerate with: scripts/hash-trusted-callers.sh
 # CI gate: the pre-commit hook verifies this manifest is up to date.
 
 [callers]
-"enforcement/hooks/_common.py" = "sha256:0845abd355e807b68e2391f127564f53dcaf9b34df3574b9c9ea6b8ae41ca5d6"
-"enforcement/hooks/lens_quiz.py" = "sha256:2a9212d54526aad1607ac24158783a7faefb982a0bf85d24a5abd9fc0beed69d"
-"enforcement/hooks/stop_hook.py" = "sha256:86f6142fbfdfeaa14255cc9e64ce9b56d95b6475f672a4258daf3c6571685af9"
-"enforcement/hooks/primer.py" = "sha256:9ab448f38a055ca9573602698269a66833db97345fcb7185757ae06561d0aa19"
+"hooks/_common.py" = "sha256:b0e3619b91f60937d266b326f7182dba3c4f2a29d44c2e8cdbecd727d6e4c354"
+"hooks/lens_quiz.py" = "sha256:2a9212d54526aad1607ac24158783a7faefb982a0bf85d24a5abd9fc0beed69d"
+"hooks/stop_hook.py" = "sha256:075e5fcf222ace07007bcdb8d480e13c599bd7bbd21ee63ab2f6cde5c909ab29"
+"hooks/primer.py" = "sha256:9d2df2607c0aea144edd53cccb458a73707487fec3d94775e7419f9e7a96f92a"
+"hooks/pre_tool_hook.py" = "sha256:5f78410101df9e9fb47964b4525d742fcde5223f90f4152c9a4b45d4f888afca"
+"hooks/post_tool_hook.py" = "sha256:63e513159f24f79c3d23bac2d30a77e315b9905c578472dde0329e52c1918947"
+"hooks/commit_gate.py" = "sha256:3ca5f7cfd62661001f312887940845b992607ec1a511b0d38e88d8559b1e1d76"
+"hooks/bash_guard.py" = "sha256:857b719b4ffa7a8b8b9a61fd87291b6dbe6f4f13e624eca6ffd8ab5d405831e8"
+"hooks/protocol_tracker.py" = "sha256:3bd65dd710f04f1c0157b22b44f8dfb5e9cccdd8ae5cdc0a00fe6293ce5c872a"
 "hooks/subagent_findings_check.py" = "sha256:f97d12f1d431dad0f9a88ea25c24e923acb3d0a6f4722c0bfb4d047fb161d921"
