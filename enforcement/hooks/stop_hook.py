@@ -22,6 +22,12 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
+    DAEMON_CLEANUP_STATES as _DAEMON_CLEANUP_STATES,
+)
+from _common import (
+    STOP_ALLOWED_STATES as _STOP_ALLOWED_STATES,
+)
+from _common import (
     _is_process_alive,
     _read_init_pid,
     _write_terminated_marker,
@@ -33,14 +39,6 @@ from _common import (  # noqa: E402
 )
 from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
-
-# Two sets because "allowed to stop" ≠ "safe to kill daemon".
-# awaiting_clear allows stop (the turn is done) but the daemon must
-# survive — it holds the HMAC session key for the resuming session.
-# When adding states, decide: does the audit resume after this? If yes,
-# put it in _STOP_ALLOWED only. If the audit is over, put it in both.
-_STOP_ALLOWED_STATES = {"idle", "finalized", "awaiting_clear", ""}
-_DAEMON_CLEANUP_STATES = {"idle", "finalized", ""}
 
 
 def _try_stop_daemon(cwd: str) -> None:
@@ -159,13 +157,26 @@ def main() -> None:
             "Consider cleaning up docs/holtz/.sahjhan/ if the audit is no longer needed."
         )
 
-    # Active audit, non-terminal state — block
+    # Active audit, non-terminal state — block. If the file-based cache
+    # disagrees with the daemon, say so: a persistent mismatch is the #57
+    # signature (stale daemon state on a pre-0.14.0 sahjhan binary), and
+    # diagnosing it from message-format differences alone is brutal.
+    mismatch_note = ""
+    file_state = _read_status_cache_state(cwd)
+    if file_state is not None and file_state != current_state:
+        mismatch_note = (
+            f" NOTE: status-cache.json says '{file_state}' while the daemon "
+            f"says '{current_state}' — if this mismatch persists across "
+            "turns, the sahjhan binary predates the ledger-state overlay "
+            "(v0.14.0) and should be upgraded."
+        )
     exit_stop_block(
         f"Audit is in state '{current_state}' which is not terminal. "
         "You must complete the audit protocol before stopping. "
         "If this audit cannot be completed, the user can manually run: "
         "! sahjhan daemon stop\n"
         "(The next stop attempt will detect the dead daemon and allow exit.)"
+        + mismatch_note
     )
 
 

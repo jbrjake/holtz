@@ -81,15 +81,91 @@ class TestSahjhanAllowlist:
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
 
-    def test_sahjhan_daemon_stop_blocked(self):
-        """daemon is allowed but daemon stop is blocked via sub-subcommand check."""
+    def test_sahjhan_daemon_stop_blocked_mid_audit(self, tmp_path, mock_daemon):
+        """daemon stop is blocked while a live daemon reports an active audit (#57)."""
+        mock_daemon.state = {"active": True, "state": "fix_loop"}
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan daemon stop"},
-            "cwd": REPO_ROOT,
+            "cwd": str(tmp_path),
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+        reason = output["hookSpecificOutput"]["permissionDecisionReason"]
+        assert "session key" in reason, (
+            "block message should explain WHY daemon stop is dangerous mid-audit"
+        )
+
+    def test_sahjhan_daemon_stop_blocked_when_state_unknown(self, tmp_path, mock_daemon):
+        """Live daemon but unreadable state — fail closed."""
+        mock_daemon.state = None
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan daemon stop"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_sahjhan_daemon_stop_allowed_when_daemon_dead(self, tmp_path):
+        """Dead daemon: stop only cleans stale pid/socket files — allowed (#57).
+
+        This is the recovery path the stop hook's escape hatch needs.
+        """
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan daemon stop"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_sahjhan_daemon_stop_allowed_after_termination(self, tmp_path, mock_daemon):
+        """Terminated audits permit daemon stop even with a live daemon (#57)."""
+        mock_daemon.state = {"active": True, "state": "fix_loop"}
+        marker = tmp_path / "docs" / "holtz" / ".sahjhan" / "terminated"
+        marker.write_text("reason: daemon_pid_dead\n")
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan daemon stop"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_sahjhan_daemon_stop_allowed_in_cleanup_state(self, tmp_path, mock_daemon):
+        """finalized/idle audits have no session key worth protecting (#57)."""
+        mock_daemon.state = {"active": False, "state": "finalized"}
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan daemon stop"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
+
+    def test_sahjhan_daemon_stop_blocked_in_awaiting_clear(self, tmp_path, mock_daemon):
+        """awaiting_clear allows the TURN to stop, but the daemon must survive
+        (it holds the HMAC session key for the resuming session)."""
+        mock_daemon.state = {"active": True, "state": "awaiting_clear"}
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan daemon stop"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+    def test_sahjhan_daemon_stop_allowed_without_audit_dir(self, tmp_path):
+        """No docs/holtz/.sahjhan — nothing to protect."""
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan daemon stop"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow"
 
     def test_sahjhan_daemon_start_allowed(self):
         """daemon start is allowed."""
@@ -918,12 +994,14 @@ class TestBackslashEscapedCommandBypass:
             "Backslash-escaped sahjhan bypassed subcommand allowlist"
         )
 
-    def test_quoted_sahjhan_daemon_stop_blocked(self):
-        """'sahjhan' daemon stop must still be blocked by the sub-subcommand check."""
+    def test_quoted_sahjhan_daemon_stop_blocked(self, tmp_path, mock_daemon):
+        """'sahjhan' daemon stop must still be blocked mid-audit — quoting the
+        command name must not bypass the sub-subcommand check."""
+        mock_daemon.state = {"active": True, "state": "fix_loop"}
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "'sahjhan' daemon stop"},
-            "cwd": REPO_ROOT,
+            "cwd": str(tmp_path),
         }
         output = _run_hook(event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (

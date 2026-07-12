@@ -11,13 +11,13 @@
 # CI gate: the pre-commit hook verifies this manifest is up to date.
 
 [callers]
-"hooks/_common.py" = "sha256:b0e3619b91f60937d266b326f7182dba3c4f2a29d44c2e8cdbecd727d6e4c354"
+"hooks/_common.py" = "sha256:d124503dde0277eba2165ae43bec327ce48991c7a810d33f9441acb33ba9848d"
 "hooks/lens_quiz.py" = "sha256:2a9212d54526aad1607ac24158783a7faefb982a0bf85d24a5abd9fc0beed69d"
-"hooks/stop_hook.py" = "sha256:075e5fcf222ace07007bcdb8d480e13c599bd7bbd21ee63ab2f6cde5c909ab29"
+"hooks/stop_hook.py" = "sha256:126b87fd9f208224733a77b166884b40c4cdaf95723059d22f6e5a47d7ff69c4"
 "hooks/primer.py" = "sha256:9d2df2607c0aea144edd53cccb458a73707487fec3d94775e7419f9e7a96f92a"
 "hooks/pre_tool_hook.py" = "sha256:5f78410101df9e9fb47964b4525d742fcde5223f90f4152c9a4b45d4f888afca"
 "hooks/post_tool_hook.py" = "sha256:63e513159f24f79c3d23bac2d30a77e315b9905c578472dde0329e52c1918947"
 "hooks/commit_gate.py" = "sha256:3ca5f7cfd62661001f312887940845b992607ec1a511b0d38e88d8559b1e1d76"
-"hooks/bash_guard.py" = "sha256:857b719b4ffa7a8b8b9a61fd87291b6dbe6f4f13e624eca6ffd8ab5d405831e8"
-"hooks/protocol_tracker.py" = "sha256:3bd65dd710f04f1c0157b22b44f8dfb5e9cccdd8ae5cdc0a00fe6293ce5c872a"
+"hooks/bash_guard.py" = "sha256:a534dca9da6509d573c25965dda2c29d7cd2196cd8486a1837d0965f6d5e5a09"
+"hooks/protocol_tracker.py" = "sha256:f15a77bd741567b6eb4dfc93834a2df60a1e629c58fd9e8c20dcfedd3e60658d"
 "hooks/subagent_findings_check.py" = "sha256:f97d12f1d431dad0f9a88ea25c24e923acb3d0a6f4722c0bfb4d047fb161d921"

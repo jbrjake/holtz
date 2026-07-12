@@ -69,13 +69,19 @@ def _parse_commit_hash(output: str) -> str:
 
 
 def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
-    """Query sahjhan status (text) and update cache fields."""
+    """Query sahjhan status (text) and update cache fields.
+
+    --no-gates (sahjhan v0.14.0): plain status evaluates transition gates,
+    which can run the project's test suite — guaranteed to blow the 5s
+    timeout below and silently keep stale bookkeeping (#57). The refresh
+    only needs state/sets, never gate readiness.
+    """
     binary = ensure_sahjhan()
     if binary is None:
         return cache
     config_dir, _ = resolve_config_dir(cwd)
     try:
-        cmd = [binary, "--config-dir", config_dir, "status"]
+        cmd = [binary, "--config-dir", config_dir, "status", "--no-gates"]
         result = subprocess.run(
             cmd,
             capture_output=True, text=True, timeout=5, cwd=cwd,

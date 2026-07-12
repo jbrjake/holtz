@@ -76,6 +76,16 @@ class MockEnforcementDaemon:
     def _handle(self, request: dict) -> dict:
         op = request.get("op", "")
 
+        if op == "status":
+            # Health check — always allowed by the real daemon, no auth.
+            return {
+                "ok": True,
+                "pid": os.getpid(),
+                "uptime_seconds": 1,
+                "vault_entries": 0,
+                "enforcement_active": self.state is not None,
+            }
+
         if op == "enforcement_read":
             if self.state is None:
                 return {"ok": False, "error": "not_found", "message": "no enforcement state"}

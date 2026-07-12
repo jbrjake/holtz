@@ -1131,6 +1131,36 @@ class TestStopHookFreshness:
         assert "fix_loop" in reason
         assert "not terminal" in reason.lower() or "complete" in reason.lower()
 
+    def test_block_message_surfaces_daemon_file_state_mismatch(self, tmp_path, mock_daemon):
+        """#57 signature: daemon says one state, status-cache.json another.
+
+        The block message must surface the disagreement — the tqdm run
+        needed ~150 blocked turns to diagnose it from message formats.
+        """
+        import json as _json
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "merge_ready"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        (sahjhan_dir / "daemon-init-pid").write_text(str(os.getpid()))
+        (sahjhan_dir / "status-cache.json").write_text(
+            _json.dumps({"current_state": "awaiting_clear"})
+        )
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event)
+        assert output.get("decision") == "block"
+        reason = output.get("reason", "")
+        assert "merge_ready" in reason
+        assert "awaiting_clear" in reason, (
+            "block message must surface the daemon-vs-file state mismatch"
+        )
+        assert "0.14.0" in reason, "message should point at the binary fix version"
+
     def test_allows_stop_in_awaiting_clear_state(self, tmp_path, mock_daemon):
         """Issue #32: awaiting_clear is a stop-allowed state — agent must be able to stop."""
         from datetime import datetime, timezone

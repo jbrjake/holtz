@@ -8,6 +8,7 @@ verification fails, records a protocol_violation event.
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import subprocess
 import sys
@@ -62,7 +63,7 @@ def main() -> None:
     config_dir, _ = resolve_config_dir(cwd)
 
     try:
-        verify_cmd = [binary, "--config-dir", config_dir, "manifest", "verify"]
+        verify_cmd = [binary, "--json", "--config-dir", config_dir, "manifest", "verify"]
         result = subprocess.run(
             verify_cmd,
             capture_output=True,
@@ -74,33 +75,71 @@ def main() -> None:
         exit_enforcement_error(cwd, "Manifest verify failed", "PostToolUse")
 
     if result.returncode != 0:
-        # Record protocol violation
-        detail = result.stderr.strip() or result.stdout.strip() or "Manifest verification failed"
-        with contextlib.suppress(OSError, subprocess.TimeoutExpired):
-            violation_cmd = [
-                binary, "--config-dir", config_dir,
-                "event", "protocol_violation",
-                "--field", "project=holtz",
-                "--field", "run=0",
-                "--field", "auditor=holtz",
-                "--field", "file_path=unknown",
-                "--field", f"detail={detail}",
-            ]
-            subprocess.run(
-                violation_cmd,
-                capture_output=True,
-                timeout=5,
-                cwd=cwd,
+        # One violation event per mismatched file, with the real path and
+        # hashes (#57: events used to say file_path=unknown, detail=error,
+        # leaving no way to tell WHICH managed file was modified).
+        mismatches = _parse_mismatches(result.stdout)
+        if not mismatches:
+            detail = (
+                result.stderr.strip() or result.stdout.strip() or "Manifest verification failed"
             )
+            mismatches = [("unknown", detail)]
 
+        for file_path, detail in mismatches:
+            with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+                violation_cmd = [
+                    binary, "--config-dir", config_dir,
+                    "event", "protocol_violation",
+                    "--field", "project=holtz",
+                    "--field", "run=0",
+                    "--field", "auditor=holtz",
+                    "--field", f"file_path={file_path}",
+                    "--field", f"detail={detail}",
+                ]
+                subprocess.run(
+                    violation_cmd,
+                    capture_output=True,
+                    timeout=5,
+                    cwd=cwd,
+                )
+
+        files = ", ".join(path for path, _ in mismatches)
         exit_warn(
-            f"PROTOCOL VIOLATION: Managed file integrity check failed. "
-            f"Detail: {detail}. This violation is permanent and will "
+            f"PROTOCOL VIOLATION: Managed file integrity check failed for: "
+            f"{files}. This violation is permanent and will "
             f"block convergence for this run.",
             "PostToolUse",
         )
 
     exit_ok()
+
+
+def _parse_mismatches(stdout: str) -> list[tuple[str, str]]:
+    """Extract (file_path, detail) pairs from `manifest verify --json` output.
+
+    The JSON envelope carries data.mismatches even on the integrity-error
+    exit code. Returns [] when the output isn't parseable (old binary,
+    config error) so the caller can fall back to a single opaque event.
+    """
+    try:
+        envelope = json.loads(stdout)
+        entries = envelope["data"]["mismatches"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return []
+
+    mismatches: list[tuple[str, str]] = []
+    for entry in entries:
+        path = entry.get("path")
+        if not path:
+            continue
+        expected = entry.get("expected", "?")[:16]
+        actual = entry.get("actual")
+        detail = (
+            f"manifest hash mismatch: expected {expected}, "
+            f"actual {(actual or 'missing')[:16]}"
+        )
+        mismatches.append((path, detail))
+    return mismatches
 
 
 if __name__ == "__main__":

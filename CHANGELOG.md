@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.135.0] - 2026-07-12
+
+_Changes since v0.132.64_
+
+### Added
+- **enforcement:** pin sahjhan v0.14.0 and refresh status with --no-gates (#57)
+- **enforcement:** surface daemon-vs-file state mismatch in stop block message (#57)
+- **enforcement:** graduated daemon-stop policy — make the escape hatch reachable (#57)
+
+### Fixed
+- **enforcement:** record real file paths in protocol_violation events (#57)
+- **enforcement:** remove living-doc renders that booby-trapped agent writes (#57)
+
 ## [0.132.64] - 2026-04-19
 
 37 commits since v0.132.26. This is a hardening release: graduated daemon-lifecycle blocking, several enforcement-hook bypass patches, first-run correctness on fresh installs, and a full overhaul of the local dev loop so CI-breaking regressions fail in pre-commit and pre-push instead of in GitHub Actions.
