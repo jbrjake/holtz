@@ -224,11 +224,15 @@ class TestBootstrapHook:
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_blocked(code, output, "sahjhan vault")
 
-    def test_blocks_bash_sahjhan_daemon_stop(self):
-        """sahjhan daemon stop must be blocked (prevent agent killing daemon)."""
+    def test_blocks_bash_sahjhan_daemon_stop(self, tmp_path, mock_daemon):
+        """sahjhan daemon stop must be blocked mid-audit (agent killing a live
+        daemon destroys the session key). Graduated policy (#57): allowed only
+        when the audit is idle/finalized/terminated or the daemon is dead —
+        see TestSahjhanAllowlist in test_bootstrap_read_guard.py."""
+        mock_daemon.state = {"active": True, "state": "fix_loop"}
         event = {
             "tool_input": {"command": "sahjhan daemon stop"},
-            "cwd": REPO_ROOT,
+            "cwd": str(tmp_path),
         }
         code, output, _ = run_enforcement_hook("_sahjhan_bootstrap.py", event)
         assert_blocked(code, output, "sahjhan daemon stop")

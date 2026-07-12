@@ -22,6 +22,12 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
+    DAEMON_CLEANUP_STATES as _DAEMON_CLEANUP_STATES,
+)
+from _common import (
+    STOP_ALLOWED_STATES as _STOP_ALLOWED_STATES,
+)
+from _common import (
     _is_process_alive,
     _read_init_pid,
     _write_terminated_marker,
@@ -33,14 +39,6 @@ from _common import (  # noqa: E402
 )
 from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
-
-# Two sets because "allowed to stop" ≠ "safe to kill daemon".
-# awaiting_clear allows stop (the turn is done) but the daemon must
-# survive — it holds the HMAC session key for the resuming session.
-# When adding states, decide: does the audit resume after this? If yes,
-# put it in _STOP_ALLOWED only. If the audit is over, put it in both.
-_STOP_ALLOWED_STATES = {"idle", "finalized", "awaiting_clear", ""}
-_DAEMON_CLEANUP_STATES = {"idle", "finalized", ""}
 
 
 def _try_stop_daemon(cwd: str) -> None:

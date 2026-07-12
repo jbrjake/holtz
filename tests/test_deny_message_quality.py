@@ -131,12 +131,13 @@ class TestBootstrapDenyMessages:
             f"Message should mention 'reset', not redirect artifact: {reason}"
         _assert_no_parse_artifacts(reason, f"bootstrap/{cmd}")
 
-    def test_daemon_stop_message(self):
-        """sahjhan daemon stop produces a coherent deny message."""
+    def test_daemon_stop_message(self, tmp_path, mock_daemon):
+        """Mid-audit sahjhan daemon stop produces a coherent deny message."""
+        mock_daemon.state = {"active": True, "state": "fix_loop"}
         event = {
             "tool_name": "Bash",
             "tool_input": {"command": "sahjhan daemon stop"},
-            "cwd": "/tmp/fake-cwd",
+            "cwd": str(tmp_path),
         }
         output = _run_hook(BOOTSTRAP_HOOK, event)
         reason = _get_pre_tool_reason(output)

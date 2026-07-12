@@ -280,7 +280,58 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
     return (subcmd, sub_subcmd)
 
 
-def _bash_references_blocked_sahjhan(command: str) -> str | None:
+def _daemon_stop_permitted(cwd: str) -> tuple[bool, str]:
+    """Graduated `sahjhan daemon stop` policy (#57).
+
+    Mid-audit, killing the daemon destroys the HMAC session key and
+    terminates the run — that stays blocked. But the old blanket block
+    made the stop hook's own escape hatch unreachable: the agent was
+    told the daemon must be stopped and simultaneously forbidden from
+    stopping it. Allow the command when there is nothing to protect:
+
+    - no audit data dir, or the audit is already marked terminated
+    - daemon not reachable (stopping only cleans stale pid/socket files)
+    - protocol state is a daemon-cleanup state (idle/finalized/"")
+
+    Fails closed when the state of a live daemon cannot be determined.
+    Returns (permitted, reason-for-block).
+    """
+    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
+    if not os.path.isdir(data_dir):
+        return True, ""
+    if os.path.exists(os.path.join(data_dir, "terminated")):
+        return True, ""
+
+    # Lazy imports: this hook is deliberately import-free at module level
+    # so a broken sibling module can never disable the bootstrap guards.
+    try:
+        from _common import (
+            DAEMON_CLEANUP_STATES,
+            _daemon_request,
+            _get_daemon_socket_path,
+        )
+        from _protocol_cache import read_cache
+    except ImportError:
+        return False, "(enforcement modules unavailable — failing closed)"
+
+    try:
+        resp = _daemon_request(_get_daemon_socket_path(cwd), {"op": "status"})
+        daemon_alive = bool(resp.get("ok"))
+    except (OSError, ConnectionError, RuntimeError, ValueError, KeyError):
+        daemon_alive = False
+    if not daemon_alive:
+        return True, ""
+
+    cache = read_cache(cwd)
+    if cache is None:
+        return False, "(daemon is live but audit state is unknown)"
+    state = cache.get("state", "")
+    if state in DAEMON_CLEANUP_STATES:
+        return True, ""
+    return False, f"(audit state '{state}')"
+
+
+def _bash_references_blocked_sahjhan(command: str, cwd: str) -> str | None:
     """Check if a Bash command invokes a blocked sahjhan subcommand.
 
     Splits on shell operators (&&, ||, ;, |, newline), checks each segment.
@@ -317,6 +368,17 @@ def _bash_references_blocked_sahjhan(command: str) -> str | None:
         # Check second-level blocks
         blocked_subs = BLOCKED_SAHJHAN_SUBSUB.get(subcmd)
         if blocked_subs and sub_subcmd in blocked_subs:
+            if (subcmd, sub_subcmd) == ("daemon", "stop"):
+                permitted, reason = _daemon_stop_permitted(cwd)
+                if permitted:
+                    continue
+                return (
+                    f"BLOCKED: 'sahjhan daemon stop' is not permitted {reason}. "
+                    "Killing the daemon mid-audit destroys the HMAC session key "
+                    "and terminates the run. The agent may run it once the audit "
+                    "is idle/finalized/terminated or the daemon is already dead; "
+                    "until then only the user can run it: ! sahjhan daemon stop"
+                )
             return (
                 f"BLOCKED: 'sahjhan {subcmd} {sub_subcmd}' is not permitted. "
                 f"'{subcmd}' is allowed but '{sub_subcmd}' is blocked."
@@ -771,7 +833,7 @@ def main() -> None:
     if command and not path:
         _maybe_bootstrap_binary(command)
         # Allowlist check for sahjhan subcommands (defense-in-depth)
-        sahjhan_block = _bash_references_blocked_sahjhan(command)
+        sahjhan_block = _bash_references_blocked_sahjhan(command, cwd)
         if sahjhan_block:
             _block(sahjhan_block)
             return

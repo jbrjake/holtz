@@ -363,8 +363,19 @@ class TestBlockedContractCommands:
     def test_reset_blocked(self):
         _assert_blocked("sahjhan reset --confirm", "SKILL.md: never run reset")
 
-    def test_daemon_stop_blocked(self):
-        _assert_blocked("sahjhan daemon stop", "SKILL.md: daemon stop is blocked")
+    def test_daemon_stop_blocked(self, tmp_path, mock_daemon):
+        """daemon stop stays blocked mid-audit. The graduated policy (#57)
+        allows it only when the audit is idle/finalized/terminated or the
+        daemon is dead — an active-state live daemon is the contract case."""
+        mock_daemon.state = {"active": True, "state": "fix_loop"}
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan daemon stop"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(event)
+        decision = output["hookSpecificOutput"]["permissionDecision"]
+        assert decision == "deny", "daemon stop must stay blocked mid-audit"
 
     def test_bare_sahjhan_blocked(self):
         _assert_blocked("sahjhan", "No subcommand should be blocked")

@@ -43,6 +43,16 @@ exit_stop_warn: Callable[[str], NoReturn] = _mod.exit_stop_warn
 exit_stop_block: Callable[[str], NoReturn] = _mod.exit_stop_block
 mask_fenced_blocks: Callable[[str], str] = _mod.mask_fenced_blocks
 
+# Two sets because "allowed to stop [the turn]" ≠ "safe to kill daemon".
+# awaiting_clear allows stop (the turn is done) but the daemon must
+# survive — it holds the HMAC session key for the resuming session.
+# When adding states, decide: does the audit resume after this? If yes,
+# put it in STOP_ALLOWED only. If the audit is over, put it in both.
+# Shared by stop_hook.py (stop gating + daemon cleanup) and
+# _sahjhan_bootstrap.py (graduated `sahjhan daemon stop` policy, #57).
+STOP_ALLOWED_STATES = {"idle", "finalized", "awaiting_clear", ""}
+DAEMON_CLEANUP_STATES = {"idle", "finalized", ""}
+
 
 def _enforcement_root() -> str:
     """Return the root directory containing enforcement/.
