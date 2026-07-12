@@ -612,11 +612,17 @@ class TestBashGuard:
         _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), _cache)
         log_file = tmp_path / "violation_cmd.log"
+        verify_json = (
+            '{"schema_version":1,"ok":true,"command":"manifest_verify",'
+            '"data":{"clean":false,"tracked_count":2,"mismatches":['
+            '{"path":"docs/holtz/patterns-brief.md","expected":"aaaa1111bbbb2222cccc",'
+            '"actual":"dddd3333eeee4444ffff"}]}}'
+        )
         _create_mock_binary(tmp_path, (
             'case "$*" in\n'
             '  *verify*)\n'
-            '    echo "tampered" >&2\n'
-            '    exit 1\n'
+            "    echo '" + verify_json + "'\n"
+            '    exit 2\n'
             '    ;;\n'
             '  *)\n'
             '    echo "$*" >> ' + str(log_file) + '\n'
@@ -634,6 +640,52 @@ class TestBashGuard:
         logged = log_file.read_text()
         assert "--field" in logged, "violation event should use --field syntax"
         assert "project=holtz" in logged, "violation event missing project field"
+        # #57: the event must name the actual mismatched file and hashes,
+        # not file_path=unknown / detail=error.
+        assert "file_path=docs/holtz/patterns-brief.md" in logged, (
+            "violation event must record the real mismatched path"
+        )
+        assert "file_path=unknown" not in logged
+        assert "expected aaaa1111bbbb2222" in logged, (
+            "violation detail should carry the expected hash prefix"
+        )
+
+    def test_violation_falls_back_to_unknown_on_unparseable_output(
+        self, tmp_path, mock_daemon
+    ):
+        """Old binaries / config errors emit non-JSON — keep the opaque event."""
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "enforcement").mkdir(parents=True)
+        import sys
+        sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        _cache = empty_cache()
+        _cache["state"] = "fix_loop"
+        _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), _cache)
+        log_file = tmp_path / "violation_cmd.log"
+        _create_mock_binary(tmp_path, (
+            'case "$*" in\n'
+            '  *verify*)\n'
+            '    echo "tampered" >&2\n'
+            '    exit 1\n'
+            '    ;;\n'
+            '  *)\n'
+            '    echo "$*" >> ' + str(log_file) + '\n'
+            '    exit 0\n'
+            '    ;;\n'
+            'esac'
+        ))
+        event = {"tool_name": "Bash", "cwd": str(tmp_path)}
+        run_enforcement_hook(
+            "bash_guard.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert log_file.exists()
+        logged = log_file.read_text()
+        assert "file_path=unknown" in logged
+        assert "detail=tampered" in logged
 
     def test_skips_manifest_verify_for_sahjhan_commands(self, tmp_path):
         """BH-019: bash_guard skips manifest verification for sahjhan commands.
