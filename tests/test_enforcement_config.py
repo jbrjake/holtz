@@ -178,6 +178,39 @@ def test_renders_have_ledger_field():
         )
 
 
+def test_agent_owned_living_docs_are_not_render_targets():
+    """The living documents are agent-written per the skill instructions.
+
+    A render entry manifest-tracks its target, so the skill-prescribed
+    agent writes would trigger permanent protocol_violation events (#57).
+    Any file the skill tells the agent to write must never appear here.
+    """
+    agent_owned = {
+        "patterns-brief.md",
+        "patterns-brief-archive.md",
+        "LIVING-PUNCHLIST.md",
+        "architecture-baseline.md",
+        "impact-graph.json",
+    }
+    cfg = tomllib.loads(RENDERS_TOML.read_text())
+    render_targets = {r["target"] for r in cfg["renders"]}
+    overlap = agent_owned & render_targets
+    assert not overlap, (
+        f"Agent-owned living docs must not be render targets "
+        f"(render → manifest-tracked → agent write = permanent violation, #57): {sorted(overlap)}"
+    )
+
+
+def test_render_templates_exist():
+    """Every render entry's template file must exist in enforcement/."""
+    cfg = tomllib.loads(RENDERS_TOML.read_text())
+    for render in cfg["renders"]:
+        template = ENFORCEMENT_DIR / render["template"]
+        assert template.exists(), (
+            f"Render target '{render['target']}' references missing template {render['template']}"
+        )
+
+
 def test_render_ledger_templates_match_protocol():
     """Every ledger_template in renders.toml must have a matching template in protocol.toml."""
     renders_cfg = tomllib.loads(RENDERS_TOML.read_text())

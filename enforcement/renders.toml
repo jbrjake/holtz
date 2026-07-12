@@ -18,23 +18,9 @@ trigger = "on_state"
 state = "converged"
 ledger_template = "run"
 
-[[renders]]
-target = "LIVING-PUNCHLIST.md"
-template = "templates/living-punchlist.md.tera"
-trigger = "on_event"
-event_types = ["_checkpoint"]
-ledger = "project"
-
-[[renders]]
-target = "architecture-baseline.md"
-template = "templates/architecture-baseline.md.tera"
-trigger = "on_event"
-event_types = ["_checkpoint"]
-ledger = "project"
-
-[[renders]]
-target = "patterns-brief.md"
-template = "templates/patterns-brief.md.tera"
-trigger = "on_event"
-event_types = ["_checkpoint"]
-ledger = "project"
+# The living documents (patterns-brief.md, LIVING-PUNCHLIST.md,
+# architecture-baseline.md) are AGENT-owned per the skill instructions and
+# deliberately have no render entries. Rendering them tracked the files in
+# the manifest, so the skill-prescribed agent writes triggered permanent
+# protocol_violation events (#57). The old renders were also inert: they
+# pulled content from _checkpoint event fields that nothing ever recorded.
