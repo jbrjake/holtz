@@ -5,10 +5,10 @@ Reads markdown files from an archived run directory and emits
 JSONL events to stdout. Output is piped to sahjhan ledger import.
 
 Usage:
-    python scripts/migrate_legacy.py --input docs/holtz/archive/2026-03-22-run9/
-    python scripts/migrate_legacy.py --run 9 --input docs/holtz/archive/2026-03-22-run9/
-    python scripts/migrate_legacy.py --all --archive-root docs/holtz/archive/
-    python scripts/migrate_legacy.py --build-project
+    python3 scripts/migrate_legacy.py --input docs/holtz/archive/2026-03-22-run9/
+    python3 scripts/migrate_legacy.py --run 9 --input docs/holtz/archive/2026-03-22-run9/
+    python3 scripts/migrate_legacy.py --all --archive-root docs/holtz/archive/
+    python3 scripts/migrate_legacy.py --build-project
 """
 from __future__ import annotations
 

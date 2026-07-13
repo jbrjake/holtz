@@ -5,8 +5,8 @@ Run this when Claude Code updates their hook protocol or when
 hook_schema.py is updated after a freshness check.
 
 Usage:
-    python scripts/refresh_hook_schema.py          # preview to stdout
-    python scripts/refresh_hook_schema.py --write   # write to fixture file
+    python3 scripts/refresh_hook_schema.py          # preview to stdout
+    python3 scripts/refresh_hook_schema.py --write   # write to fixture file
 """
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def generate_schema() -> dict:
     return {
         "_comment": (
             "Expected hook output structures per event type. "
-            "Regenerate with: python scripts/refresh_hook_schema.py --write"
+            "Regenerate with: python3 scripts/refresh_hook_schema.py --write"
         ),
         "PreToolUse": {
             "required_wrapper_key": "hookSpecificOutput",

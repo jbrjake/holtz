@@ -321,6 +321,7 @@ def test_readme_badge_counts_match_actual():
     """
     import re
     import subprocess
+    import sys
     from pathlib import Path
 
     root = Path(__file__).resolve().parent.parent
@@ -333,8 +334,11 @@ def test_readme_badge_counts_match_actual():
     assert badge_match, "Could not find test count badge in README.md"
     badge_count = int(badge_match.group(1))
 
+    # Use sys.executable (the interpreter running this suite, which has
+    # pytest) rather than bare "python" — the latter breaks wherever
+    # `python` on PATH isn't the deps-equipped interpreter.
     result = subprocess.run(
-        ["python", "-m", "pytest", "tests/", "--collect-only"],
+        [sys.executable, "-m", "pytest", "tests/", "--collect-only"],
         capture_output=True, text=True, cwd=str(root),
     )
     test_match = re.search(r"(\d+) tests? collected", result.stdout)

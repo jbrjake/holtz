@@ -1,6 +1,7 @@
 """Tests for validate_punchlist.py."""
 
 import subprocess
+import sys
 from pathlib import Path
 
 import validate_punchlist as vp
@@ -2494,7 +2495,7 @@ def test_cli_filter_status_render(tmp_path, make_item):
                   resolution="Fixed in a1b2c3d")
     )
     result = subprocess.run(
-        ["python", "skills/holtz/scripts/validate_punchlist.py",
+        [sys.executable, "skills/holtz/scripts/validate_punchlist.py",
          str(punchlist), "--filter-status", "OPEN", "--render"],
         capture_output=True, text=True,
         cwd=REPO_ROOT,
@@ -2517,7 +2518,7 @@ def test_cli_resolved_before_render(tmp_path, make_item):
         + make_item(item_id="BH-003", status="OPEN")
     )
     result = subprocess.run(
-        ["python", "skills/holtz/scripts/validate_punchlist.py",
+        [sys.executable, "skills/holtz/scripts/validate_punchlist.py",
          str(punchlist), "--resolved-before", "1", "--render"],
         capture_output=True, text=True,
         cwd=REPO_ROOT,
@@ -2570,7 +2571,7 @@ def test_cli_without_render_runs_validation(tmp_path, make_item):
     punchlist = tmp_path / "PUNCHLIST.md"
     punchlist.write_text(make_item(item_id="BH-001", status="OPEN", wrap=True))
     result = subprocess.run(
-        ["python", "skills/holtz/scripts/validate_punchlist.py", str(punchlist)],
+        [sys.executable, "skills/holtz/scripts/validate_punchlist.py", str(punchlist)],
         capture_output=True, text=True,
         cwd=REPO_ROOT,
     )

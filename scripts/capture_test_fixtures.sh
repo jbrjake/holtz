@@ -16,10 +16,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 FIXTURE_DIR="$REPO_ROOT/tests/fixtures"
 
+# Activate the project venv so python3/pytest/ruff/mypy resolve to the
+# installed dependencies (mirrors git-hooks/pre-commit).
+if [[ -f "$REPO_ROOT/.venv/bin/activate" ]]; then
+    # shellcheck disable=SC1091
+    source "$REPO_ROOT/.venv/bin/activate"
+fi
+
 mkdir -p "$FIXTURE_DIR"
 
 echo "Capturing pytest output (with summary line)..."
-python -m pytest tests/ --tb=short -q \
+python3 -m pytest tests/ --tb=short -q \
     -m "not slow and not machine_specific and not network" \
     --ignore=tests/test_real_daemon_integration.py \
     -x 2>&1 \

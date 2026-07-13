@@ -8,7 +8,7 @@ The graph file is created automatically when you add the first node — `save()`
 
 ```bash
 # First add_node creates docs/holtz/impact-graph.json
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_node "<module>:<function>" "function" "<file_path>" --line <N>
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_node "<module>:<function>" "function" "<file_path>" --line <N>
 ```
 
 ## Graph Reconciliation (Subsequent Runs)
@@ -17,17 +17,17 @@ If `docs/holtz/impact-graph.json` exists, reconcile before adding new nodes:
 
 ```bash
 # 1. Remove nodes for deleted files (cascade-deletes edges)
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json prune_missing --project-root .
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json prune_missing --project-root .
 
 # 2. Flag nodes whose entity shifted >10 lines or is absent
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json drift_check --project-root .
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json drift_check --project-root .
 ```
 
 3. **Stale edge verification (LLM-driven):** Verify `calls` and `imports` edges by grepping for the call/import in the source file. Remove severed relationships. `assumes` and `diverges_from` edges are NOT verified here — they require re-evaluation during Steps 6-8.
 
 4. **Add new nodes** for files and functions discovered in recon:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_node "<module>:<function>" "function" "<file_path>" --line <N>
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_node "<module>:<function>" "function" "<file_path>" --line <N>
 ```
 
 ## Adding Edges During Audit Steps
@@ -52,21 +52,21 @@ Every audit step (6, 7, 8) MUST add edges to the impact graph. After completing 
 
 ```bash
 # Relationship edges (Steps 0-4)
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<source_id>" "<target_id>" "imports"
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<caller_id>" "<callee_id>" "calls"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<source_id>" "<target_id>" "imports"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<caller_id>" "<callee_id>" "calls"
 
 # Test coverage edges (Step 7)
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<test_file_id>" "<function_id>" "tests"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<test_file_id>" "<function_id>" "tests"
 
 # Semantic edges (Steps 6-8) — ALWAYS include --note
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<source_id>" "<target_id>" "assumes" --note "<what A assumes about B>"
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<source_id>" "<target_id>" "diverges_from" --note "<how A and B differ>"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<source_id>" "<target_id>" "assumes" --note "<what A assumes about B>"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<source_id>" "<target_id>" "diverges_from" --note "<how A and B differ>"
 
 # Pattern edges (Step 11)
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<func_a_id>" "<func_b_id>" "shares_pattern" --note "PAT-NNN"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<func_a_id>" "<func_b_id>" "shares_pattern" --note "PAT-NNN"
 
 # Co-fix edges (Step 10 blast radius)
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<func_a_id>" "<func_b_id>" "co_fixed" --note "<commit_hash>"
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json add_edge "<func_a_id>" "<func_b_id>" "co_fixed" --note "<commit_hash>"
 ```
 
 ### Verification
@@ -74,7 +74,7 @@ python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/h
 After completing each step, verify edges were added:
 
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats
 ```
 
 Expected output shows node count, edge count, and edge type breakdown. The edge count MUST increase after each audit step.
@@ -85,10 +85,10 @@ After each fix, query the impact graph for downstream effects:
 
 ```bash
 # Standard depth (2 hops)
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py blast_radius <changed_id> --depth 2
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py blast_radius <changed_id> --depth 2
 
 # Architectural fixes (3 hops)
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py blast_radius <changed_id> --depth 3
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py blast_radius <changed_id> --depth 3
 ```
 
 For each node in the blast radius:
@@ -104,10 +104,10 @@ After each fix and blast radius check:
 
 ```bash
 # Lower risk on fixed node
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py update_risk <fixed_node_id> -0.1
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py update_risk <fixed_node_id> -0.1
 
 # Lower risk on clean blast radius nodes
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py update_risk <clean_node_id> -0.05
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py update_risk <clean_node_id> -0.05
 ```
 
 Add/update edges if the fix changed relationships (new call, removed import). For architectural fixes, add `assumes` edges for new implicit contracts. Add `co_fixed` edges between functions fixed in the same commit.
@@ -118,9 +118,9 @@ During adversarial self-play, Justine writes to her own graph to avoid concurren
 
 ```bash
 # Justine uses --graph docs/holtz/justine/impact-graph.json for ALL operations
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/justine/impact-graph.json add_node ...
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/justine/impact-graph.json add_edge ...
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/justine/impact-graph.json stats
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/justine/impact-graph.json add_node ...
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/justine/impact-graph.json add_edge ...
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/justine/impact-graph.json stats
 ```
 
 After the merge, Justine's graph is merged into the canonical graph per [merge-protocol.md](merge-protocol.md).

@@ -8,25 +8,25 @@ If a SUMMARY.md exists in docs/holtz/, it's appended at the end.
 
 Usage:
   # Auto-detect the most recent session for this project
-  python scripts/session-to-cast.py
+  python3 scripts/session-to-cast.py
 
   # Specify a session JSONL
-  python scripts/session-to-cast.py --session ~/.claude/projects/.../SESSION.jsonl
+  python3 scripts/session-to-cast.py --session ~/.claude/projects/.../SESSION.jsonl
 
   # Specify output path
-  python scripts/session-to-cast.py -o docs/runs/my-run.cast
+  python3 scripts/session-to-cast.py -o docs/runs/my-run.cast
 
   # Cut at a specific message (default: end of file)
-  python scripts/session-to-cast.py --cut "take this last holtz run"
+  python3 scripts/session-to-cast.py --cut "take this last holtz run"
 
   # Append a specific SUMMARY.md
-  python scripts/session-to-cast.py --summary docs/holtz/SUMMARY.md
+  python3 scripts/session-to-cast.py --summary docs/holtz/SUMMARY.md
 
   # Adjust playback pacing
-  python scripts/session-to-cast.py --text-delay 2.0 --tool-delay 0.1
+  python3 scripts/session-to-cast.py --text-delay 2.0 --tool-delay 0.1
 
   # List available sessions for this project
-  python scripts/session-to-cast.py --list
+  python3 scripts/session-to-cast.py --list
 """
 import argparse
 import json
