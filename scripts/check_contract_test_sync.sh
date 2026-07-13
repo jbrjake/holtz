@@ -23,7 +23,31 @@ CHANGED_FILES=$(git diff --name-only "origin/${BASE}" HEAD 2>/dev/null \
 SKILL_CHANGED=$(echo "$CHANGED_FILES" | grep -c 'skills/.*\.md\|references/.*\.md' || true)
 CONTRACT_CHANGED=$(echo "$CHANGED_FILES" | grep -c 'test_contract_commands.py' || true)
 GATE_CHANGED=$(echo "$CHANGED_FILES" | grep -c 'contract_gate.py' || true)
-SKIP_TAG=$(git log -1 --pretty=%B | grep -c '\[skip-contract\]' || true)
+
+# [skip-contract] may live in ANY commit of the PR, not just the tip. On a
+# pull_request, GitHub Actions checks out the synthetic merge commit, so
+# `git log -1` is always the auto-generated "Merge <sha> into <sha>" message
+# and never carries the tag — which made the documented escape unreachable on
+# exactly the event where this check runs. Scan the PR head branch's own
+# commits instead. Fetch ONLY the head ref so FETCH_HEAD is unambiguous
+# (fetching multiple refs makes `git log FETCH_HEAD` read just the first).
+SKIP_TAG=0
+_scan_for_skip() {
+    echo "$1" | grep -q '\[skip-contract\]'
+}
+if [ -n "${GITHUB_HEAD_REF:-}" ]; then
+    git fetch --depth=50 origin "$GITHUB_HEAD_REF" >/dev/null 2>&1 || true
+    if _scan_for_skip "$(git log --pretty=%B -50 FETCH_HEAD 2>/dev/null || echo '')"; then
+        SKIP_TAG=1
+    fi
+fi
+# Fallback for push events and local runs, where HEAD is a real commit
+# (not a merge commit) and carries the tag directly.
+if [ "$SKIP_TAG" -eq 0 ]; then
+    if _scan_for_skip "$(git log --pretty=%B -50 HEAD 2>/dev/null || echo '')"; then
+        SKIP_TAG=1
+    fi
+fi
 
 if [ "$SKILL_CHANGED" -gt 0 ] && [ "$CONTRACT_CHANGED" -eq 0 ] && [ "$GATE_CHANGED" -eq 0 ] && [ "$SKIP_TAG" -eq 0 ]; then
     echo "FAIL: Skill/reference files changed but contract tests were not updated."
