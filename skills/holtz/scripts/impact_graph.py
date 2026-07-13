@@ -5,8 +5,15 @@ Holtz Impact Graph — Knowledge graph for code entity relationships.
 Persists as JSON at docs/holtz/impact-graph.json. Encodes relationships
 between code entities discovered during auditing.
 
-Usage: python impact_graph.py <command> [args]
+Usage: python3 impact_graph.py <command> [args]
 """
+# `from __future__ import annotations` makes the PEP 604 `X | Y` type hints
+# below lazy (strings), so this script imports and runs on Python 3.9 — the
+# version many host `python3`s resolve to. Without it, `int | None` in the
+# signatures raises TypeError at import on <3.10, and the audit_complete gate
+# (`snapshot_compare` runs this script) fails with an opaque "stdout is not
+# valid JSON" — an env problem masquerading as a data problem (issue #59).
+from __future__ import annotations
 
 import argparse
 import json

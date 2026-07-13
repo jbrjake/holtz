@@ -11,7 +11,7 @@ Parses PUNCHLIST.md files and validates:
 - Validation commands are present
 
 Usage:
-  Validate:  python validate_punchlist.py [path-to-punchlist.md]
+  Validate:  python3 validate_punchlist.py [path-to-punchlist.md]
   Filter:    python validate_punchlist.py [path] --filter-status OPEN --render
   Recency:   python validate_punchlist.py [path] --resolved-before 3 --render
 
@@ -20,6 +20,7 @@ Filter flags:
   --resolved-before N                   Keep only the N most recently resolved items
   --render                              Output filtered markdown instead of validation report
 """
+from __future__ import annotations  # PEP 604 unions run on Python 3.9 (issue #59)
 
 import re
 import sys

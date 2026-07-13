@@ -500,9 +500,15 @@ class TestChainedInterpreterBypass:
 # list was only used inside _check_bash_write() for Bash commands.
 #
 # Impact: An agent can use Write or Edit tools to directly overwrite
-# sahjhan-rendered documents (STATUS.md, PUNCHLIST.md, SUMMARY.md,
-# MERGE-REPORT.md, PUNCHLIST-MERGED.md) without being blocked.
-# Bash redirect to the same paths IS blocked, creating an inconsistency.
+# sahjhan-RENDERED documents (STATUS.md, PUNCHLIST.md, SUMMARY.md) without
+# being blocked. Bash redirect to the same paths IS blocked, creating an
+# inconsistency.
+#
+# Scope note (issue #60): MANAGED_DOCS covers only ledger-RENDERED views.
+# The merge-agent's artifacts (PUNCHLIST-MERGED.md, MERGE-REPORT.md) are
+# agent-authored, not rendered — they must remain WRITABLE or the
+# merge_complete gate is unsatisfiable. The invariant "MANAGED_DOCS <=>
+# has a render rule" is enforced by test_managed_docs_consistency.py.
 # ═══════════════════════════════════════════════════════════════════════
 
 
@@ -555,25 +561,40 @@ class TestManagedDocsWriteEditBypass:
         output = run_hook(self.HOOK, event)
         assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
 
-    def test_write_to_merge_report_blocked(self):
-        """Write tool targeting MERGE-REPORT.md must be blocked."""
+    def test_write_to_merge_report_allowed(self):
+        """MERGE-REPORT.md is agent-authored (merge-agent), not rendered — must be writable.
+
+        Issue #60: it was wrongly in MANAGED_DOCS. Blocking it wedged the
+        merge phase because nothing else can produce it.
+        """
         event = {
             "tool_name": "Write",
             "tool_input": {"file_path": "docs/holtz/MERGE-REPORT.md"},
             "cwd": "/tmp/fake-cwd",
         }
         output = run_hook(self.HOOK, event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "MERGE-REPORT.md was blocked — it is agent-authored, not a rendered "
+            "view, and must be writable or merge_complete is unsatisfiable (#60)"
+        )
 
-    def test_write_to_punchlist_merged_blocked(self):
-        """Write tool targeting PUNCHLIST-MERGED.md must be blocked."""
+    def test_write_to_punchlist_merged_allowed(self):
+        """PUNCHLIST-MERGED.md is the merge-agent's worklist output — must be writable.
+
+        Issue #60: the merge_complete gate requires this file to exist, but the
+        only writer (the merge-agent subagent) was blocked by MANAGED_DOCS and
+        no render rule produces it, so full adversarial runs wedged at Step 9.
+        """
         event = {
             "tool_name": "Write",
             "tool_input": {"file_path": "docs/holtz/PUNCHLIST-MERGED.md"},
             "cwd": "/tmp/fake-cwd",
         }
         output = run_hook(self.HOOK, event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "deny"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
+            "PUNCHLIST-MERGED.md was blocked — merge_complete requires it to "
+            "exist but the merge-agent is the only writer (#60)"
+        )
 
     def test_write_to_non_managed_doc_allowed(self):
         """Write to docs/holtz/notes.md must still be allowed."""
