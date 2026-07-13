@@ -24,14 +24,29 @@ PROTECTED = [
     "_sahjhan_bootstrap.py",
 ]
 
-# BH-001 (run 27): Sahjhan-managed files in docs/holtz/ that are rendered
-# from ledger state. Direct writes (including via Bash) must be blocked.
+# BH-001 (run 27): Sahjhan-*rendered* files in docs/holtz/. These are views
+# produced deterministically from ledger state by `sahjhan render` (see
+# renders.toml). Because the ledger is the source of truth, an agent that
+# hand-writes one of these could forge protocol state — so every write vector
+# (Write/Edit and every Bash form) is blocked. The invariant is exact:
+#
+#     a path belongs in MANAGED_DOCS  <=>  it has a render rule in renders.toml
+#
+# Do NOT add agent-authored artifacts here. `PUNCHLIST-MERGED.md` and
+# `MERGE-REPORT.md` were previously listed but are written by the merge-agent
+# subagent (judgment-based consolidation per merge-protocol.md — they are NOT
+# rendered from the ledger and have no render rule). Guarding them made the
+# `merge_complete` transition unsatisfiable: the gate requires the merged
+# punchlist to exist, but the only writer (the merge-agent) was blocked and
+# nothing renders it — so a full adversarial run wedged permanently at Step 9
+# (issue #60). Their integrity does not depend on this guard: convergence is
+# driven by `finding`/`finding_resolved` ledger events, not by these files.
+# `test_managed_docs_consistency.py` enforces the <=> invariant so this class
+# of wedge cannot be reintroduced.
 MANAGED_DOCS = [
     "docs/holtz/STATUS.md",
     "docs/holtz/PUNCHLIST.md",
     "docs/holtz/SUMMARY.md",
-    "docs/holtz/MERGE-REPORT.md",
-    "docs/holtz/PUNCHLIST-MERGED.md",
 ]
 
 # Issue #33: The .sahjhan data directory contains enforcement state (cache,
