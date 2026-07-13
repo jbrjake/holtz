@@ -1,5 +1,5 @@
 {
-  "_comment": "Expected hook output structures per event type. Regenerate with: python scripts/refresh_hook_schema.py --write",
+  "_comment": "Expected hook output structures per event type. Regenerate with: python3 scripts/refresh_hook_schema.py --write",
   "PreToolUse": {
     "required_wrapper_key": "hookSpecificOutput",
     "required_fields": [

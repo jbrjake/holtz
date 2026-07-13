@@ -12,6 +12,15 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Activate the project venv so python3/pytest/ruff/mypy resolve to the
+# installed dependencies. Mirrors git-hooks/pre-commit. Without this, a
+# machine whose bare interpreter lacks pytest fails these gates spuriously
+# ("No module named pytest") even though the suite is green in the venv.
+if [[ -f .venv/bin/activate ]]; then
+    # shellcheck disable=SC1091
+    source .venv/bin/activate
+fi
+
 FAILURES=0
 
 run_check() {
@@ -32,14 +41,14 @@ run_check "Ruff" ruff check .
 run_check "Mypy" mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/ scripts/ enforcement/scripts/
 
 # --- Contract and schema gates ---
-run_check "Contract Gate" python scripts/contract_gate.py
-run_check "Schema Freshness" python -m pytest tests/test_hook_schema_freshness.py -v
+run_check "Contract Gate" python3 scripts/contract_gate.py
+run_check "Schema Freshness" python3 -m pytest tests/test_hook_schema_freshness.py -v
 
 # --- Sahjhan pin single-source-of-truth (prevents marker/pin drift) ---
-run_check "Sahjhan Pin Consistency" python scripts/check_sahjhan_pin.py
+run_check "Sahjhan Pin Consistency" python3 scripts/check_sahjhan_pin.py
 
 # --- Full test suite with coverage ---
-run_check "Full Test Suite" python -m pytest \
+run_check "Full Test Suite" python3 -m pytest \
     --cov=skills/holtz/scripts --cov=hooks --cov=enforcement/hooks \
     --cov-report=term-missing --cov-fail-under=80
 
@@ -48,7 +57,7 @@ run_check "Hook Smoke Test" scripts/smoke-test-hooks.sh --verbose
 
 # --- Version bump check ---
 run_check "Version Bump" bash -c '
-    CURRENT=$(python -c "import json; print(json.load(open(\".claude-plugin/plugin.json\"))[\"version\"])")
+    CURRENT=$(python3 -c "import json; print(json.load(open(\".claude-plugin/plugin.json\"))[\"version\"])")
     LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
     LATEST_VER=${LATEST_TAG#v}
     if [ "$CURRENT" = "$LATEST_VER" ]; then

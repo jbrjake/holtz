@@ -10,8 +10,8 @@ This catches drift between skill instructions and hook enforcement even
 if someone forgets to update test_contract_commands.py.
 
 Usage:
-    python scripts/contract_gate.py          # exit 0 = pass, exit 1 = fail
-    python scripts/contract_gate.py --verbose  # show every command tested
+    python3 scripts/contract_gate.py          # exit 0 = pass, exit 1 = fail
+    python3 scripts/contract_gate.py --verbose  # show every command tested
 """
 from __future__ import annotations
 

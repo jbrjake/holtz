@@ -217,11 +217,11 @@ Justine attacks the highest-priority areas first, regardless of traditional orde
 
 For areas not resolved by prediction testing:
 1. Read `docs/holtz/justine/recon/step3-recon-summary.md` for project context.
-2. Audit across **ALL lenses simultaneously** rather than one lens at a time. Run `python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/parse_lens_registry.py` to get the current lens set with scopes. For each code area, apply all `per-file` scoped lenses in a single read-through. For `cross-file` scoped lenses, trace paths using impact graph entry points — these may require reading additional files beyond the current area.
+2. Audit across **ALL lenses simultaneously** rather than one lens at a time. Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/parse_lens_registry.py` to get the current lens set with scopes. For each code area, apply all `per-file` scoped lenses in a single read-through. For `cross-file` scoped lenses, trace paths using impact graph entry points — these may require reading additional files beyond the current area.
 3. **Default lens order for priority weighting:** integration → security → data-flow → error-propagation → contract → component. Within each area, integration concerns are checked first because boundary failures are where the obvious bugs live.
 4. **Priority order across areas:** Cross-cutting concerns first (interfaces, contracts, error boundaries), then individual components. This is the inverse of Holtz, who starts with components.
 5. Use **Agent subagents** for batch audits when possible. Each subagent audits a code area across all lenses and writes findings directly to a temp file. You merge them into the punchlist.
-6. **Subagent brief:** Instruct each subagent to: (a) read the compact pattern brief by running `python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md` — if a finding matches a pattern ID, reference it in the punchlist item; if a pattern match seems likely but uncertain, read the full entry from `docs/holtz/patterns-brief.md` for that specific pattern ID, (b) check known patterns against the code, (c) write findings to disk before returning, (d) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT, (e) choose the most conservative default for ambiguities — report NEEDS_CONTEXT only if genuinely impossible without human input. **When reviewing subagent output:** verify findings by reading actual code. Subagents may have missed context or misidentified patterns. Confirm each finding before it enters the punchlist.
+6. **Subagent brief:** Instruct each subagent to: (a) read the compact pattern brief by running `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md` — if a finding matches a pattern ID, reference it in the punchlist item; if a pattern match seems likely but uncertain, read the full entry from `docs/holtz/patterns-brief.md` for that specific pattern ID, (b) check known patterns against the code, (c) write findings to disk before returning, (d) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT, (e) choose the most conservative default for ambiguities — report NEEDS_CONTEXT only if genuinely impossible without human input. **When reviewing subagent output:** verify findings by reading actual code. Subagents may have missed context or misidentified patterns. Confirm each finding before it enters the punchlist.
 
 **Doc-to-implementation checks (Holtz Step 6 scope):**
 - Extract testable claims from project docs.
@@ -253,7 +253,7 @@ Read [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/impact-graph-operations.md`
 
 1. **Re-read `docs/holtz/justine/PUNCHLIST.md`** — this is your worklist. **If the punchlist has more than 6 items**, use filtered reads to reduce context load:
    ```bash
-   python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py docs/holtz/justine/PUNCHLIST.md --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
+   python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py docs/holtz/justine/PUNCHLIST.md --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
    ```
    This shows all OPEN/IN PROGRESS items plus the 3 most recently resolved items (for cross-item pattern recognition). Items resolved earlier are on disk and available in J4.
 2. **Triage** → Fast Path (test/doc/design/deterministic bug) | Investigation Path (intermittent/theoretical bug) | Can't-Reproduce Path (repro test passes)
@@ -333,7 +333,7 @@ digraph {
 
 **Filtered reads in convergence loop:** Each iteration re-reads the punchlist. If the punchlist has more than 6 items, use:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py docs/holtz/justine/PUNCHLIST.md --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py docs/holtz/justine/PUNCHLIST.md --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
 ```
 This keeps recently-resolved items visible for pattern recognition while filtering out stable old resolutions. J4 (pattern analysis, every 3-5 fixes) reads the full punchlist.
 

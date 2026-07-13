@@ -22,7 +22,7 @@ After `/clear`, the primer hook injects resume context and records a `context_re
 
 **Filtered reads in convergence loop:** Each iteration re-reads the punchlist. If the punchlist has more than 6 items, use:
 ```bash
-python ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py <path> --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py <path> --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
 ```
 This keeps recently-resolved items visible for pattern recognition while filtering out stable old resolutions. Step 11 (pattern analysis, every 3-5 fixes) reads the full punchlist.
 

@@ -2,7 +2,7 @@
 # Dev setup for the holtz repo.
 #
 # By default, this script ONLY does repo-dev work: installs git hooks
-# (pre-commit, post-commit, commit-msg) and makes the sahjhan binary
+# (pre-commit, post-commit, pre-push) and makes the sahjhan binary
 # executable. It does NOT enable the plugin's Claude Code hooks against
 # this repo itself.
 #
@@ -47,6 +47,21 @@ SRC_DIR="$REPO_ROOT/git-hooks"
 if [[ ! -d "$SRC_DIR" ]]; then
     echo "Error: $SRC_DIR not found. Run from the repository root." >&2
     exit 1
+fi
+
+# Prune stale hook symlinks whose source under git-hooks/ was removed
+# (e.g. the retired commit-msg hook). Without this, a deleted hook stays
+# wired as a dangling symlink until manually cleaned. Only touch symlinks
+# that point back into our SRC_DIR — never a dev's own hooks.
+if [[ -d "$GIT_HOOKS_DIR" ]]; then
+    for dest in "$GIT_HOOKS_DIR"/*; do
+        [[ -L "$dest" ]] || continue
+        target="$(readlink "$dest")"
+        if [[ "$target" == "$SRC_DIR/"* ]] && [[ ! -e "$target" ]]; then
+            rm -f "$dest"
+            echo "$(basename "$dest"): removed stale hook (source deleted)"
+        fi
+    done
 fi
 
 for hook in "$SRC_DIR"/*; do

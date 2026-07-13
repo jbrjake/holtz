@@ -5,9 +5,9 @@ Reads git log between the last release tag and HEAD, parses conventional
 commit prefixes, and outputs Keep a Changelog formatted markdown.
 
 Usage:
-    python scripts/generate-changelog.py              # preview to stdout
-    python scripts/generate-changelog.py --write      # update CHANGELOG.md in place
-    python scripts/generate-changelog.py --since v0.4.0  # override base tag
+    python3 scripts/generate-changelog.py              # preview to stdout
+    python3 scripts/generate-changelog.py --write      # update CHANGELOG.md in place
+    python3 scripts/generate-changelog.py --since v0.4.0  # override base tag
 """
 
 import argparse

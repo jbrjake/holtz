@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.135.10] - 2026-07-13
+
+_Changes since v0.135.7_
+
+### Fixed
+- invoke Python via python3, not bare python, across skills/scripts/tests
+- **enforcement:** pin sahjhan v0.14.2 (seal trusted-callers.toml)
+- **build:** retire commit-msg hook; post-commit is the sole version bumper
+
+### Infrastructure
+- make [skip-contract] escape reachable on pull_request [skip-contract]
+
 ## [0.135.7] - 2026-07-13
 
 _Changes since v0.135.0_
