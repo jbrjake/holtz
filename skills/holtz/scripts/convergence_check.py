@@ -5,6 +5,7 @@ Holtz Audit Utilities
 Punchlist parsing, test runner detection, and test suite execution.
 Convergence enforcement is now handled by the Sahjhan engine.
 """
+from __future__ import annotations  # PEP 604 unions run on Python 3.9 (issue #59)
 
 import re
 import subprocess
