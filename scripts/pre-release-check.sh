@@ -35,6 +35,9 @@ run_check "Mypy" mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enfo
 run_check "Contract Gate" python scripts/contract_gate.py
 run_check "Schema Freshness" python -m pytest tests/test_hook_schema_freshness.py -v
 
+# --- Sahjhan pin single-source-of-truth (prevents marker/pin drift) ---
+run_check "Sahjhan Pin Consistency" python scripts/check_sahjhan_pin.py
+
 # --- Full test suite with coverage ---
 run_check "Full Test Suite" python -m pytest \
     --cov=skills/holtz/scripts --cov=hooks --cov=enforcement/hooks \
