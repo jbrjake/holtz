@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.135.7] - 2026-07-13
+
+_Changes since v0.135.0_
+
+### Fixed
+- **enforcement:** pin sahjhan v0.14.1 (gate failure diagnostics) (#59)
+- **skill:** main-agent fix-loop autonomy + first-run onboarding (#61, #59)
+- **enforcement:** run gate scripts under python3, 3.9-safe (#59)
+- **enforcement:** un-manage merge artifacts so merge_complete is reachable (#60)
+- **build:** make the sahjhan pin a single source of truth (#59 footgun)
+
 ## [0.135.0] - 2026-07-12
 
 _Changes since v0.132.64_
