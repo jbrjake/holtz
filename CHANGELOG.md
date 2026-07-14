@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.136.0] - 2026-07-14
+
+_Changes since v0.135.0_
+
+### Added
+- **enforcement:** clear before fixes, ~300K budget, subagent-dispatched fixes
+
+### Fixed
+- **enforcement:** record restricted events via daemon record_event op
+- invoke Python via python3, not bare python, across skills/scripts/tests
+- **enforcement:** pin sahjhan v0.14.2 (seal trusted-callers.toml)
+- **build:** retire commit-msg hook; post-commit is the sole version bumper
+- **enforcement:** pin sahjhan v0.14.1 (gate failure diagnostics) (#59)
+- **skill:** main-agent fix-loop autonomy + first-run onboarding (#61, #59)
+- **enforcement:** run gate scripts under python3, 3.9-safe (#59)
+- **enforcement:** un-manage merge artifacts so merge_complete is reachable (#60)
+- **build:** make the sahjhan pin a single source of truth (#59 footgun)
+
+### Documentation
+- changelog for v0.135.10
+- changelog for v0.135.7
+
+### Infrastructure
+- make [skip-contract] escape reachable on pull_request [skip-contract]
+
 ## [0.135.10] - 2026-07-13
 
 _Changes since v0.135.7_
