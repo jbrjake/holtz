@@ -2,6 +2,8 @@
 
 Read this file at the start of Step 10. This file is shared by Holtz and Justine — the fix process is disciplined regardless of how findings were discovered.
 
+**Division of labour (orchestrator vs. fix subagent).** Each finding's investigation and authoring is delegated to a **fix subagent**; the **orchestrator** applies, verifies, commits, and records (see [phase-fix-loop.md](phase-fix-loop.md) → Per-Item Fix Procedure). The triage flowchart and paths below describe what the **subagent** does inside its own context — reading code, forming and testing hypotheses, writing the reproduction test and the fix, verifying them in isolation. The subagent returns compact artifacts (root cause, failing test, fix diff, blast-radius node, hardening test) and a triage verdict; it does **not** commit, does **not** record Sahjhan events, and does **not** modify the enforced working tree. The orchestrator then runs the enforced TDD-commit sequence with those artifacts. This keeps the read/reason-heavy work out of the main context (the ~300K budget) while the ledger and commits stay linear in the orchestrator.
+
 ## Triage Flowchart
 
 ```dot

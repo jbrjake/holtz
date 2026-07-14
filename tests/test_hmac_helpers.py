@@ -44,6 +44,47 @@ def test_compute_event_proof_calls_daemon():
     assert proof == "deadbeef0123"
 
 
+def test_record_authed_event_sends_record_event_op():
+    """record_authed_event sends the record_event op with sorted fields and
+    returns the daemon response (no HMAC proof, no CLI courier)."""
+    requests = []
+
+    def _capture(sock_path, request):
+        requests.append(request)
+        return {"ok": True, "data": "7"}
+
+    with mock.patch.object(_enforcement_common, "_daemon_request", side_effect=_capture):
+        resp = _enforcement_common.record_authed_event(
+            "context_reset",
+            {"trigger": "user_prompt_submit", "run": "3", "auditor": "holtz"},
+            cwd="/tmp/whatever",
+        )
+
+    assert resp == {"ok": True, "data": "7"}
+    assert requests[0]["op"] == "record_event"
+    assert requests[0]["event_type"] == "context_reset"
+    # Fields sorted (deterministic wire order)
+    assert list(requests[0]["fields"].keys()) == ["auditor", "run", "trigger"]
+
+
+def test_record_authed_event_propagates_daemon_rejection():
+    """A daemon-side rejection must RAISE, never be swallowed. This is the
+    core of the fixed bug: the old CLI path returned an unchecked non-zero
+    exit code, so a rejected context_reset looked like success."""
+    import pytest
+
+    def _reject(sock_path, request):
+        raise RuntimeError("sahjhan daemon error: caller not authenticated")
+
+    with (
+        mock.patch.object(_enforcement_common, "_daemon_request", side_effect=_reject),
+        pytest.raises(RuntimeError),
+    ):
+        _enforcement_common.record_authed_event(
+            "context_reset", {"run": "1"}, cwd="/tmp/whatever"
+        )
+
+
 def test_compute_event_proof_sorts_fields():
     """Fields must be sorted before sending to daemon."""
     requests = []

@@ -134,3 +134,65 @@ class TestPrimerErrorMessageQuality:
             f"primer.py references nonexistent /stop command in awaiting_clear death message. "
             f"Use /plugin or ! sahjhan daemon stop instead. Got: {context!r}"
         )
+
+
+@pytest.mark.hook_e2e
+class TestPrimerContextResetRecording:
+    """context_reset is recorded via the daemon `record_event` socket op.
+
+    Regression coverage for the swallowed-returncode bug. In production the
+    daemon was REACHABLE but rejected the restricted-event submit (the bare
+    `sahjhan authed-event` courier could never resolve to a trusted hook →
+    pid_resolution_failed). The old CLI path returned that as a non-zero exit
+    code the primer never checked, so no context_reset landed AND no failure
+    surfaced. record_authed_event now records over the daemon socket and
+    raises on rejection, so both outcomes are observable.
+    """
+
+    def test_daemon_rejection_injects_enforcement_failure(self, tmp_path, mock_daemon):
+        """Daemon reachable but rejects record_event → ENFORCEMENT FAILURE.
+
+        This is the exact production scenario the old code swallowed.
+        """
+        _init_sahjhan(tmp_path)
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        # Alive init PID → not a daemon death → enforcement-failure branch.
+        (sahjhan_dir / "daemon-init-pid").write_text(f"{os.getpid()}\n")
+        mock_daemon.record_event_response = {
+            "ok": False,
+            "error": "auth_failed",
+            "message": "caller not authenticated",
+            "reason": "pid_resolution_failed",
+        }
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
+        assert code == 0
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
+        assert "ENFORCEMENT FAILURE" in context, (
+            f"a rejected context_reset must surface, not be swallowed. Got: {context!r}"
+        )
+        attempts = [
+            e for e in mock_daemon.recorded_events if e.get("event_type") == "context_reset"
+        ]
+        assert attempts, "primer should have attempted a context_reset record_event"
+        assert attempts[0]["op"] == "record_event"
+
+    def test_daemon_success_records_context_reset(self, tmp_path, mock_daemon):
+        """Daemon accepts record_event → context_reset recorded, no failure."""
+        _init_sahjhan(tmp_path)
+        # mock_daemon default response is ok:true.
+
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
+        assert code == 0
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
+        assert "ENFORCEMENT FAILURE" not in context, (
+            f"a successful record must not report failure. Got: {context!r}"
+        )
+        resets = [
+            e for e in mock_daemon.recorded_events if e.get("event_type") == "context_reset"
+        ]
+        assert len(resets) == 1, "primer should record exactly one context_reset"
+        assert resets[0]["op"] == "record_event"
+        assert resets[0]["fields"]["trigger"] == "user_prompt_submit"

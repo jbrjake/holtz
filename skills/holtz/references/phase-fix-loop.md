@@ -8,6 +8,17 @@ Before entering the fix loop, read [references/step-10-fix-loop.md](references/s
 The `fix_loop_start` transition will not pass without this event.
 </HARD-GATE>
 
+<HARD-GATE>
+**A context reset is mandatory between building the punchlist and the first fix.** `fix_loop_start` does **not** land you in `fix_loop` — it lands in `awaiting_clear`. The punchlist is now complete on disk; auditing it and fixing it are separate contexts. So:
+
+1. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_loop_start` → you are now in `awaiting_clear`.
+2. Tell the user to `/clear`. The turn stops; the daemon survives (it holds the session key). This is a context reset, **not** a stopping point — the run resumes after the clear.
+3. After `/clear`, the primer re-injects state and records the `context_reset` event. **Re-read [references/step-10-fix-loop.md](references/step-10-fix-loop.md)** (your context was wiped) and the worklist from disk.
+4. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition resume` → now you are in `fix_loop`. The `resume` gate requires the `context_reset`, so it will not pass unless a real `/clear` happened.
+
+The same `awaiting_clear` boundary recurs mid-loop via `iteration_boundary` (Step 12). Entering fixes and resuming fixes use identical machinery.
+</HARD-GATE>
+
 ### Step 10: TDD Fix Loop
 
 Read [references/impact-graph-operations.md](references/impact-graph-operations.md) for blast radius queries and risk score updates.
@@ -20,20 +31,36 @@ This shows all OPEN/IN PROGRESS items plus the 3 most recently resolved items (f
 
 #### Per-Item Fix Procedure (MANDATORY — do not skip steps)
 
+Fixes are **delegated to subagents; the orchestrator commits.** You (the orchestrator) do not read a finding's code or author its test and fix in your own context — that is the subagent's job, and it is what keeps the main context under the ~300K budget (see SKILL.md → Context Survival Protocol). You keep the ledger, the commits, and the git state — those stay linear in one place so subagents never race on the ledger or the branch.
+
 For EACH punchlist item, in order:
 
+**Step A — Dispatch the fix subagent (investigation + authoring).**
+Launch **one** Agent subagent for the finding. Give it: the finding (ID, description, location, category, Discovery Chain), which triage path it falls under (see [references/step-10-fix-loop.md](references/step-10-fix-loop.md)), and the instruction to work **only** this finding. Its TDD contract is what keeps it on task — require it to return:
+- root cause + confidence (`bug/*` needs HIGH confidence before any fix);
+- a **failing test** (full content + target path) that reproduces the finding;
+- the **fix** as a minimal diff;
+- evidence it verified them **in isolation**: the reproduction test fails before the fix and passes after, and the full suite is green. The subagent must NOT modify the enforced working tree and must NOT record any Sahjhan event or commit — it verifies in a scratch worktree/copy and returns artifacts only;
+- the changed function/module (the blast-radius node) and **≥1 edge-case hardening test**.
+
+If the subagent cannot reach HIGH confidence, it returns its investigation notes plus a recommendation (defer-low / defer-medium / can't-reproduce with evidence). You then follow the deferral path in [references/step-10-fix-loop.md](references/step-10-fix-loop.md) — do not invent a fix.
+
+**Step B — Orchestrator applies, verifies, commits, records.** With the subagent's returned artifacts:
+
 1. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event fix_start --field finding_id=BH-NNN`
-2. Write a failing test. Run it. Confirm it FAILS.
+2. Apply the subagent's failing test. Run it. Confirm it FAILS.
 3. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event test_failed_before_fix --field finding_id=BH-NNN --field test_name=...`
-4. Write the fix. Run the failing test. Confirm it PASSES.
+4. Apply the subagent's fix. Run the failing test. Confirm it PASSES.
 5. Run full suite. Confirm all pass.
 6. Run blast radius: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json blast_radius <node> --depth 2`
 7. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field finding_id=BH-NNN --field affected_count=N`
-8. Write edge-case hardening tests (minimum 1).
+8. Apply the subagent's edge-case hardening test(s) (minimum 1).
 9. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event hardening_complete --field finding_id=BH-NNN --field edge_cases_tested=N`
 10. `git commit` with finding ID in body. Format: `fix(<scope>): <desc>`
 11. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit --item-id BH-NNN`
 12. Move to next item.
+
+Dispatch subagents **one finding at a time** — the ledger is a single hash chain and commits land on one branch, so concurrent fix subagents would race on both. Applying the returned test-then-fix in your own context is exactly what trips the TDD pre-edit hook (step 2 must precede step 4), which is why the events and the commit belong to the orchestrator, not the subagent.
 
 **You cannot do step 4 before step 3.** The pre-edit hook enforces this.
 
