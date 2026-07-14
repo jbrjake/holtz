@@ -43,18 +43,25 @@ gates = [
 
 # ── Fix Loop ──
 
+# fix_loop_start lands in awaiting_clear, NOT fix_loop: the punchlist is now
+# built (merge complete / audit pass done), and the agent MUST /clear before
+# touching any fix. The `resume` transition below (gated on context_reset)
+# carries awaiting_clear -> fix_loop, so a real context reset is enforced
+# between building the worklist and the first fix — the same machinery that
+# gates the per-iteration clears inside the loop.
 [[transitions]]
 from = "merge_done"
-to = "fix_loop"
+to = "awaiting_clear"
 command = "fix_loop_start"
 gates = [
     { type = "ledger_has_event", event = "reference_read", filter = { path = "step-10-fix-loop.md" }, min_count = 1, intent = "must read fix loop procedure before starting" },
 ]
 
-# Direct audit -> fix_loop for lens rotations (no merge on subsequent passes)
+# Lens rotations (no merge on subsequent passes) also clear before fixing:
+# audit -> awaiting_clear -> (resume) -> fix_loop.
 [[transitions]]
 from = "audit"
-to = "fix_loop"
+to = "awaiting_clear"
 command = "fix_loop_start"
 gates = [
     { type = "ledger_has_event", event = "state_transition", filter = { to = "merge_done" }, min_count = 1, intent = "first pass must go through merge before fix loop" },

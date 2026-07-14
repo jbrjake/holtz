@@ -33,10 +33,14 @@ Holtz (depth-first, methodical) and Justine (breadth-first, aggressive) independ
                 ┌────▼──────┐
                 │ merge_done│
                 └────┬──────┘
-                     │
-                ┌────▼──────┐  iteration_boundary
-            ┌──►│ fix_loop  │──────► awaiting_clear
-            │   └──┬───┬────┘  ◄──── (resume after /clear)
+                     │ fix_loop_start
+                ┌────▼──────────┐
+                │ awaiting_clear│◄─── iteration_boundary (mid-loop, from fix_loop)
+                └────┬──────────┘
+                     │ resume (after /clear)
+                ┌────▼──────┐
+            ┌──►│ fix_loop  │
+            │   └──┬───┬────┘
             │      │   │
             │      │   └──► pattern_analysis ────┐
             │      │                              │
@@ -96,7 +100,7 @@ The audit has 21 steps (0-20) across 6 phases. Each phase has its own reference 
 | Recon | 0-4 | `idle` → `recon` | `phase-recon.md` | Map the codebase. Build impact graph. Generate predictions. Dispatch Justine. |
 | Audit | 5-8 | `audit` | `phase-audit.md` | Verify doc claims. Audit test quality against 18 anti-patterns. Adversarial code review through 13 lenses. |
 | Merge | 9 | `merge_ready` → `merge_done` | `phase-merge.md` | Merge-agent reconciles Holtz + Justine punchlists. Produces unified worklist. |
-| Fix Loop | 10-14 | `fix_loop`, `awaiting_clear`, `pattern_analysis`, `perspective_clean` | `phase-fix-loop.md` | TDD fix cycle: failing test → minimal fix → hardening → blast radius → pattern analysis. Per lens. |
+| Fix Loop | 10-14 | `fix_loop`, `awaiting_clear`, `pattern_analysis`, `perspective_clean` | `phase-fix-loop.md` | Mandatory `/clear` before the first fix (`fix_loop_start` → `awaiting_clear` → `resume`). Each fix is delegated to a subagent (investigation + authoring); the orchestrator applies/commits/records. TDD cycle: failing test → minimal fix → hardening → blast radius → pattern analysis. Per lens. |
 | Convergence | 15-16 | `all_perspectives_clean` → `final_sweep` → `final_sweep_clean` | `phase-convergence.md` | Final sweep across all lenses. If dirty, back to fix loop. If clean, converge. |
 | Finalize | 17-20 | `converged` → `finalized` | `phase-finalize.md` | Update architecture baseline, living punchlist, pattern library. Write summary. |
 

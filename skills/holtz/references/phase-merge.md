@@ -23,3 +23,5 @@ Agent(subagent_type="merge-agent", prompt="Merge Holtz's punchlist at docs/holtz
 5. **If no Justine output exists** (she wasn't dispatched or produced nothing), proceed with `docs/holtz/PUNCHLIST.md` as the worklist.
 
 Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition merge_complete` to advance protocol state.
+
+The punchlist is now built and on disk. **Do not start fixing yet.** `fix_loop_start` routes through `awaiting_clear`, not straight into `fix_loop`: a context reset (`/clear`) is mandatory between building the worklist and the first fix. See [phase-fix-loop.md](phase-fix-loop.md) → the entry HARD-GATE.
