@@ -28,6 +28,10 @@ class MockEnforcementDaemon:
     def __init__(self, socket_path: str | os.PathLike) -> None:
         self.socket_path = str(socket_path)
         self.state: dict[str, Any] | None = None
+        # record_event support: log of received requests + a configurable
+        # canned response. Default success returns a ledger seq in `data`.
+        self.recorded_events: list[dict] = []
+        self.record_event_response: dict | None = None
         self._server: socket.socket | None = None
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -110,6 +114,16 @@ class MockEnforcementDaemon:
         if op == "sign":
             # Return a dummy proof for tests that need signing support
             return {"ok": True, "proof": "deadbeef" * 8}
+
+        if op == "record_event":
+            # Log the append request so tests can assert what was recorded,
+            # then return the configured response (default: success with a
+            # ledger seq). Tests set record_event_response to a {"ok": False,
+            # ...} value to simulate a daemon-side rejection.
+            self.recorded_events.append(request)
+            if self.record_event_response is not None:
+                return self.record_event_response
+            return {"ok": True, "data": str(len(self.recorded_events))}
 
         return {"ok": False, "error": "unknown_op", "message": f"unknown op: {op}"}
 

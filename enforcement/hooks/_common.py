@@ -8,7 +8,8 @@ Also provides enforcement-specific utilities:
 - resolve_config_dir(): Find the enforcement config directory correctly
   regardless of whether running as a plugin or in local dev.
 - compute_event_proof(): Get HMAC proof from the sahjhan daemon via socket.
-- record_authed_event(): Record a restricted event with daemon-signed proof.
+- record_authed_event(): Record a restricted event by asking the daemon to
+  append it directly over the authenticated socket (record_event op).
 """
 from __future__ import annotations
 
@@ -16,7 +17,6 @@ import importlib.util
 import json
 import os
 import socket
-import subprocess
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import NoReturn
@@ -221,29 +221,45 @@ def record_authed_event(
     event_type: str,
     fields: dict[str, str],
     cwd: str,
-) -> subprocess.CompletedProcess[str]:
-    """Record a restricted event with daemon-signed HMAC proof via sahjhan authed-event.
+) -> dict:
+    """Record a restricted event by asking the daemon to append it directly.
+
+    Sends the ``record_event`` op over the daemon socket. This hook process
+    is authenticated by the daemon via SO_PEERCRED against
+    trusted-callers.toml — the same peer-identity check that authorizes
+    ``sign`` and ``enforcement_write``. No HMAC proof or ``sahjhan
+    authed-event`` courier is involved: that courier is the bare sahjhan
+    binary, which the daemon cannot resolve to a trusted hook script (its
+    cmdline has no script → ancestor walk yields pid_resolution_failed), so
+    its submit is always rejected even when the sign succeeds. Recording over
+    this already-authenticated connection avoids that failure — and a
+    daemon-side rejection now surfaces as a raised RuntimeError instead of a
+    swallowed non-zero exit code.
+
+    Requires sahjhan >= 0.15.0 (the ``record_event`` op).
 
     Args:
         event_type: The restricted event type name.
         fields: Dict of field name -> value pairs.
-        cwd: Working directory for the sahjhan command.
+        cwd: Working directory for daemon socket path resolution.
 
     Returns:
-        The CompletedProcess from the sahjhan call.
-    """
-    from _resolve import ensure_sahjhan
+        The daemon response dict; ``data`` holds the new ledger seq.
 
-    proof = compute_event_proof(event_type, fields, cwd=cwd)
-    binary = ensure_sahjhan()
-    if binary is None:
-        raise OSError("Sahjhan binary unavailable")
-    config_dir, _ = resolve_config_dir(cwd)
-    cmd = [binary, "--config-dir", config_dir]
-    cmd.extend(["authed-event", event_type, "--proof", proof])
-    for k, v in fields.items():
-        cmd.extend(["--field", f"{k}={v}"])
-    return subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, timeout=10)
+    Raises:
+        RuntimeError: the daemon rejected the event (unknown type, invalid
+            field, ledger error) or otherwise returned ``ok: false``.
+        OSError: the daemon socket is unreachable.
+    """
+    sock_path = _get_daemon_socket_path(cwd)
+    return _daemon_request(
+        sock_path,
+        {
+            "op": "record_event",
+            "event_type": event_type,
+            "fields": dict(sorted(fields.items())),
+        },
+    )
 
 
 def _read_init_pid(cwd: str) -> int | None:

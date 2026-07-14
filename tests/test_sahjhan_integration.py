@@ -808,12 +808,15 @@ class TestPrimer:
         assert code == 0
         assert output.get("continue") is True
 
-    def test_reset_records_event_with_field_syntax(self):
-        """BH-008: Reset event uses authed-event with --field key=value syntax.
+    def test_records_context_reset_via_record_event_op(self):
+        """Primer records context_reset through the daemon `record_event` op.
 
-        With daemon-based signing, compute_event_proof connects to the daemon
-        socket. This test sets up a mock Unix socket to serve sign requests.
-        Uses a short temp path to stay within macOS AF_UNIX path limits.
+        Supersedes BH-008 (which checked the old `sahjhan authed-event
+        --field` CLI syntax). context_reset is no longer recorded via the CLI
+        at all — the primer asks the daemon to append it directly over the
+        authenticated socket. This test sets up a mock daemon at a short
+        socket path and asserts the append request arrived with the right
+        fields. Uses a short temp path to stay within macOS AF_UNIX limits.
         """
         import shutil
         import tempfile
@@ -879,14 +882,20 @@ class TestPrimer:
             else:
                 os.environ["SAHJHAN_DAEMON_SOCKET"] = saved_sock_env
 
-        assert log_file.exists(), (
-            "primer should record a context_reset event when active non-terminal run exists"
+        # The primer ran `sahjhan status` through the (mock) CLI binary...
+        assert log_file.exists(), "primer should have invoked sahjhan status"
+        assert "status" in log_file.read_text()
+        # ...but context_reset is recorded over the socket, not the CLI.
+        resets = [
+            e for e in daemon.recorded_events if e.get("event_type") == "context_reset"
+        ]
+        assert resets, (
+            "primer should record a context_reset via the daemon record_event op "
+            "when an active non-terminal run exists"
         )
-        logged = log_file.read_text()
-        assert "context_reset" in logged, "expected context_reset event in log"
-        assert "authed-event" in logged, "reset event should use authed-event subcommand"
-        assert "--field" in logged, "reset event should use --field syntax"
-        assert "project=holtz" in logged, "reset event missing project field"
+        assert resets[0]["op"] == "record_event"
+        assert resets[0]["fields"].get("project") == "holtz"
+        assert resets[0]["fields"].get("trigger") == "user_prompt_submit"
 
     def test_degrades_gracefully_on_oserror(self, tmp_path):
         """BH-015: primer degrades gracefully when binary is unexecutable."""

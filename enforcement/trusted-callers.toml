@@ -11,7 +11,7 @@
 # CI gate: the pre-commit hook verifies this manifest is up to date.
 
 [callers]
-"hooks/_common.py" = "sha256:d124503dde0277eba2165ae43bec327ce48991c7a810d33f9441acb33ba9848d"
+"hooks/_common.py" = "sha256:13d53fd8061def9bb0a52d0fa743889e83a69e518f88f5695d8965342f241960"
 "hooks/lens_quiz.py" = "sha256:2a9212d54526aad1607ac24158783a7faefb982a0bf85d24a5abd9fc0beed69d"
 "hooks/stop_hook.py" = "sha256:126b87fd9f208224733a77b166884b40c4cdaf95723059d22f6e5a47d7ff69c4"
 "hooks/primer.py" = "sha256:9d2df2607c0aea144edd53cccb458a73707487fec3d94775e7419f9e7a96f92a"
