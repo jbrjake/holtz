@@ -31,38 +31,39 @@ This shows all OPEN/IN PROGRESS items plus the 3 most recently resolved items (f
 
 #### Per-Item Fix Procedure (MANDATORY — do not skip steps)
 
-Fixes are **delegated to subagents; the orchestrator commits.** You (the orchestrator) do not read a finding's code or author its test and fix in your own context — that is the subagent's job, and it is what keeps the main context under the ~300K budget (see SKILL.md → Context Survival Protocol). You keep the ledger, the commits, and the git state — those stay linear in one place so subagents never race on the ledger or the branch.
+Fixes are **delegated to subagents; the orchestrator validates and commits.** You (the orchestrator) do not read a finding's code or author its test and fix in your own context — that is the subagent's job, and it is what keeps the main context under the ~300K budget (see SKILL.md → Context Survival Protocol). The subagent does the **whole TDD cycle in the enforced working tree** — writing the failing test, recording it, writing the fix, running the suite. You keep only the **git commits and the protocol-state transitions**; those stay linear in one place so subagents never race on the branch or the state machine.
+
+**The subagent is under the same enforcement you are.** The hooks fire on a subagent's Bash/Edit exactly as they fire on yours — Claude Code adds an `agent_id` to the hook event but the TDD gate does not look at it. So the pre-edit hook physically stops the subagent from writing a source fix until it has recorded `test_failed_before_fix` since the last transition, and its `sahjhan event ...` calls write the same ledger you read. "Follow TDD" is not a request you make of the subagent in its prompt — it is mechanically unavoidable for it, just as it is for you. (This is why the subagent must run Sahjhan, not avoid it: recording the TDD events is exactly what unblocks its own edits.)
 
 For EACH punchlist item, in order:
 
-**Step A — Dispatch the fix subagent (investigation + authoring).**
-Launch **one** Agent subagent for the finding. Give it: the finding (ID, description, location, category, Discovery Chain), which triage path it falls under (see [references/step-10-fix-loop.md](references/step-10-fix-loop.md)), and the instruction to work **only** this finding. Its TDD contract is what keeps it on task — require it to return:
-- root cause + confidence (`bug/*` needs HIGH confidence before any fix);
-- a **failing test** (full content + target path) that reproduces the finding;
-- the **fix** as a minimal diff;
-- evidence it verified them **in isolation**: the reproduction test fails before the fix and passes after, and the full suite is green. The subagent must NOT modify the enforced working tree and must NOT record any Sahjhan event or commit — it verifies in a scratch worktree/copy and returns artifacts only;
-- the changed function/module (the blast-radius node) and **≥1 edge-case hardening test**.
-
-If the subagent cannot reach HIGH confidence, it returns its investigation notes plus a recommendation (defer-low / defer-medium / can't-reproduce with evidence). You then follow the deferral path in [references/step-10-fix-loop.md](references/step-10-fix-loop.md) — do not invent a fix.
-
-**Step B — Orchestrator applies, verifies, commits, records.** With the subagent's returned artifacts:
+**Step A — Dispatch the fix subagent (investigate + author + verify, in-tree).**
+Launch **one** Agent subagent for the finding. Give it: the finding (ID, description, location, category, Discovery Chain), which triage path it falls under (see [references/step-10-fix-loop.md](references/step-10-fix-loop.md)), the instruction to work **only** this finding, and `$CLAUDE_PLUGIN_ROOT` so it can invoke Sahjhan. The subagent runs the enforced TDD sequence itself, in the real tree:
 
 1. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event fix_start --field finding_id=BH-NNN`
-2. Apply the subagent's failing test. Run it. Confirm it FAILS.
+2. Write a failing test that reproduces the finding. Run it. Confirm it FAILS. (Files under `tests/**` are exempt from the pre-edit gate, so this write is allowed.)
 3. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event test_failed_before_fix --field finding_id=BH-NNN --field test_name=...`
-4. Apply the subagent's fix. Run the failing test. Confirm it PASSES.
+4. Write the fix. (The pre-edit hook now allows the source edit because step 3 is on the ledger.) Run the failing test. Confirm it PASSES.
 5. Run full suite. Confirm all pass.
 6. Run blast radius: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json blast_radius <node> --depth 2`
 7. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field finding_id=BH-NNN --field affected_count=N`
-8. Apply the subagent's edge-case hardening test(s) (minimum 1).
+8. Write ≥1 edge-case hardening test. Run it. Confirm it passes.
 9. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event hardening_complete --field finding_id=BH-NNN --field edge_cases_tested=N`
-10. `git commit` with finding ID in body. Format: `fix(<scope>): <desc>`
-11. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit --item-id BH-NNN`
-12. Move to next item.
 
-Dispatch subagents **one finding at a time** — the ledger is a single hash chain and commits land on one branch, so concurrent fix subagents would race on both. Applying the returned test-then-fix in your own context is exactly what trips the TDD pre-edit hook (step 2 must precede step 4), which is why the events and the commit belong to the orchestrator, not the subagent.
+The subagent returns a **compact result**, not artifacts to apply: root cause + confidence (`bug/*` needs HIGH confidence before any fix), the blast-radius node, the test name(s), and the suite pass-count. The edits and the ledger events are already on disk — that is the whole point. The subagent does **NOT** `git commit` and does **NOT** run any `transition`; those are yours.
 
-**You cannot do step 4 before step 3.** The pre-edit hook enforces this.
+If the subagent cannot reach HIGH confidence, it records nothing, leaves the tree clean, and returns its investigation notes plus a recommendation (defer-low / defer-medium / can't-reproduce with evidence). You then follow the deferral path in [references/step-10-fix-loop.md](references/step-10-fix-loop.md) — do not invent a fix.
+
+**Step B — Orchestrator validates and commits.** You author and apply nothing. With the finding's work already in the tree and on the ledger:
+
+10. **Validate the verification:** re-run the full suite and confirm it is green, and confirm the ledger shows this finding's `test_failed_before_fix` and `hardening_complete` for BH-NNN (`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" status`, or `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" ledger`). If the suite is red or those events are missing, the subagent's fix is not real — send it back or defer; do not commit.
+11. `git commit` with finding ID in body. Format: `fix(<scope>): <desc>`
+12. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit --item-id BH-NNN`
+13. Move to next item.
+
+Dispatch subagents **one finding at a time** — the ledger is a single hash chain and commits land on one branch, so concurrent fix subagents would race on both. Because the subagent is gated by the **same** TDD pre-edit hook you are, it cannot write the fix (step 4) before recording `test_failed_before_fix` (step 3) — that hard guarantee is what lets you commit on its word after only re-running the suite.
+
+**The subagent cannot do step 4 before step 3.** The pre-edit hook enforces this — on the subagent, exactly as it would on you.
 
 #### Fix Loop Output Rules
 
