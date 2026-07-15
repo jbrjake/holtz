@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from _common import exit_block, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
 from _protocol_cache import (  # noqa: E402
     compute_obligations,
+    contains_sahjhan_cmd,
     format_injection,
     is_enforcement_fresh,
     is_fix_loop_state,
@@ -86,8 +87,14 @@ def main() -> None:
     blocks_all = any(o.get("blocks_all") for o in obligations)
     injection = format_injection(obligations, cache)
 
-    # Hard block: stall threshold exceeded (overrides test allowance)
+    # Hard block: stall threshold exceeded (overrides test allowance).
+    # Exception: a line that runs a sahjhan enforcement subcommand — even
+    # wrapped, e.g. ``cd repo && sahjhan status | head`` — is the legitimate
+    # way to re-sync and clear the stall. The stall block is a nudge, not a
+    # security gate, so let it through (never a git commit). #70 item 1.
     if blocks_all:
+        if contains_sahjhan_cmd(cmd) and not is_git_commit(cmd):
+            exit_ok("PreToolUse")
         exit_block(injection)
 
     # Test commands are allowed unless stall threshold exceeded

@@ -3,8 +3,8 @@
 [![CI](https://github.com/jbrjake/holtz/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/jbrjake/holtz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)
-![1653 tests](https://img.shields.io/badge/tests-1653_total-brightgreen.svg)
-![89% coverage](https://img.shields.io/badge/coverage-89%25-brightgreen.svg)
+![1659 tests](https://img.shields.io/badge/tests-1659_total-brightgreen.svg)
+![87% coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)
 
 **Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
 

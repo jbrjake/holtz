@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import exit_ok, read_event, resolve_config_dir  # noqa: E402
 from _protocol_cache import (  # noqa: E402
+    contains_sahjhan_cmd,
     empty_cache,
     is_enforcement_fresh,
     is_git_commit,
@@ -120,6 +121,37 @@ def _stop_daemon(cwd: str) -> None:
         )
 
 
+def _apply_sahjhan_cmd(cwd: str, cache: dict | None, cmd: str) -> dict:
+    """Record the effects of a sahjhan enforcement command on the cache.
+
+    Runs for pure sahjhan lines and for wrapped re-sync lines like
+    ``cd repo && sahjhan status | head``: refresh state from the daemon,
+    clear the stall counter, stamp last_sahjhan_cmd, tear the daemon down on
+    finalization, and apply fix_commit / pattern-check bookkeeping. #70 item 1.
+    """
+    if cache is None:
+        cache = empty_cache()
+    cache = _refresh_from_sahjhan(cwd, cache)
+    # Running any sahjhan enforcement subcommand IS the protocol event the
+    # stall counter waits for — clear it deterministically, even when the
+    # status refresh above could not reach the daemon.
+    cache["stall"] = 0
+    cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+    # Stop daemon after finalization (teardown safety net)
+    if cache.get("state") == "finalized":
+        _stop_daemon(cwd)
+    # BH-017: match subcommand tokens, not substrings of full command
+    tokens = cmd.split()
+    if "fix_commit" in tokens:
+        cache["unregistered_commits"] = []
+        cache["fixes_since_pattern"] = cache.get("fixes_since_pattern", 0) + 1
+    if "pattern_check" in tokens or "pattern_done" in tokens:
+        cache["fixes_since_pattern"] = 0
+    with contextlib.suppress(RuntimeError):
+        write_cache(cwd, cache)
+    return cache
+
+
 def main() -> None:
     event = read_event()
 
@@ -134,22 +166,7 @@ def main() -> None:
     cache = read_cache(cwd)
 
     if is_sahjhan_cmd(cmd):
-        if cache is None:
-            cache = empty_cache()
-        cache = _refresh_from_sahjhan(cwd, cache)
-        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
-        # Stop daemon after finalization (teardown safety net)
-        if cache.get("state") == "finalized":
-            _stop_daemon(cwd)
-        # BH-017: match subcommand tokens, not substrings of full command
-        tokens = cmd.split()
-        if "fix_commit" in tokens:
-            cache["unregistered_commits"] = []
-            cache["fixes_since_pattern"] = cache.get("fixes_since_pattern", 0) + 1
-        if "pattern_check" in tokens or "pattern_done" in tokens:
-            cache["fixes_since_pattern"] = 0
-        with contextlib.suppress(RuntimeError):
-            write_cache(cwd, cache)
+        _apply_sahjhan_cmd(cwd, cache, cmd)
         exit_ok()
 
     if cache is None:
@@ -165,6 +182,15 @@ def main() -> None:
         commits.append(commit_hash)
         with contextlib.suppress(RuntimeError):
             update_cache(cwd, {"unregistered_commits": commits, "stall": 0})
+        exit_ok()
+
+    # A sahjhan enforcement subcommand ran inside a larger shell line
+    # (e.g. ``cd repo && sahjhan status | head``). It still re-syncs the
+    # protocol, so treat it like a bare sahjhan command rather than penalize
+    # the stall counter. Checked after the git-commit branch so a
+    # ``git commit && sahjhan status`` line still registers its commit. #70 item 1.
+    if contains_sahjhan_cmd(cmd):
+        _apply_sahjhan_cmd(cwd, cache, cmd)
         exit_ok()
 
     # Test/lint/type-check commands are legitimate TDD activity — don't count as stalling
