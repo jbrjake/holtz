@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shlex
+import subprocess
 import sys
 
 PROTECTED = [
@@ -798,6 +799,240 @@ def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
     return None
 
 
+# ── #71: TDD gate for ordinary-source writes via Bash ──
+# The TDD "failing test before you touch source" gate is enforced against the
+# Write/Edit tools (pre_tool_hook.py -> hooks.toml). Bash is an unguarded write
+# primitive: `cat > src/foo.py`, heredocs, `tee`, `sed -i` all write source with
+# no failing test recorded. These functions extract the *literal* write targets
+# of a bash command and route in-repo source targets through the same
+# `sahjhan hook eval` TDD gate. The parsing is quote- and heredoc-aware so inert
+# heredoc/quoted *data* is never misread as a command (the over-block class #71
+# itself documents).
+
+# Operator tokens that separate one command from the next.
+_SHELL_OP_TOKENS = frozenset({"|", "||", "&&", ";", ";;", "&", "|&"})
+
+# Combined redirect form: >file, >>file, 1>file, 2>>file — a leading fd number
+# (or nothing) then > / >>, but NOT a stream dup (>&, 2>&1). ``word>file`` is
+# deliberately excluded so arrows like ``a->b`` don't read as redirects.
+_REDIRECT_COMBINED_RE = re.compile(r'^(\d*)(>>?)(?!&)(.+)$')
+
+
+def _strip_heredoc_bodies(command: str) -> str:
+    """Remove heredoc *bodies* (inert data) from a command, keeping command lines.
+
+    ``cat > f.py <<'EOF'\\n...body...\\nEOF`` -> ``cat > f.py <<'EOF'``.
+
+    The text between a heredoc opener and its terminator is data, not shell —
+    scanning it for redirect targets or command tokens is the false-positive
+    class #71 documents (an issue-body heredoc that merely quotes ``x > y`` must
+    not be read as a redirect). We keep opener lines (with their real redirect
+    target) and drop body + terminator lines. Handles multiple heredocs opened
+    on one line, quoted/unquoted delimiters, and the ``<<-`` form.
+    """
+    lines = command.split("\n")
+    out: list[str] = []
+    opener = re.compile(r"""<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_-]*)\1""")
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        out.append(line)
+        delims = [m.group(2) for m in opener.finditer(line)]
+        i += 1
+        for delim in delims:
+            while i < n and lines[i].strip() != delim:
+                i += 1
+            if i < n:  # drop the terminator line too
+                i += 1
+    return "\n".join(out)
+
+
+def _shell_command_segments(command: str) -> list[list[str]]:
+    """Quote-aware split into per-command token lists.
+
+    Splits on newlines first (shlex treats newline as plain whitespace and would
+    otherwise merge adjacent commands), shlex-tokenizes each line (so ``>`` and
+    ``;`` inside quotes stay inside their token), and splits each token stream on
+    unquoted shell operators. Lines shlex can't parse (unbalanced quotes) are
+    skipped rather than guessed at.
+    """
+    segments: list[list[str]] = []
+    for line in command.split("\n"):
+        if not line.strip():
+            continue
+        try:
+            tokens = shlex.split(line, comments=False, posix=True)
+        except ValueError:
+            continue
+        cur: list[str] = []
+        for tok in tokens:
+            if tok in _SHELL_OP_TOKENS:
+                if cur:
+                    segments.append(cur)
+                    cur = []
+            else:
+                cur.append(tok)
+        if cur:
+            segments.append(cur)
+    return segments
+
+
+def _redirect_targets(tokens: list[str]) -> list[str]:
+    """Literal stdout-redirect (`>` / `>>`) targets in a command's token list."""
+    targets: list[str] = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok in (">", ">>"):
+            if i + 1 < len(tokens):
+                nxt = tokens[i + 1]
+                if nxt not in (">", ">>", "<", "<<") and not nxt.startswith("&"):
+                    targets.append(nxt)
+            i += 2
+            continue
+        m = _REDIRECT_COMBINED_RE.match(tok)
+        if m and "<" not in m.group(3):
+            targets.append(m.group(3))
+        i += 1
+    return targets
+
+
+def _tee_targets(tokens: list[str]) -> list[str]:
+    """File targets of a ``tee`` command (tokens are one command segment)."""
+    if not tokens or tokens[0].rsplit("/", 1)[-1] != "tee":
+        return []
+    return [t for t in tokens[1:] if not t.startswith("-")]
+
+
+def _sed_inplace_targets(tokens: list[str]) -> list[str]:
+    """File target of an in-place ``sed -i`` command (last positional arg)."""
+    if not tokens or tokens[0].rsplit("/", 1)[-1] != "sed":
+        return []
+    if not any(t == "-i" or t.startswith("-i") or t == "--in-place"
+               or t.startswith("--in-place") for t in tokens[1:]):
+        return []
+    last = tokens[-1]
+    return [] if last.startswith("-") else [last]
+
+
+def _bash_write_targets(command: str) -> list[str]:
+    """Literal file paths a bash command writes new content to.
+
+    Covers the content-authoring primitives an auditor reaches for to write
+    source without the file tools: stdout redirection (``> f``, ``>> f``,
+    including heredocs ``cat > f <<EOF``), ``tee``, and in-place ``sed -i``.
+    cp/mv are intentionally excluded (rename/backup churn is legitimate; the
+    protected-path guard in _check_bash_write still covers those). Shell-
+    expansion targets ($VAR / $(...) / backticks) are dropped — they aren't
+    literal source paths and would only add false positives.
+    """
+    targets: list[str] = []
+    for tokens in _shell_command_segments(_strip_heredoc_bodies(command)):
+        targets += _redirect_targets(tokens)
+        targets += _tee_targets(tokens)
+        targets += _sed_inplace_targets(tokens)
+    # shlex leaves a trailing operator glued to a target when it isn't space-
+    # separated (``> one.py; echo`` -> token ``one.py;``). Strip it, and drop
+    # shell-expansion targets ($VAR / $(...) / backticks) — not literal paths.
+    cleaned: list[str] = []
+    for t in targets:
+        t = t.rstrip(";&|")
+        if t and "$" not in t and "`" not in t:
+            cleaned.append(t)
+    return cleaned
+
+
+def _bash_source_write_tdd_block(command: str, cwd: str) -> str | None:
+    """Route bash writes to ordinary in-repo *source* through the TDD gate (#71).
+
+    Returns a block reason if a bash command writes source without a preceding
+    failing test recorded, else None. Docs and out-of-repo targets are exempt
+    (mirrors pre_tool_hook._tdd_gate_exempt); test files are exempt via the
+    hooks.toml ``tests/**`` filter applied during eval. Protected/managed paths
+    are handled earlier by _check_bash_write, so they never reach here.
+
+    Fails closed like the Write/Edit gate: during a fresh audit, an unverifiable
+    gate (missing binary/config, eval failure) blocks. Fast path: no source
+    write target, or no active audit -> allow with no subprocess.
+    """
+    targets = _bash_write_targets(command)
+    if not targets:
+        return None
+
+    repo_root = os.path.realpath(cwd)
+    rel_targets: list[str] = []
+    for t in targets:
+        resolved = os.path.realpath(t if os.path.isabs(t) else os.path.join(cwd, t))
+        rel = os.path.relpath(resolved, repo_root)
+        if rel == os.pardir or rel.startswith(os.pardir + os.sep):
+            continue  # outside the project tree
+        if rel.split(os.sep, 1)[0] == "docs":
+            continue  # docs are not source (author-editable)
+        rel_targets.append(rel)
+    if not rel_targets:
+        return None
+
+    # Only gate during a fresh, active audit. _daemon_lifecycle runs earlier in
+    # the Bash chain and fails closed on daemon death, so a stale/None cache
+    # here means no live audit.
+    try:
+        from _common import resolve_config_dir
+        from _protocol_cache import is_enforcement_fresh, read_cache
+        from _resolve import ensure_sahjhan
+    except Exception:
+        return None
+
+    if not is_enforcement_fresh(read_cache(cwd)):
+        return None
+
+    binary = ensure_sahjhan()
+    config_dir, config_found = resolve_config_dir(cwd)
+    if binary is None or not config_found:
+        return (
+            "BLOCKED: cannot verify the TDD gate for a bash source write "
+            "(enforcement unavailable). During an active audit, source changes "
+            "require a recorded failing test. Use Write/Edit, or retry."
+        )
+
+    for rel in rel_targets:
+        cmd = [binary, "--config-dir", config_dir, "--json",
+               "hook", "eval", "--event", "PreToolUse", "--tool", "Write", "--file", rel]
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=5, cwd=cwd,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return (
+                f"BLOCKED: cannot verify the TDD gate for bash write to '{rel}' "
+                "(enforcement eval failed). During an active audit, source changes "
+                "require a recorded failing test. Use Write/Edit, or retry."
+            )
+        try:
+            data = json.loads(result.stdout) if result.stdout.strip() else None
+        except (json.JSONDecodeError, ValueError):
+            data = None
+        if data is None:
+            return (
+                f"BLOCKED: cannot verify the TDD gate for bash write to '{rel}' "
+                "(enforcement eval returned no decision). During an active audit, "
+                "source changes require a recorded failing test. Use Write/Edit, or retry."
+            )
+        eval_data = data.get("data", data)
+        if eval_data.get("decision") == "block":
+            reason = next(
+                (m["message"] for m in eval_data.get("messages", [])
+                 if m.get("action") == "block"),
+                "write and run a failing test before editing source files.",
+            )
+            return (
+                f"BLOCKED: bash writes to source file '{rel}' but no failing test "
+                f"is recorded. {reason} "
+                "(The TDD gate now covers bash source writes too — #71.)"
+            )
+    return None
+
+
 def _maybe_bootstrap_binary(command: str) -> None:
     """Trigger the binary bootstrap on a first invocation of `sahjhan …`.
 
@@ -855,6 +1090,12 @@ def main() -> None:
         result = _check_bash_write(command, cwd)
         if result:
             _block(result)
+            return
+        # #71: ordinary-source writes via bash go through the same TDD gate as
+        # Write/Edit (protected/managed paths already handled above).
+        tdd_block = _bash_source_write_tdd_block(command, cwd)
+        if tdd_block:
+            _block(tdd_block)
             return
         _allow()
         return
