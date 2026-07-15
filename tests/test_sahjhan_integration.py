@@ -1397,6 +1397,63 @@ class TestPreToolHookSubagentTddParity:
         assert_allowed(code, output)
 
 
+class TestPreToolHookTddPathScope:
+    """#70 item 2: the TDD pre-edit gate applies to in-repo source only.
+
+    The gate exists to force "no source change without a preceding failing
+    test". It was firing on *any* non-test Edit/Write in fix_loop — including
+    documentation and files outside the project tree (the auditor's own session
+    notes) — which have no failing test to write and only pushed legitimate
+    writes onto the ``cat >`` heredoc bypass (#71). These tests pin that docs
+    and out-of-repo writes are exempt while real source stays gated. The mock
+    ``hook eval`` returns BLOCK, so anything that reaches the eval is blocked;
+    an exempt path must be allowed *without* reaching it.
+    """
+
+    _setup_fix_loop = staticmethod(TestPreToolHookSubagentTddParity._setup_fix_loop)
+    _BLOCK_JSON = TestPreToolHookSubagentTddParity._BLOCK_JSON
+
+    def test_docs_write_exempt_even_when_gate_would_block(self, tmp_path, mock_daemon):
+        """A Write to docs/ in fix_loop is allowed — docs are not TDD'd."""
+        self._setup_fix_loop(tmp_path, self._BLOCK_JSON, 1)
+        event = {
+            "tool_input": {"file_path": "docs/holtz/patterns-brief.md"},
+            "tool_name": "Write",
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert_allowed(code, output)
+
+    def test_out_of_repo_write_exempt(self, tmp_path, mock_daemon):
+        """A Write to an absolute path outside the project tree is allowed."""
+        self._setup_fix_loop(tmp_path, self._BLOCK_JSON, 1)
+        outside = str(tmp_path.parent / "session-notes.md")
+        event = {
+            "tool_input": {"file_path": outside},
+            "tool_name": "Edit",
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert_allowed(code, output)
+
+    def test_source_write_still_blocked(self, tmp_path, mock_daemon):
+        """Regression: a real in-repo source Edit is still gated (not over-exempted)."""
+        self._setup_fix_loop(tmp_path, self._BLOCK_JSON, 1)
+        event = {
+            "tool_input": {"file_path": "src/widget.py"},
+            "tool_name": "Edit",
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert_blocked(code, output, "TDD")
+
+
 # --- stop_hook.py (Stop) ---
 
 

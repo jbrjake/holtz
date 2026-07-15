@@ -24,6 +24,36 @@ from _resolve import ensure_sahjhan  # noqa: E402
 from _sahjhan_bootstrap import MANAGED_DOCS  # noqa: E402
 
 
+def _tdd_gate_exempt(file_path: str, cwd: str) -> bool:
+    """Whether the fix-loop TDD pre-edit gate should skip this Edit/Write target.
+
+    The gate (hooks.toml) blocks Edit/Write in ``fix_loop`` until a failing test
+    is recorded — its purpose is "no *source* change without a preceding failing
+    test". Test files are already exempt via the hooks.toml
+    ``path_not_matches = "tests/**"`` filter. But the gate also fired on writes
+    that are not source and need no failing test: documentation, and files
+    outside the project tree (the auditor's own session notes / the scratchpad).
+    Blocking those only pushed legitimate writes onto the ``cat >`` heredoc
+    bypass (#70 item 2, which feeds #71). Exempt:
+
+      * any path outside the project root (``cwd``), and
+      * ``docs/**`` inside the project.
+
+    Managed docs (STATUS/PUNCHLIST/SUMMARY) are still protected — the
+    managed-path guard runs before this and is independent of the TDD gate.
+    """
+    if not file_path:
+        return False
+    resolved = os.path.realpath(
+        file_path if os.path.isabs(file_path) else os.path.join(cwd, file_path)
+    )
+    repo_root = os.path.realpath(cwd)
+    rel = os.path.relpath(resolved, repo_root)
+    if rel == os.pardir or rel.startswith(os.pardir + os.sep):
+        return True  # outside the project tree
+    return rel.split(os.sep, 1)[0] == "docs"
+
+
 def main() -> None:
     event = read_event()
     tool_name = event.get("tool_name", event.get("tool", ""))
@@ -46,6 +76,16 @@ def main() -> None:
                     "Use `sahjhan finding`, `sahjhan resolve`, or other CLI commands "
                     "to modify managed files. Direct writes are not allowed."
                 )
+
+    # ── TDD gate scope (#70 item 2) ──
+    # The fix-loop TDD pre-edit gate is for in-repo *source* files only. Editing
+    # docs or files outside the project tree needs no failing test; blocking them
+    # only pushes writes onto the bash `cat >` bypass. Exempt them before the
+    # gate eval. The TDD gate is the only PreToolUse Edit/Write rule, so this
+    # skips nothing else (test files are already exempt via the hooks.toml
+    # filter). The managed-path guard above still applies regardless.
+    if tool_name in ("Edit", "Write", "NotebookEdit") and _tdd_gate_exempt(file_path, cwd):
+        exit_ok("PreToolUse")
 
     # Stale enforcement: skip hook eval for abandoned audits
     cache = read_cache(cwd)
