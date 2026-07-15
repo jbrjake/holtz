@@ -694,3 +694,59 @@ class TestAwaitingHumanPauseRoundTrip:
         assert status["data"]["state"] == "fix_loop", (
             f"resume should return to fix_loop, got: {status['data']['state']}"
         )
+
+
+class TestEventCountFilterSourceEdit:
+    """#70 item 7: the fix_loop_stall monitor counts only source_edit events, so
+    a burst of file reads (investigation) no longer trips the "N events" nudge.
+
+    Proves the whole chain end-to-end: holtz hooks.toml event_types filter +
+    the sahjhan >= 0.17.0 engine that honors it. Under the old count-all
+    behavior, 20 reads (> the old threshold of 20) would have fired the warning.
+    """
+
+    def test_file_reads_do_not_trip_source_edit_monitor(self, real_daemon):
+        _fast_forward_to_fix_loop(real_daemon)
+
+        # Record a burst of reads with NO source edits.
+        for i in range(20):
+            _run_sahjhan(
+                real_daemon, "event", "file_read",
+                "--field", f"file_path=src/mod_{i}.py",
+                "--field", "tool=Read",
+            )
+
+        result = _run_sahjhan(
+            real_daemon, "--json", "hook", "eval", "--event", "PreToolUse", "--tool", "Read",
+            check=False,
+        )
+        data = json.loads(result.stdout)
+        warnings = data["data"].get("monitor_warnings", [])
+        assert not any(w.get("name") == "fix_loop_stall" for w in warnings), (
+            f"file reads (0 source edits) must not trip fix_loop_stall, got: {warnings}"
+        )
+
+    def test_source_edits_do_trip_the_monitor(self, real_daemon):
+        _fast_forward_to_fix_loop(real_daemon)
+
+        # 12 source edits reach the threshold.
+        for i in range(12):
+            _run_sahjhan(
+                real_daemon, "event", "source_edit",
+                "--field", f"file_path=src/mod_{i}.py",
+                "--field", "tool=Edit",
+            )
+
+        result = _run_sahjhan(
+            real_daemon, "--json", "hook", "eval", "--event", "PreToolUse", "--tool", "Read",
+            check=False,
+        )
+        data = json.loads(result.stdout)
+        warnings = data["data"].get("monitor_warnings", [])
+        stall = next((w for w in warnings if w.get("name") == "fix_loop_stall"), None)
+        assert stall is not None, (
+            f"12 source edits should trip fix_loop_stall, got warnings: {warnings}"
+        )
+        assert "12 source edits" in stall.get("message", ""), (
+            f"count should reflect source edits only, got: {stall.get('message')}"
+        )

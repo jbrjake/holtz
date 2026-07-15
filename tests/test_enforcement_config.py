@@ -149,6 +149,38 @@ def test_fix_commit_has_circuit_breaker():
     )
 
 
+def test_fix_loop_event_count_triggers_filter_source_edit():
+    """#70 item 7: the fix_loop "N events" nudges count only source_edit events.
+
+    Counting every ledger event (dominated by auto-recorded reads/searches) made
+    the warning climb to 30-40 during a single fix's investigation. The triggers
+    now set event_types = ["source_edit"] (honored by sahjhan >= 0.17.0) so the
+    count reflects uncommitted work, not read noise.
+    """
+    hooks = tomllib.loads((ENFORCEMENT_DIR / "hooks.toml").read_text())
+
+    # PostToolUse Edit accumulation warning
+    edit_warn = next(
+        (h for h in hooks.get("hooks", [])
+         if h.get("check", {}).get("type") == "event_count_since_last_transition"),
+        None,
+    )
+    assert edit_warn is not None, "no event_count_since_last_transition hook found"
+    assert edit_warn["check"].get("event_types") == ["source_edit"], (
+        "Edit-accumulation warn must count only source_edit events (#70 item 7)"
+    )
+
+    # fix_loop_stall monitor
+    stall = next(
+        (m for m in hooks.get("monitors", []) if m.get("name") == "fix_loop_stall"),
+        None,
+    )
+    assert stall is not None, "fix_loop_stall monitor not found"
+    assert stall["trigger"].get("event_types") == ["source_edit"], (
+        "fix_loop_stall monitor must count only source_edit events (#70 item 7)"
+    )
+
+
 def test_pause_resume_transitions_exist():
     """#69: a reversible awaiting_human pause with an ungated pause/resume pair.
 
