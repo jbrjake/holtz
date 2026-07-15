@@ -166,6 +166,74 @@ def test_iteration_boundary_enforces_pattern_check():
     )
 
 
+def test_fix_commit_breaker_scoped_to_iteration_not_lifetime():
+    """#67: the fix_commit circuit breaker must reset each iteration_boundary.
+
+    A lifetime ``count(*) < 15`` cap makes ``converge`` mathematically
+    unsatisfiable for any audit whose must-fix set exceeds 15 — ``converge``
+    requires every finding resolved-or-deferred, and the one-fix-one-commit rule
+    forbids clearing several findings per commit. Scoping the breaker to fixes
+    ``seq >`` the last ``iteration_boundary`` caps runaway *within* an uncleared
+    window while still letting a long audit converge across ``/clear`` cycles.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    fix_commit = next(
+        (t for t in cfg["transitions"] if t.get("command") == "fix_commit"), None
+    )
+    assert fix_commit is not None, "No fix_commit transition found"
+    breaker = next(
+        (
+            g
+            for g in fix_commit["gates"]
+            if g["type"] == "query" and "command='fix_commit'" in g.get("sql", "")
+        ),
+        None,
+    )
+    assert breaker is not None, "fix_commit must have a query circuit-breaker gate"
+    sql = breaker["sql"]
+    assert "iteration_boundary" in sql and "COALESCE" in sql and "seq >" in sql, (
+        "fix_commit circuit breaker must be scoped since the last "
+        "iteration_boundary (seq > COALESCE(... iteration_boundary ..., 0)) so the "
+        "cap resets each /clear; a lifetime cap blocks convergence for audits with "
+        f">15 must-fix findings (#67). Got: {sql}"
+    )
+
+
+def test_pattern_check_bootstraps_from_zero():
+    """#65: the first pattern_check must be satisfiable with no prior analysis.
+
+    The old gate used ``ledger_has_event_since`` with
+    ``since = "last_event_of_type:pattern_analysis_complete"`` — a reference
+    syntax that gate type does not parse. It matched no event, silently fell back
+    to "since last state_transition", and ignored ``min_count`` entirely, so the
+    very first ``pattern_check`` could never fire (you need a
+    ``pattern_analysis_complete`` to satisfy the gate that produces the first
+    one). A COALESCE-scoped query treats "no prior analysis" as the run start.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    pattern_check = next(
+        (t for t in cfg["transitions"] if t.get("command") == "pattern_check"), None
+    )
+    assert pattern_check is not None, "No pattern_check transition found"
+    gate_types = [g["type"] for g in pattern_check["gates"]]
+    assert "ledger_has_event_since" not in gate_types, (
+        "pattern_check must not use ledger_has_event_since with a "
+        "last_event_of_type baseline — that gate ignores the baseline and "
+        "min_count, so the first pattern analysis can never fire (#65)"
+    )
+    q = next((g for g in pattern_check["gates"] if g["type"] == "query"), None)
+    assert q is not None, "pattern_check must use a query gate (#65)"
+    sql = q.get("sql", "")
+    assert "COALESCE" in sql and "pattern_analysis_complete" in sql, (
+        "pattern_check must use a COALESCE-scoped query so the first pattern "
+        f"analysis fires once 3+ findings resolve (#65). Got: {pattern_check['gates']}"
+    )
+    assert ">= 3" in sql or ">=3" in sql, (
+        "pattern_check must enforce the 3-resolved-findings minimum in SQL "
+        "(the old ledger_has_event_since silently ignored min_count) (#65)"
+    )
+
+
 # ── Task 1.3: renders.toml ──
 
 

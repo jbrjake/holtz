@@ -78,7 +78,7 @@ gates = [
     { type = "command_succeeds", cmd = "python3 -m pytest --tb=short -q", timeout = 120, intent = "test suite must pass after fix" },
     { type = "ledger_has_event_since", event = "blast_radius", since = "last_transition", intent = "blast radius must be checked after each fix" },
     { type = "ledger_has_event_since", event = "hardening_complete", since = "last_transition", intent = "edge cases must be hardened after each fix" },
-    { type = "query", sql = "SELECT count(*) < 15 FROM events WHERE type='state_transition' AND command='fix_commit'", expect = "true", intent = "circuit breaker: max 15 fix iterations" },
+    { type = "query", sql = "SELECT count(*) < 15 FROM events WHERE type='state_transition' AND command='fix_commit' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='state_transition' AND command='iteration_boundary'), 0)", expect = "true", intent = "circuit breaker: max 15 fixes per iteration (scoped since the last iteration_boundary /clear, so the cap resets each context reset instead of capping the whole run)" },
 ]
 
 # ── Deferral: can't reproduce ──
@@ -148,7 +148,15 @@ from = "fix_loop"
 to = "pattern_analysis"
 command = "pattern_check"
 gates = [
-    { type = "ledger_has_event_since", event = "finding_resolved", since = "last_event_of_type:pattern_analysis_complete", min_count = 3, intent = "pattern analysis needs 3+ resolved findings to be meaningful" },
+    # #65: use a COALESCE-scoped query (mirroring iteration_boundary) rather than
+    # ledger_has_event_since. The old gate referenced `last_event_of_type:...`, a
+    # syntax that gate type does not understand: it matched no event, silently fell
+    # back to "since last state_transition", and ignored min_count entirely — so the
+    # first pattern_check could never fire (chicken-and-egg: you need a prior
+    # pattern_analysis_complete to satisfy the gate that produces the first one).
+    # COALESCE(..., 0) treats "no prior pattern analysis" as the run start, so the
+    # first pattern_check becomes ready once 3+ findings are resolved.
+    { type = "query", sql = "SELECT count(*) >= 3 FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)", expect = "true", intent = "pattern analysis needs 3+ findings resolved since the last pattern analysis" },
 ]
 
 [[transitions]]
