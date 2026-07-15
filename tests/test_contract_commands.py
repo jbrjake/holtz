@@ -191,6 +191,17 @@ class TestSkillMdQuickReference:
     def test_transition_fix_commit(self):
         _assert_allowed("sahjhan transition fix_commit", "SKILL.md: transitions")
 
+    def test_transition_fix_commit_positional_item(self):
+        # phase-fix-loop.md: the fix_commit item id is POSITIONAL (the CLI
+        # rejects --item-id); `-- BH-NNN` also works. #70 item 6.
+        _assert_allowed("sahjhan transition fix_commit BH-001", "phase-fix-loop.md")
+        _assert_allowed("sahjhan transition fix_commit -- BH-001", "phase-fix-loop.md")
+
+    def test_transition_pause_resume(self):
+        # #69: the reversible awaiting_human pause/resume commands.
+        _assert_allowed("sahjhan transition pause", "awaiting_human pause")
+        _assert_allowed("sahjhan transition resume", "awaiting_human resume")
+
     def test_set_complete_perspective(self):
         _assert_allowed(
             "sahjhan set complete perspective component",
