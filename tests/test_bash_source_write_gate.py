@@ -268,3 +268,87 @@ class TestBashSourceWriteGate:
             cwd=str(tmp_path), env=_mock_env(tmp_path),
         )
         assert_allowed(code, output)
+
+
+# ---------------------------------------------------------------------------
+# _bash_source_write_tdd_block: fail-closed + eval branches (dependency-injected)
+# ---------------------------------------------------------------------------
+
+
+class TestBashSourceWriteTddBlockUnit:
+    """Directly exercise the gate's decision branches by injecting the sibling
+    dependencies (read_cache/is_enforcement_fresh/ensure_sahjhan/config) and a
+    fake eval subprocess — including the fail-closed paths a real daemon rarely
+    hits but that must never silently allow a source write mid-audit."""
+
+    @staticmethod
+    def _patch_active_audit(monkeypatch, binary="/fake/sahjhan", config_found=True):
+        import _common
+        import _protocol_cache
+        import _resolve
+        import _sahjhan_bootstrap as bootstrap
+        monkeypatch.setattr(_protocol_cache, "read_cache", lambda cwd: {"active": True})
+        monkeypatch.setattr(_protocol_cache, "is_enforcement_fresh", lambda c, **k: True)
+        monkeypatch.setattr(_resolve, "ensure_sahjhan", lambda: binary)
+        monkeypatch.setattr(_common, "resolve_config_dir", lambda cwd: ("/cfg", config_found))
+        return bootstrap
+
+    class _FakeProc:
+        def __init__(self, stdout):
+            self.stdout = stdout
+            self.returncode = 0
+
+    def test_no_target_allows(self, monkeypatch):
+        bootstrap = self._patch_active_audit(monkeypatch)
+        assert bootstrap._bash_source_write_tdd_block("grep foo src/", "/repo") is None
+
+    def test_docs_target_allows_without_eval(self, monkeypatch):
+        bootstrap = self._patch_active_audit(monkeypatch)
+
+        def _boom(*a, **k):  # eval must not be reached for docs
+            raise AssertionError("eval should not run for docs target")
+        monkeypatch.setattr(bootstrap.subprocess, "run", _boom)
+        assert bootstrap._bash_source_write_tdd_block(
+            "cat > docs/x.md", "/repo") is None
+
+    def test_binary_unavailable_fails_closed(self, monkeypatch):
+        bootstrap = self._patch_active_audit(monkeypatch, binary=None)
+        reason = bootstrap._bash_source_write_tdd_block("cat > src/a.py", "/repo")
+        assert reason is not None and "BLOCKED" in reason
+
+    def test_config_missing_fails_closed(self, monkeypatch):
+        bootstrap = self._patch_active_audit(monkeypatch, config_found=False)
+        reason = bootstrap._bash_source_write_tdd_block("cat > src/a.py", "/repo")
+        assert reason is not None and "BLOCKED" in reason
+
+    def test_eval_subprocess_error_fails_closed(self, monkeypatch):
+        bootstrap = self._patch_active_audit(monkeypatch)
+
+        def _raise(*a, **k):
+            raise OSError("boom")
+        monkeypatch.setattr(bootstrap.subprocess, "run", _raise)
+        reason = bootstrap._bash_source_write_tdd_block("cat > src/a.py", "/repo")
+        assert reason is not None and "BLOCKED" in reason
+
+    def test_eval_invalid_json_fails_closed(self, monkeypatch):
+        bootstrap = self._patch_active_audit(monkeypatch)
+        monkeypatch.setattr(bootstrap.subprocess, "run",
+                            lambda *a, **k: self._FakeProc("not json"))
+        reason = bootstrap._bash_source_write_tdd_block("cat > src/a.py", "/repo")
+        assert reason is not None and "BLOCKED" in reason
+
+    def test_eval_block_returns_reason(self, monkeypatch):
+        bootstrap = self._patch_active_audit(monkeypatch)
+        block_json = ('{"data":{"decision":"block","messages":'
+                      '[{"action":"block","message":"need a failing test"}]}}')
+        monkeypatch.setattr(bootstrap.subprocess, "run",
+                            lambda *a, **k: self._FakeProc(block_json))
+        reason = bootstrap._bash_source_write_tdd_block("cat > src/a.py", "/repo")
+        assert reason is not None
+        assert "a.py" in reason and "need a failing test" in reason
+
+    def test_eval_allow_returns_none(self, monkeypatch):
+        bootstrap = self._patch_active_audit(monkeypatch)
+        monkeypatch.setattr(bootstrap.subprocess, "run",
+                            lambda *a, **k: self._FakeProc('{"data":{"decision":"allow"}}'))
+        assert bootstrap._bash_source_write_tdd_block("cat > src/a.py", "/repo") is None
