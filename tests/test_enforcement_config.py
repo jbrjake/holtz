@@ -149,6 +149,37 @@ def test_fix_commit_has_circuit_breaker():
     )
 
 
+def test_pause_resume_transitions_exist():
+    """#69: a reversible awaiting_human pause with an ungated pause/resume pair.
+
+    fix_loop --pause--> awaiting_human --resume--> fix_loop. Pausing to answer a
+    user question must never be gated (that's the whole point), and awaiting_human
+    must be a declared state.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    pause = next(
+        (t for t in cfg["transitions"]
+         if t.get("command") == "pause" and t.get("from") == "fix_loop"), None
+    )
+    assert pause is not None, "No fix_loop --pause--> transition found (#69)"
+    assert pause["to"] == "awaiting_human"
+    assert not pause.get("gates"), "pause must be ungated — pausing for a human is always allowed"
+
+    resume = next(
+        (t for t in cfg["transitions"]
+         if t.get("command") == "resume" and t.get("from") == "awaiting_human"), None
+    )
+    assert resume is not None, "No awaiting_human --resume--> transition found (#69)"
+    assert resume["to"] == "fix_loop"
+    assert not resume.get("gates"), "resume from a pause must be ungated"
+
+    states = tomllib.loads((ENFORCEMENT_DIR / "states.toml").read_text())
+    assert "awaiting_human" in states["states"], "awaiting_human state not declared"
+    assert not states["states"]["awaiting_human"].get("terminal"), (
+        "awaiting_human is a pause, not terminal"
+    )
+
+
 def test_iteration_boundary_enforces_pattern_check():
     """BH-020: iteration_boundary must block when 3+ fixes lack pattern analysis."""
     cfg = tomllib.loads(TRANSITIONS_TOML.read_text())

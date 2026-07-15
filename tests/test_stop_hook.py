@@ -188,3 +188,52 @@ class TestStopHookRemediationMessage:
         assert "next stop" in reason.lower(), (
             f"Block message should explain two-step escape, got: {reason}"
         )
+
+    def test_fix_loop_block_message_offers_pause(self, tmp_path, mock_daemon):
+        """#69: the fix_loop stop-block should offer `transition pause` so the
+        agent can yield to answer a question instead of abandoning the run."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
+        (sahjhan_dir / "daemon-init-pid").write_text(str(os.getpid()))
+        from _protocol_cache import write_cache
+        write_cache(str(tmp_path), {
+            "state": "fix_loop",
+            "active": True,
+            "last_sahjhan_cmd": "2099-01-01T00:00:00+00:00",
+        })
+        event = {"cwd": str(tmp_path)}
+        _, output, _ = run_enforcement_hook("stop_hook.py", event, cwd=str(tmp_path))
+        reason = output.get("reason", "")
+        assert "pause" in reason.lower() and "resume" in reason.lower(), (
+            f"fix_loop block message should offer pause/resume, got: {reason}"
+        )
+
+
+class TestStopHookAwaitingHuman:
+    """#69: the reversible awaiting_human pause allows stopping without killing
+    the daemon, so the session survives and the run can resume."""
+
+    def test_awaiting_human_allows_stop(self, tmp_path, mock_daemon):
+        """Stop is allowed in awaiting_human — the agent may yield the turn."""
+        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
+        sahjhan_dir.mkdir(parents=True, exist_ok=True)
+        (sahjhan_dir / "daemon-init-pid").write_text(str(os.getpid()))
+        from _protocol_cache import write_cache
+        write_cache(str(tmp_path), {
+            "state": "awaiting_human",
+            "active": True,
+            "last_sahjhan_cmd": "2099-01-01T00:00:00+00:00",
+        })
+        event = {"cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook("stop_hook.py", event, cwd=str(tmp_path))
+        assert code == 0
+        assert output.get("decision") != "block", (
+            f"awaiting_human should allow stop, got: {output}"
+        )
+
+    def test_awaiting_human_not_a_daemon_cleanup_state(self):
+        """The daemon (session key) must survive a pause so resume works —
+        awaiting_human is stop-allowed but NOT a cleanup state."""
+        from _common import DAEMON_CLEANUP_STATES, STOP_ALLOWED_STATES
+        assert "awaiting_human" in STOP_ALLOWED_STATES
+        assert "awaiting_human" not in DAEMON_CLEANUP_STATES

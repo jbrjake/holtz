@@ -50,7 +50,10 @@ mask_fenced_blocks: Callable[[str], str] = _mod.mask_fenced_blocks
 # put it in STOP_ALLOWED only. If the audit is over, put it in both.
 # Shared by stop_hook.py (stop gating + daemon cleanup) and
 # _sahjhan_bootstrap.py (graduated `sahjhan daemon stop` policy, #57).
-STOP_ALLOWED_STATES = {"idle", "finalized", "awaiting_clear", ""}
+# awaiting_human (#69): a reversible pause so the agent can yield to answer a
+# user question mid-audit. Stop is allowed, but — like awaiting_clear — the
+# daemon must survive so `sahjhan transition resume` continues the run.
+STOP_ALLOWED_STATES = {"idle", "finalized", "awaiting_clear", "awaiting_human", ""}
 DAEMON_CLEANUP_STATES = {"idle", "finalized", ""}
 
 

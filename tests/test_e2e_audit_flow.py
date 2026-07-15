@@ -650,3 +650,47 @@ class TestFullAuditLifecycle:
         assert "recon" in context.lower() or "sahjhan resume" in context.lower(), (
             f"Primer must inject resume context during active audit. Got: {output}"
         )
+
+
+class TestAwaitingHumanPauseRoundTrip:
+    """#69: pause/resume must work end-to-end against the real binary + tomls.
+
+    fix_loop --pause--> awaiting_human (Stop now allowed, daemon preserved)
+    --resume--> fix_loop. This proves the real sahjhan binary parses the new
+    transitions and that the session survives a pause (unlike `daemon stop`).
+    """
+
+    def test_pause_allows_stop_then_resume_returns_to_fix_loop(self, real_daemon):
+        _fast_forward_to_fix_loop(real_daemon)
+
+        # Enter the pause — no gates, must succeed against the real binary.
+        _run_sahjhan(real_daemon, "transition", "pause")
+        status = json.loads(_run_sahjhan(real_daemon, "--json", "status").stdout)
+        assert status["data"]["state"] == "awaiting_human", (
+            f"pause should land in awaiting_human, got: {status['data']['state']}"
+        )
+
+        # Sync the enforcement cache to the paused state, then Stop must be allowed.
+        _freshen_enforcement_cache(real_daemon)
+        stop_out = _invoke_hook("stop_hook.py", {"cwd": real_daemon["project_root"]}, real_daemon)
+        assert stop_out.get("decision") != "block", (
+            f"Stop must be allowed in awaiting_human, got: {stop_out}"
+        )
+
+        # The primer surfaces the paused state and how to resume.
+        primer_out = _invoke_hook(
+            "primer.py",
+            {"cwd": real_daemon["project_root"], "user_prompt": "quick question"},
+            real_daemon,
+        )
+        primer_ctx = primer_out.get("hookSpecificOutput", {}).get("additionalContext", "")
+        assert "awaiting_human" in primer_ctx.lower() or "paused" in primer_ctx.lower(), (
+            f"Primer should surface the paused state, got: {primer_ctx}"
+        )
+
+        # The daemon (session key) survived the pause — resume returns to fix_loop.
+        _run_sahjhan(real_daemon, "transition", "resume")
+        status = json.loads(_run_sahjhan(real_daemon, "--json", "status").stdout)
+        assert status["data"]["state"] == "fix_loop", (
+            f"resume should return to fix_loop, got: {status['data']['state']}"
+        )

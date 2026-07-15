@@ -141,6 +141,23 @@ gates = [
     { type = "ledger_has_event_since", event = "context_reset", since = "last_transition", intent = "context must be reset via /clear before resuming" },
 ]
 
+# ── Pause for human (#69) ──
+# Reversible pause so the agent can yield the turn to answer a user question
+# mid-fix-loop without abandoning the run. No gates: pausing to talk to the
+# human is always legitimate. The Stop hook allows stopping in awaiting_human
+# (it is in STOP_ALLOWED_STATES but NOT DAEMON_CLEANUP_STATES), so the daemon
+# and session key survive and `resume` picks the run back up.
+
+[[transitions]]
+from = "fix_loop"
+to = "awaiting_human"
+command = "pause"
+
+[[transitions]]
+from = "awaiting_human"
+to = "fix_loop"
+command = "resume"
+
 # ── Pattern Analysis ──
 
 [[transitions]]
