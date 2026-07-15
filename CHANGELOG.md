@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.137.2] - 2026-07-15
+
+_Changes since v0.136.0_
+
+### Added
+- **enforcement:** add reversible awaiting_human pause state (#69)
+
+### Fixed
+- **enforcement:** count only source edits for the fix-loop "N events" nudges (#70 item 7)
+- **enforcement:** re-pin sahjhan 0.15.0 → 0.17.0 (ship #63 stderr + gate fixes)
+- **enforcement:** apply the TDD gate to bash source writes (#71)
+- **enforcement:** allow wrapped sahjhan re-sync through stall block (#70 item 1)
+- **enforcement:** scope TDD pre-edit gate to in-repo source (#70 item 2)
+- **enforcement:** make test/lint gate commands overridable; fix fix-loop doc drift
+- **enforcement:** scope fix_commit breaker per-iteration; bootstrap pattern_check from zero
+- **enforcement:** subagents run TDD in-tree; docs match agent-agnostic hooks
+
+### Infrastructure
+- **enforcement:** cover fail-closed branches of the bash TDD gate (#71)
+
 ## [0.136.0] - 2026-07-14
 
 _Changes since v0.135.0_
