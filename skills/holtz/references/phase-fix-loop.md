@@ -58,7 +58,7 @@ If the subagent cannot reach HIGH confidence, it records nothing, leaves the tre
 
 10. **Validate the verification:** re-run the full suite and confirm it is green, and confirm the ledger shows this finding's `test_failed_before_fix` and `hardening_complete` for BH-NNN (`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" status`, or `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" ledger`). If the suite is red or those events are missing, the subagent's fix is not real — send it back or defer; do not commit.
 11. `git commit` with finding ID in body. Format: `fix(<scope>): <desc>`
-12. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit --item-id BH-NNN`
+12. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit BH-NNN` — the item id is **positional** (`item_id=BH-NNN` also works); the CLI rejects `--item-id`.
 13. Move to next item.
 
 Dispatch subagents **one finding at a time** — the ledger is a single hash chain and commits land on one branch, so concurrent fix subagents would race on both. Because the subagent is gated by the **same** TDD pre-edit hook you are, it cannot write the fix (step 4) before recording `test_failed_before_fix` (step 3) — that hard guarantee is what lets you commit on its word after only re-running the suite.
@@ -145,10 +145,19 @@ For each lens sweep, record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcem
 After completing a lens sweep (any type), return to Step 10 (fix loop) for any new findings. When a perspective passes clean, run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" set complete perspective`. Then run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition lens_rotate` to switch to the next perspective.
 
 **Circuit Breakers:**
-- **MAX_ITERATIONS:** 15 total fix-loop iterations. Enforced by Sahjhan's `fix_commit` gate (`max_count = 15`). After 15, the gate blocks — report remaining items to the user.
+- **MAX_ITERATIONS:** 15 fixes **per iteration window**. Enforced by Sahjhan's `fix_commit` circuit-breaker gate, which counts `fix_commit`s *since the last `iteration_boundary`* — so the cap resets at each `/clear`. If a single uncleared window hits 15, run `iteration_boundary` + `/clear` to continue (or report remaining items). Whole-run convergence is **not** capped: a long audit fixes >15 findings across multiple windows (fixed in #67; a prior lifetime cap made >15-finding audits unconvergeable).
 - **SAME_ITEM:** 3 attempts on the same punchlist item. After 3, escalate to the user.
 - **NO_PROGRESS:** 3 consecutive iterations with no items resolved. Stop and report.
 - **CONTEXT_BUDGET:** If context utilization exceeds 60%, wrap up the current item and proceed to the convergence boundary — run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition iteration_boundary` and instruct `/clear`. Do not wait for compaction.
+
+**Test / lint command for non-standard targets.** The `fix_commit`, perspective-completion, and `converge` gates run the target project's suite and linter. These commands run **in the environment that invoked `sahjhan transition`**, so the interpreter resolves via your current `PATH`. If the target's tests only run under a venv/pyenv/conda/poetry/tox (i.e. the login `python3`/`ruff` isn't the right one), export an override **once at run start** — it flows to every gate:
+
+```bash
+export HOLTZ_PYTEST='.venv/bin/python -m pytest --tb=short -q'   # or: poetry run pytest / tox / python3.12 -m pytest ...
+export HOLTZ_LINT='.venv/bin/ruff check .'                       # or: poetry run ruff check .
+```
+
+Unset, the gates default to `python3 -m pytest --tb=short -q` and `ruff check .` (unchanged behavior). When a gate command fails, Sahjhan now surfaces a tail of its stderr in the block reason (e.g. `No module named pytest`), so a missing interpreter is distinguishable from a real test failure (sahjhan ≥ 0.16.0, holtz #63).
 
 ```dot
 digraph {

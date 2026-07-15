@@ -234,6 +234,38 @@ def test_pattern_check_bootstraps_from_zero():
     )
 
 
+def test_test_and_lint_gates_are_env_overridable():
+    """#63/#70.5: pytest/ruff gate commands must be overridable per target.
+
+    Gate commands run in the environment that invoked ``sahjhan transition``, so
+    a target project whose tests/lint only run under a venv/pyenv/conda/poetry/
+    tox can't rely on the login ``python3``/``ruff``. Wrapping each command in
+    ``${HOLTZ_PYTEST:-...}`` / ``${HOLTZ_LINT:-...}`` lets an operator set the
+    exact command once (``sh`` expands the default when the var is unset, so
+    prior behavior is preserved) — without hardcoding any interpreter path into
+    the engine.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    pytest_cmds, lint_cmds = [], []
+    for t in cfg["transitions"]:
+        for g in t.get("gates", []):
+            cmd = g.get("cmd", "")
+            if "pytest" in cmd:
+                pytest_cmds.append(cmd)
+            if "ruff" in cmd:
+                lint_cmds.append(cmd)
+    assert pytest_cmds, "expected at least one pytest gate command"
+    assert lint_cmds, "expected at least one ruff gate command"
+    for cmd in pytest_cmds:
+        assert cmd.startswith("${HOLTZ_PYTEST:-") and cmd.endswith("}"), (
+            f"pytest gate must be overridable via $HOLTZ_PYTEST (#63/#70.5): {cmd}"
+        )
+    for cmd in lint_cmds:
+        assert cmd.startswith("${HOLTZ_LINT:-") and cmd.endswith("}"), (
+            f"lint gate must be overridable via $HOLTZ_LINT (#63/#70.5): {cmd}"
+        )
+
+
 # ── Task 1.3: renders.toml ──
 
 

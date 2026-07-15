@@ -75,7 +75,7 @@ command = "fix_commit"
 args = ["item_id"]
 gates = [
     { type = "command_succeeds", cmd = "git log -1 --format=%B | grep -q '{{item_id}}'", intent = "commit must reference the punchlist item" },
-    { type = "command_succeeds", cmd = "python3 -m pytest --tb=short -q", timeout = 120, intent = "test suite must pass after fix" },
+    { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest --tb=short -q}", timeout = 120, intent = "test suite must pass after fix" },
     { type = "ledger_has_event_since", event = "blast_radius", since = "last_transition", intent = "blast radius must be checked after each fix" },
     { type = "ledger_has_event_since", event = "hardening_complete", since = "last_transition", intent = "edge cases must be hardened after each fix" },
     { type = "query", sql = "SELECT count(*) < 15 FROM events WHERE type='state_transition' AND command='fix_commit' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='state_transition' AND command='iteration_boundary'), 0)", expect = "true", intent = "circuit breaker: max 15 fixes per iteration (scoped since the last iteration_boundary /clear, so the cap resets each context reset instead of capping the whole run)" },
@@ -178,8 +178,8 @@ gates = [
     { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')", expect = "0", intent = "all findings must be resolved or deferred" },
     { type = "query", sql = "SELECT count(*) >= 2 FROM events WHERE type='iteration_complete' AND perspective='{{current_perspective}}'", expect = "true", intent = "two clean iterations required for stability" },
     { type = "min_elapsed", event = "iteration_complete", seconds = 120, intent = "prevent rapid-fire gaming of iteration count" },
-    { type = "command_succeeds", cmd = "python3 -m pytest --tb=short -q", timeout = 120, intent = "tests must pass" },
-    { type = "command_succeeds", cmd = "ruff check .", timeout = 30, intent = "no lint violations" },
+    { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest --tb=short -q}", timeout = 120, intent = "tests must pass" },
+    { type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", timeout = 30, intent = "no lint violations" },
     { type = "no_violations", intent = "no unresolved protocol violations" },
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='quiz_answered' AND pass='true' AND perspective='{{current_perspective}}'", expect = "true", intent = "lens quiz must be passed" },
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='quiz_posed' AND perspective='{{current_perspective}}'", expect = "true", intent = "quiz must be posed by enforcement hook before completion" },
@@ -217,8 +217,8 @@ to = "final_sweep_clean"
 command = "converge"
 gates = [
     { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member", intent = "all lenses must be complete" },
-    { type = "command_succeeds", cmd = "python3 -m pytest --tb=short -q", timeout = 120, intent = "tests must pass" },
-    { type = "command_succeeds", cmd = "ruff check .", timeout = 30, intent = "no lint violations" },
+    { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest --tb=short -q}", timeout = 120, intent = "tests must pass" },
+    { type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", timeout = 30, intent = "no lint violations" },
     { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')", expect = "0", intent = "all findings must be resolved or deferred" },
     { type = "no_violations", intent = "no unresolved protocol violations" },
     { type = "query", sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')", expect = "true", intent = "no unresolved quiz exhaustions" },
