@@ -650,3 +650,103 @@ class TestFullAuditLifecycle:
         assert "recon" in context.lower() or "sahjhan resume" in context.lower(), (
             f"Primer must inject resume context during active audit. Got: {output}"
         )
+
+
+class TestAwaitingHumanPauseRoundTrip:
+    """#69: pause/resume must work end-to-end against the real binary + tomls.
+
+    fix_loop --pause--> awaiting_human (Stop now allowed, daemon preserved)
+    --resume--> fix_loop. This proves the real sahjhan binary parses the new
+    transitions and that the session survives a pause (unlike `daemon stop`).
+    """
+
+    def test_pause_allows_stop_then_resume_returns_to_fix_loop(self, real_daemon):
+        _fast_forward_to_fix_loop(real_daemon)
+
+        # Enter the pause — no gates, must succeed against the real binary.
+        _run_sahjhan(real_daemon, "transition", "pause")
+        status = json.loads(_run_sahjhan(real_daemon, "--json", "status").stdout)
+        assert status["data"]["state"] == "awaiting_human", (
+            f"pause should land in awaiting_human, got: {status['data']['state']}"
+        )
+
+        # Sync the enforcement cache to the paused state, then Stop must be allowed.
+        _freshen_enforcement_cache(real_daemon)
+        stop_out = _invoke_hook("stop_hook.py", {"cwd": real_daemon["project_root"]}, real_daemon)
+        assert stop_out.get("decision") != "block", (
+            f"Stop must be allowed in awaiting_human, got: {stop_out}"
+        )
+
+        # The primer surfaces the paused state and how to resume.
+        primer_out = _invoke_hook(
+            "primer.py",
+            {"cwd": real_daemon["project_root"], "user_prompt": "quick question"},
+            real_daemon,
+        )
+        primer_ctx = primer_out.get("hookSpecificOutput", {}).get("additionalContext", "")
+        assert "awaiting_human" in primer_ctx.lower() or "paused" in primer_ctx.lower(), (
+            f"Primer should surface the paused state, got: {primer_ctx}"
+        )
+
+        # The daemon (session key) survived the pause — resume returns to fix_loop.
+        _run_sahjhan(real_daemon, "transition", "resume")
+        status = json.loads(_run_sahjhan(real_daemon, "--json", "status").stdout)
+        assert status["data"]["state"] == "fix_loop", (
+            f"resume should return to fix_loop, got: {status['data']['state']}"
+        )
+
+
+class TestEventCountFilterSourceEdit:
+    """#70 item 7: the fix_loop_stall monitor counts only source_edit events, so
+    a burst of file reads (investigation) no longer trips the "N events" nudge.
+
+    Proves the whole chain end-to-end: holtz hooks.toml event_types filter +
+    the sahjhan >= 0.17.0 engine that honors it. Under the old count-all
+    behavior, 20 reads (> the old threshold of 20) would have fired the warning.
+    """
+
+    def test_file_reads_do_not_trip_source_edit_monitor(self, real_daemon):
+        _fast_forward_to_fix_loop(real_daemon)
+
+        # Record a burst of reads with NO source edits.
+        for i in range(20):
+            _run_sahjhan(
+                real_daemon, "event", "file_read",
+                "--field", f"file_path=src/mod_{i}.py",
+                "--field", "tool=Read",
+            )
+
+        result = _run_sahjhan(
+            real_daemon, "--json", "hook", "eval", "--event", "PreToolUse", "--tool", "Read",
+            check=False,
+        )
+        data = json.loads(result.stdout)
+        warnings = data["data"].get("monitor_warnings", [])
+        assert not any(w.get("name") == "fix_loop_stall" for w in warnings), (
+            f"file reads (0 source edits) must not trip fix_loop_stall, got: {warnings}"
+        )
+
+    def test_source_edits_do_trip_the_monitor(self, real_daemon):
+        _fast_forward_to_fix_loop(real_daemon)
+
+        # 12 source edits reach the threshold.
+        for i in range(12):
+            _run_sahjhan(
+                real_daemon, "event", "source_edit",
+                "--field", f"file_path=src/mod_{i}.py",
+                "--field", "tool=Edit",
+            )
+
+        result = _run_sahjhan(
+            real_daemon, "--json", "hook", "eval", "--event", "PreToolUse", "--tool", "Read",
+            check=False,
+        )
+        data = json.loads(result.stdout)
+        warnings = data["data"].get("monitor_warnings", [])
+        stall = next((w for w in warnings if w.get("name") == "fix_loop_stall"), None)
+        assert stall is not None, (
+            f"12 source edits should trip fix_loop_stall, got warnings: {warnings}"
+        )
+        assert "12 source edits" in stall.get("message", ""), (
+            f"count should reflect source edits only, got: {stall.get('message')}"
+        )

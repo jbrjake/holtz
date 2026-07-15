@@ -23,6 +23,14 @@ params = [{ name = "current_perspective", set = "perspective", source = "current
 label = "Awaiting Context Reset"
 # Agent must tell user to /clear; primer hook records context_reset event
 
+[states.awaiting_human]
+label = "Awaiting Human (paused)"
+# #69: a lightweight, reversible pause the agent enters (from fix_loop) to
+# yield the turn and answer a user question mid-audit. The Stop hook allows
+# stopping here — but, unlike `! sahjhan daemon stop`, the daemon (and the
+# session key) is preserved, so `sahjhan transition resume` continues the run.
+# Not terminal.
+
 [states.pattern_analysis]
 label = "Pattern Analysis (Step 11)"
 

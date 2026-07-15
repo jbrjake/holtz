@@ -145,6 +145,7 @@ pytest -m "not slow and not machine_specific"
 2. Hook changed → test via subprocess (`_run_hook(event)`), not function import. Subprocess tests the interface Claude Code actually uses.
 3. New shell idiom in a skill file → add it to the combinatorial matrix in `test_contract_commands.py` (`_SHELL_IDIOMS`, `_SHELL_WRAPPER_IDIOMS`, or `_SHELL_CHAIN_IDIOMS`). Parametrized tests auto-combine it with all subcommands.
 4. Coverage is necessary but not sufficient. 100% coverage with synthetic inputs is worse than 80% coverage with real inputs. Prefer testing real commands from skill files over hand-crafted examples.
+5. **Subagent behavior is enforcement, not just prose.** Claude Code fires PreToolUse/PostToolUse hooks for subagent tool calls too and adds an `agent_id` field. The enforcement hooks are **agent-agnostic by design** — a fix subagent is under the same TDD gate as the orchestrator (see `references/phase-fix-loop.md`). So: (a) never exempt `agent_id`-bearing calls from a gate without a `hook_e2e` test proving the new behavior is intended (see `TestPreToolHookSubagentTddParity`); and (b) if a skill file changes what a subagent may do, add/adjust that hook_e2e test **and** the doc-consistency test (`test_subagent_contract_consistency.py`) in the same commit. A skill claim about subagent permissions that no test enforces is how `800624f` shipped a contradictory, unenforced contract.
 
 ## Branch Protection (recommended)
 

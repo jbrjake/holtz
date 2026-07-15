@@ -50,19 +50,22 @@ patterns = [
 ]
 
 # ── Edit Accumulation Warning ──
-# Warn after many events in fix_loop without a state transition.
-# Catches "batch all fixes then summarize" anti-pattern.
+# Warn after many *source edits* in fix_loop without a state transition.
+# Catches "batch all fixes then summarize" anti-pattern. Counts only
+# source_edit events (not reads/searches) so the signal reflects uncommitted
+# work rather than investigation noise (#70 item 7; needs sahjhan >= 0.17.0).
 
 [[hooks]]
 event = "PostToolUse"
 tools = ["Edit"]
 states = ["fix_loop"]
 action = "warn"
-message = "High activity: {count} events since your last fix_commit. Each fix must be committed atomically. Run: sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" transition fix_commit --item-id BH-NNN"
+message = "High activity: {count} source edits since your last fix_commit. Each fix must be committed atomically. Run: sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" transition fix_commit -- BH-NNN"
 
 [hooks.check]
 type = "event_count_since_last_transition"
 threshold = 8
+event_types = ["source_edit"]
 
 # ── Auto-Record: File Reads ──
 
@@ -100,11 +103,15 @@ fields = { file_path = "{tool.file_path}" }
 name = "fix_loop_stall"
 states = ["fix_loop"]
 action = "warn"
-message = "{count} events since last state transition. Run `sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" status`. If you have been fixing bugs without committing, stop and commit each fix atomically."
+# Counts only source edits (not reads/searches) so it flags genuinely
+# uncommitted work instead of climbing to 30-40 on investigation noise
+# (#70 item 7; needs sahjhan >= 0.17.0).
+message = "{count} source edits since last state transition. Run `sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" status`. If you have been fixing bugs without committing, stop and commit each fix atomically."
 
 [monitors.trigger]
 type = "event_count_since_last_transition"
-threshold = 20
+threshold = 12
+event_types = ["source_edit"]
 
 [[monitors]]
 name = "audit_stall"

@@ -364,6 +364,102 @@ class TestChainBlockingBehavior:
 
 
 # ---------------------------------------------------------------------------
+# 2d-bis: Chicken-and-egg stall block (#70 item 1)
+# ---------------------------------------------------------------------------
+
+
+def _stalled_fix_loop_state(stall: int, commits: list[str] | None = None) -> dict:
+    """A fresh fix_loop cache with the stall counter tripped."""
+    now = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+    return {
+        "active": True,
+        "state": "fix_loop",
+        "stall": stall,
+        "unregistered_commits": commits or [],
+        "last_sahjhan_cmd": now,
+        "fixes_since_pattern": 0,
+        "perspective": "integration",
+        "perspectives_done": 3,
+        "perspectives_total": 13,
+        "last_refresh": now,
+    }
+
+
+class TestChickenAndEggStallBlock:
+    """#70 item 1: a stalled run must still be able to run sahjhan to re-sync.
+
+    Before the fix, the stall block ("N commands without protocol event")
+    blocked *all* Bash including the ``sahjhan status`` needed to clear it,
+    and only a bare, unwrapped invocation slipped through.
+    """
+
+    def test_wrapped_sahjhan_resync_allowed_through_stall_block(self, mock_daemon, tmp_path):
+        """``cd repo && sahjhan status | head`` passes commit_gate when stalled."""
+        mock_daemon.state = _stalled_fix_loop_state(stall=20)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": f"cd {tmp_path} && sahjhan status | head"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(PRE_TOOL_COMMIT_GATE, event)
+        assert _is_pre_tool_allowed(output), \
+            f"Wrapped sahjhan re-sync must clear the stall block: {output}"
+
+    def test_plain_command_still_blocked_by_stall(self, mock_daemon, tmp_path):
+        """A non-sahjhan command is still blocked while stalled."""
+        mock_daemon.state = _stalled_fix_loop_state(stall=20)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo hello"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(PRE_TOOL_COMMIT_GATE, event)
+        assert _is_pre_tool_blocked(output), \
+            "Plain command must remain blocked by the stall gate"
+
+    def test_git_commit_with_sahjhan_still_blocked_by_stall(self, mock_daemon, tmp_path):
+        """The re-sync exemption must not become a git-commit bypass."""
+        mock_daemon.state = _stalled_fix_loop_state(stall=20)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": 'sahjhan status && git commit -m "x"'},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(PRE_TOOL_COMMIT_GATE, event)
+        assert _is_pre_tool_blocked(output), \
+            "A git commit chained with sahjhan must not slip past the stall block"
+
+    def test_wrapped_sahjhan_resync_resets_stall(self, mock_daemon, tmp_path, monkeypatch):
+        """protocol_tracker clears the stall counter on a wrapped re-sync."""
+        monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(REPO_ROOT))
+        mock_daemon.state = _stalled_fix_loop_state(stall=20)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": f"cd {tmp_path} && sahjhan status | head"},
+            "tool_response": {"exit_code": 0, "output": "state: fix_loop"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(POST_TOOL_TRACKER, event)
+        assert _is_post_tool_ok(output)
+        assert mock_daemon.state.get("stall") == 0, \
+            "Wrapped sahjhan re-sync must reset the stall counter"
+
+    def test_plain_command_increments_stall(self, mock_daemon, tmp_path):
+        """A plain command still increments the stall counter (contrast)."""
+        mock_daemon.state = _stalled_fix_loop_state(stall=5)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo hello"},
+            "tool_response": {"exit_code": 0, "output": "hello"},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(POST_TOOL_TRACKER, event)
+        assert _is_post_tool_ok(output)
+        assert mock_daemon.state.get("stall") == 6, \
+            "Plain command should increment stall, not reset it"
+
+
+# ---------------------------------------------------------------------------
 # 2e: Stop chain
 # ---------------------------------------------------------------------------
 

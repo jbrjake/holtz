@@ -283,6 +283,37 @@ def is_git_commit(cmd: str) -> bool:
     return False
 
 
+def _segment_is_sahjhan(seg: str) -> bool:
+    """True if a single shell segment invokes the sahjhan CLI.
+
+    phase-recon.md prescribes ``nohup sahjhan ... daemon start &`` for the
+    daemon-start step. Skip ``nohup``/``env`` wrappers and leading env-var
+    assignments so the downstream hooks (commit_gate, bash_guard,
+    protocol_tracker) still treat it as a sahjhan invocation — otherwise
+    protocol_tracker never stamps last_sahjhan_cmd, enforcement looks stale,
+    and the stall counter ticks on a legitimate setup command.
+    """
+    parts = seg.split()
+    idx = 0
+    while idx < len(parts):
+        tok = parts[idx]
+        if tok in ("nohup", "env"):
+            idx += 1
+        elif "=" in tok and not tok.startswith("-"):
+            # env var assignment form: ``env FOO=bar sahjhan …`` or
+            # bare ``FOO=bar sahjhan …``
+            idx += 1
+        else:
+            break
+    p0 = parts[idx] if idx < len(parts) else ""
+    return bool(parts) and (
+        p0 == "sahjhan"
+        or p0.endswith("/sahjhan")
+        or "/sahjhan-" in p0
+        or p0.startswith("sahjhan-")
+    )
+
+
 def is_sahjhan_cmd(cmd: str) -> bool:
     """Detect commands that are exclusively sahjhan CLI invocations.
 
@@ -296,35 +327,20 @@ def is_sahjhan_cmd(cmd: str) -> bool:
     segments = _split_shell_segments(cmd)
     if not segments:
         return False
-    for seg in segments:
-        parts = seg.split()
-        # phase-recon.md prescribes ``nohup sahjhan ... daemon start &`` for
-        # the daemon-start step. Skip ``nohup``/``env`` wrappers so the
-        # downstream hooks (commit_gate, bash_guard, protocol_tracker) still
-        # treat it as a sahjhan invocation — otherwise protocol_tracker
-        # never stamps last_sahjhan_cmd, enforcement looks stale, and the
-        # stall counter ticks on a legitimate setup command.
-        idx = 0
-        while idx < len(parts):
-            tok = parts[idx]
-            if tok in ("nohup", "env"):
-                idx += 1
-            elif "=" in tok and not tok.startswith("-"):
-                # env var assignment form: ``env FOO=bar sahjhan …`` or
-                # bare ``FOO=bar sahjhan …``
-                idx += 1
-            else:
-                break
-        p0 = parts[idx] if idx < len(parts) else ""
-        is_sahjhan = (
-            p0 == "sahjhan"
-            or p0.endswith("/sahjhan")
-            or "/sahjhan-" in p0
-            or p0.startswith("sahjhan-")
-        )
-        if not (parts and is_sahjhan):
-            return False
-    return True
+    return all(_segment_is_sahjhan(seg) for seg in segments)
+
+
+def contains_sahjhan_cmd(cmd: str) -> bool:
+    """Detect commands where AT LEAST ONE segment invokes the sahjhan CLI.
+
+    Unlike ``is_sahjhan_cmd`` (every segment), this matches wrapped re-sync
+    calls like ``cd repo && sahjhan status | head``. Used by the stall
+    ("N commands without protocol event") nudge — a re-sync prompt, not a
+    security gate — so any line that actually runs a sahjhan enforcement
+    subcommand is allowed to clear it (holtz #70 item 1). The security gates
+    (TDD, managed-path) keep using the stricter checks.
+    """
+    return any(_segment_is_sahjhan(seg) for seg in _split_shell_segments(cmd))
 
 
 def is_fix_loop_state(cache: dict[str, Any] | None) -> bool:
@@ -372,7 +388,8 @@ def compute_obligations(
 
     if stall > 15:
         obligations.append({
-            "msg": f"{stall} commands without protocol event. Run sahjhan{cfg} status.",
+            "msg": f"{stall} commands without a protocol event. Run any sahjhan{cfg} "
+                   f"command (e.g. status) to re-sync — it may be part of a larger shell line.",
             "blocks_commit": True,
             "blocks_all": True,
         })

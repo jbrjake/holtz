@@ -1296,6 +1296,164 @@ class TestPreToolHook:
         assert_allowed(code, output)
 
 
+class TestPreToolHookSubagentTddParity:
+    """The TDD pre-edit gate treats a subagent identically to the main agent.
+
+    Claude Code adds an ``agent_id`` to the hook event when a tool call
+    originates from a Task-tool subagent. The fix-loop delegates fixes to
+    subagents (see references/phase-fix-loop.md), and the whole design depends
+    on the subagent being under the *same* TDD enforcement as the orchestrator
+    — it must record ``test_failed_before_fix`` before it can edit source,
+    exactly as the orchestrator must. These tests fail if ``pre_tool_hook``
+    ever special-cases ``agent_id`` to exempt subagents from the gate. That
+    exemption is the bug this contract was written to prevent: a subagent that
+    can skip TDD is not following the protocol.
+    """
+
+    # Mock sahjhan: `hook eval` returns a scripted decision; `status` reports
+    # fix_loop so protocol_tracker/read paths see an active run.
+    _SCRIPT = (
+        'case "$*" in\n'
+        '  *hook*eval*)\n'
+        "    echo '%s'\n"
+        '    exit %d\n'
+        '    ;;\n'
+        '  *status*)\n'
+        '    echo "state: fix_loop (1 events, chain valid)"\n'
+        '    exit 0\n'
+        '    ;;\n'
+        'esac\n'
+        'exit 0'
+    )
+    _BLOCK_JSON = (
+        '{"data":{"decision":"block","messages":[{"action":"block",'
+        '"message":"TDD violation: write and run a failing test before editing '
+        'source files."}]}}'
+    )
+    _ALLOW_JSON = '{"data":{"decision":"allow"}}'
+
+    @staticmethod
+    def _setup_fix_loop(tmp_path, eval_json, eval_exit):
+        (tmp_path / "enforcement").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "enforcement" / "protocol.toml").write_text("")
+        _create_mock_binary(
+            tmp_path,
+            TestPreToolHookSubagentTddParity._SCRIPT % (eval_json, eval_exit),
+        )
+        sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+
+    def test_subagent_source_edit_blocked_by_tdd_gate(self, tmp_path, mock_daemon):
+        """A subagent's source Edit is blocked by the TDD gate — agent_id is
+        not an exemption. This is the guardrail against a subagent bypass."""
+        self._setup_fix_loop(tmp_path, self._BLOCK_JSON, 1)
+        event = {
+            "tool_input": {"file_path": "src/widget.py"},
+            "tool_name": "Edit",
+            "cwd": str(tmp_path),
+            "agent_id": "sub_abc123",
+            "agent_type": "general-purpose",
+        }
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert_blocked(code, output, "TDD")
+
+    def test_main_agent_source_edit_blocked_baseline(self, tmp_path, mock_daemon):
+        """Same setup with no agent_id also blocks — the parity anchor. If this
+        passes but the subagent case does not, agent_id is being special-cased."""
+        self._setup_fix_loop(tmp_path, self._BLOCK_JSON, 1)
+        event = {
+            "tool_input": {"file_path": "src/widget.py"},
+            "tool_name": "Edit",
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert_blocked(code, output, "TDD")
+
+    def test_subagent_source_edit_allowed_once_gate_satisfied(self, tmp_path, mock_daemon):
+        """When the gate is satisfied (test recorded → eval allows), the
+        subagent's source Edit proceeds — a subagent that follows TDD is not
+        blocked. Enforce identically, don't exempt."""
+        self._setup_fix_loop(tmp_path, self._ALLOW_JSON, 0)
+        event = {
+            "tool_input": {"file_path": "src/widget.py"},
+            "tool_name": "Edit",
+            "cwd": str(tmp_path),
+            "agent_id": "sub_abc123",
+            "agent_type": "general-purpose",
+        }
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert_allowed(code, output)
+
+
+class TestPreToolHookTddPathScope:
+    """#70 item 2: the TDD pre-edit gate applies to in-repo source only.
+
+    The gate exists to force "no source change without a preceding failing
+    test". It was firing on *any* non-test Edit/Write in fix_loop — including
+    documentation and files outside the project tree (the auditor's own session
+    notes) — which have no failing test to write and only pushed legitimate
+    writes onto the ``cat >`` heredoc bypass (#71). These tests pin that docs
+    and out-of-repo writes are exempt while real source stays gated. The mock
+    ``hook eval`` returns BLOCK, so anything that reaches the eval is blocked;
+    an exempt path must be allowed *without* reaching it.
+    """
+
+    _setup_fix_loop = staticmethod(TestPreToolHookSubagentTddParity._setup_fix_loop)
+    _BLOCK_JSON = TestPreToolHookSubagentTddParity._BLOCK_JSON
+
+    def test_docs_write_exempt_even_when_gate_would_block(self, tmp_path, mock_daemon):
+        """A Write to docs/ in fix_loop is allowed — docs are not TDD'd."""
+        self._setup_fix_loop(tmp_path, self._BLOCK_JSON, 1)
+        event = {
+            "tool_input": {"file_path": "docs/holtz/patterns-brief.md"},
+            "tool_name": "Write",
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert_allowed(code, output)
+
+    def test_out_of_repo_write_exempt(self, tmp_path, mock_daemon):
+        """A Write to an absolute path outside the project tree is allowed."""
+        self._setup_fix_loop(tmp_path, self._BLOCK_JSON, 1)
+        outside = str(tmp_path.parent / "session-notes.md")
+        event = {
+            "tool_input": {"file_path": outside},
+            "tool_name": "Edit",
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert_allowed(code, output)
+
+    def test_source_write_still_blocked(self, tmp_path, mock_daemon):
+        """Regression: a real in-repo source Edit is still gated (not over-exempted)."""
+        self._setup_fix_loop(tmp_path, self._BLOCK_JSON, 1)
+        event = {
+            "tool_input": {"file_path": "src/widget.py"},
+            "tool_name": "Edit",
+            "cwd": str(tmp_path),
+        }
+        code, output, _ = run_enforcement_hook(
+            "pre_tool_hook.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert_blocked(code, output, "TDD")
+
+
 # --- stop_hook.py (Stop) ---
 
 

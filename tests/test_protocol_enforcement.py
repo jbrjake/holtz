@@ -172,6 +172,25 @@ class TestProtocolCache:
         assert not is_sahjhan_cmd("sahjhan status; git push")
         assert not is_sahjhan_cmd("git commit && sahjhan transition fix_commit")
 
+    def test_contains_sahjhan_command(self):
+        """#70 item 1: detect a sahjhan segment even when wrapped in a larger line.
+
+        contains_sahjhan_cmd is the looser sibling of is_sahjhan_cmd — it
+        matches re-sync lines like ``cd repo && sahjhan status | head`` so the
+        stall block (a nudge, not a security gate) can be cleared without
+        stripping the shell wrapping.
+        """
+        from _protocol_cache import contains_sahjhan_cmd
+        # The exact repro from #70 item 1 — previously stayed blocked.
+        assert contains_sahjhan_cmd("cd repo && sahjhan status | head")
+        assert contains_sahjhan_cmd("git commit -m 'fix'; sahjhan status")
+        assert contains_sahjhan_cmd("sahjhan status")
+        assert contains_sahjhan_cmd("cd /project && ./bin/sahjhan event test_failed_before_fix")
+        # sahjhan appearing only as quoted data / prose is not an invocation.
+        assert not contains_sahjhan_cmd("git commit -m 'sahjhan'")
+        assert not contains_sahjhan_cmd("echo sahjhan")
+        assert not contains_sahjhan_cmd("echo hello")
+
     def test_sahjhan_cmd_bare_binary_name(self):
         """BH-006 run 29: bare platform binary names must be detected."""
         from _protocol_cache import is_sahjhan_cmd

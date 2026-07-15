@@ -146,6 +146,15 @@ def main() -> None:
     if current_state in ("audit", "fix_loop") and perspective != "unknown":
         context += f"\nLens: {perspective}. Quiz on exit. Failures restart."
 
+    # #69: paused for a human — keep conversing, session is preserved.
+    if current_state == "awaiting_human":
+        context += (
+            "\nPAUSED (awaiting_human): you yielded the turn to answer the user. "
+            "Keep replying while they converse — the daemon and session key are "
+            "preserved. When they're ready to continue the audit, run "
+            f"`{binary} --config-dir {config_dir} transition resume`."
+        )
+
     context += (
         f"\nRun `{binary} --config-dir {config_dir} status` for full state. "
         f"Run `{binary} --config-dir {config_dir} gate check <transition>` "

@@ -170,12 +170,23 @@ def main() -> None:
             "turns, the sahjhan binary predates the ledger-state overlay "
             "(v0.14.0) and should be upgraded."
         )
+    # #69: offer the reversible pause. From fix_loop the agent can yield the
+    # turn to answer a user question without abandoning the run — this
+    # preserves the daemon/session key, unlike `daemon stop`.
+    pause_hint = ""
+    if current_state == "fix_loop":
+        pause_hint = (
+            "\nTo pause and answer a user question without losing the session, run: "
+            f"sahjhan --config-dir {config_dir} transition pause "
+            "(resume later with `sahjhan transition resume`)."
+        )
     exit_stop_block(
         f"Audit is in state '{current_state}' which is not terminal. "
         "You must complete the audit protocol before stopping. "
         "If this audit cannot be completed, the user can manually run: "
         "! sahjhan daemon stop\n"
         "(The next stop attempt will detect the dead daemon and allow exit.)"
+        + pause_hint
         + mismatch_note
     )
 

@@ -149,6 +149,69 @@ def test_fix_commit_has_circuit_breaker():
     )
 
 
+def test_fix_loop_event_count_triggers_filter_source_edit():
+    """#70 item 7: the fix_loop "N events" nudges count only source_edit events.
+
+    Counting every ledger event (dominated by auto-recorded reads/searches) made
+    the warning climb to 30-40 during a single fix's investigation. The triggers
+    now set event_types = ["source_edit"] (honored by sahjhan >= 0.17.0) so the
+    count reflects uncommitted work, not read noise.
+    """
+    hooks = tomllib.loads((ENFORCEMENT_DIR / "hooks.toml").read_text())
+
+    # PostToolUse Edit accumulation warning
+    edit_warn = next(
+        (h for h in hooks.get("hooks", [])
+         if h.get("check", {}).get("type") == "event_count_since_last_transition"),
+        None,
+    )
+    assert edit_warn is not None, "no event_count_since_last_transition hook found"
+    assert edit_warn["check"].get("event_types") == ["source_edit"], (
+        "Edit-accumulation warn must count only source_edit events (#70 item 7)"
+    )
+
+    # fix_loop_stall monitor
+    stall = next(
+        (m for m in hooks.get("monitors", []) if m.get("name") == "fix_loop_stall"),
+        None,
+    )
+    assert stall is not None, "fix_loop_stall monitor not found"
+    assert stall["trigger"].get("event_types") == ["source_edit"], (
+        "fix_loop_stall monitor must count only source_edit events (#70 item 7)"
+    )
+
+
+def test_pause_resume_transitions_exist():
+    """#69: a reversible awaiting_human pause with an ungated pause/resume pair.
+
+    fix_loop --pause--> awaiting_human --resume--> fix_loop. Pausing to answer a
+    user question must never be gated (that's the whole point), and awaiting_human
+    must be a declared state.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    pause = next(
+        (t for t in cfg["transitions"]
+         if t.get("command") == "pause" and t.get("from") == "fix_loop"), None
+    )
+    assert pause is not None, "No fix_loop --pause--> transition found (#69)"
+    assert pause["to"] == "awaiting_human"
+    assert not pause.get("gates"), "pause must be ungated — pausing for a human is always allowed"
+
+    resume = next(
+        (t for t in cfg["transitions"]
+         if t.get("command") == "resume" and t.get("from") == "awaiting_human"), None
+    )
+    assert resume is not None, "No awaiting_human --resume--> transition found (#69)"
+    assert resume["to"] == "fix_loop"
+    assert not resume.get("gates"), "resume from a pause must be ungated"
+
+    states = tomllib.loads((ENFORCEMENT_DIR / "states.toml").read_text())
+    assert "awaiting_human" in states["states"], "awaiting_human state not declared"
+    assert not states["states"]["awaiting_human"].get("terminal"), (
+        "awaiting_human is a pause, not terminal"
+    )
+
+
 def test_iteration_boundary_enforces_pattern_check():
     """BH-020: iteration_boundary must block when 3+ fixes lack pattern analysis."""
     cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
@@ -164,6 +227,106 @@ def test_iteration_boundary_enforces_pattern_check():
         "after 3+ fix_commits — otherwise the auditor can skip Step 11 "
         "and miss recurring patterns (BH-020)"
     )
+
+
+def test_fix_commit_breaker_scoped_to_iteration_not_lifetime():
+    """#67: the fix_commit circuit breaker must reset each iteration_boundary.
+
+    A lifetime ``count(*) < 15`` cap makes ``converge`` mathematically
+    unsatisfiable for any audit whose must-fix set exceeds 15 — ``converge``
+    requires every finding resolved-or-deferred, and the one-fix-one-commit rule
+    forbids clearing several findings per commit. Scoping the breaker to fixes
+    ``seq >`` the last ``iteration_boundary`` caps runaway *within* an uncleared
+    window while still letting a long audit converge across ``/clear`` cycles.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    fix_commit = next(
+        (t for t in cfg["transitions"] if t.get("command") == "fix_commit"), None
+    )
+    assert fix_commit is not None, "No fix_commit transition found"
+    breaker = next(
+        (
+            g
+            for g in fix_commit["gates"]
+            if g["type"] == "query" and "command='fix_commit'" in g.get("sql", "")
+        ),
+        None,
+    )
+    assert breaker is not None, "fix_commit must have a query circuit-breaker gate"
+    sql = breaker["sql"]
+    assert "iteration_boundary" in sql and "COALESCE" in sql and "seq >" in sql, (
+        "fix_commit circuit breaker must be scoped since the last "
+        "iteration_boundary (seq > COALESCE(... iteration_boundary ..., 0)) so the "
+        "cap resets each /clear; a lifetime cap blocks convergence for audits with "
+        f">15 must-fix findings (#67). Got: {sql}"
+    )
+
+
+def test_pattern_check_bootstraps_from_zero():
+    """#65: the first pattern_check must be satisfiable with no prior analysis.
+
+    The old gate used ``ledger_has_event_since`` with
+    ``since = "last_event_of_type:pattern_analysis_complete"`` — a reference
+    syntax that gate type does not parse. It matched no event, silently fell back
+    to "since last state_transition", and ignored ``min_count`` entirely, so the
+    very first ``pattern_check`` could never fire (you need a
+    ``pattern_analysis_complete`` to satisfy the gate that produces the first
+    one). A COALESCE-scoped query treats "no prior analysis" as the run start.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    pattern_check = next(
+        (t for t in cfg["transitions"] if t.get("command") == "pattern_check"), None
+    )
+    assert pattern_check is not None, "No pattern_check transition found"
+    gate_types = [g["type"] for g in pattern_check["gates"]]
+    assert "ledger_has_event_since" not in gate_types, (
+        "pattern_check must not use ledger_has_event_since with a "
+        "last_event_of_type baseline — that gate ignores the baseline and "
+        "min_count, so the first pattern analysis can never fire (#65)"
+    )
+    q = next((g for g in pattern_check["gates"] if g["type"] == "query"), None)
+    assert q is not None, "pattern_check must use a query gate (#65)"
+    sql = q.get("sql", "")
+    assert "COALESCE" in sql and "pattern_analysis_complete" in sql, (
+        "pattern_check must use a COALESCE-scoped query so the first pattern "
+        f"analysis fires once 3+ findings resolve (#65). Got: {pattern_check['gates']}"
+    )
+    assert ">= 3" in sql or ">=3" in sql, (
+        "pattern_check must enforce the 3-resolved-findings minimum in SQL "
+        "(the old ledger_has_event_since silently ignored min_count) (#65)"
+    )
+
+
+def test_test_and_lint_gates_are_env_overridable():
+    """#63/#70.5: pytest/ruff gate commands must be overridable per target.
+
+    Gate commands run in the environment that invoked ``sahjhan transition``, so
+    a target project whose tests/lint only run under a venv/pyenv/conda/poetry/
+    tox can't rely on the login ``python3``/``ruff``. Wrapping each command in
+    ``${HOLTZ_PYTEST:-...}`` / ``${HOLTZ_LINT:-...}`` lets an operator set the
+    exact command once (``sh`` expands the default when the var is unset, so
+    prior behavior is preserved) — without hardcoding any interpreter path into
+    the engine.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    pytest_cmds, lint_cmds = [], []
+    for t in cfg["transitions"]:
+        for g in t.get("gates", []):
+            cmd = g.get("cmd", "")
+            if "pytest" in cmd:
+                pytest_cmds.append(cmd)
+            if "ruff" in cmd:
+                lint_cmds.append(cmd)
+    assert pytest_cmds, "expected at least one pytest gate command"
+    assert lint_cmds, "expected at least one ruff gate command"
+    for cmd in pytest_cmds:
+        assert cmd.startswith("${HOLTZ_PYTEST:-") and cmd.endswith("}"), (
+            f"pytest gate must be overridable via $HOLTZ_PYTEST (#63/#70.5): {cmd}"
+        )
+    for cmd in lint_cmds:
+        assert cmd.startswith("${HOLTZ_LINT:-") and cmd.endswith("}"), (
+            f"lint gate must be overridable via $HOLTZ_LINT (#63/#70.5): {cmd}"
+        )
 
 
 # ── Task 1.3: renders.toml ──
