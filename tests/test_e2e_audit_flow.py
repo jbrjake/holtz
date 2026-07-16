@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -749,4 +750,124 @@ class TestEventCountFilterSourceEdit:
         )
         assert "12 source edits" in stall.get("message", ""), (
             f"count should reflect source edits only, got: {stall.get('message')}"
+        )
+
+
+def _record_finding(real_daemon, finding_id="BH-001"):
+    """Record a `finding` event so the ledger has an open item to resolve."""
+    _run_sahjhan(
+        real_daemon, "event", "finding",
+        "--field", "project=holtz", "--field", "run=1", "--field", "auditor=holtz",
+        "--field", "phase=audit", "--field", "step=7", "--field", f"id={finding_id}",
+        "--field", "severity=HIGH", "--field", "category=bug/logic",
+        "--field", "location=x.py:1", "--field", "perspective=component",
+        "--field", "description=d", "--field", "predicted_by=1",
+    )
+
+
+def _satisfy_fix_commit_gates(real_daemon, finding_id="BH-001"):
+    """Record the per-fix TDD events fix_commit requires (blast_radius +
+    hardening_complete since the last transition)."""
+    _run_sahjhan(
+        real_daemon, "event", "blast_radius",
+        "--field", "project=holtz", "--field", "run=1", "--field", "auditor=holtz",
+        "--field", "phase=fix_loop", "--field", "step=10",
+        "--field", "target_node=x.py", "--field", "depth=2",
+        "--field", "affected_count=1", "--field", f"finding_id={finding_id}",
+    )
+    _run_sahjhan(
+        real_daemon, "event", "hardening_complete",
+        "--field", "project=holtz", "--field", "run=1", "--field", "auditor=holtz",
+        "--field", "phase=fix_loop", "--field", "step=10",
+        "--field", f"finding_id={finding_id}",
+        "--field", "edge_cases_tested=1", "--field", "tests_added=1",
+    )
+
+
+def _git_init_with_commit(root, message):
+    """Init a git repo at `root` with one commit whose message contains the
+    finding id (so the fix_commit `git log | grep item_id` gate passes)."""
+    for args in (
+        ["git", "init", "-q"],
+        ["git", "config", "user.email", "t@t.com"],
+        ["git", "config", "user.name", "t"],
+        ["git", "commit", "-q", "--allow-empty", "-m", message],
+    ):
+        subprocess.run(args, cwd=root, check=True, capture_output=True, text=True)
+
+
+def _finding_resolved_events(real_daemon):
+    """Return the finding_resolved rows. `--json query` emits a plain JSON
+    array of row objects."""
+    result = _run_sahjhan(
+        real_daemon, "--json", "query",
+        "SELECT id, commit_hash FROM events WHERE type='finding_resolved'",
+    )
+    return json.loads(result.stdout)
+
+
+class TestFixCommitAutoEmitsFindingResolved:
+    """Regression guard: the fix_commit transition must AUTO-EMIT
+    finding_resolved for its item (sahjhan >= 0.18.0 transition emits).
+
+    The bug: an audit could run the full TDD loop, commit N fixes, and record N
+    fix_commit *transitions* while recording ZERO finding_resolved *events* —
+    the transition writes a state_transition, not a finding_resolved, and the
+    enforced Per-Item Fix Procedure never recorded one. STATUS then showed
+    "Resolved: 0", PUNCHLIST showed every finding OPEN, and the
+    perspective/pattern/convergence gates (which read finding_resolved) could
+    never pass, so the run could not converge despite all commits and TDD events
+    being present.
+
+    The fix makes fix_commit emit finding_resolved itself — one atomic command
+    records both, with no second, redundant `event finding_resolved` from the
+    agent. This test drives the REAL holtz config + real binary end-to-end.
+    """
+
+    def _drive_to_fix_commit(self, real_daemon, monkeypatch, finding_id="BH-001"):
+        # Gates run in the `sahjhan transition` subprocess env; a trivially-true
+        # test/lint command lets us exercise the transition without a real suite.
+        monkeypatch.setenv("HOLTZ_PYTEST", "true")
+        monkeypatch.setenv("HOLTZ_LINT", "true")
+        _git_init_with_commit(
+            real_daemon["project_root"], f"fix(x): resolve {finding_id}"
+        )
+        _fast_forward_to_fix_loop(real_daemon)
+        _record_finding(real_daemon, finding_id)
+        _satisfy_fix_commit_gates(real_daemon, finding_id)
+
+    def test_fix_commit_emits_finding_resolved(self, real_daemon, monkeypatch):
+        self._drive_to_fix_commit(real_daemon, monkeypatch, "BH-001")
+
+        # Before the transition: no resolution recorded.
+        assert _finding_resolved_events(real_daemon) == []
+
+        result = _run_sahjhan(real_daemon, "transition", "fix_commit", "BH-001")
+        assert "fix_loop" in result.stdout, f"transition should succeed: {result.stdout}"
+
+        rows = _finding_resolved_events(real_daemon)
+        assert len(rows) == 1, (
+            f"fix_commit must auto-emit exactly one finding_resolved; got: {rows}"
+        )
+        assert rows[0]["id"] == "BH-001", "emitted resolution must carry the item id"
+        # commit_hash is derived from HEAD (7-hex short hash).
+        assert re.fullmatch(r"[0-9a-f]{7,40}", rows[0]["commit_hash"] or ""), (
+            f"commit_hash must come from git HEAD, got: {rows[0].get('commit_hash')!r}"
+        )
+
+    def test_emitted_resolution_clears_open_findings_query(self, real_daemon, monkeypatch):
+        """The perspective-completion gate's open-findings query must reach 0
+        after the fix_commit — proving the emit actually resolves the finding."""
+        self._drive_to_fix_commit(real_daemon, monkeypatch, "BH-001")
+        _run_sahjhan(real_daemon, "transition", "fix_commit", "BH-001")
+
+        result = _run_sahjhan(
+            real_daemon, "--json", "query",
+            "SELECT count(*) AS open FROM events f WHERE f.type='finding' "
+            "AND f.id NOT IN (SELECT id FROM events WHERE type='finding_resolved') "
+            "AND f.id NOT IN (SELECT id FROM events WHERE type='finding_deferred')",
+        )
+        open_count = int(json.loads(result.stdout)[0]["open"])
+        assert open_count == 0, (
+            f"after fix_commit auto-emit, no findings should remain open; got {open_count}"
         )

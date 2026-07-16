@@ -149,6 +149,48 @@ def test_fix_commit_has_circuit_breaker():
     )
 
 
+def test_fix_commit_auto_emits_finding_resolved():
+    """fix_commit must AUTO-EMIT finding_resolved for its item (sahjhan emits).
+
+    Recording fix_commit writes only a state_transition, not a finding_resolved
+    — so without coupling the two, an audit could commit every fix, register
+    every fix_commit, and still show "Resolved: 0" with all findings OPEN,
+    unable to converge (the perspective/pattern/convergence gates read
+    finding_resolved). Emitting the resolution from the transition keeps
+    "committed a fix for BH-NNN" and "BH-NNN is resolved" atomic in one command,
+    without the agent restating the fact.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    fix_commit = next(
+        (t for t in cfg["transitions"] if t.get("command") == "fix_commit"), None
+    )
+    assert fix_commit is not None, "No fix_commit transition found"
+
+    emit = next(
+        (e for e in fix_commit.get("emits", []) if e.get("event") == "finding_resolved"),
+        None,
+    )
+    assert emit is not None, (
+        "fix_commit must declare an `emits` entry for finding_resolved — "
+        "otherwise the transition and the finding's resolution decouple and the "
+        "run can never converge."
+    )
+    fields = emit.get("fields", {})
+    assert fields.get("id") == "{{item_id}}", (
+        "the emitted finding_resolved must carry the item id from the transition arg"
+    )
+    assert "commit_hash" in emit.get("commands", {}), (
+        "the emit must derive commit_hash from the commit (git rev-parse HEAD)"
+    )
+
+    # The old manual-recording gate must be gone (it would deadlock: you cannot
+    # gate a transition on an event the transition itself emits).
+    for g in fix_commit.get("gates", []):
+        assert "finding_resolved" not in g.get("sql", ""), (
+            "fix_commit must not gate on finding_resolved — it emits it"
+        )
+
+
 def test_fix_loop_event_count_triggers_filter_source_edit():
     """#70 item 7: the fix_loop "N events" nudges count only source_edit events.
 

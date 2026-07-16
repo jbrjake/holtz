@@ -80,6 +80,20 @@ gates = [
     { type = "ledger_has_event_since", event = "hardening_complete", since = "last_transition", intent = "edge cases must be hardened after each fix" },
     { type = "query", sql = "SELECT count(*) < 15 FROM events WHERE type='state_transition' AND command='fix_commit' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='state_transition' AND command='iteration_boundary'), 0)", expect = "true", intent = "circuit breaker: max 15 fixes per iteration (scoped since the last iteration_boundary /clear, so the cap resets each context reset instead of capping the whole run)" },
 ]
+# fix_commit AUTO-EMITS finding_resolved (sahjhan >= 0.18.0). Recording the
+# transition writes a state_transition; the finding's resolution is a separate
+# finding_resolved event, and STATUS/PUNCHLIST "Resolved" counts plus every
+# downstream gate (pattern_check, set complete perspective, converge) read
+# finding_resolved — NOT the transition. Emitting it here keeps "committed a fix
+# for BH-NNN" and "BH-NNN is resolved" atomic in the single `transition
+# fix_commit BH-NNN` command, so the agent never restates the same fact. Without
+# this an audit could run the full TDD loop, commit N fixes, and still show
+# "Resolved: 0" with all findings open, unable to converge. id comes from the
+# positional item_id arg; commit_hash from the just-made HEAD; project/run/
+# auditor are inherited from the run's prior events; phase/step are literals.
+emits = [
+    { event = "finding_resolved", commands = { commit_hash = "git rev-parse --short=7 HEAD" }, fields = { id = "{{item_id}}", commit_hash = "{{commit_hash}}", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
+]
 
 # ── Deferral: can't reproduce ──
 
