@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.138.0] - 2026-07-17
+
+_Changes since v0.137.2_
+
+### Added
+- **enforcement:** generate lens quiz bank from the graph during recon, vault-only (#73)
+
+### Fixed
+- **enforcement:** fix_commit auto-emits finding_resolved (sahjhan 0.18.0 emits)
+
+### Infrastructure
+- **enforcement:** cover quiz_stage.py validation + marker output (#73)
+
 ## [0.137.2] - 2026-07-15
 
 _Changes since v0.136.0_
