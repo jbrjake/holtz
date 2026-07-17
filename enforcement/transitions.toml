@@ -17,6 +17,7 @@ gates = [
     { type = "ledger_has_event", event = "justine_dispatched", min_count = 1, intent = "Justine must be dispatched for parallel audit" },
     { type = "ledger_has_event", event = "snapshot", min_count = 1, intent = "pre-audit edge count snapshot needed for comparison" },
     { type = "ledger_lacks_event", event = "finding", filter = { phase = "audit" }, intent = "no audit-phase findings should exist before recon is complete" },
+    { type = "ledger_has_event", event = "quiz_bank_generated", min_count = 1, intent = "lens quiz bank must be generated from the graph during recon (#73) — the vault key is writable only in recon, so it cannot be built later" },
 ]
 
 # ── Audit ──

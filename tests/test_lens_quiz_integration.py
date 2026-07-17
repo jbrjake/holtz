@@ -37,6 +37,14 @@ def _load_module(name, path):
         evidence_mod = importlib.util.module_from_spec(evidence_spec)
         _sys.modules["lens_evidence"] = evidence_mod
         evidence_spec.loader.exec_module(evidence_mod)
+    # Ensure quiz_vault is loaded so lens_quiz can import it
+    if "quiz_vault" not in _sys.modules:
+        qv_spec = importlib.util.spec_from_file_location(
+            "enforcement_hooks.quiz_vault", str(_HOOK_DIR / "quiz_vault.py")
+        )
+        qv_mod = importlib.util.module_from_spec(qv_spec)
+        _sys.modules["quiz_vault"] = qv_mod
+        qv_spec.loader.exec_module(qv_mod)
     spec.loader.exec_module(mod)
     return mod
 

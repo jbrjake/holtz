@@ -39,6 +39,13 @@ def _load_lens_quiz():
     sys.modules["lens_evidence"] = evidence_mod
     evidence_spec.loader.exec_module(evidence_mod)
 
+    # Also load quiz_vault (lens_quiz imports read_quiz_bank_safe from it)
+    qv_path = str(_HOOK_DIR / "quiz_vault.py")
+    qv_spec = importlib.util.spec_from_file_location("enforcement_hooks.quiz_vault", qv_path)
+    qv_mod = importlib.util.module_from_spec(qv_spec)
+    sys.modules["quiz_vault"] = qv_mod
+    qv_spec.loader.exec_module(qv_mod)
+
     # Now load lens_quiz
     quiz_path = str(_HOOK_DIR / "lens_quiz.py")
     spec = importlib.util.spec_from_file_location("enforcement_hooks.lens_quiz", quiz_path)
@@ -61,6 +68,8 @@ parse_lens_name = _quiz.parse_lens_name
 score_answers = _quiz.score_answers
 select_questions = _quiz.select_questions
 verify_answer_freshness = _quiz.verify_answer_freshness
+resolve_transcript_path = _quiz.resolve_transcript_path
+_stale_bank_message = _quiz._stale_bank_message
 
 # ── Sample quiz bank for tests ──
 
@@ -389,6 +398,49 @@ def test_verify_freshness_missing_answer_key(tmp_path):
     q = {"source": "test.py:10", "opts": ["a", "b", "c", "d"]}
     # Should return False (stale), not raise KeyError
     assert verify_answer_freshness(q, str(tmp_path)) is False
+
+
+# ── #73 Defect B: transcript path resolution across CC versions ──
+
+
+def test_resolve_transcript_prefers_agent_transcript():
+    """The subagent's own transcript wins when both fields are present."""
+    event = {
+        "agent_transcript_path": "/agent.jsonl",
+        "transcript_path": "/parent.jsonl",
+    }
+    assert resolve_transcript_path(event) == "/agent.jsonl"
+
+
+def test_resolve_transcript_falls_back_to_transcript_path():
+    """CC versions that omit agent_transcript_path still yield a transcript.
+
+    This is the Defect B fix: the old code read only agent_transcript_path,
+    so a payload with the documented common `transcript_path` field silently
+    degraded to min_reads=0.
+    """
+    event = {"transcript_path": "/parent.jsonl"}
+    assert resolve_transcript_path(event) == "/parent.jsonl"
+
+
+def test_resolve_transcript_none_when_absent():
+    """Neither field present → None (hook degrades, does not crash)."""
+    assert resolve_transcript_path({"last_assistant_message": "LENS: x"}) is None
+
+
+# ── #73 Defect C: stale-bank message is actionable ──
+
+
+def test_stale_bank_message_is_actionable():
+    """The fail-closed message names the recovery paths, not just 'regenerate'."""
+    msg = _stale_bank_message("component", 5, 5)
+    assert "component" in msg
+    assert "5/5" in msg
+    # The bank is locked after recon — recoveries are human review or a fresh run.
+    assert "quiz_exhausted_resolved" in msg
+    assert "fresh run" in msg
+    # Points at the documented recon procedure.
+    assert "phase-recon" in msg
 
 
 # ── BH-008: PAT-001 fence masking in parse_lens_name / parse_answers ──

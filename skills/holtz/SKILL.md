@@ -131,7 +131,7 @@ sahjhan event audit_claim --field project=holtz --field run=N \
 
 # Advance protocol steps (canonical commands only)
 sahjhan transition run_start           # begin a new audit run
-sahjhan transition recon_complete      # after Steps 0-4
+sahjhan transition recon_complete      # after Steps 0-5 (Step 5 generates the lens quiz bank; gate requires quiz_bank_generated)
 sahjhan transition audit_complete      # after Steps 6-8
 sahjhan transition merge_complete      # after Step 9
 sahjhan transition fix_commit          # after each fix commit
