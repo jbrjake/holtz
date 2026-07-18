@@ -28,6 +28,9 @@ class MockEnforcementDaemon:
     def __init__(self, socket_path: str | os.PathLike) -> None:
         self.socket_path = str(socket_path)
         self.state: dict[str, Any] | None = None
+        # vault support: in-memory name -> bytes store, mirroring the real
+        # daemon's vault_store/vault_read/vault_list/vault_delete ops.
+        self.vault: dict[str, bytes] = {}
         # record_event support: log of received requests + a configurable
         # canned response. Default success returns a ledger seq in `data`.
         self.recorded_events: list[dict] = []
@@ -110,6 +113,37 @@ class MockEnforcementDaemon:
             self.state["last_refresh"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
             encoded = base64.b64encode(json.dumps(self.state).encode()).decode()
             return {"ok": True, "data": encoded}
+
+        if op == "vault_store":
+            name = request.get("name", "")
+            if name.startswith("_"):
+                return {"ok": False, "error": "reserved",
+                        "message": "vault names starting with '_' are reserved"}
+            try:
+                self.vault[name] = base64.b64decode(request["data"])
+            except (KeyError, ValueError) as exc:
+                return {"ok": False, "error": "decode_error", "message": str(exc)}
+            return {"ok": True}
+
+        if op == "vault_read":
+            name = request.get("name", "")
+            if name.startswith("_"):
+                return {"ok": False, "error": "reserved",
+                        "message": "vault names starting with '_' are reserved"}
+            if name not in self.vault:
+                return {"ok": False, "error": "not_found",
+                        "message": f"no entry named '{name}'"}
+            encoded = base64.b64encode(self.vault[name]).decode()
+            return {"ok": True, "data": encoded}
+
+        if op == "vault_delete":
+            name = request.get("name", "")
+            self.vault.pop(name, None)
+            return {"ok": True}
+
+        if op == "vault_list":
+            names = [n for n in self.vault if not n.startswith("_")]
+            return {"ok": True, "names": names}
 
         if op == "sign":
             # Return a dummy proof for tests that need signing support

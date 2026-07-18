@@ -23,6 +23,7 @@ TRUSTED_SCRIPTS=(
     "enforcement/hooks/commit_gate.py"
     "enforcement/hooks/bash_guard.py"
     "enforcement/hooks/protocol_tracker.py"
+    "enforcement/hooks/quiz_capture.py"
     "hooks/subagent_findings_check.py"
 )
 

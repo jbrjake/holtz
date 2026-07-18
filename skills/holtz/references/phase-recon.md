@@ -126,3 +126,28 @@ Output: `docs/holtz/recon/step3-recon-summary.md`
 Use extended thinking (ultrathink). Rank where bugs are likely to be found using seven input sources: pattern brief, impact graph risk scores, impact graph edges, git churn, prior run findings, recon observations, and cold file inventory. When `cold_file_ratio` exceeds 40%, add at least 3 cold files to predictions as MEDIUM-confidence targets with basis "never audited — unknown risk," prioritizing files closest to entry points or with the most inbound impact graph edges. Each prediction includes: Target, Predicted Issue, Confidence (HIGH/MEDIUM/LOW), Basis, Lens, Graph Support, Outcome.
 
 Output: `docs/holtz/recon/step4-predictions.md`
+
+### Step 5: Lens Quiz Bank Generation (must complete before `recon_complete`)
+
+The lens quiz is what stops a later sweep from rubber-stamping "I looked again." Its questions must be committed **now**, while the impact graph is fresh in context — because by the time a lens sweep runs, there has been a `/clear` and the graph is gone. An auditor who didn't actually re-read the code cannot answer questions anchored to it.
+
+**The quiz bank is generated during recon and cannot be built later.** The `quiz-bank` vault key is `writable_in_states = ["recon"]` (`enforcement/vault.toml`); the daemon rejects any staging after `recon_complete`. The `recon_complete` gate requires a `quiz_bank_generated` event, so **you cannot leave recon without a bank.**
+
+Dispatch a **quiz-generation subagent** (its context is discarded — the main context never sees the answers). Instruct it to:
+
+1. Read `docs/holtz/impact-graph.json` and the recon summary. For each of the 13 lenses (`python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/parse_lens_registry.py` for the list), pick anchor points from the graph — high-risk nodes, hot edges, the specific functions/classes/constants that lens cares about **in this project**.
+2. For each anchor, author one multiple-choice question whose correct answer is only knowable by reading that source, with the answer text verifiably present in the anchored symbol. Aim for ~5 questions per lens.
+3. Stage each question as it goes (one Bash call per question):
+   ```
+   python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/quiz_stage.py \
+     --lens <lens> --question "<q>" --answer <A-D> \
+     --option "<opt1>" --option "<opt2>" --option "<opt3>" --option "<opt4>" \
+     --source "path/to/file.py::symbol" \
+     --keyword <k1> --keyword <k2> --keyword <k3>
+   ```
+   A trusted courier hook (`quiz_capture.py`) captures each and appends it to the vault. Questions whose answer is **not** verifiable against the current source are silently dropped — so anchor to real symbols. Nothing is written to disk; the bank lives only in the daemon vault.
+4. When done, finalize once: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/quiz_stage.py --finalize` (this records `quiz_bank_generated`, which unblocks `recon_complete`).
+
+The subagent knows the answers because it wrote them — that is fine. The protection is temporal: the answers leave context at the next `/clear`, and the vault is unreadable by any Claude tool. A later sweep must re-read the code to pass. See [ARCHITECTURE.md](../../../docs/ARCHITECTURE.md) (Lens quiz) and issue #73.
+
+Output: questions in the daemon vault; `quiz_bank_generated` in the ledger.

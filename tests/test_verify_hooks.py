@@ -45,6 +45,7 @@ def test_passes_with_all_hooks(tmp_path):
             {"matcher": "Bash", "hooks": [
                 {"type": "command", "command": "python enforcement/hooks/bash_guard.py"},
                 {"type": "command", "command": "python enforcement/hooks/protocol_tracker.py"},
+                {"type": "command", "command": "python enforcement/hooks/quiz_capture.py"},
             ]},
             {"matcher": "", "hooks": [
                 {"type": "command", "command": "python enforcement/hooks/post_tool_hook.py"},

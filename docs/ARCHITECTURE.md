@@ -211,7 +211,7 @@ Extended lenses (7 more):
 
 Per-file lenses run during initial file audits (Steps 7-8). Cross-file lenses get dedicated parallel subagents. Step 14 (lens sweep) does gap-fill for covered lenses and full sweeps for uncovered ones.
 
-The lens quiz system (`enforcement/quiz-bank.json` + `lens_quiz.py`) exists because subagents will rubber-stamp "looks fine" if nobody checks.
+The lens quiz system exists because subagents will rubber-stamp "looks fine" if nobody checks. During recon a generation subagent derives per-lens questions from the impact graph and stages them, one at a time, through a trusted courier (`quiz_capture.py`) into the sahjhan daemon's in-memory **vault** — never to disk (the ledger is `cat`-readable, so on-disk answers would leak). The `quiz-bank` vault key is `writable_in_states = ["recon"]` (`enforcement/vault.toml`), so the daemon slams the staging channel shut at `recon_complete`; the `recon_complete` gate requires `quiz_bank_generated`, so you cannot leave recon without a bank. On a later lens sweep — after a `/clear` has wiped the graph and answers from context — `lens_quiz.py` reads the vault and quizzes the subagent, which must actually re-read the code to answer. The protection is temporal integrity, not answer secrecy from the recon author. See issue #73.
 
 ---
 

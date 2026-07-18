@@ -106,15 +106,19 @@ sahjhan init
 # Run ledger management — sahjhan resolves active ledger automatically
 sahjhan ledger create --from run N --activate
 
-# Record findings and resolution
+# Record findings. Resolution (finding_resolved) is AUTO-EMITTED by the
+# fix_commit transition — you do not record it by hand in the fix loop; see
+# references/phase-fix-loop.md Step B. The finding_resolved command below is
+# shown for reference only (e.g. reconciling an out-of-band resolution).
 sahjhan event finding --field project=holtz --field run=N \
   --field auditor=holtz --field phase=audit --field step=7 \
   --field id=BH-001 --field severity=HIGH --field category=doc/drift \
   --field location="README.md:108" --field perspective=public-contract \
   --field description="Pattern count stale" --field predicted_by=1
-sahjhan event finding_resolved --field project=holtz --field run=N \
-  --field auditor=holtz --field phase=fix_loop --field step=10 \
-  --field id=BH-001 --field commit_hash=abc1234
+# (auto-emitted by `transition fix_commit BH-001`):
+# sahjhan event finding_resolved --field project=holtz --field run=N \
+#   --field auditor=holtz --field phase=fix_loop --field step=10 \
+#   --field id=BH-001 --field commit_hash=abc1234
 
 # Record recon and audit events
 sahjhan event recon_finding --field project=holtz --field run=N \
@@ -127,7 +131,7 @@ sahjhan event audit_claim --field project=holtz --field run=N \
 
 # Advance protocol steps (canonical commands only)
 sahjhan transition run_start           # begin a new audit run
-sahjhan transition recon_complete      # after Steps 0-4
+sahjhan transition recon_complete      # after Steps 0-5 (Step 5 generates the lens quiz bank; gate requires quiz_bank_generated)
 sahjhan transition audit_complete      # after Steps 6-8
 sahjhan transition merge_complete      # after Step 9
 sahjhan transition fix_commit          # after each fix commit

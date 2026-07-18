@@ -21,8 +21,6 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
-    _daemon_request,
-    _get_daemon_socket_path,
     exit_stop_allow,
     exit_stop_block,
     mask_fenced_blocks,
@@ -36,27 +34,34 @@ from lens_evidence import (  # noqa: E402
     check_transcript,
     parse_transcript_jsonl,
 )
-
-# ── Vault helpers ──
-
-
-def store_quiz_bank(bank: list[dict], cwd: str | None = None) -> None:
-    """Store quiz bank data in the sahjhan daemon vault.
-
-    Called during audit initialization to load the quiz bank into
-    daemon memory. After this, the file-based quiz bank is not needed.
-    """
-    import base64
-    sock_path = _get_daemon_socket_path(cwd)
-    data = base64.b64encode(json.dumps(bank).encode()).decode()
-    _daemon_request(sock_path, {"op": "vault_store", "name": "quiz-bank", "data": data})
-
+from quiz_vault import read_quiz_bank_safe  # noqa: E402
 
 # ── Constants ──
 
 MAX_QUIZ_ATTEMPTS = 3
 PASS_THRESHOLD = {5: 4, 4: 3, 3: 3, 2: 2, 1: 1}  # questions -> min correct
 MAX_STALE_QUESTIONS = 2  # if more than this are stale, quiz is invalid
+
+
+def _stale_bank_message(lens: str, stale: int, total: int) -> str:
+    """Fail-closed message when the locked bank no longer fits the source.
+
+    The bank is generated from the impact graph during recon and locked at
+    recon_complete (the vault key is writable only in recon). If fix commits
+    later change the anchored source so that >MAX_STALE_QUESTIONS questions for
+    a lens go stale, the quiz can't be validly posed and can't be regenerated
+    in-place. The recoveries are: escalate the lens for human review
+    (record quiz_exhausted_resolved), or start a fresh run so recon rebuilds
+    the bank against the current source.
+    """
+    return (
+        f"Quiz bank stale for lens '{lens}': {stale}/{total} questions anchor to "
+        f"source that changed since recon. The bank is graph-derived during recon "
+        f"and locked at recon_complete — it cannot be regenerated in place. Either "
+        f"escalate this lens for human review (quiz_exhausted_resolved) or start a "
+        f"fresh run so recon rebuilds the bank. See references/phase-recon.md "
+        f"(Quiz bank generation)."
+    )
 
 # ── Pure functions (tested directly) ──
 
@@ -65,6 +70,19 @@ _ANSWERS_RE = re.compile(
     r"^LENS:\s*(\S+)\s+ANSWERS:\s*([A-Da-d](?:\s*,\s*[A-Da-d])*)",
     re.MULTILINE,
 )
+
+
+def resolve_transcript_path(event: dict) -> str | None:
+    """Return the subagent transcript path from a SubagentStop event.
+
+    Defect B (#73): prefer the subagent's own transcript
+    (``agent_transcript_path``, sent by CC versions that split it out) and
+    fall back to the parent ``transcript_path`` — a documented common hook
+    field — so the read-count evidence check still has a transcript to parse
+    on versions that omit ``agent_transcript_path`` instead of silently
+    degrading to ``min_reads=0``. Returns None when neither field is present.
+    """
+    return event.get("agent_transcript_path") or event.get("transcript_path")
 
 
 def parse_lens_name(message: str) -> str | None:
@@ -391,7 +409,11 @@ def main() -> None:
 
     # ── Phase 1: Evidence check ──
 
-    transcript_path = event.get("agent_transcript_path")
+    # Defect B (#73): resolve the transcript path robustly across CC versions.
+    # last_assistant_message (read above) is the guaranteed source of the
+    # subagent's final text per the CC hook docs; the transcript is only used
+    # for the read-count evidence check.
+    transcript_path = resolve_transcript_path(event)
     transcript_available = bool(transcript_path and os.path.isfile(transcript_path))
     if transcript_available:
         events_list = parse_transcript_jsonl(transcript_path)
@@ -410,19 +432,13 @@ def main() -> None:
         # to avoid permanently blocking subagents whose transcript is unavailable.
         events_list = [{"type": "assistant", "content": message}]
 
-    # Load quiz bank from daemon vault (secrets never on disk)
-    # Graceful degradation: catch daemon-unavailable errors (OSError covers
-    # socket failures; RuntimeError covers daemon-returned errors; KeyError
-    # covers missing "data" field when vault is unpopulated).
-    # Data corruption (binascii.Error, json.JSONDecodeError) is NOT caught —
-    # corrupt vault data should crash the hook visibly, not silently disable
-    # the quiz gate.
-    bank: list[dict] = []
-    with contextlib.suppress(OSError, RuntimeError, KeyError):
-        import base64
-        sock_path = _get_daemon_socket_path(cwd)
-        resp = _daemon_request(sock_path, {"op": "vault_read", "name": "quiz-bank"})
-        bank = json.loads(base64.b64decode(resp["data"]))
+    # Read the quiz bank from the daemon vault. It was populated during recon by
+    # the trusted courier (quiz_capture.py) from graph-derived questions and is
+    # readable only in the sweep states (enforcement/vault.toml). read_quiz_bank_safe
+    # returns [] if the daemon is unreachable or the bank was never generated —
+    # graceful degradation, not the #73 silent no-op (which was an always-empty
+    # vault because nothing ever wrote it).
+    bank: list[dict] = read_quiz_bank_safe(cwd)
 
     questions = select_questions(bank, lens)
     keywords = []
@@ -445,9 +461,21 @@ def main() -> None:
 
     # ── Phase 2 & 3: Quiz flow ──
 
-    # Graceful degradation: no quiz bank → allow (evidence check was enough)
+    # Graceful degradation: no quiz bank → allow (evidence check was enough).
+    # With the vault now populated at prime time this only triggers when the
+    # daemon is genuinely unreachable — the intended degradation path, not the
+    # #73 silent no-op (which was an *always*-empty vault).
     if not questions:
         exit_stop_allow()
+
+    # Defect C (#73): refuse to pose a quiz this project cannot answer. When the
+    # bank's questions for this lens reference source absent from the target
+    # (e.g. the holtz-self default bank against an external project), every
+    # question is stale — posing it yields an unpassable quiz and an unreachable
+    # convergence. Fail closed with an actionable regeneration path instead.
+    fresh = sum(1 for q in questions if verify_answer_freshness(q, cwd))
+    if fresh < len(questions) - MAX_STALE_QUESTIONS:
+        exit_stop_block(_stale_bank_message(lens, len(questions) - fresh, len(questions)))
 
     # Check if quiz was already posed for this perspective
     posed_events = _query_events(
@@ -489,10 +517,7 @@ def main() -> None:
 
     # Check staleness — also handle total=0 (all questions stale)
     if total == 0 or total < len(questions) - MAX_STALE_QUESTIONS:
-        exit_stop_block(
-            f"Too many stale questions ({len(questions) - total}/{len(questions)}). "
-            "Quiz bank must be regenerated."
-        )
+        exit_stop_block(_stale_bank_message(lens, len(questions) - total, len(questions)))
 
     threshold = PASS_THRESHOLD.get(total, max(1, total - 1))
 

@@ -44,6 +44,8 @@ digraph {
 
 Commit format: `fix(<scope>): <desc>` with punchlist ID in body.
 
+**Each resolved item gets a `finding_resolved` ledger event — emitted automatically by the `fix_commit` transition** (sahjhan ≥ 0.18.0), so the orchestrator never records it by hand. That event, not the commit or the `state_transition`, is what marks the finding resolved for STATUS/PUNCHLIST and the perspective/pattern/convergence gates. Wherever a path below says "Commit," the orchestrator's follow-up is just: commit → `sahjhan transition fix_commit BH-NNN` (which records both the transition and the resolution). See [phase-fix-loop.md](phase-fix-loop.md) → Per-Item Fix Procedure, Step B.
+
 ## Fast Path
 
 For straightforward items where the root cause is obvious from the finding:

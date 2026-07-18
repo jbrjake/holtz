@@ -83,3 +83,36 @@ def test_orchestrator_keeps_commit_and_transition() -> None:
     text = (SKILL_DIR / "references" / "phase-fix-loop.md").read_text(encoding="utf-8")
     assert "fix_commit" in text
     assert "git commit" in text.lower()
+
+
+def test_per_item_procedure_couples_fix_commit_to_resolution() -> None:
+    """The Per-Item Fix Procedure must tie `fix_commit` to `finding_resolved`.
+
+    The bug this guards: the procedure recorded the fix_commit *transition* but
+    never a finding_resolved *event*. STATUS/PUNCHLIST "Resolved" and the
+    perspective/pattern/convergence gates all read finding_resolved, so an audit
+    following the procedure verbatim resolved zero findings and could not
+    converge. The fix makes `fix_commit` auto-emit `finding_resolved`; the doc
+    must say so, so it can't drift back to a commit+transition that resolves
+    nothing.
+    """
+    text = (SKILL_DIR / "references" / "phase-fix-loop.md").read_text(encoding="utf-8")
+    assert "finding_resolved" in text, (
+        "phase-fix-loop.md must explain that fix_commit records finding_resolved."
+    )
+    lowered = text.lower()
+    assert "auto-record" in lowered or "auto-emit" in lowered or "auto record" in lowered, (
+        "phase-fix-loop.md must state that fix_commit auto-records the "
+        "finding_resolved resolution (so agents don't record it by hand)."
+    )
+
+
+def test_step_10_cross_references_resolution_event() -> None:
+    """step-10-fix-loop.md's triage paths end at 'Commit'; it must point at the
+    resolution event so a reader of that file alone doesn't think commit is the
+    last enforcement action."""
+    text = (SKILL_DIR / "references" / "step-10-fix-loop.md").read_text(encoding="utf-8")
+    assert "finding_resolved" in text, (
+        "step-10-fix-loop.md must reference the finding_resolved ledger event so "
+        "its triage paths don't imply commit alone resolves a finding."
+    )

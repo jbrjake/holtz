@@ -1,7 +1,7 @@
 {
   "required_hooks": {
     "PreToolUse": ["_daemon_lifecycle.py", "_sahjhan_bootstrap.py", "pre_tool_hook.py", "commit_gate.py"],
-    "PostToolUse": ["post_tool_hook.py", "bash_guard.py", "protocol_tracker.py"],
+    "PostToolUse": ["post_tool_hook.py", "bash_guard.py", "protocol_tracker.py", "quiz_capture.py"],
     "UserPromptSubmit": ["primer.py"],
     "Stop": ["stop_hook.py"],
     "SubagentStop": ["lens_quiz.py", "subagent_findings_check.py"]

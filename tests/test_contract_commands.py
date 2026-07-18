@@ -125,6 +125,45 @@ class TestPhaseReconInitSequence:
         )
 
 
+class TestPhaseReconQuizStage:
+    """Step 5 (#73) stages quiz questions via quiz_stage.py — the bootstrap must
+    allow these non-sahjhan Bash commands, or recon quiz generation is blocked.
+
+    These invoke ``${CLAUDE_PLUGIN_ROOT}/skills/...quiz_stage.py``; the out-of-tree
+    script guard expands that variable from the hook's env, so the test runs the
+    hook with CLAUDE_PLUGIN_ROOT + cwd set exactly as Claude Code does — otherwise
+    the guard can't read the (real, in-tree) script and blocks conservatively.
+    """
+
+    _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    def _assert_allowed_in_plugin(self, command: str, context: str) -> None:
+        event = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": self._REPO}
+        output = run_hook(
+            HOOK, event, cwd=self._REPO, env={**os.environ, "CLAUDE_PLUGIN_ROOT": self._REPO}
+        )
+        decision = output["hookSpecificOutput"]["permissionDecision"]
+        reason = output["hookSpecificOutput"].get("permissionDecisionReason", "")
+        assert decision == "allow", f"BLOCKED but should be ALLOWED.\n  {context}\n  {reason}"
+
+    def test_quiz_stage_question(self):
+        self._assert_allowed_in_plugin(
+            'python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/quiz_stage.py '
+            '--lens component --question "What does save() use?" --answer B '
+            '--option "shutil" --option "tempfile + os.replace" '
+            '--option "open w" --option "json.dump" '
+            '--source "impact_graph.py::ImpactGraph.save" '
+            '--keyword ImpactGraph --keyword save --keyword atomic',
+            "phase-recon.md Step 5: stage one quiz question",
+        )
+
+    def test_quiz_stage_finalize(self):
+        self._assert_allowed_in_plugin(
+            "python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/quiz_stage.py --finalize",
+            "phase-recon.md Step 5: finalize the quiz bank",
+        )
+
+
 # ---------------------------------------------------------------------------
 # Contract commands: extracted from SKILL.md quick reference
 # ---------------------------------------------------------------------------

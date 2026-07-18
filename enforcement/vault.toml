@@ -1,0 +1,39 @@
+# Vault access policy (sahjhan >= 0.19.0) — state-gated vault keys.
+#
+# Declares, per vault key, the ledger states in which the daemon permits
+# store / read / delete. The daemon derives the current state from the active
+# ledger and rejects out-of-state ops. This keeps the quiz's temporal-integrity
+# rule in config, not in imperative hook code (#73):
+#
+#   * quiz-bank is WRITABLE only in `recon` — a generation subagent stages
+#     graph-derived questions there via the trusted courier (quiz_capture.py),
+#     and the channel slams shut the instant `recon_complete` advances the
+#     state. Questions "delivered after the phase has passed" are refused by
+#     the engine, so a later pass can't forge "I looked again."
+#
+#   * quiz-bank is READABLE only during recon (the courier's read-modify-append)
+#     and the lens-sweep states where lens_quiz.py poses/scores. It is NOT
+#     readable in idle, the merge/pause states, or after convergence — defence
+#     in depth on top of the trusted-caller auth that already blocks the agent.
+#
+#   * quiz-bank is DELETABLE only when no audit is live (idle / finalized), so
+#     a run cannot drop its own answer key mid-flight.
+#
+# An absent field = unrestricted for that op; keys with no policy here are
+# unrestricted (backward compatible). quiz-bank never touches disk — it lives
+# only in the daemon's in-memory vault (the ledger is cat-readable).
+
+[[policy]]
+name = "quiz-bank"
+writable_in_states = ["recon"]
+readable_in_states = [
+    "recon",
+    "audit",
+    "fix_loop",
+    "pattern_analysis",
+    "perspective_clean",
+    "all_perspectives_clean",
+    "final_sweep",
+    "final_sweep_clean",
+]
+deletable_in_states = ["idle", "finalized"]
