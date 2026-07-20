@@ -15,7 +15,13 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import exit_ok, read_event, resolve_config_dir  # noqa: E402
+from _common import (  # noqa: E402
+    bash_exit_code,
+    bash_output,
+    exit_ok,
+    read_event,
+    resolve_config_dir,
+)
 from _protocol_cache import (  # noqa: E402
     contains_sahjhan_cmd,
     empty_cache,
@@ -160,8 +166,11 @@ def main() -> None:
 
     cwd = event.get("cwd", os.getcwd())
     cmd = event.get("tool_input", {}).get("command", "")
-    exit_code = event.get("tool_response", {}).get("exit_code", -1)
-    output = event.get("tool_response", {}).get("output", "")
+    # CC 2.x Bash payloads carry stdout under .stdout and omit exit_code
+    # (PostToolUse fires only on success); the helpers read both shapes so
+    # git-commit registration below doesn't silently die on 2.x (#75).
+    exit_code = bash_exit_code(event)
+    output = bash_output(event)
 
     cache = read_cache(cwd)
 

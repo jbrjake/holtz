@@ -35,6 +35,8 @@ _spec.loader.exec_module(_mod)
 # exit helpers and lets callers' narrowing silently disappear. Annotate
 # the re-exports so mypy knows these never return.
 read_event: Callable[..., dict] = _mod.read_event
+bash_output: Callable[[dict], str] = _mod.bash_output
+bash_exit_code: Callable[[dict], int] = _mod.bash_exit_code
 exit_ok: Callable[..., NoReturn] = _mod.exit_ok
 exit_warn: Callable[..., NoReturn] = _mod.exit_warn
 exit_block: Callable[[str], NoReturn] = _mod.exit_block

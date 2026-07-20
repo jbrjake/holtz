@@ -450,6 +450,42 @@ class TestProtocolTracker:
         assert updated is not None
         assert "abc1234" in updated["unregistered_commits"]
 
+    def test_detects_git_commit_cc2x_payload(self, tmp_path, mock_daemon):
+        """CC 2.x Bash payload registers commits (#75).
+
+        On Claude Code 2.x the Bash tool_response carries stdout under
+        ``stdout`` and has no ``exit_code`` (PostToolUse fires only on
+        success). The old ``.output`` / ``.exit_code == 0`` read saw an empty
+        string and a ``-1`` sentinel, so the git-commit branch never fired and
+        commits went unregistered. The shape-tolerant read fixes it.
+        """
+        from datetime import datetime, timezone  # noqa: UP017
+
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": "git commit -m 'fix: stuff'"},
+            "tool_response": {
+                "stdout": "[dev abc1234] fix: stuff",
+                "stderr": "",
+                "interrupted": False,
+                "isImage": False,
+                "noOutputExpected": False,
+            },
+            "cwd": str(tmp_path),
+        }
+        code, _output, _ = run_enforcement_hook("protocol_tracker.py", event)
+        assert code == 0
+
+        updated = read_cache(str(tmp_path))
+        assert updated is not None
+        assert "abc1234" in updated["unregistered_commits"]
+
     def test_increments_stall_counter(self, tmp_path, mock_daemon):
         """Non-git, non-sahjhan, non-TDD commands increment stall."""
         from datetime import datetime, timezone  # noqa: UP017

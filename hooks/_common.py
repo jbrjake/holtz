@@ -42,6 +42,37 @@ def read_event() -> dict[str, Any]:
         return {}
 
 
+def bash_output(event: dict[str, Any]) -> str:
+    """Return a Bash tool's stdout from a PostToolUse event, shape-tolerant.
+
+    Claude Code 2.x delivers Bash stdout under ``tool_response.stdout``
+    (verified on 2.1.x: the payload is
+    ``{"stdout", "stderr", "interrupted", "isImage", "noOutputExpected"}``
+    with no ``output`` key). Pre-2.x payloads used ``tool_response.output``.
+    A hook that reads only ``output`` silently sees ``""`` on 2.x — the #75
+    failure that left the lens-quiz vault empty and wedged ``recon_complete``.
+
+    Read ``stdout`` first, fall back to ``output`` so both shapes work.
+    """
+    tr = event.get("tool_response") or {}
+    return tr.get("stdout") or tr.get("output") or ""
+
+
+def bash_exit_code(event: dict[str, Any]) -> int:
+    """Return a Bash tool's exit code from a PostToolUse event, shape-tolerant.
+
+    Claude Code 2.x omits ``exit_code`` entirely and fires PostToolUse only
+    *after a tool call succeeds* (a non-zero Bash exit does not fire the
+    event at all — verified on 2.1.x). So an absent code means success: it
+    defaults to ``0`` rather than a sentinel, otherwise every 2.x commit
+    would fail the ``exit_code == 0`` guard and never register (#75). Pre-2.x
+    payloads carry an explicit ``exit_code`` (possibly non-zero); honor it.
+    """
+    tr = event.get("tool_response") or {}
+    code = tr.get("exit_code")
+    return 0 if code is None else int(code)
+
+
 def exit_ok(event_name: str = "") -> NoReturn:
     """Allow the tool call silently, exit 0.
 
