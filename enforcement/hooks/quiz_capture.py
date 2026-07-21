@@ -26,7 +26,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import exit_ok, exit_warn, read_event  # noqa: E402
+from _common import bash_output, exit_ok, exit_warn, read_event  # noqa: E402
 from lens_quiz import verify_answer_freshness  # noqa: E402
 from quiz_vault import (  # noqa: E402
     append_question,
@@ -46,7 +46,10 @@ def main() -> None:
     if event.get("tool_name") != "Bash":
         exit_ok()
 
-    output = event.get("tool_response", {}).get("output", "") or ""
+    # Read stdout via the shape-tolerant helper: CC 2.x puts Bash stdout under
+    # tool_response.stdout, not .output — reading .output silently dropped every
+    # staged question and wedged recon_complete (#75).
+    output = bash_output(event)
     if QUESTION_MARKER not in output and FINALIZE_MARKER not in output:
         exit_ok()
 

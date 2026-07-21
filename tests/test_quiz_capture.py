@@ -56,10 +56,23 @@ _QUESTION = {
 
 
 def _bash_event(output: str, cwd: str) -> dict:
+    """Build a realistic Claude Code 2.x Bash PostToolUse event.
+
+    CC 2.x delivers Bash stdout under ``tool_response.stdout`` — there is no
+    ``output`` key and no ``exit_code`` (verified live on 2.1.x). Tests use the
+    real shape so a regression to reading ``.output`` (the #75 bug) fails here
+    instead of passing against a synthetic payload the runtime never sends.
+    """
     return {
         "tool_name": "Bash",
         "tool_input": {"command": "python3 quiz_stage.py ..."},
-        "tool_response": {"exit_code": 0, "output": output},
+        "tool_response": {
+            "stdout": output,
+            "stderr": "",
+            "interrupted": False,
+            "isImage": False,
+            "noOutputExpected": False,
+        },
         "cwd": cwd,
     }
 
@@ -70,6 +83,26 @@ def test_captures_question_into_vault(tmp_path, mock_daemon):
     code, _ = _run(_bash_event(marker, str(tmp_path)), str(tmp_path))
     assert code == 0
     assert "quiz-bank" in mock_daemon.vault
+    stored = json.loads(mock_daemon.vault["quiz-bank"])
+    assert stored == [_QUESTION]
+
+
+def test_captures_from_legacy_output_field(tmp_path, mock_daemon):
+    """Pre-2.x Claude Code delivered stdout under ``tool_response.output``.
+
+    The shape-tolerant read must still capture from that legacy field so the
+    courier keeps working across Claude Code versions (#75 fallback path).
+    """
+    _target_source(tmp_path)
+    marker = "QUIZ-QUESTION: " + json.dumps(_QUESTION, separators=(",", ":"))
+    legacy_event = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "python3 quiz_stage.py ..."},
+        "tool_response": {"exit_code": 0, "output": marker},
+        "cwd": str(tmp_path),
+    }
+    code, _ = _run(legacy_event, str(tmp_path))
+    assert code == 0
     stored = json.loads(mock_daemon.vault["quiz-bank"])
     assert stored == [_QUESTION]
 
