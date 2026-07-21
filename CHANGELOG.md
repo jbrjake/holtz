@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.138.1] - 2026-07-21
+
+_Changes since v0.138.0_
+
+### Fixed
+- **enforcement:** read Bash stdout from tool_response.stdout (#75)
+
 ## [0.138.0] - 2026-07-17
 
 _Changes since v0.137.2_
