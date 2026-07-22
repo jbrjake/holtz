@@ -143,6 +143,30 @@ def _freshen_enforcement_cache(real_daemon) -> None:
     _invoke_hook("protocol_tracker.py", event, real_daemon)
 
 
+def _record_finding_resolved(real_daemon, item_id: str, step: str = "10") -> None:
+    """Append a real finding_resolved event to the active ledger."""
+    _run_sahjhan(
+        real_daemon, "event", "finding_resolved",
+        "--field", "project=holtz",
+        "--field", "run=1",
+        "--field", "auditor=holtz",
+        "--field", "phase=fix_loop",
+        "--field", f"step={step}",
+        "--field", f"id={item_id}",
+        "--field", "commit_hash=abc1234",
+    )
+
+
+def _run_tracker(real_daemon, command: str) -> None:
+    """Run protocol_tracker (PostToolUse) against an arbitrary Bash command."""
+    _invoke_hook("protocol_tracker.py", {
+        "tool_name": "Bash",
+        "tool_input": {"command": command},
+        "tool_response": {"exit_code": 0, "output": ""},
+        "cwd": real_daemon["project_root"],
+    }, real_daemon)
+
+
 class TestTddGateBlocksWriteInFixLoop:
     """The flagship enforcement: Write/Edit in fix_loop without a failing test
     must be blocked with a message telling the model to record
@@ -870,4 +894,107 @@ class TestFixCommitAutoEmitsFindingResolved:
         open_count = int(json.loads(result.stdout)[0]["open"])
         assert open_count == 0, (
             f"after fix_commit auto-emit, no findings should remain open; got {open_count}"
+        )
+
+
+class TestCommitGatePatternCounterDerivation:
+    """#77: the commit gate's 'pattern analysis overdue' hard block must be
+    driven by the LEDGER (finding_resolved since the last pattern analysis) —
+    the same fact the pattern_check transition gate reads — not by a cache
+    counter that token-matching kept in a separate, drifting mirror.
+
+    The regression these guard against is a *deadlock*: the commit gate blocks a
+    legitimate fix commit and tells the auditor to run `transition
+    pattern_check`, while that transition's own gate is simultaneously blocked
+    because the ledger shows < 3 findings resolved. The printed escape is
+    unsatisfiable. Deriving the counter from the ledger makes block-condition ≡
+    escape-readiness, so that can never happen.
+
+    These assert observable *enforcement behavior* through the subprocess
+    commit_gate hook (a trusted daemon caller) rather than reading the
+    enforcement cache in-process — the pytest process is not a trusted caller,
+    so a direct enforcement_read is refused by design.
+    """
+
+    def _commit_decision(self, real_daemon, msg: str) -> dict:
+        return _invoke_hook("commit_gate.py", {
+            "tool_input": {"command": f"git commit -m {msg!r}"},
+            "cwd": real_daemon["project_root"],
+        }, real_daemon).get("hookSpecificOutput", {})
+
+    def test_commit_gate_block_boundary_tracks_ledger(self, real_daemon):
+        """The block boundary is the ledger count: a commit is allowed at 2
+        findings resolved and blocked at 3 — proving the counter that drives the
+        gate is derived from finding_resolved events, not a token mirror."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _record_finding_resolved(real_daemon, "BH-001")
+        _record_finding_resolved(real_daemon, "BH-002")
+        _freshen_enforcement_cache(real_daemon)  # protocol_tracker derives -> 2
+
+        allowed = self._commit_decision(real_daemon, "fix: BH-002")
+        assert allowed.get("permissionDecision") == "allow", (
+            f"2 findings resolved (< 3) must not be pattern-blocked; got {allowed}"
+        )
+
+        _record_finding_resolved(real_daemon, "BH-003")
+        _freshen_enforcement_cache(real_daemon)  # derives -> 3
+
+        blocked = self._commit_decision(real_daemon, "fix: BH-003")
+        assert blocked.get("permissionDecision") == "deny", (
+            f"3 findings resolved must trigger the pattern-overdue block; got {blocked}"
+        )
+        assert "pattern" in blocked.get("permissionDecisionReason", "").lower()
+
+    def test_diagnostics_do_not_move_the_counter(self, real_daemon):
+        """Failure modes 1 & 2: read-only diagnostics that merely MENTION
+        `fix_commit` / `pattern_check` as tokens must neither inflate the counter
+        (spurious block) nor reset it (silent skip)."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _record_finding_resolved(real_daemon, "BH-001")
+        _record_finding_resolved(real_daemon, "BH-002")
+
+        # Mode 1: the old mirror would inflate on each `fix_commit` token. The
+        # ledger truth is 2, so the commit stays allowed after any number of them.
+        _run_tracker(real_daemon, "sahjhan gate check fix_commit")
+        _run_tracker(real_daemon, "sahjhan gate check fix_commit")
+        _run_tracker(real_daemon, "sahjhan gate check fix_commit")
+        allowed = self._commit_decision(real_daemon, "fix: BH-002")
+        assert allowed.get("permissionDecision") == "allow", (
+            f"diagnostics mentioning fix_commit must not inflate the counter into "
+            f"a spurious block; got {allowed}"
+        )
+
+        # Mode 2: a diagnostic mentioning `pattern_check` must NOT zero the
+        # counter. Bring the ledger to 3, then run such a diagnostic to freshen:
+        # the derived counter is 3, so the commit is (correctly) blocked.
+        _record_finding_resolved(real_daemon, "BH-003")
+        _run_tracker(real_daemon, "sahjhan gate check pattern_check")
+        blocked = self._commit_decision(real_daemon, "fix: BH-003")
+        assert blocked.get("permissionDecision") == "deny", (
+            f"a diagnostic mentioning pattern_check must not silently reset the "
+            f"ledger-derived count of 3; got {blocked}"
+        )
+
+    def test_hard_block_escape_is_satisfiable(self, real_daemon):
+        """The core of #77: when the commit gate hard-blocks on 'pattern
+        overdue', the escape it prints (`transition pattern_check`) must be
+        runnable at that same instant — its gate ready. No deadlock."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _record_finding_resolved(real_daemon, "BH-001")
+        _record_finding_resolved(real_daemon, "BH-002")
+        _record_finding_resolved(real_daemon, "BH-003")
+        _freshen_enforcement_cache(real_daemon)
+
+        blocked = self._commit_decision(real_daemon, "fix: BH-003")
+        assert blocked.get("permissionDecision") == "deny"
+        assert "pattern" in blocked.get("permissionDecisionReason", "").lower()
+
+        # The printed escape is satisfiable: pattern_check transition succeeds NOW
+        # (exit 0). If this were the old drifting mirror, the counter could hit 3
+        # while the ledger held < 3, and this transition would exit 1 — deadlock.
+        result = _run_sahjhan(real_daemon, "transition", "pattern_check", check=False)
+        assert result.returncode == 0, (
+            "commit gate directed the auditor to `transition pattern_check`, but "
+            "its own gate rejected it — the exact #77 deadlock.\n"
+            f"exit: {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
         )

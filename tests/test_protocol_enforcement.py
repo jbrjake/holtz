@@ -412,6 +412,47 @@ class TestParseStatusText:
         assert result["run_number"] == "0"
 
 
+class TestRunsTransition:
+    """#77: _runs_transition distinguishes the mutating `transition <cmd>` verb
+    from read-only diagnostics that only mention the command name as a token.
+    This is what stops a diagnostic from silently moving cache bookkeeping."""
+
+    def test_bare_transition_matches(self):
+        from protocol_tracker import _runs_transition
+        assert _runs_transition("sahjhan transition fix_commit BH-001", "fix_commit")
+
+    def test_transition_with_config_dir_matches(self):
+        from protocol_tracker import _runs_transition
+        assert _runs_transition(
+            "sahjhan --config-dir /x/y transition fix_commit BH-001", "fix_commit"
+        )
+
+    def test_pattern_check_transition_matches(self):
+        from protocol_tracker import _runs_transition
+        assert _runs_transition("sahjhan transition pattern_check", "pattern_check")
+
+    def test_gate_check_diagnostic_does_not_match(self):
+        from protocol_tracker import _runs_transition
+        assert not _runs_transition("sahjhan gate check fix_commit", "fix_commit")
+        assert not _runs_transition("sahjhan gate check pattern_check", "pattern_check")
+
+    def test_query_mentioning_token_does_not_match(self):
+        from protocol_tracker import _runs_transition
+        assert not _runs_transition(
+            "sahjhan query \"SELECT * FROM events WHERE command='fix_commit'\"",
+            "fix_commit",
+        )
+
+    def test_flag_value_does_not_match(self):
+        from protocol_tracker import _runs_transition
+        assert not _runs_transition("sahjhan status --ledger fix_commit-test", "fix_commit")
+
+    def test_trailing_transition_token_is_safe(self):
+        """`transition` as the final token must not index past the end."""
+        from protocol_tracker import _runs_transition
+        assert not _runs_transition("sahjhan transition", "fix_commit")
+
+
 class TestProtocolTracker:
     """Tests for protocol_tracker.py PostToolUse hook."""
 
@@ -967,7 +1008,11 @@ class TestEnforcementIntegration:
         # 5. Verify unregistered commits cleared
         c = read_cache(str(tmp_path))
         assert c["unregistered_commits"] == []
-        assert c["fixes_since_pattern"] == 1
+        # #77: fixes_since_pattern is derived from the ledger, no longer a
+        # token-incremented mirror. With no real ledger behind the mock daemon
+        # the transition can't bump it — the derived-count path is covered by the
+        # real_daemon test in tests/test_e2e_audit_flow.py.
+        assert c["fixes_since_pattern"] == 0
 
         # 6. Gate allows next commit
         _, out, _ = run_enforcement_hook("commit_gate.py", {
