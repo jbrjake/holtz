@@ -7,6 +7,7 @@ updates the enforcement cache file. Never blocks. Pure bookkeeping.
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import re
 import subprocess
@@ -75,6 +76,62 @@ def _parse_commit_hash(output: str) -> str:
     return m.group(1) if m else "unknown"
 
 
+def _runs_transition(cmd: str, command: str) -> bool:
+    """True iff cmd invokes ``sahjhan ... transition <command>`` (verb-adjacent).
+
+    Distinguishes the *mutating* transition from read-only diagnostics that
+    merely mention the command name as a bare token — ``sahjhan gate check
+    fix_commit``, ``sahjhan query "... 'fix_commit' ..."``, ``sahjhan status``.
+    Only the actual transition should move cache bookkeeping. #77.
+    """
+    tokens = cmd.split()
+    return any(
+        tok == "transition" and tokens[i + 1] == command
+        for i, tok in enumerate(tokens[:-1])
+    )
+
+
+# #77: the authoritative backlog for "pattern analysis overdue" is the ledger,
+# NOT a hand-mirrored counter. This is the SAME query the `pattern_check`
+# transition gate uses (enforcement/transitions.toml) — count finding_resolved
+# events since the last pattern_analysis_complete. Deriving fixes_since_pattern
+# from it means the commit gate's block condition (>= 3) and the pattern_check
+# gate's readiness (>= 3) are one fact and can never disagree, so the block's
+# printed escape ("run transition pattern_check") is always satisfiable.
+_FIXES_SINCE_PATTERN_SQL = (
+    "SELECT count(*) AS n FROM events "
+    "WHERE type='finding_resolved' "
+    "AND seq > COALESCE((SELECT MAX(seq) FROM events "
+    "WHERE type='pattern_analysis_complete'), 0)"
+)
+
+
+def _query_fixes_since_pattern(binary: str, config_dir: str, cwd: str) -> int | None:
+    """Ledger-derived count of finding_resolved since the last pattern analysis.
+
+    Runs sahjhan's generic `query` primitive against the active ledger (the same
+    ledger the gates evaluate). Returns None on any failure — binary/daemon
+    unavailable, timeout, non-zero exit, or malformed output — so the caller
+    preserves the last known counter instead of resetting it. An under-count
+    only delays the pattern nudge; it never deadlocks a commit. #77.
+    """
+    try:
+        result = subprocess.run(
+            [binary, "--config-dir", config_dir, "query",
+             _FIXES_SINCE_PATTERN_SQL, "--format", "json"],
+            capture_output=True, text=True, timeout=5, cwd=cwd,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        rows = json.loads(result.stdout)
+        return int(rows[0]["n"])
+    except (json.JSONDecodeError, KeyError, IndexError, ValueError, TypeError):
+        return None
+
+
 def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     """Query sahjhan status (text) and update cache fields.
 
@@ -82,6 +139,10 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     which can run the project's test suite — guaranteed to blow the 5s
     timeout below and silently keep stale bookkeeping (#57). The refresh
     only needs state/sets, never gate readiness.
+
+    fixes_since_pattern is re-derived from the ledger here (only while it
+    matters — fix_loop/pattern_analysis), never mirrored by token-matching the
+    command text. #77.
     """
     binary = ensure_sahjhan()
     if binary is None:
@@ -108,6 +169,14 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     cache["perspectives_total"] = perspective.get("total", 0) or cache.get("perspectives_total", 13)
     cache["stall"] = 0
     cache["active"] = cache.get("state", "") not in ("", "idle", "finalized")
+
+    # Derive the pattern-analysis backlog from the ledger, but only in the
+    # states where it's consumed — avoids a subprocess on every recon/audit
+    # sahjhan command. Query failure keeps the previous value.
+    if cache.get("state") in ("fix_loop", "pattern_analysis"):
+        fixes = _query_fixes_since_pattern(binary, config_dir, cwd)
+        if fixes is not None:
+            cache["fixes_since_pattern"] = fixes
     return cache
 
 
@@ -146,13 +215,14 @@ def _apply_sahjhan_cmd(cwd: str, cache: dict | None, cmd: str) -> dict:
     # Stop daemon after finalization (teardown safety net)
     if cache.get("state") == "finalized":
         _stop_daemon(cwd)
-    # BH-017: match subcommand tokens, not substrings of full command
-    tokens = cmd.split()
-    if "fix_commit" in tokens:
+    # #77: fixes_since_pattern is DERIVED from the ledger in _refresh_from_sahjhan
+    # (the same query the pattern_check gate uses), not mirrored by token-matching
+    # the command text — a read-only diagnostic that only mentions `fix_commit`/
+    # `pattern_check` no longer moves it. The pending-commit registration is still
+    # cache-tracked, but it clears solely on the mutating `transition fix_commit`
+    # verb, so a diagnostic can't silently clear a real pending commit either.
+    if _runs_transition(cmd, "fix_commit"):
         cache["unregistered_commits"] = []
-        cache["fixes_since_pattern"] = cache.get("fixes_since_pattern", 0) + 1
-    if "pattern_check" in tokens or "pattern_done" in tokens:
-        cache["fixes_since_pattern"] = 0
     with contextlib.suppress(RuntimeError):
         write_cache(cwd, cache)
     return cache

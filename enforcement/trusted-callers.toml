@@ -19,6 +19,6 @@
 "hooks/post_tool_hook.py" = "sha256:63e513159f24f79c3d23bac2d30a77e315b9905c578472dde0329e52c1918947"
 "hooks/commit_gate.py" = "sha256:e1b26fae9dace0e9556fdad292eb34e102b2a3f03d705beaed4e28145458b840"
 "hooks/bash_guard.py" = "sha256:a534dca9da6509d573c25965dda2c29d7cd2196cd8486a1837d0965f6d5e5a09"
-"hooks/protocol_tracker.py" = "sha256:2140adb5c0e90fd9540293754630541cdddaf900de065afe22fd622abef519fa"
+"hooks/protocol_tracker.py" = "sha256:f7df69d32e5defade6c862bea0e3a8f30254576131e10d73296f93c3dfbb3314"
 "hooks/quiz_capture.py" = "sha256:3d1697849e6a9a313f29bb9745c1181ba69a31258eec27f4bb84b65afe0484aa"
 "hooks/subagent_findings_check.py" = "sha256:f97d12f1d431dad0f9a88ea25c24e923acb3d0a6f4722c0bfb4d047fb161d921"

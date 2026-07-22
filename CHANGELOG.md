@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.138.2] - 2026-07-22
+
+_Changes since v0.138.1_
+
+### Fixed
+- **enforcement:** derive pattern-overdue counter from the ledger (#77)
+
 ## [0.138.1] - 2026-07-21
 
 _Changes since v0.138.0_
