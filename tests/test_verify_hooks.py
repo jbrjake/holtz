@@ -56,6 +56,11 @@ def test_passes_with_all_hooks(tmp_path):
                 {"type": "command", "command": "python enforcement/hooks/primer.py"},
             ]},
         ],
+        "SessionStart": [
+            {"matcher": "", "hooks": [
+                {"type": "command", "command": "python enforcement/hooks/session_start.py"},
+            ]},
+        ],
         "Stop": [
             {"matcher": "", "hooks": [
                 {"type": "command", "command": "python enforcement/hooks/stop_hook.py"},

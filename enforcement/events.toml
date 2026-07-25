@@ -115,14 +115,21 @@ fields = [
     { name = "detail", type = "string" },
 ]
 
+# Context boundary. `trigger` and `source` are patterned, not decorative: they
+# are the event's provenance, and the daemon validates them on every write. An
+# event that cannot name a real context reset cannot be recorded, and the
+# `resume` gate filters on `trigger` so it cannot be satisfied by one (#79).
+# `startup`/`clear`/`compact` wipe or replace the context; `resume`/`fork`
+# carry the prior transcript forward and are therefore not resets.
 [events.context_reset]
-description = "Context boundary — recorded by primer hook on UserPromptSubmit after /clear"
+description = "Context boundary — recorded by session_start hook when Claude Code reports a real context reset (SessionStart source=clear|compact|startup)"
 restricted = true
 fields = [
     { name = "project", type = "string" },
     { name = "run", type = "string", pattern = "^\\d+$" },
     { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
-    { name = "trigger", type = "string", pattern = "^user_prompt_submit$" },
+    { name = "trigger", type = "string", pattern = "^session_start$" },
+    { name = "source", type = "string", pattern = "^(clear|compact|startup)$" },
 ]
 
 [events.justine_dispatched]

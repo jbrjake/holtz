@@ -18,6 +18,7 @@ TRUSTED_SCRIPTS=(
     "enforcement/hooks/lens_quiz.py"
     "enforcement/hooks/stop_hook.py"
     "enforcement/hooks/primer.py"
+    "enforcement/hooks/session_start.py"
     "enforcement/hooks/pre_tool_hook.py"
     "enforcement/hooks/post_tool_hook.py"
     "enforcement/hooks/commit_gate.py"

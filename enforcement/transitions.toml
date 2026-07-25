@@ -46,10 +46,11 @@ gates = [
 
 # fix_loop_start lands in awaiting_clear, NOT fix_loop: the punchlist is now
 # built (merge complete / audit pass done), and the agent MUST /clear before
-# touching any fix. The `resume` transition below (gated on context_reset)
-# carries awaiting_clear -> fix_loop, so a real context reset is enforced
-# between building the worklist and the first fix — the same machinery that
-# gates the per-iteration clears inside the loop.
+# touching any fix. The `resume` transition below carries awaiting_clear ->
+# fix_loop, gated on a `context_reset` that Claude Code's SessionStart hook
+# vouched for — so a real context reset is enforced between building the
+# worklist and the first fix, by the same machinery that gates the
+# per-iteration clears inside the loop.
 [[transitions]]
 from = "merge_done"
 to = "awaiting_clear"
@@ -148,12 +149,19 @@ gates = [
     { type = "query", sql = "SELECT count(*) < 3 FROM events WHERE type='state_transition' AND command='fix_commit' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)", expect = "true", intent = "pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary" },
 ]
 
+# The filter is what makes this gate mean what it says. `context_reset` used to
+# be recorded by the primer on every UserPromptSubmit — including automated
+# background-task notifications — so the gate opened on whatever prompt arrived
+# next, with the pre-reset context fully intact (#79). Only session_start.py can
+# write `trigger=session_start`, and only when Claude Code reports a SessionStart
+# whose source actually wiped the context. Requiring the provenance here means
+# the block condition and the evidence are the same fact.
 [[transitions]]
 from = "awaiting_clear"
 to = "fix_loop"
 command = "resume"
 gates = [
-    { type = "ledger_has_event_since", event = "context_reset", since = "last_transition", intent = "context must be reset via /clear before resuming" },
+    { type = "ledger_has_event_since", event = "context_reset", since = "last_transition", filter = { trigger = "session_start" }, intent = "context must be reset via /clear (or compaction) before resuming" },
 ]
 
 # ── Pause for human (#69) ──

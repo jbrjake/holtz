@@ -21,7 +21,9 @@ params = [{ name = "current_perspective", set = "perspective", source = "current
 
 [states.awaiting_clear]
 label = "Awaiting Context Reset"
-# Agent must tell user to /clear; primer hook records context_reset event
+# Agent must tell the user to /clear. Claude Code then fires SessionStart, and
+# session_start.py records the context_reset event that unblocks `resume`.
+# Nothing an agent can do produces that event — waiting is the only way out.
 
 [states.awaiting_human]
 label = "Awaiting Human (paused)"

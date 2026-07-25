@@ -18,7 +18,7 @@ All sahjhan commands below must include `--config-dir "$CLAUDE_PLUGIN_ROOT/enfor
 6. If not converged for other reasons: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" ledger checkpoint --snapshot pre-clear` then `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition iteration_boundary`. Tell the user: *"Not converged. `/clear` then any message to continue."* Stop. The stop gate hook enforces this: blocks premature stops until the protocol reaches a terminal state.
 7. If converged: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition confirm_convergence` — transitions from `final_sweep_clean` to `converged`. Proceed to Step 16.
 
-After `/clear`, the primer hook injects resume context and records a `context_reset` event — the user types anything and the model resumes from `sahjhan status`.
+After `/clear`, Claude Code's `SessionStart` records the `context_reset` event and the primer injects resume context — the user types anything and the model resumes from `sahjhan status`.
 
 **Filtered reads in convergence loop:** Each iteration re-reads the punchlist. If the punchlist has more than 6 items, use:
 ```bash

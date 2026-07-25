@@ -110,6 +110,17 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/session_start.py\""
+          }
+        ]
+      }
     ]
   }
 }

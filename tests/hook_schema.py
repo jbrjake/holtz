@@ -1,7 +1,7 @@
 """Claude Code hook output schema — single source of truth.
 
 Derived from: https://code.claude.com/docs/en/hooks
-Last verified: 2026-04-11
+Last verified: 2026-07-25
 
 ALL test validators and assertions must reference this file.
 When Claude Code changes their spec, update THIS file only.
@@ -46,6 +46,31 @@ USERPROMPTSUBMIT_HSO_FIELDS: set[str] = {
     "sessionTitle",
 }
 
+# ── SessionStart ────────────────────────────────────────────
+# SessionStart cannot block — it is for side effects and context
+# injection only, so there is no decision field at all.
+SESSIONSTART_VALID_DECISIONS: set[str] = set()
+
+SESSIONSTART_HSO_FIELDS: set[str] = {
+    "hookEventName",
+    "additionalContext",
+    "initialUserMessage",
+    "watchPaths",
+    "sessionTitle",
+    "reloadSkills",
+}
+
+# `source` values, i.e. how the session was initiated. Only the first
+# three leave the model with no prior context; `resume` restores the
+# transcript and `fork` copies it (holtz #79).
+SESSIONSTART_SOURCES: set[str] = {
+    "startup",
+    "resume",
+    "clear",
+    "compact",
+    "fork",
+}
+
 # ── Universal top-level fields (all events) ─────────────────
 UNIVERSAL_FIELDS: set[str] = {
     "continue",         # bool, default true. false = stop Claude entirely
@@ -76,6 +101,8 @@ def validate_hook_output(event_type: str, output: dict) -> list[str]:
         errors.extend(_validate_stop(output))
     elif event_type == "UserPromptSubmit":
         errors.extend(_validate_user_prompt_submit(output))
+    elif event_type == "SessionStart":
+        errors.extend(_validate_session_start(output))
 
     return errors
 
@@ -155,5 +182,28 @@ def _validate_user_prompt_submit(output: dict) -> list[str]:
         errors.append(
             f"Invalid UserPromptSubmit decision '{decision}'. Only 'block' is valid."
         )
+
+    return errors
+
+
+def _validate_session_start(output: dict) -> list[str]:
+    errors: list[str] = []
+    hso = output.get("hookSpecificOutput", {})
+
+    if hso:
+        event_name = hso.get("hookEventName")
+        if event_name and event_name != "SessionStart":
+            errors.append(
+                f"hookEventName must be 'SessionStart', got '{event_name}'"
+            )
+        unknown = set(hso.keys()) - SESSIONSTART_HSO_FIELDS
+        if unknown:
+            errors.append(
+                f"Unknown SessionStart hookSpecificOutput fields: {sorted(unknown)}"
+            )
+
+    # SessionStart cannot block — a decision field is always a mistake.
+    if "decision" in output:
+        errors.append("SessionStart cannot block — 'decision' is not a valid field")
 
     return errors

@@ -88,6 +88,14 @@ _EVENT_BUILDERS: dict[str, object] = {
         "cwd": cwd,
     },
     "UserPromptSubmit": lambda cwd: {"cwd": cwd, "user_prompt": "test"},
+    # `source` is the field that decides whether a context_reset is recorded
+    # at all (#79), so the representative event must carry a real one.
+    "SessionStart": lambda cwd: {
+        "cwd": cwd,
+        "session_id": "abc123",
+        "hook_event_name": "SessionStart",
+        "source": "clear",
+    },
 }
 
 

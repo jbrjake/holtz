@@ -87,5 +87,33 @@
       "suppressOutput",
       "systemMessage"
     ]
+  },
+  "SessionStart": {
+    "required_wrapper_key": null,
+    "valid_top_level_decisions": [],
+    "hookSpecificOutput_fields": [
+      "additionalContext",
+      "hookEventName",
+      "initialUserMessage",
+      "reloadSkills",
+      "sessionTitle",
+      "watchPaths"
+    ],
+    "forbidden_fields": [
+      "decision"
+    ],
+    "sources": [
+      "clear",
+      "compact",
+      "fork",
+      "resume",
+      "startup"
+    ],
+    "universal_fields": [
+      "continue",
+      "stopReason",
+      "suppressOutput",
+      "systemMessage"
+    ]
   }
 }

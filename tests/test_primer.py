@@ -137,62 +137,58 @@ class TestPrimerErrorMessageQuality:
 
 
 @pytest.mark.hook_e2e
-class TestPrimerContextResetRecording:
-    """context_reset is recorded via the daemon `record_event` socket op.
+class TestPrimerNeverRecordsContextReset:
+    """Issue #79 regression guard.
 
-    Regression coverage for the swallowed-returncode bug. In production the
-    daemon was REACHABLE but rejected the restricted-event submit (the bare
-    `sahjhan authed-event` courier could never resolve to a trusted hook →
-    pid_resolution_failed). The old CLI path returned that as a non-zero exit
-    code the primer never checked, so no context_reset landed AND no failure
-    surfaced. record_authed_event now records over the daemon socket and
-    raises on rejection, so both outcomes are observable.
+    The primer used to record `context_reset` on every UserPromptSubmit. That
+    event gates `awaiting_clear -> fix_loop`, and UserPromptSubmit fires on any
+    turn — an ordinary typed message, or an automated background-task
+    notification with no human and no /clear. So the gate opened with the full
+    recon+audit+merge context intact, silently, while `status` reported
+    `resume: ready`.
+
+    The recording now belongs to session_start.py, which fires only when the
+    host reports a real reset. The primer must never write it again, on any
+    prompt, under any daemon condition — otherwise the hole reopens.
     """
 
-    def test_daemon_rejection_injects_enforcement_failure(self, tmp_path, mock_daemon):
-        """Daemon reachable but rejects record_event → ENFORCEMENT FAILURE.
+    @pytest.mark.parametrize(
+        "prompt",
+        [
+            "continue",
+            "/clear",  # the text of a clear is not a clear
+            "<task-notification>subagent finished</task-notification>",
+        ],
+    )
+    def test_no_context_reset_for_any_prompt(self, tmp_path, mock_daemon, prompt):
+        _init_sahjhan(tmp_path)
 
-        This is the exact production scenario the old code swallowed.
+        event = {"cwd": str(tmp_path), "user_prompt": prompt}
+        code, _, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
+        assert code == 0
+
+        resets = [
+            e for e in mock_daemon.recorded_events
+            if e.get("event_type") == "context_reset"
+        ]
+        assert not resets, (
+            f"primer recorded a context_reset for prompt {prompt!r}. A prompt is "
+            f"not a context reset — this is exactly issue #79. Got: {resets!r}"
+        )
+
+    def test_healthy_daemon_reports_no_enforcement_failure(self, tmp_path, mock_daemon):
+        """A reachable, authenticating daemon must not raise a false alarm.
+
+        The health probe replaced a write with an `enforcement_read`, and an
+        audit that hasn't cached state yet answers `not_found`. That is a
+        healthy daemon, not a broken one.
         """
         _init_sahjhan(tmp_path)
-        sahjhan_dir = tmp_path / "docs" / "holtz" / ".sahjhan"
-        # Alive init PID → not a daemon death → enforcement-failure branch.
-        (sahjhan_dir / "daemon-init-pid").write_text(f"{os.getpid()}\n")
-        mock_daemon.record_event_response = {
-            "ok": False,
-            "error": "auth_failed",
-            "message": "caller not authenticated",
-            "reason": "pid_resolution_failed",
-        }
-
-        event = {"cwd": str(tmp_path)}
-        code, output, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
-        assert code == 0
-        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
-        assert "ENFORCEMENT FAILURE" in context, (
-            f"a rejected context_reset must surface, not be swallowed. Got: {context!r}"
-        )
-        attempts = [
-            e for e in mock_daemon.recorded_events if e.get("event_type") == "context_reset"
-        ]
-        assert attempts, "primer should have attempted a context_reset record_event"
-        assert attempts[0]["op"] == "record_event"
-
-    def test_daemon_success_records_context_reset(self, tmp_path, mock_daemon):
-        """Daemon accepts record_event → context_reset recorded, no failure."""
-        _init_sahjhan(tmp_path)
-        # mock_daemon default response is ok:true.
 
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("primer.py", event, cwd=str(tmp_path))
         assert code == 0
         context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
         assert "ENFORCEMENT FAILURE" not in context, (
-            f"a successful record must not report failure. Got: {context!r}"
+            f"a healthy daemon must not report failure. Got: {context!r}"
         )
-        resets = [
-            e for e in mock_daemon.recorded_events if e.get("event_type") == "context_reset"
-        ]
-        assert len(resets) == 1, "primer should record exactly one context_reset"
-        assert resets[0]["op"] == "record_event"
-        assert resets[0]["fields"]["trigger"] == "user_prompt_submit"
