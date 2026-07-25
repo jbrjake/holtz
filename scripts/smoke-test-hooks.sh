@@ -41,6 +41,7 @@ enforcement/hooks/bash_guard.py:PostToolUse
 enforcement/hooks/protocol_tracker.py:PostToolUse
 enforcement/hooks/stop_hook.py:Stop
 enforcement/hooks/primer.py:UserPromptSubmit
+enforcement/hooks/session_start.py:SessionStart
 hooks/subagent_findings_check.py:SubagentStop
 "
 
@@ -64,6 +65,13 @@ for entry in $HOOKS; do
         MATCHER="*"
         PROMPT="say hi"
     elif [[ "$event" == "UserPromptSubmit" ]]; then
+        MATCHER="*"
+        PROMPT="say hi"
+    elif [[ "$event" == "SessionStart" ]]; then
+        # A fresh `claude -p` run fires SessionStart (source=startup). Like the
+        # other entries here this only proves the hook is invoked and emits
+        # valid JSON — the work dir has no audit, so the hook exits silently.
+        # Provenance behavior is covered by tests/test_session_start.py.
         MATCHER="*"
         PROMPT="say hi"
     elif [[ "$event" == "SubagentStop" ]]; then
