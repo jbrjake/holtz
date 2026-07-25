@@ -13,8 +13,10 @@ The `fix_loop_start` transition will not pass without this event.
 
 1. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_loop_start` → you are now in `awaiting_clear`.
 2. Tell the user to `/clear`. The turn stops; the daemon survives (it holds the session key). This is a context reset, **not** a stopping point — the run resumes after the clear.
-3. After `/clear`, the primer re-injects state and records the `context_reset` event. **Re-read [references/step-10-fix-loop.md](references/step-10-fix-loop.md)** (your context was wiped) and the worklist from disk.
-4. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition resume` → now you are in `fix_loop`. The `resume` gate requires the `context_reset`, so it will not pass unless a real `/clear` happened.
+3. After `/clear`, Claude Code fires a `SessionStart` that records the `context_reset` event, and the primer re-injects state on your next turn. **Re-read [references/step-10-fix-loop.md](references/step-10-fix-loop.md)** (your context was wiped) and the worklist from disk.
+4. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition resume` → now you are in `fix_loop`.
+
+The `resume` gate requires a `context_reset` whose provenance is a real reset — `/clear`, a compaction, or a brand-new session. Nothing else can write one: it is not produced by sending a message, and a `--resume`/`--continue`/`/branch` session does not count, because those carry the old context forward. Talking your way past this gate is not available; the only way through is an actual reset (#79).
 
 The same `awaiting_clear` boundary recurs mid-loop via `iteration_boundary` (Step 12). Entering fixes and resuming fixes use identical machinery.
 </HARD-GATE>

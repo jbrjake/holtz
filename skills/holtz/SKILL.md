@@ -236,7 +236,7 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 - **Terse within phases.** Between tool calls within a phase, do not explain what you are about to do. Execute, then report findings. Save narrative for phase boundaries and significant discoveries. Every sentence of narration enters context permanently.
 - **Tool search threshold.** In MCP-heavy environments, set `ENABLE_TOOL_SEARCH=auto:5` to defer tool definition loading until tools exceed 5% of context (default is 10%). This reduces early-session cache burden when many MCP servers are connected.
 - **Re-read before every step.** At the start of each step, read the output files you need. Assume prior context is gone.
-- **After compaction or `/clear`: STOP.** Run `sahjhan status` and re-read the latest step output files before continuing. After `/clear`, the primer hook injects resume context automatically and records a `context_reset` event in the ledger.
+- **After compaction or `/clear`: STOP.** Run `sahjhan status` and re-read the latest step output files before continuing. Claude Code's `SessionStart` records the `context_reset` event, and the primer injects resume context on your next turn.
 - **The Sahjhan ledger is your program counter.** Run `sahjhan status` after any compaction to recover your position — current state, active perspective, available transitions. The rendered STATUS.md is a read-only view of this same data.
 
 ## Session Splitting (Optional, for Token Efficiency)

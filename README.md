@@ -3,7 +3,7 @@
 [![CI](https://github.com/jbrjake/holtz/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/jbrjake/holtz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)
-![1771 tests](https://img.shields.io/badge/tests-1771_total-brightgreen.svg)
+![1799 tests](https://img.shields.io/badge/tests-1799_total-brightgreen.svg)
 ![91% coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)
 
 **Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
@@ -207,7 +207,7 @@ Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-1 skill, 3 agents, 24 reference docs, 1 example, 8 Python scripts, 16 seed patterns, 12 enforcement hooks, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+1 skill, 3 agents, 24 reference docs, 1 example, 8 Python scripts, 16 seed patterns, 13 enforcement hooks, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 For the full capability inventory, file layout, enforcement architecture, and what's still on the workbench, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

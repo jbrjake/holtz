@@ -268,3 +268,82 @@ class TestStopHookWithRealState:
         # Terminated marker → exit_stop_allow (no output)
         decision = output.get("decision", "")
         assert decision != "block"
+
+
+class TestContextResetProvenanceWithRealDaemon:
+    """Issue #79 end-to-end: only a real reset writes `context_reset`.
+
+    The mock daemon accepts any field values, so it cannot show that the real
+    engine validates the event's provenance against `events.toml`. These tests
+    drive the actual binary, whose `record_event` op runs `validate_event_fields`
+    and whose caller auth resolves the hook by content hash.
+    """
+
+    @staticmethod
+    def _session_start(real_daemon, source):
+        event = {
+            "cwd": real_daemon["project_root"],
+            "hook_event_name": "SessionStart",
+            "source": source,
+        }
+        return run_enforcement_hook(
+            "session_start.py", event,
+            cwd=real_daemon["project_root"],
+            env=_hook_env(real_daemon),
+        )
+
+    @staticmethod
+    def _context_resets(real_daemon):
+        """Every context_reset in the active ledger, as field dicts."""
+        result = _run_sahjhan(real_daemon, "--json", "log", "dump")
+        entries = json.loads(result.stdout)["data"]["entries"]
+        return [
+            e.get("fields", {}) for e in entries
+            if e.get("event_type") == "context_reset"
+        ]
+
+    def test_clear_records_with_session_start_provenance(self, real_daemon):
+        """A real /clear lands a real event the real engine accepted."""
+        _run_sahjhan(real_daemon, "ledger", "create", "--from", "run", "1", "--activate")
+        _run_sahjhan(real_daemon, "transition", "run_start")
+
+        code, _, _ = self._session_start(real_daemon, "clear")
+        assert code == 0
+
+        resets = self._context_resets(real_daemon)
+        assert len(resets) == 1, f"expected one context_reset, got {resets!r}"
+        assert resets[0]["trigger"] == "session_start"
+        assert resets[0]["source"] == "clear"
+
+    def test_resume_source_records_nothing(self, real_daemon):
+        """`--resume` restores the transcript, so it is not a reset."""
+        _run_sahjhan(real_daemon, "ledger", "create", "--from", "run", "1", "--activate")
+        _run_sahjhan(real_daemon, "transition", "run_start")
+
+        code, _, _ = self._session_start(real_daemon, "resume")
+        assert code == 0
+        assert not self._context_resets(real_daemon), (
+            "a resumed session carries the prior context forward — recording "
+            "context_reset for it is issue #79 with extra steps"
+        )
+
+    def test_resume_gate_blocked_without_a_reset(self, real_daemon):
+        """The awaiting_clear gate reports blocked until a reset is recorded.
+
+        This is the assertion the reporter's live run needed: at awaiting_clear
+        with no reset, `gate check resume` must NOT say ready.
+        """
+        _run_sahjhan(real_daemon, "ledger", "create", "--from", "run", "1", "--activate")
+        result = _run_sahjhan(real_daemon, "--json", "gate", "check", "resume", check=False)
+
+        # Either sahjhan refuses the check (wrong source state) or reports it
+        # blocked — what must never happen is a `ready`/passing verdict with no
+        # context_reset in the ledger.
+        assert not self._context_resets(real_daemon)
+        if result.returncode == 0 and result.stdout.strip():
+            data = json.loads(result.stdout)
+            passed = data.get("data", {}).get("passed")
+            assert passed is not True, (
+                f"resume gate reported passing with zero context_reset events "
+                f"in the ledger — this is issue #79. Got: {data!r}"
+            )

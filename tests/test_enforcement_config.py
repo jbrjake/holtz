@@ -672,3 +672,116 @@ def test_trusted_callers_hashes_match_files():
         "trusted-callers.toml is stale. The daemon will reject these callers:\n  "
         + "\n  ".join(mismatches)
     )
+
+
+# ── Issue #79: context_reset provenance is declarative ──
+
+
+def _context_reset_fields() -> dict[str, dict]:
+    cfg = tomllib.loads(EVENTS_TOML.read_text())
+    return {f["name"]: f for f in cfg["events"]["context_reset"]["fields"]}
+
+
+def _resume_gate() -> dict:
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    resume = [
+        t for t in cfg["transitions"]
+        if t.get("command") == "resume" and t.get("from") == "awaiting_clear"
+    ]
+    assert len(resume) == 1, "expected exactly one awaiting_clear `resume` transition"
+    gates = resume[0]["gates"]
+    reset_gates = [g for g in gates if g.get("event") == "context_reset"]
+    assert len(reset_gates) == 1, "expected exactly one context_reset gate on resume"
+    return reset_gates[0]
+
+
+def test_context_reset_trigger_cannot_be_a_prompt():
+    """The old provenance must be unwritable, not merely unused (#79).
+
+    The daemon validates event fields against this pattern on every
+    `record_event`, so narrowing it is what stops any future hook — or a
+    revert of primer.py — from recording a prompt as if it were a reset.
+    """
+    pattern = _context_reset_fields()["trigger"]["pattern"]
+    assert not re.match(pattern, "user_prompt_submit"), (
+        f"trigger pattern {pattern!r} still admits 'user_prompt_submit'. "
+        "A submitted prompt is not a context reset."
+    )
+    assert re.match(pattern, "session_start")
+
+
+def test_context_reset_source_admits_only_real_resets():
+    """resume/fork carry the prior transcript forward — they are not resets."""
+    pattern = _context_reset_fields()["source"]["pattern"]
+    for source in ("clear", "compact", "startup"):
+        assert re.match(pattern, source), (
+            f"source pattern {pattern!r} rejects {source!r}, which does wipe "
+            f"or replace the context — this would make the gate unsatisfiable"
+        )
+    for source in ("resume", "fork"):
+        assert not re.match(pattern, source), (
+            f"source pattern {pattern!r} admits {source!r}, which restores or "
+            f"copies the prior context"
+        )
+
+
+def test_context_reset_is_restricted():
+    """Only a hash-verified trusted caller may write the event."""
+    cfg = tomllib.loads(EVENTS_TOML.read_text())
+    assert cfg["events"]["context_reset"].get("restricted") is True
+
+
+def test_resume_gate_requires_session_start_provenance():
+    """The gate must filter on provenance, not just on the event type.
+
+    Without the filter, `context_reset` events already in live ledgers — the
+    ones the primer wrote on ordinary prompts — would still satisfy it.
+    """
+    gate = _resume_gate()
+    assert gate.get("filter", {}).get("trigger") == "session_start", (
+        f"resume gate does not require trigger=session_start: {gate!r}"
+    )
+    assert gate["since"] == "last_transition"
+
+
+def test_session_start_hook_is_registered_and_trusted():
+    """The only writer of context_reset must actually run, and authenticate."""
+    hooks_json = json.loads(
+        (Path(__file__).parent.parent / "hooks" / "hooks.json").read_text()
+    )
+    commands = [
+        h["command"]
+        for group in hooks_json["hooks"].get("SessionStart", [])
+        for h in group["hooks"]
+    ]
+    assert any("session_start.py" in c for c in commands), (
+        "session_start.py is not registered for SessionStart — context_reset "
+        "would never be recorded and every awaiting_clear would deadlock"
+    )
+
+    manifest = tomllib.loads((ENFORCEMENT_DIR / "trusted-callers.toml").read_text())
+    assert "hooks/session_start.py" in manifest["callers"], (
+        "session_start.py is missing from trusted-callers.toml — the daemon "
+        "would reject its record_event and the gate could never open"
+    )
+
+
+def test_ungated_resume_cannot_bypass_the_clear_boundary():
+    """The `awaiting_human` resume is ungated on purpose — keep it unreachable
+    from `awaiting_clear`.
+
+    Pausing to answer a user mid-fix (#69) is always legitimate, so that
+    transition carries no context_reset gate. It shares the `resume` command
+    name with the gated one, which makes it a standing bypass risk: if anything
+    ever routes `awaiting_clear -> awaiting_human`, the clear boundary becomes
+    optional again.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    sources_into_awaiting_human = {
+        t["from"] for t in cfg["transitions"] if t.get("to") == "awaiting_human"
+    }
+    assert "awaiting_clear" not in sources_into_awaiting_human, (
+        "awaiting_clear can reach awaiting_human, whose `resume` is ungated — "
+        "that is a route around the mandatory context reset (#79). Entries: "
+        f"{sorted(sources_into_awaiting_human)}"
+    )

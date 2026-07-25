@@ -169,10 +169,30 @@ def _get_daemon_socket_path(cwd: str | None = None) -> str:
     return os.path.join(cwd, "docs", "holtz", ".sahjhan", "daemon.sock")
 
 
+class DaemonError(RuntimeError):
+    """A request that reached the daemon and was refused by it.
+
+    The wire protocol answers with a structured ``error`` code alongside the
+    human-readable ``message``, but this was collapsing both into a bare
+    ``RuntimeError(message)``. Callers that need to tell refusals apart —
+    ``auth_failed`` means enforcement is broken, ``not_found`` just means
+    nothing is stored yet — were left with nothing but the prose to match on.
+    Subclasses RuntimeError, so every existing ``except RuntimeError`` handler
+    behaves exactly as before.
+    """
+
+    def __init__(self, message: str, error: str = "", reason: str = "") -> None:
+        super().__init__(message)
+        self.error = error
+        self.reason = reason
+
+
 def _daemon_request(sock_path: str, request: dict) -> dict:
     """Send a JSON request to the sahjhan daemon and return the response.
 
-    Raises RuntimeError if the daemon is unreachable or returns an error.
+    Raises DaemonError (a RuntimeError) if the daemon refuses the request, and
+    OSError if the socket is unreachable. The two are different facts: a
+    refusal proves the daemon is alive.
     """
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.settimeout(5)
@@ -183,8 +203,10 @@ def _daemon_request(sock_path: str, request: dict) -> dict:
     finally:
         sock.close()
     if not response.get("ok"):
-        raise RuntimeError(
-            f"sahjhan daemon error: {response.get('message', 'unknown error')}"
+        raise DaemonError(
+            f"sahjhan daemon error: {response.get('message', 'unknown error')}",
+            error=str(response.get("error") or ""),
+            reason=str(response.get("reason") or ""),
         )
     return response
 

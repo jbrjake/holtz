@@ -22,6 +22,8 @@ from hook_schema import (  # noqa: E402
     POSTTOOLUSE_VALID_DECISIONS,
     PRETOOLUSE_HSO_FIELDS,
     PRETOOLUSE_VALID_DECISIONS,
+    SESSIONSTART_HSO_FIELDS,
+    SESSIONSTART_SOURCES,
     STOP_VALID_DECISIONS,
     UNIVERSAL_FIELDS,
     USERPROMPTSUBMIT_HSO_FIELDS,
@@ -73,6 +75,14 @@ def generate_schema() -> dict:
             "required_wrapper_key": None,
             "valid_top_level_decisions": sorted(USERPROMPTSUBMIT_VALID_DECISIONS),
             "hookSpecificOutput_fields": sorted(USERPROMPTSUBMIT_HSO_FIELDS),
+            "universal_fields": sorted(UNIVERSAL_FIELDS),
+        },
+        "SessionStart": {
+            "required_wrapper_key": None,
+            "valid_top_level_decisions": [],
+            "hookSpecificOutput_fields": sorted(SESSIONSTART_HSO_FIELDS),
+            "forbidden_fields": ["decision"],
+            "sources": sorted(SESSIONSTART_SOURCES),
             "universal_fields": sorted(UNIVERSAL_FIELDS),
         },
     }

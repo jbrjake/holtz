@@ -154,7 +154,8 @@ Python hooks in two locations:
 | `subagent_findings_check.py` | SubagentStop | Validates subagent output files exist |
 | `lens_quiz.py` | SubagentStop | Three-phase lens validation (evidence → quiz → score) |
 | `stop_hook.py` | Stop | Blocks stop in non-terminal states |
-| `primer.py` | UserPromptSubmit | Injects resume context on session restart |
+| `primer.py` | UserPromptSubmit | Injects resume context; probes daemon liveness and caller auth |
+| `session_start.py` | SessionStart | Records `context_reset` when `source` is `clear`, `compact`, or `startup` — the only writer of the event that gates `awaiting_clear -> fix_loop` (#79) |
 
 **Enforcement hooks** (`enforcement/hooks/`): The Python modules that implement the logic above.
 

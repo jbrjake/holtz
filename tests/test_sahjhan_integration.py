@@ -808,15 +808,18 @@ class TestPrimer:
         assert code == 0
         assert output.get("continue") is True
 
-    def test_records_context_reset_via_record_event_op(self):
-        """Primer records context_reset through the daemon `record_event` op.
+    def test_does_not_record_context_reset_on_prompt(self):
+        """Primer must not write context_reset on any UserPromptSubmit (#79).
 
-        Supersedes BH-008 (which checked the old `sahjhan authed-event
-        --field` CLI syntax). context_reset is no longer recorded via the CLI
-        at all — the primer asks the daemon to append it directly over the
-        authenticated socket. This test sets up a mock daemon at a short
-        socket path and asserts the append request arrived with the right
-        fields. Uses a short temp path to stay within macOS AF_UNIX limits.
+        History: BH-008 caught the primer using the wrong CLI syntax, and a
+        later fix moved the write to the daemon `record_event` op. Both were
+        about *how* the event was written. #79 is about *whether* it should be:
+        UserPromptSubmit fires on incidental turns and automated background-task
+        notifications, so recording there opened the awaiting_clear gate with the
+        pre-reset context intact. session_start.py owns the write now — this
+        test keeps the primer out of it, against a real daemon socket rather
+        than a stub, so "no record" cannot be an unreachable-socket artifact.
+        Uses a short temp path to stay within macOS AF_UNIX limits.
         """
         import shutil
         import tempfile
@@ -885,17 +888,15 @@ class TestPrimer:
         # The primer ran `sahjhan status` through the (mock) CLI binary...
         assert log_file.exists(), "primer should have invoked sahjhan status"
         assert "status" in log_file.read_text()
-        # ...but context_reset is recorded over the socket, not the CLI.
+        # ...and the daemon was reachable throughout, so an absent context_reset
+        # is a decision, not a dropped connection.
         resets = [
             e for e in daemon.recorded_events if e.get("event_type") == "context_reset"
         ]
-        assert resets, (
-            "primer should record a context_reset via the daemon record_event op "
-            "when an active non-terminal run exists"
+        assert not resets, (
+            "the primer must not record context_reset — a submitted prompt is not "
+            f"a context reset (#79). Got: {resets!r}"
         )
-        assert resets[0]["op"] == "record_event"
-        assert resets[0]["fields"].get("project") == "holtz"
-        assert resets[0]["fields"].get("trigger") == "user_prompt_submit"
 
     def test_degrades_gracefully_on_oserror(self, tmp_path):
         """BH-015: primer degrades gracefully when binary is unexecutable."""
