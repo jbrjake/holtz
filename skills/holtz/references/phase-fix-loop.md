@@ -81,6 +81,11 @@ If you find yourself writing a summary table, STOP. You are not in the finalize 
 
 Use extended thinking (ultrathink) for this step — cross-finding pattern discovery and sibling search require deep reasoning.
 
+There are two ways to run Step 11, and the difference is whether you enter the `pattern_analysis` state:
+
+- **Stay in `fix_loop`** (usual). Just do the work and record `pattern_analysis_complete` at step 5. That satisfies the `iteration_boundary` gate, which counts fix commits since the last pattern analysis.
+- **Enter `pattern_analysis`** (when `iteration_boundary` blocks you and its message says to run `pattern_check`). Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_check` — its gate needs 3+ findings resolved since the last pattern analysis, which is exactly the condition that blocked you. Then do steps 1-6 below, and leave with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_done`, whose gate needs the `pattern_analysis_complete` event from step 5. **`pattern_done` is the only exit from `pattern_analysis`** — nothing else leads out of that state.
+
 1. **Re-read `docs/holtz/PUNCHLIST.md`** — For pattern analysis, read the full punchlist (no filter). Pattern grouping requires seeing all resolved items to identify shared root causes across the complete history.
 2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify pattern, search for siblings, write new items to punchlist IMMEDIATELY
 3. Write pattern blocks to punchlist per format spec
@@ -151,6 +156,10 @@ After completing a lens sweep (any type), return to Step 10 (fix loop) for any n
 - **SAME_ITEM:** 3 attempts on the same punchlist item. After 3, escalate to the user.
 - **NO_PROGRESS:** 3 consecutive iterations with no items resolved. Stop and report.
 - **CONTEXT_BUDGET:** If context utilization exceeds 60%, wrap up the current item and proceed to the convergence boundary — run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition iteration_boundary` and instruct `/clear`. Do not wait for compaction.
+
+**Answering the user mid-loop (#69).** If the user asks you something that genuinely needs the turn handed back, run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pause` first. It moves `fix_loop -> awaiting_human`, which is the one non-terminal state the Stop hook lets you stop in — and unlike `! sahjhan daemon stop` it keeps the daemon and the session key alive, so `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition resume` picks the run straight back up. There is no gate on either direction; pausing to talk to a human is always legitimate.
+
+This is **not** a licence to ask whether to continue. Continuing is the default (see SKILL.md's Autonomy section) — `pause` is for a question the user actually asked, not for converting a blocked gate into "how would you like me to proceed?"
 
 **Test / lint command for non-standard targets.** The `fix_commit`, perspective-completion, and `converge` gates run the target project's suite and linter. These commands run **in the environment that invoked `sahjhan transition`**, so the interpreter resolves via your current `PATH`. If the target's tests only run under a venv/pyenv/conda/poetry/tox (i.e. the login `python3`/`ruff` isn't the right one), export an override **once at run start** — it flows to every gate:
 

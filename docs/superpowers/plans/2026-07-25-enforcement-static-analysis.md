@@ -1,27 +1,101 @@
 # Making the enforcement layering statically analyzable
 
-**Status:** proposal, not implemented — **resume at Phase 0**
+**Status:** Phases 0–3 landed. `sahjhan lint` + `scripts/enforcement_lint.py`
+both block in pre-commit, pre-release, and CI. **Resume at Phase 4** (generate
+`ENFORCEMENT-CONTRACT.md` and the trust graph).
 **Tracking:** holtz [#82](https://github.com/jbrjake/holtz/issues/82) · engine portion [jbrjake/sahjhan#32](https://github.com/jbrjake/sahjhan/issues/32) · first defect found [#81](https://github.com/jbrjake/holtz/issues/81)
 **Motivation:** #73 (gate unsatisfiable), #77 (gate deadlocked), #79 (gate satisfied without cause)
 **Goal:** find the next one without running an audit
 
 ## Next session starts here
 
-1. Read this document top to bottom, then **#82** (phasing checklist).
-2. Do **Phase 0 only** — harden the throwaway prototype into
-   `scripts/enforcement_lint.py` implementing C1, C10, C11 by inference, run it,
-   and triage every hit into the "Phase 0 findings" section below.
-3. **Do not add TOML surface or block any gate in Phase 0.** The point of the
-   phase is to measure whether the later phases are worth their cost. If it
-   finds two things, say so and stop.
-4. The prototype is not in the tree — it was a one-off. Its logic is reproduced
-   in "Prototype methodology" below; rebuild from that, correcting the
-   false-positive cause it exposed (write paths are three verbs, not one).
+Phases 0–3 are done (2026-07-26). What remains:
+
+1. **Phase 4 — everting.** Generate `docs/ENFORCEMENT-CONTRACT.md` from the
+   declarations now in the tree: one row per gate giving the fact required, the
+   event, its writer, and its attestation class. The data is already there —
+   `python3 scripts/enforcement_lint.py --census` prints it. Add a staleness
+   test like `test_hook_schema_freshness.py`.
+2. **Two open findings**, both recorded below and neither blocking:
+   `prediction`/`prediction_outcome` are read by `summary.md.tera` and written
+   by nothing, and eight L6 near-miss predicate pairs are unmigrated.
+3. **The ratchet is now live.** Any field-found gate defect must become a check
+   or be recorded here as un-lintable *with the reason*.
 
 ### Phase 0 findings
 
-_Empty — Phase 0 has not run. Record triaged results here, one row per hit:
-finding, verdict (real / false positive / dead), and the action taken._
+Measured on `dev` @ `4a85303` with sahjhan v0.20.0. Both halves ran: the engine's
+L1–L7 over the protocol graph, and `scripts/enforcement_lint.py`'s H1–H6 over
+the parts of the chain that live in holtz code.
+
+The headline: **the approach paid, but not where the plan predicted.** The
+prototype's "12 dead declarations" was the least interesting number. The real
+yield was three latent defects that no test covered, one of which was a
+single-character bypass of every command block in the repo — and it surfaced
+only because implementing a *different* finding forced the question "can the
+agent get at this another way?"
+
+#### Engine checks (`sahjhan lint`)
+
+| Finding | Count | Verdict | Action |
+|---|---|---|---|
+| L1: `resume` requires restricted `context_reset`, no producer | 1 error | **Undeclared, not absent** — `session_start.py` writes it; the engine cannot see Python | Declared `[[events.context_reset.producers]]` |
+| L4: `awaiting_clear` has no satisfiable exit | 1 error | Cascade of the above | Same fix |
+| L5: declared but never produced or consumed | 16 warnings | 6 genuinely dead · 7 had invisible writers · 2 template false positives · `_checkpoint` is engine-written | Deleted 6; declared producers for 7; kept `_checkpoint`; 2 left open (below) |
+| L6: duplicate/drifted predicates | 11 warnings | 3 verbatim duplicates real · 8 near-miss noise (gates that legitimately differ by severity) | Migrated the 3 to `[queries.*]`; 8 remain as accepted noise |
+| L3: boundary route-around | 0 | Passes once `context-reset` is declared — proves no path reaches `fix_loop` from `merge_done` without the gated `resume`, including via `awaiting_human` | Replaces a hand-written test with a property |
+| L7: evidence weaker than the gate | 0 | Silent until `[attestation]` exists; now enforces `requires_attestation = "host"` on `resume` | **This is #79 caught at rest** |
+
+Net: **2 errors → 0**, 28 warnings → 10.
+
+#### Holtz checks (`scripts/enforcement_lint.py`)
+
+| Finding | Verdict | Action |
+|---|---|---|
+| H1: `quiz_exhausted_resolved` gates `converge`, written by nothing | **REAL — #81.** Two places in `lens_quiz.py` tell the agent to record it and name no command; the event was unrestricted, so the agent could clear its own failed re-read quiz | Human-only channel: bootstrap denies the agent's path, `phase-convergence.md` documents the user's `!` command, `attestation = "human"` |
+| `quiz_bank_generated` unrestricted, `question_count` pattern allows `0` | **REAL, new, high severity.** Either forged or honestly-empty, the run leaves recon bankless; the vault key is recon-only so the bank can never be built; every lens quiz then fails open without recording `quiz_posed`; `set complete perspective` requires it. **Unrecoverable deadlock — the exact #73 failure the gate was added to prevent** | `restricted = true` + `^[1-9]\d*$` on both counts |
+| A leading `!` bypassed every second-level command block | **REAL, new, security.** `! sahjhan …` runs the command (bash negates only the exit status), but the parser saw `tokens[0] == "!"` and reported "not a sahjhan command". Defeated `daemon stop`'s mid-audit denial too | Fixed in `_sahjhan_bootstrap.py`; 4 unit + 3 contract regression tests |
+| H1: `prediction`, `prediction_outcome` read by `summary.md.tera`, written by nothing | **REAL, open.** SUMMARY.md's prediction-accuracy section can never populate; the skill files discuss predictive recon at length and never record the events | Left open — wiring it means new skill commands and contract coverage |
+| H6: `pattern_check`, `pattern_done`, `pause` taught by no skill file | **REAL.** `iteration_boundary`'s own gate message says "run `pattern_check`", which lands the agent in `pattern_analysis`, whose only exit — `pattern_done` — appeared nowhere | Documented all three |
+| H4: `quiz_vault.py` writes a restricted event but is not hash-pinned | **False positive in the check.** The daemon authenticates the *process*; `quiz_vault.py` only ever runs inside the pinned `quiz_capture.py` | Fixed: H4 resolves through the import graph |
+
+Census: **23 of 29 gate-consumed events are the agent's own word** (the
+prototype's estimate was 19 of 24). Now visible via `--census` rather than
+inferred.
+
+#### The analyzers' own false positives, and what they cost
+
+Recorded because the plan asked for a false-positive rate before anything
+blocks, and because every one of these was a wrong *model* of the tree rather
+than a bad regex — the same failure mode as the defects being hunted.
+
+| Cause | Cost if unfixed | Fix |
+|---|---|---|
+| Scanned only fenced code blocks | 11 phantom "undocumented transitions" — holtz teaches commands in inline backtick spans mid-sentence | Scan fences *and* spans |
+| Hook block-messages not treated as taught commands | `test_failed_before_fix` looked writerless; the message an agent reads while stuck *is* the escape it runs | Parse `message` fields in `hooks.toml` |
+| Tera templates not scanned as consumers | 2 phantom dead events. **sahjhan's L5 has the same gap** and reports them too | Parse `where_eq(attribute="event_type", …)` |
+| `("event", "x")` tuple ≡ subprocess argv fragment | Reported the hook that *forbids* an event as one of its writers | Require a sibling `"--field"` in the argv |
+| Read `[queries]` from `transitions.toml`; it lives in `protocol.toml` | **Silently retired a live H1 error** the moment its predicate was migrated to a named query | Read the right file; unresolvable names are now an H2 error |
+| Test fixture left `Tree.hooks_json` at its default | The real repo's registrations leaked into fixtures, so an unregistered hook looked registered | Override every path in the fixture |
+
+Name-grepping for writers was confirmed unsound in both directions, as the
+prototype predicted: `set_member_complete` has no write site bearing its name,
+and a bare `event <name>` regex matches English prose.
+
+#### Recorded as un-lintable
+
+- **`protocol_violation` is agent-writable and stays that way.** Forging one
+  only blocks the forger's own convergence, and the open CLI path lets a human
+  record a violation they observed. Attestation is `agent` — the weakest path
+  that exists, not the intended one.
+- **Whether Claude Code's `!` prefix really bypasses `PreToolUse`.** The
+  human-only channel rests on it, as does the pre-existing
+  `! sahjhan daemon stop` guidance. It is a fact about the harness, not about
+  our config; the linter can only check that the *agent's* path is shut, which
+  it now does (H2 fails a `human:` producer whose event is not denied).
+- **Eight L6 near-miss predicate pairs.** Gates that differ by a severity
+  filter read as 86–96% identical to a text comparison. Migrating them to named
+  queries would merge facts that are genuinely different.
 
 ## The problem: the layering is real but invisible
 
@@ -229,6 +303,31 @@ C9's "jointly satisfiable" is deliberately weak — it means *no gate references
 an event with no producer*, not full constraint solving. Sound, incomplete, and
 cheap; that is the right trade for a gate that runs on every commit.
 
+**Where each check landed.** The C-numbering above is the design vocabulary;
+the shipped checks are sahjhan's `L1`–`L7` and holtz's `H1`–`H6`. The split
+followed the purity rule almost exactly as predicted:
+
+| Design | Shipped as | Where |
+|---|---|---|
+| C1 producer/consumer closure | L1 + H1 | both — the engine sees TOML producers, holtz sees hooks and skill files |
+| C2 producer window precedes consumer | L2 | sahjhan |
+| C3 attestation strength | L7 | sahjhan (holtz declares the lattice) |
+| C4 `restricted` ⟺ non-agent provenance | H5 | holtz — generalised: `restricted` **or** denied in the bootstrap allowlist |
+| C5 no duplicated inline SQL | L6 | sahjhan |
+| C6 block condition ≡ escape readiness | — | not shipped; named queries make it structural where migrated |
+| C7 boundary traversal | L3 | sahjhan |
+| C8 transition emits the state it implies | — | not shipped |
+| C9 dead-end states | L4 | sahjhan |
+| C10 dead vocabulary | L5 | sahjhan (holtz adds Tera templates as consumers) |
+| C11 transition ⟷ skill agreement | H6 | holtz |
+| C12 writer registered and hash-pinned | H2 + H3 + H4 | holtz |
+
+C6 and C8 remain unshipped. Neither is un-lintable in principle; both were
+simply not reached, and #77's deadlock is now guarded by the derived counter
+rather than by a check. The third copy of that predicate still lives in
+`protocol_tracker.py` as a Python string that no linter compares to the gate —
+a candidate for a future H7.
+
 ## The declarations must be falsified, not trusted
 
 The obvious failure of this whole design is committing the original sin one
@@ -296,28 +395,33 @@ to anyone who scrolled past it, with no analyzer running at all.
 
 Nothing turns blocking before its false-positive rate is known.
 
-**Phase 0 — measure (no config changes).** Harden the prototype into
-`scripts/enforcement_lint.py` implementing C1, C10, C11 by inference. Run it,
-triage every hit, and write the results into this document. Cheap, and it
-answers "how many more are lurking?" before any design is committed. *Exit: a
-triaged findings list.*
+**✅ Phase 0 — measure.** Done. `scripts/enforcement_lint.py` implements H1–H6;
+findings triaged above. Deviation from the plan: the phase did not stay
+measurement-only, because `sahjhan lint` shipped mid-phase and its L1 error was
+a *missing declaration* rather than a missing writer — so declaring producers
+was the cheapest way to learn whether the checks were sound, and the
+declarations then found real defects immediately.
 
-**Phase 1 — declare provenance.** Add `[events.*.provenance]` for all 46
-events, and C12 + writer-uniqueness in holtz. Filling in 46 blocks is itself an
-audit: every event whose writer is hard to name is a finding. *Exit: C4 and C12
-blocking in pre-commit.*
+**✅ Phase 1 — declare provenance.** Done, in the shape the engine settled on
+(`[[events.*.producers]]` + `attestation` on the event) rather than the
+`[events.*.provenance]` block proposed here. Producer `id` is opaque to sahjhan
+by design, so holtz gives it a grammar — `agent:cli`, `hook:<path>`,
+`human:<path>`, `engine:emits:<command>`, `engine:auto_record:<tools>` — and
+H2/H3/H4 falsify each form against the tree.
 
-**Phase 2 — engine support.** `sahjhan lint` with C1, C2, C7, C9, C10 over the
-generic model; named queries resolved by the engine. Ship as a sahjhan minor
-release, re-pin holtz. *Exit: `sahjhan lint` clean, in `pre-release-check.sh`.*
+**✅ Phase 2 — engine support.** Done. sahjhan v0.20.0 ships `lint` with
+L1–L7; holtz re-pinned from 0.19.0. Both linters run from
+`scripts/lint-enforcement.sh` in pre-commit, `pre-release-check.sh`, and CI.
 
-**Phase 3 — attestation + identity.** `requires_attestation` on the gates that
-constrain the agent; migrate duplicated SQL to named queries. C3, C5, C6.
-*Exit: C3 blocking.*
+**✅ Phase 3 — attestation + identity.** Done. `[attestation]` levels declared
+with a fifth class the plan did not anticipate — `human`, for a command only a
+person can run (#81). `requires_attestation = "host"` on `resume`. Three
+duplicated predicates migrated to `[queries.*]`.
 
-**Phase 4 — everting.** Generate `ENFORCEMENT-CONTRACT.md` and the trust graph;
-freshness-test them like the hook schema. *Exit: the contract doc is generated,
-committed, and CI fails when it goes stale.*
+**⬜ Phase 4 — everting.** Generate `ENFORCEMENT-CONTRACT.md` and the trust
+graph; freshness-test them like the hook schema. *Exit: the contract doc is
+generated, committed, and CI fails when it goes stale.* The census that feeds
+it already exists (`enforcement_lint.py --census`).
 
 **Ratchet.** After this, every field-found gate defect must either become a new
 check or be recorded here as un-lintable **with the reason**. That is what
@@ -347,30 +451,50 @@ The analyzer is enforcement code, so it is held to the enforcement testing
 rules: no check ships without a test proving it fires on a real historical
 defect.
 
-- [ ] Each of C1–C12 has a test using the **actual pre-fix config** of the bug
-      it claims to catch (reconstructable from git history for #73, #77, #79)
-      and asserting the check fails on it
-- [ ] Each check has a negative test on current `dev` asserting it passes
-- [ ] Phase 0 findings triaged and recorded in this document
-- [ ] `sahjhan lint` covered by the sahjhan suite (Rust unit + fixture configs)
-- [ ] `scripts/enforcement_lint.py` in `git-hooks/pre-commit` and
-      `scripts/pre-release-check.sh`
-- [ ] Generated `ENFORCEMENT-CONTRACT.md` has a staleness test
-- [ ] No check blocks until its false-positive rate is measured and recorded
+- [x] Each of H1–H6 has a test reconstructing the **tree** a real defect lived
+      in — not just its config, since the checks assert that files exist, are
+      registered, and are hash-pinned — and asserting the check fires
+      (`tests/test_enforcement_lint.py`)
+- [x] Each check has a negative test on current `dev` asserting it passes
+      (`TestCurrentDev`), plus property tests pinning #79's and #73's fixes:
+      `context_reset` is host-attested and unforgeable, `resume` demands host
+      evidence and carries the boundary tag, `quiz_bank_generated` cannot be
+      forged or empty
+- [x] Phase 0 findings triaged and recorded in this document
+- [x] `sahjhan lint` covered by the sahjhan suite (Rust unit + fixture configs)
+- [x] Both linters in `git-hooks/pre-commit`, `scripts/pre-release-check.sh`,
+      and CI, via `scripts/lint-enforcement.sh`
+- [ ] Generated `ENFORCEMENT-CONTRACT.md` has a staleness test — Phase 4
+- [x] No check blocks until its false-positive rate is measured and recorded —
+      see "The analyzers' own false positives" above. Every H-check reached
+      zero false positives on `dev` before the gate was wired; the two
+      remaining H1 warnings are real and do not fail the build (warnings only
+      fail under `--strict`, which is not how the gates invoke it)
 
 ## Immediate follow-ups, independent of this plan
 
 The prototype found these; they should be fixed regardless of whether the
 analyzer is built.
 
-1. ✅ **`quiz_exhausted_resolved` has no writer** — filed as
-   [#81](https://github.com/jbrjake/holtz/issues/81), covering both the missing
-   writer and the fact that an event meaning "a human reviewed this" is
-   agent-writable.
-2. ⬜ **12 events declared but neither written nor consumed.** Triage in Phase 0:
-   delete the dead ones, wire up any that were meant to be used. Verify each
-   against the corrected write-path enumeration first — the prototype's grep
-   was unsound in both directions.
-3. ⬜ **19 of 24 gate-consumed events are agent-self-attested.** Not a bug, but
-   it should be a *deliberate, visible* posture rather than an accident. The
-   generated contract table is how it becomes visible.
+1. ✅ **`quiz_exhausted_resolved` has no writer** —
+   [#81](https://github.com/jbrjake/holtz/issues/81). Fixed both halves. The
+   missing writer is now a *human* one: the bootstrap hook denies the agent's
+   `sahjhan event quiz_exhausted_resolved`, and `phase-convergence.md` tells
+   the agent to stop and hand the user a `!`-prefixed command. `restricted =
+   true` was the wrong tool — it admits trusted hooks, and no hook can attest a
+   human decision.
+2. ✅ **Dead declarations.** Six deleted (`baseline_delta`,
+   `convergence_iteration`, `merge_result`, `pattern_discovered`,
+   `run_postmortem`, `run_summary`), along with the `NEW_EVENT_TYPES` list that
+   was keeping them alive — a test asserting the noun existed while nothing
+   meant it. Seven had invisible-to-the-engine writers and now declare them.
+   `_checkpoint` is written by sahjhan itself on `ledger checkpoint`.
+3. ⬜ **23 of 29 gate-consumed events are agent-self-attested.** Not a bug, but
+   it should be a *deliberate, visible* posture rather than an accident.
+   `enforcement_lint.py --census` prints it today; Phase 4 commits it as a
+   generated document.
+4. ⬜ **`prediction` / `prediction_outcome` have no writer.** Consumed by
+   `summary.md.tera`, so SUMMARY.md's prediction-accuracy section is
+   permanently empty while the skill files discuss predictive recon throughout.
+   Wiring it means teaching two new commands and covering them in the contract
+   tests.

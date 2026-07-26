@@ -20,6 +20,20 @@ All sahjhan commands below must include `--config-dir "$CLAUDE_PLUGIN_ROOT/enfor
 
 After `/clear`, Claude Code's `SessionStart` records the `context_reset` event and the primer injects resume context — the user types anything and the model resumes from `sahjhan status`.
 
+#### Blocked by an exhausted lens quiz
+
+`converge` also refuses while any lens has an unresolved `quiz_exhausted` — a lens whose subagent failed its re-read quiz to the attempt limit, or whose questions went stale because fix commits moved the source they anchor to. (The bank is graph-derived during recon and locked when the vault key closes at `recon_complete`; it cannot be regenerated in place.)
+
+**You cannot clear this yourself.** The quiz exists to make "I looked again" mean the code was actually re-read, so signing off on your own failure to demonstrate that would void the check. Recording the resolution event is blocked on your Bash path and will stay blocked.
+
+Stop and hand it to the user. Tell them which lens is exhausted, point at its artifact (`docs/holtz/audit/lens-<lens>.md`), summarise what the sweep did and did not establish, and ask them to run — with the leading `!`, which runs it as *them*, not as a tool call:
+
+```bash
+! sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event quiz_exhausted_resolved --field project=<project> --field run=<run> --field auditor=holtz --field perspective=<lens> --field resolution=human_reviewed
+```
+
+The alternative, if they would rather not accept it, is starting a fresh run so recon rebuilds the bank against current source.
+
 **Filtered reads in convergence loop:** Each iteration re-reads the punchlist. If the punchlist has more than 6 items, use:
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py <path> --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render

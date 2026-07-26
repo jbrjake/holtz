@@ -24,11 +24,15 @@ BREADCRUMBS = ["project", "run", "auditor"]
 # Auto-recorded events don't need breadcrumb fields — they're telemetry, not audit events
 _AUTO_RECORDED_EVENTS = {"file_read", "source_edit", "file_search", "bash_command"}
 
+# The JSONL-migration vocabulary that is actually reachable. Six others
+# (merge_result, convergence_iteration, run_summary, pattern_discovered,
+# baseline_delta, run_postmortem) were declared and never wired to anything —
+# no gate, template, hook, skill file, or alias — and this list was what kept
+# them alive: a test asserting the noun exists, while nothing meant it. Removed
+# in #82 along with the declarations. See `sahjhan lint` L5.
 NEW_EVENT_TYPES = [
     "recon_finding", "audit_claim", "test_audit_finding",
-    "code_audit_finding", "merge_result", "convergence_iteration",
-    "run_summary", "graph_delta", "pattern_discovered",
-    "baseline_delta", "run_postmortem",
+    "code_audit_finding", "graph_delta",
 ]
 
 
@@ -479,12 +483,33 @@ def test_perspective_clean_has_quiz_gate():
     raise AssertionError("set complete perspective transition not found")
 
 
+def _resolved_gate_predicates(transition: dict) -> list[str]:
+    """Gate JSON with `query = "<name>"` replaced by the SQL it names.
+
+    A gate's predicate can now live in `protocol.toml [queries]` rather than
+    inline (#82), so asserting on the gate's own text stops seeing it — this
+    test passed on the inline SQL and failed the moment the predicate became a
+    shared object, without the gate's meaning changing at all. Resolve the
+    name, then assert on what actually runs.
+    """
+    queries = tomllib.loads(PROTOCOL_TOML.read_text()).get("queries", {})
+    resolved = []
+    for gate in transition.get("gates", []) or []:
+        named = gate.get("query")
+        if named:
+            assert named in queries, f"gate references undeclared query '{named}'"
+            resolved.append(json.dumps({**gate, "sql": queries[named]["sql"]}))
+        else:
+            resolved.append(json.dumps(gate))
+    return resolved
+
+
 def test_converge_has_quiz_exhaustion_gate():
     """converge transition checks for unresolved quiz_exhausted."""
     cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
     for t in cfg["transitions"]:
         if t.get("command") == "converge":
-            gate_strs = [json.dumps(g) for g in t.get("gates", [])]
+            gate_strs = _resolved_gate_predicates(t)
             assert any("quiz_exhausted" in g for g in gate_strs), \
                 "converge missing quiz_exhausted gate"
             return

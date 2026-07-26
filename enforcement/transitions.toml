@@ -106,7 +106,7 @@ command = "defer_cant_reproduce"
 args = ["item_id"]
 gates = [
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}'", expect = "true", intent = "finding must exist" },
-    { type = "query", sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'", expect = "true", intent = "finding must not already be resolved or deferred" },
+    { type = "query", query = "item_open", expect = "true" },
     { type = "ledger_has_event_since", event = "fix_start", since = "last_transition", intent = "must have started working on this item" },
     { type = "command_succeeds", cmd = "test -f docs/holtz/investigations/{{item_id}}.md && test -s docs/holtz/investigations/{{item_id}}.md", intent = "reproduction attempts must be documented in investigation file" },
 ]
@@ -120,7 +120,7 @@ command = "defer_low"
 args = ["item_id"]
 gates = [
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='LOW'", expect = "true", intent = "finding must exist and be LOW severity" },
-    { type = "query", sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'", expect = "true", intent = "finding must not already be resolved or deferred" },
+    { type = "query", query = "item_open", expect = "true" },
 ]
 
 # ── Deferral: MEDIUM severity (budget-capped) ──
@@ -132,7 +132,7 @@ command = "defer_medium"
 args = ["item_id"]
 gates = [
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='MEDIUM'", expect = "true", intent = "finding must exist and be MEDIUM severity" },
-    { type = "query", sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'", expect = "true", intent = "finding must not already be resolved or deferred" },
+    { type = "query", query = "item_open", expect = "true" },
     { type = "query", sql = "SELECT (SELECT count(*) FROM events WHERE type='finding_deferred' AND reason='medium_budget') < (SELECT count(*) FROM events WHERE type='finding' AND severity='MEDIUM') / 2", expect = "true", intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings" },
 ]
 
@@ -160,9 +160,18 @@ gates = [
 from = "awaiting_clear"
 to = "fix_loop"
 command = "resume"
+boundary = "context-reset"
 gates = [
     { type = "ledger_has_event_since", event = "context_reset", since = "last_transition", filter = { trigger = "session_start" }, intent = "context must be reset via /clear (or compaction) before resuming" },
 ]
+
+# The third layer, and the one that fails at rest rather than at runtime (#82).
+# `context_reset` is declared `attestation = "host"`; requiring host here means
+# that if anyone ever re-points the event at a weaker signal — as #79 did, to
+# UserPromptSubmit, which is `ambient` — `sahjhan lint` L7 fails the build
+# instead of the gate silently opening on the next prompt that arrives.
+  [transitions.integrity]
+  requires_attestation = "host"
 
 # ── Pause for human (#69) ──
 # Reversible pause so the agent can yield the turn to answer a user question
@@ -215,7 +224,7 @@ to = "perspective_clean"
 command = "set complete perspective"
 args = ["current_perspective"]
 gates = [
-    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')", expect = "0", intent = "all findings must be resolved or deferred" },
+    { type = "query", query = "all_findings_closed", expect = "0" },
     { type = "query", sql = "SELECT count(*) >= 2 FROM events WHERE type='iteration_complete' AND perspective='{{current_perspective}}'", expect = "true", intent = "two clean iterations required for stability" },
     { type = "min_elapsed", event = "iteration_complete", seconds = 120, intent = "prevent rapid-fire gaming of iteration count" },
     { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest --tb=short -q}", timeout = 120, intent = "tests must pass" },
@@ -259,9 +268,9 @@ gates = [
     { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member", intent = "all lenses must be complete" },
     { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest --tb=short -q}", timeout = 120, intent = "tests must pass" },
     { type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", timeout = 30, intent = "no lint violations" },
-    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')", expect = "0", intent = "all findings must be resolved or deferred" },
+    { type = "query", query = "all_findings_closed", expect = "0" },
     { type = "no_violations", intent = "no unresolved protocol violations" },
-    { type = "query", sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')", expect = "true", intent = "no unresolved quiz exhaustions" },
+    { type = "query", query = "quiz_exhaustions_resolved", expect = "true" },
 ]
 
 [[transitions]]
