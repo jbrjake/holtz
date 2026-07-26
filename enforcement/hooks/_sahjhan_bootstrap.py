@@ -78,8 +78,19 @@ ALLOWED_SAHJHAN_SUBCMDS = {
 }
 
 # Second-level blocks: subcommand is allowed but specific sub-subcommands are not.
+#
+# For `event`, the sub-subcommand is the event type — which makes this the
+# mechanism that turns an event into a human-only channel (#81). An event
+# cannot be made agent-unwritable with `restricted = true` when the intended
+# writer is a *person* rather than a trusted hook: `restricted` means
+# daemon-authenticated callers only, and a human at the terminal is running the
+# bare CLI. Denying the agent's tool-call path here leaves exactly one way to
+# record it — the user typing `! sahjhan ...`, which the harness runs directly
+# rather than as a tool call, so no PreToolUse hook is involved and the agent
+# cannot issue it. Same channel already used for `daemon stop`.
 BLOCKED_SAHJHAN_SUBSUB: dict[str, set[str]] = {
     "daemon": {"stop"},
+    "event": {"quiz_exhausted_resolved"},
 }
 
 # Resolve plugin root: enforcement/hooks/ -> enforcement/ -> repo root
@@ -238,10 +249,18 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
     if not tokens:
         return None
 
-    # Skip leading wrappers (nohup, env) and env var assignments (FOO=bar)
+    # Skip leading wrappers (nohup, env, `!`) and env var assignments (FOO=bar)
     idx = 0
     while idx < len(tokens):
-        if tokens[idx] in ("nohup", "env"):
+        if tokens[idx] in ("nohup", "env", "!"):
+            # `!` is bash's pipeline negation: `! sahjhan …` RUNS sahjhan and
+            # inverts the exit status. Skipping it here is not cosmetic — while
+            # implementing #81 the guard was observed to allow
+            # `! sahjhan event quiz_exhausted_resolved` and `! sahjhan daemon
+            # stop` because tokens[0] was "!" rather than "sahjhan", so the
+            # parser reported "not a sahjhan command". One character defeated
+            # every second-level block. Same class as the `\sahjhan` /
+            # `"sahjhan"` normalisation below.
             idx += 1
         elif "=" in tokens[idx] and not tokens[idx].startswith("-"):
             # Shell env var assignment: FOO=bar, PATH=/usr/bin, etc.
@@ -257,6 +276,10 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
     cmd_token = tokens[idx]
     if cmd_token.startswith("\\"):
         cmd_token = cmd_token[1:]
+    # `!sahjhan` with no space parses as a single token; same negation, same
+    # bypass, so strip it here too rather than only in the wrapper loop.
+    if cmd_token.startswith("!"):
+        cmd_token = cmd_token.lstrip("!")
     if len(cmd_token) >= 2 and cmd_token[0] == cmd_token[-1] and cmd_token[0] in ('"', "'"):
         cmd_token = cmd_token[1:-1]
 
@@ -394,6 +417,21 @@ def _bash_references_blocked_sahjhan(command: str, cwd: str) -> str | None:
                     "and terminates the run. The agent may run it once the audit "
                     "is idle/finalized/terminated or the daemon is already dead; "
                     "until then only the user can run it: ! sahjhan daemon stop"
+                )
+            if (subcmd, sub_subcmd) == ("event", "quiz_exhausted_resolved"):
+                return (
+                    "BLOCKED: 'sahjhan event quiz_exhausted_resolved' is not "
+                    "permitted for the agent. That event clears a lens whose "
+                    "re-read quiz you failed (or whose questions went stale), "
+                    "and it is the one thing you must not decide for yourself "
+                    "— recording it would let you sign off on your own failure "
+                    "to demonstrate you re-read the code. Stop, tell the user "
+                    "which lens is exhausted and where its audit artifact is, "
+                    "and ask them to run:\n"
+                    "! sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" "
+                    "event quiz_exhausted_resolved --field project=<project> "
+                    "--field run=<run> --field auditor=holtz "
+                    "--field perspective=<lens> --field resolution=human_reviewed"
                 )
             return (
                 f"BLOCKED: 'sahjhan {subcmd} {sub_subcmd}' is not permitted. "
