@@ -39,6 +39,19 @@ CHANGED_PY=$(echo "$CHANGED_FILES" | grep -E '\.py$' || true)
 CHANGED_ENFORCEMENT=$(echo "$CHANGED_FILES" \
     | grep -E '^(enforcement/.*\.(toml|py)|skills/.*\.md|hooks/hooks\.json)$' || true)
 if [[ -n "$CHANGED_ENFORCEMENT" ]]; then
+    # The contract doc is derived, so regenerate and re-stage it rather than
+    # making the dev remember — same treatment as trusted-callers.toml below.
+    # It is re-staged, not silently rewritten: the diff lands in the commit,
+    # which is the point of generating it at all. A row that changes from
+    # `host` to `ambient` is a defect you can see in review without running
+    # anything, and CI re-checks it for anyone who bypassed this hook.
+    if ! python3 scripts/enforcement_contract.py --check >/dev/null 2>&1; then
+        echo "pre-commit: enforcement config changed — regenerating ENFORCEMENT-CONTRACT.md"
+        python3 scripts/enforcement_contract.py --write >/dev/null
+        git --no-pager diff --stat -- docs/ENFORCEMENT-CONTRACT.md
+        git add docs/ENFORCEMENT-CONTRACT.md
+    fi
+
     echo "pre-commit: enforcement lint"
     if ! bash scripts/lint-enforcement.sh; then
         echo "pre-commit: enforcement lint failed — a gate does not mean what it says." >&2

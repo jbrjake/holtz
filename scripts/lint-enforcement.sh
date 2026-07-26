@@ -67,6 +67,16 @@ if ! python3 scripts/enforcement_lint.py ${STRICT}; then
     FAILURES=$((FAILURES + 1))
 fi
 
+# The third artifact: the layering written out where a person reads it.
+# Detection makes CI red; comprehension is what catches the defect class we
+# have not named yet. A stale contract is a document that describes a protocol
+# we no longer run, which is worse than no document.
+echo ""
+echo "--- enforcement contract (generated doc vs. config) ---"
+if ! python3 scripts/enforcement_contract.py --check; then
+    FAILURES=$((FAILURES + 1))
+fi
+
 if [[ $FAILURES -gt 0 ]]; then
     exit 1
 fi

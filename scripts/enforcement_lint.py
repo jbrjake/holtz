@@ -51,6 +51,7 @@ import json
 import re
 import sys
 import tomllib
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -71,6 +72,10 @@ PY_WRITER_DIRS = (
 # Events the engine itself writes. Nothing in the tree records these, and
 # nothing should: they exist because sahjhan appends them.
 ENGINE_BUILTIN_EVENTS = frozenset({"state_transition"})
+# Their attestation class. Not in `[attestation] levels` because no event
+# *declares* it — it is a property of who appends the record. The agent can
+# produce one only by satisfying the gates of the transition it describes.
+ENGINE_ATTESTATION = "engine"
 
 
 # ── Write-path verbs ─────────────────────────────────────────────────────────
@@ -187,7 +192,18 @@ class Model:
 
     tree: Tree = field(default_factory=Tree)
     events: dict[str, dict] = field(default_factory=dict)
+    states: dict[str, dict] = field(default_factory=dict)
     transitions: list[dict] = field(default_factory=list)
+    # protocol.toml [queries]: the named predicates a gate can reference instead
+    # of carrying its own copy of the SQL. Kept on the model because identity is
+    # the point — a checker that cannot resolve the name cannot tell two gates
+    # apart from two copies of one gate.
+    queries: dict[str, dict] = field(default_factory=dict)
+    # hooks.toml's runtime gates and monitors, kept whole: they are gates in
+    # every sense that matters (the TDD block is one), and the message a
+    # blocking hook prints is itself a taught command.
+    hooks: list[dict] = field(default_factory=list)
+    monitors: list[dict] = field(default_factory=list)
     aliases: dict[str, str] = field(default_factory=dict)
     attestation_levels: list[str] = field(default_factory=list)
     consumed: dict[str, list[str]] = field(default_factory=dict)
@@ -223,24 +239,50 @@ def _sql_event_types(sql: str) -> set[str]:
     return found
 
 
-def _gate_consumed(gate: dict) -> set[str]:
-    """Event types one gate depends on, across every gate shape."""
-    consumed: set[str] = set()
-    if isinstance(gate.get("event"), str):
-        consumed.add(gate["event"])
-    for key in ("sql", "query"):
-        value = gate.get(key)
-        if isinstance(value, str) and key == "sql":
-            consumed |= _sql_event_types(value)
+def _gate_branches(gate: dict) -> Iterator[dict]:
+    """Sub-gates of a boolean gate, whatever shape the branch was written in."""
     for branch_key in ("any_of", "all_of", "not"):
         branch = gate.get(branch_key)
         if isinstance(branch, list):
             for sub in branch:
                 if isinstance(sub, dict):
-                    consumed |= _gate_consumed(sub)
+                    yield sub
         elif isinstance(branch, dict):
-            consumed |= _gate_consumed(branch)
+            yield branch
+
+
+def _gate_query_names(gate: dict) -> set[str]:
+    """Named queries a gate references, including inside boolean branches."""
+    names = {gate["query"]} if isinstance(gate.get("query"), str) else set()
+    for sub in _gate_branches(gate):
+        names |= _gate_query_names(sub)
+    return names
+
+
+def _gate_consumed(gate: dict, queries: dict[str, dict] | None = None) -> set[str]:
+    """Event types one gate depends on, across every gate shape.
+
+    Pass ``queries`` to resolve ``query = "<name>"`` references through
+    ``protocol.toml [queries]``. Without it a named-query gate reads as
+    consuming nothing — which is how a live H1 error silently retired the
+    moment its predicate was migrated to a name.
+    """
+    consumed: set[str] = set()
+    if isinstance(gate.get("event"), str):
+        consumed.add(gate["event"])
+    if isinstance(gate.get("sql"), str):
+        consumed |= _sql_event_types(gate["sql"])
+    if queries is not None:
+        for name in _gate_query_names(gate):
+            consumed |= _sql_event_types(queries.get(name, {}).get("sql", ""))
+    for sub in _gate_branches(gate):
+        consumed |= _gate_consumed(sub, queries)
     return consumed
+
+
+def gate_event_types(model: Model, gate: dict) -> set[str]:
+    """Public form of the above, with the model's named queries resolved."""
+    return _gate_consumed(gate, model.queries)
 
 
 def parse_config(model: Model) -> None:
@@ -259,9 +301,14 @@ def parse_config(model: Model) -> None:
     # it consumes nothing — which silently retired a live H1 error the moment
     # its predicate was migrated. Resolve the name, or report the gap.
     named_queries = dict(protocol_doc.get("queries", {}))
+    model.queries = named_queries
 
     transitions_doc = _load_toml(config_dir / "transitions.toml")
     model.transitions = list(transitions_doc.get("transitions", []))
+
+    states_path = config_dir / "states.toml"
+    if states_path.exists():
+        model.states = dict(_load_toml(states_path).get("states", {}))
 
     def _record_consumer(event: str, where: str, kind: str = "gate") -> None:
         model.consumed.setdefault(event, []).append(where)
@@ -271,14 +318,13 @@ def parse_config(model: Model) -> None:
         command = transition.get("command", "?")
         where = f"transitions.toml: {command}"
         for gate in transition.get("gates", []) or []:
-            named = gate.get("query")
-            if isinstance(named, str):
+            for named in sorted(_gate_query_names(gate)):
                 if named not in named_queries:
                     model.unresolved_queries.append((command, named))
-                else:
-                    sql = named_queries[named].get("sql", "")
-                    for event in _sql_event_types(sql):
-                        _record_consumer(event, f"{where} (query {named})")
+                    continue
+                sql = named_queries[named].get("sql", "")
+                for event in _sql_event_types(sql):
+                    _record_consumer(event, f"{where} (query {named})")
             for event in _gate_consumed(gate):
                 _record_consumer(event, where)
         # `emits` is a write path, not a read.
@@ -294,6 +340,8 @@ def parse_config(model: Model) -> None:
             _record_consumer(event, f"protocol.toml: [queries.{name}]")
 
     hooks_doc = _load_toml(config_dir / "hooks.toml")
+    model.hooks = list(hooks_doc.get("hooks", []))
+    model.monitors = list(hooks_doc.get("monitors", []))
     for hook in hooks_doc.get("hooks", []):
         label = f"hooks.toml: {hook.get('event', '?')}"
         gate = hook.get("gate", {})
@@ -904,20 +952,54 @@ def run_checks(model: Model, only: list[str] | None = None) -> list[Finding]:
 # ── Census ───────────────────────────────────────────────────────────────────
 
 
+def attestation_of(model: Model, event: str) -> str:
+    """What one event's word is worth.
+
+    Defined here, once, because two things ask: the ``--census`` view and the
+    generated contract document. Two copies of this rule would drift into two
+    different answers to "how much of the evidence is the agent's own word" —
+    the same defect the checks below exist to find.
+    """
+    if event in ENGINE_BUILTIN_EVENTS:
+        return ENGINE_ATTESTATION
+    spec = model.events.get(event, {})
+    declared = spec.get("attestation")
+    if declared:
+        return str(declared)
+    # No declared class: agent-attested unless something stops the agent
+    # writing it. "unstated" is said out loud because a blank cell reads as
+    # "fine", and this one is not.
+    return "agent" if not spec.get("restricted") else "unstated"
+
+
+def gate_consumed_events(model: Model) -> dict[str, str]:
+    """Every event some *gate* depends on → its attestation class.
+
+    Wider than the transition table: a hooks.toml gate (the TDD block) and a
+    predicate embedded in a Python hook (the commit gate) decide as much as a
+    transition gate does. Render-only consumers are excluded — an unwritten
+    event there leaves a document section empty, not a run blocked.
+    """
+    consumed = {}
+    for event in sorted(model.consumed):
+        # A Python-embedded predicate records no kind; default to "gate",
+        # matching H1. Calling that one a render would hide the commit gate.
+        if "gate" in model.consumer_kinds.get(event, {"gate"}):
+            consumed[event] = attestation_of(model, event)
+    return consumed
+
+
 def census(model: Model) -> list[tuple[str, str, str]]:
     """One row per gate-consumed event: who writes it, and how strong that is.
 
     This is the posture number the plan wanted visible rather than accidental:
-    what share of the evidence a gate relies on is the agent's own word.
+    what share of the evidence a gate relies on is the agent's own word. The
+    committed form is ``docs/ENFORCEMENT-CONTRACT.md``; this is the same data
+    on the terminal.
     """
     rows = []
-    for event in sorted(model.consumed):
-        if event not in model.events:
-            continue
+    for event, attests in gate_consumed_events(model).items():
         writers = sorted({writer.producer_id for writer in model.writers.get(event, [])})
-        attests = model.events[event].get("attestation") or (
-            "agent" if not model.events[event].get("restricted") else "unstated"
-        )
         rows.append((event, attests, ", ".join(writers) or "NONE"))
     return rows
 
