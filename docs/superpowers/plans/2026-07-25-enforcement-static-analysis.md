@@ -1,26 +1,71 @@
 # Making the enforcement layering statically analyzable
 
-**Status:** Phases 0–3 landed. `sahjhan lint` + `scripts/enforcement_lint.py`
-both block in pre-commit, pre-release, and CI. **Resume at Phase 4** (generate
-`ENFORCEMENT-CONTRACT.md` and the trust graph).
+**Status:** Phases 0–4 landed, and the ratchet has run once (H7–H9, v0.140.1).
+`sahjhan lint`, `scripts/enforcement_lint.py` and the generated
+`docs/ENFORCEMENT-CONTRACT.md` all block in pre-commit, pre-release, and CI.
 **Tracking:** holtz [#82](https://github.com/jbrjake/holtz/issues/82) · engine portion [jbrjake/sahjhan#32](https://github.com/jbrjake/sahjhan/issues/32) · first defect found [#81](https://github.com/jbrjake/holtz/issues/81)
 **Motivation:** #73 (gate unsatisfiable), #77 (gate deadlocked), #79 (gate satisfied without cause)
 **Goal:** find the next one without running an audit
 
 ## Next session starts here
 
-Phases 0–3 are done (2026-07-26). What remains:
+Phases 0–4 are done (2026-07-26), and the ratchet has produced its first
+round: three new checks, three real defects, all fixed in the same commit.
+What remains:
 
-1. **Phase 4 — everting.** Generate `docs/ENFORCEMENT-CONTRACT.md` from the
-   declarations now in the tree: one row per gate giving the fact required, the
-   event, its writer, and its attestation class. The data is already there —
-   `python3 scripts/enforcement_lint.py --census` prints it. Add a staleness
-   test like `test_hook_schema_freshness.py`.
-2. **Two open findings**, both recorded below and neither blocking:
+1. **One open finding**, recorded below and not blocking:
    `prediction`/`prediction_outcome` are read by `summary.md.tera` and written
-   by nothing, and eight L6 near-miss predicate pairs are unmigrated.
-3. **The ratchet is now live.** Any field-found gate defect must become a check
-   or be recorded here as un-lintable *with the reason*.
+   by nothing, so SUMMARY.md's prediction-accuracy section is permanently
+   empty. Wiring it means teaching two new commands and covering them in the
+   contract tests. (Eight L6 near-miss pairs remain accepted noise; one of the
+   eleven — `fix_commit`/`iteration_boundary` — cleared itself when
+   `pattern_analysis_overdue` was named.)
+2. **The ratchet is live and has run once.** Any field-found gate defect must
+   become a check or be recorded here as un-lintable *with the reason*.
+3. **Candidate next checks**, none urgent: a `--explain <transition>` mode
+   printing one gate's whole chain (design artifact 3, not built); H8 for
+   *warning* hooks as well as blocking ones (deliberately scoped out — an
+   unsatisfiable escape in a nudge is not a deadlock); and whether `expect`
+   should support comparisons, which would let a named query serve a count and
+   a threshold without the boolean/int split (a sahjhan question, not a holtz
+   one).
+
+### Phase 4 findings — the ratchet's first round
+
+Shipped 2026-07-26 as `f861e6a` (contract) and `33c1e67` (H7–H9). The
+document came first on purpose: everting the layering is what made the next
+three defects obvious enough to write checks for.
+
+| Check | Found | Verdict | Fix |
+|---|---|---|---|
+| H7: a gate predicate that also lives as a Python string | `protocol_tracker._FIXES_SINCE_PATTERN_SQL`, 93% identical to the `pattern_check` gate | **REAL.** #77 was fixed by making the hook read the ledger — but from its own copy of the SQL. Two expressions, nothing comparing them | Named the predicate; the hook resolves the name at runtime and holds no SQL |
+| H8: a block whose printed escape is decided by a different predicate | `iteration_boundary` blocks on `state_transition WHERE command='fix_commit'` and names `pattern_check`, which counts `finding_resolved` | **REAL, latent.** Resolve findings without a `fix_commit` transition — the standalone path SKILL.md teaches, or a fix whose `emits` failed — and the counts disagree. Disagree the wrong way and the block and its own escape are both shut: #77's deadlock from a second direction | Both reference `[queries.pattern_analysis_overdue]` with opposite `expect`, so exactly one is open at any ledger state |
+| H9: an item-scoped transition that does not record the state it implies | `defer_cant_reproduce`, `defer_low`, `defer_medium` | **REAL.** Gated on the item being open, emitting nothing, so the skill taught `defer low BH-001` *and* `event finding_deferred id=BH-001`. Double-entry per deferred finding, and order-dependent: event first and `item_open` refuses the transition; transition only and convergence never clears | `emits` on all three, the way `fix_commit` already did it; removed the second command from `step-10-fix-loop.md` |
+
+**False-positive rates, measured before each check blocked.** H7: one SQL
+literal exists in the entire Python tree and it is the defect — zero. H9: three
+hits, all real — zero. H8 needed one narrowing pass. Its first form reported
+`commit_gate.py`'s unregistered-commit block, which names `fix_commit` as the
+escape; that is a *good* block whose escape is more work (a passing suite, a
+recorded blast radius), not a restatement of the fact that blocked. Only the
+nominal case is decidable, so a Python block that names no query is left alone.
+The lesson repeats Phase 0's: the check's error was a wrong model of the tree,
+not a bad pattern.
+
+**What made H8 possible was giving the block a *name* to check, not a text to
+compare.** The cache key is the query name, so the chain — block → the value it
+reads → the query that derived it → the gate it points at — is one word
+repeated in four files, and any break in it fails the build. Textual similarity
+would have been the same mistake one level up.
+
+**Verified against a real daemon, not the config.** `emits` fields are
+pattern-validated on write, and `expect = "false"` depends on how DataFusion
+renders a boolean — neither is decidable by reading TOML. New `real_daemon`
+tests assert that `iteration_boundary` and `pattern_check` are never both shut
+(with zero `fix_commit` transitions recorded, the case the old predicate
+missed), that a deferral closes its item for convergence, that a second
+deferral is still refused, and that `defer_medium` emits the exact `reason` its
+budget gate counts.
 
 ### Phase 0 findings
 
@@ -291,7 +336,7 @@ real is not worth its false positives.
 | C3 | Gate's `requires_attestation` ≤ writer's `attests` | forgeable evidence | **#79** |
 | C4 | `restricted` ⟺ `attests ∈ {tool, host}` | an event claiming non-agent provenance that an agent may write | `quiz_exhausted_resolved` (live) |
 | C5 | Named-query references only; no duplicated inline SQL | mirror drift / deadlock | **#77** |
-| C6 | Block condition ≡ escape readiness for the same named fact | printed escape is unsatisfiable | **#77** |
+| C6 | Block condition ≡ escape readiness for the same named fact | printed escape is unsatisfiable | **#77** (shipped as H8) |
 | C7 | No path bypasses a declared `boundary` edge | route-around | `awaiting_human` (guarded by a hand-written test today) |
 | C8 | Transition taking an `item_id` emits the state its name implies | transition/state decoupling | `fix_commit`/`finding_resolved` |
 | C9 | Every non-terminal state has ≥1 outgoing transition whose gates are jointly satisfiable | dead end | — (structural) |
@@ -314,19 +359,18 @@ followed the purity rule almost exactly as predicted:
 | C3 attestation strength | L7 | sahjhan (holtz declares the lattice) |
 | C4 `restricted` ⟺ non-agent provenance | H5 | holtz — generalised: `restricted` **or** denied in the bootstrap allowlist |
 | C5 no duplicated inline SQL | L6 | sahjhan |
-| C6 block condition ≡ escape readiness | — | not shipped; named queries make it structural where migrated |
+| C6 block condition ≡ escape readiness | H8 | holtz — the block sites are Python hooks and gate `intent` prose, which the engine cannot see |
 | C7 boundary traversal | L3 | sahjhan |
-| C8 transition emits the state it implies | — | not shipped |
+| C8 transition emits the state it implies | H9 | holtz |
 | C9 dead-end states | L4 | sahjhan |
 | C10 dead vocabulary | L5 | sahjhan (holtz adds Tera templates as consumers) |
 | C11 transition ⟷ skill agreement | H6 | holtz |
 | C12 writer registered and hash-pinned | H2 + H3 + H4 | holtz |
 
-C6 and C8 remain unshipped. Neither is un-lintable in principle; both were
-simply not reached, and #77's deadlock is now guarded by the derived counter
-rather than by a check. The third copy of that predicate still lives in
-`protocol_tracker.py` as a Python string that no linter compares to the gate —
-a candidate for a future H7.
+C6, C8 and the H7 candidate all shipped in the ratchet's first round
+(v0.140.1), and each found a live defect — see "Phase 4 findings" above. The
+split held: every one of them needed to see a Python hook or a skill file, so
+all three landed on the holtz side of the seam.
 
 ## The declarations must be falsified, not trusted
 
@@ -418,10 +462,23 @@ with a fifth class the plan did not anticipate — `human`, for a command only a
 person can run (#81). `requires_attestation = "host"` on `resume`. Three
 duplicated predicates migrated to `[queries.*]`.
 
-**⬜ Phase 4 — everting.** Generate `ENFORCEMENT-CONTRACT.md` and the trust
-graph; freshness-test them like the hook schema. *Exit: the contract doc is
-generated, committed, and CI fails when it goes stale.* The census that feeds
-it already exists (`enforcement_lint.py --census`).
+**✅ Phase 4 — everting.** Done. `scripts/enforcement_contract.py` generates
+`docs/ENFORCEMENT-CONTRACT.md`: the attestation lattice, the posture census, a
+mermaid trust graph coloured by each edge's *weakest* gate, one row per gate
+(fact · evidence · writer · attests · forgeable), the `hooks.toml` runtime
+gates, and a writer table showing registration and pin — the layering's bottom
+row, where a stale hash silently fails every gate open. Gated three ways: a
+byte-comparison test, `--check` in `lint-enforcement.sh`, and pre-commit
+regeneration that re-stages the diff so review sees it.
+
+Two details worth keeping. The document and `--census` derive their shared
+number from one function (`gate_consumed_events`), because two copies of that
+rule would drift into two different answers to "how much of this is the agent's
+own word" — the defect class the whole effort exists to find, committed by the
+tool that finds it. And the trust graph's legend keys on the *edge*, not the
+command: `resume` appears twice in different colours, which is exactly the
+`awaiting_human` route-around the boundary check forbids, now visible without
+running anything.
 
 **Ratchet.** After this, every field-found gate defect must either become a new
 check or be recorded here as un-lintable **with the reason**. That is what
@@ -464,7 +521,16 @@ defect.
 - [x] `sahjhan lint` covered by the sahjhan suite (Rust unit + fixture configs)
 - [x] Both linters in `git-hooks/pre-commit`, `scripts/pre-release-check.sh`,
       and CI, via `scripts/lint-enforcement.sh`
-- [ ] Generated `ENFORCEMENT-CONTRACT.md` has a staleness test — Phase 4
+- [x] Generated `ENFORCEMENT-CONTRACT.md` has a staleness test
+      (`tests/test_enforcement_contract.py`), paired with substantive property
+      tests — a byte comparison alone would pass forever on a generator that
+      emitted an empty file
+- [x] H7–H9 each fire on a reconstructed defect and go silent on its fix; H8's
+      false positive is pinned by a test asserting the honest escape stays
+      quiet
+- [x] The behaviour changes are asserted against a **real daemon**, since
+      `emits` field validation and `expect = "false"` rendering are facts about
+      the engine, not about our TOML
 - [x] No check blocks until its false-positive rate is measured and recorded —
       see "The analyzers' own false positives" above. Every H-check reached
       zero false positives on `dev` before the gate was wired; the two
