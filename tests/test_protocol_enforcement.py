@@ -265,7 +265,7 @@ class TestProtocolCache:
         from _protocol_cache import compute_obligations, empty_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
-        cache["fixes_since_pattern"] = 4
+        cache["pattern_analysis_overdue"] = True
         obligations = compute_obligations(cache)
         assert any("pattern_check" in o["msg"] for o in obligations)
 
@@ -287,7 +287,7 @@ class TestProtocolCache:
         cache["perspective"] = "component"
         cache["perspectives_done"] = 2
         cache["perspectives_total"] = 13
-        cache["fixes_since_pattern"] = 5
+        cache["pattern_analysis_overdue"] = True
         obligations = compute_obligations(cache)
         text = format_injection(obligations, cache)
         # Rough token estimate: words + punctuation
@@ -802,7 +802,7 @@ class TestCommitGate:
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
-        cache["fixes_since_pattern"] = 4
+        cache["pattern_analysis_overdue"] = True
         cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
@@ -824,7 +824,7 @@ class TestCommitGate:
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
-        cache["fixes_since_pattern"] = 4
+        cache["pattern_analysis_overdue"] = True
         cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
@@ -844,7 +844,7 @@ class TestCommitGate:
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
-        cache["fixes_since_pattern"] = 4
+        cache["pattern_analysis_overdue"] = True
         write_cache(str(tmp_path), cache)
 
         event = {
@@ -882,7 +882,7 @@ class TestPrimerStateLine:
         cache["perspectives_done"] = 2
         cache["perspectives_total"] = 13
         cache["unregistered_commits"] = ["abc"]
-        cache["fixes_since_pattern"] = 4
+        cache["pattern_analysis_overdue"] = True
         line = format_state_line(cache)
         assert line
         assert len(line.split()) <= 25, f"State line too long: {line}"
@@ -1008,11 +1008,12 @@ class TestEnforcementIntegration:
         # 5. Verify unregistered commits cleared
         c = read_cache(str(tmp_path))
         assert c["unregistered_commits"] == []
-        # #77: fixes_since_pattern is derived from the ledger, no longer a
-        # token-incremented mirror. With no real ledger behind the mock daemon
-        # the transition can't bump it — the derived-count path is covered by the
-        # real_daemon test in tests/test_e2e_audit_flow.py.
-        assert c["fixes_since_pattern"] == 0
+        # #77/#82: pattern_analysis_overdue is derived by running the gate's
+        # own named query against the ledger, no longer a token-incremented
+        # mirror. With no real ledger behind the mock daemon the transition
+        # can't raise it — the derived path is covered by the real_daemon test
+        # in tests/test_e2e_audit_flow.py.
+        assert c["pattern_analysis_overdue"] is False
 
         # 6. Gate allows next commit
         _, out, _ = run_enforcement_hook("commit_gate.py", {

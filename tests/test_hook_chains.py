@@ -159,7 +159,7 @@ class TestPostToolUseBashChain:
             "stall": 0,
             "unregistered_commits": [],
             "last_sahjhan_cmd": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
-            "fixes_since_pattern": 0,
+            "pattern_analysis_overdue": False,
             "perspective": "integration",
             "perspectives_done": 3,
             "perspectives_total": 13,
@@ -190,7 +190,7 @@ class TestPostToolUseBashChain:
             "stall": 5,
             "unregistered_commits": [],
             "last_sahjhan_cmd": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
-            "fixes_since_pattern": 0,
+            "pattern_analysis_overdue": False,
             "perspective": "integration",
             "perspectives_done": 3,
             "perspectives_total": 13,
@@ -252,7 +252,7 @@ class TestFullRoundTrip:
             "stall": 0,
             "unregistered_commits": [],
             "last_sahjhan_cmd": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
-            "fixes_since_pattern": 0,
+            "pattern_analysis_overdue": False,
             "perspective": "integration",
             "perspectives_done": 3,
             "perspectives_total": 13,
@@ -327,7 +327,7 @@ class TestChainBlockingBehavior:
             "stall": 0,
             "unregistered_commits": ["abc1234"],
             "last_sahjhan_cmd": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
-            "fixes_since_pattern": 0,
+            "pattern_analysis_overdue": False,
             "perspective": "integration",
             "perspectives_done": 3,
             "perspectives_total": 13,
@@ -377,7 +377,7 @@ def _stalled_fix_loop_state(stall: int, commits: list[str] | None = None) -> dic
         "stall": stall,
         "unregistered_commits": commits or [],
         "last_sahjhan_cmd": now,
-        "fixes_since_pattern": 0,
+        "pattern_analysis_overdue": False,
         "perspective": "integration",
         "perspectives_done": 3,
         "perspectives_total": 13,

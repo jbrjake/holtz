@@ -638,5 +638,19 @@ fields = [
     { name = "evidence_path", type = "string", optional = true },
 ]
 
+# `agent:cli` stays declared because `sahjhan event finding_deferred` is on the
+# bootstrap allowlist, and attestation is the strength of the *weakest*
+# available path, not the intended one. The three emits below are the intended
+# one: each deferral transition records the deferral it just performed, so the
+# agent never states the same fact twice (#82).
 [[events.finding_deferred.producers]]
 id = "agent:cli"
+
+[[events.finding_deferred.producers]]
+id = "engine:emits:defer_cant_reproduce"
+
+[[events.finding_deferred.producers]]
+id = "engine:emits:defer_low"
+
+[[events.finding_deferred.producers]]
+id = "engine:emits:defer_medium"

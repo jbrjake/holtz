@@ -97,8 +97,10 @@ If not reproducible after structured attempts:
 
 1. Ensure reproduction attempts are documented in `docs/holtz/investigations/{item_id}.md`
 2. Run: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer cant-reproduce {item_id}`
-3. Run: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding_deferred --field id={item_id} --field reason=cant_reproduce --field evidence_path=docs/holtz/investigations/{item_id}.md`
-4. Update PUNCHLIST.md status to DEFERRED
+3. Update PUNCHLIST.md status to DEFERRED
+
+The `finding_deferred` event is auto-emitted by the transition — do not record
+it by hand. One command, both facts.
 
 Do not silently drop the item.
 
@@ -110,14 +112,12 @@ For LOW and MEDIUM findings where the fix is legitimate but lower priority than 
 
 ```
 sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer low {item_id}
-sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding_deferred --field id={item_id} --field reason=low_priority
 ```
 
 **MEDIUM severity:** Up to half of MEDIUM findings may be deferred. The budget is enforced at deferral time — if the cap is reached, the transition is blocked.
 
 ```
 sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer medium {item_id}
-sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding_deferred --field id={item_id} --field reason=medium_budget
 ```
 
 HIGH and CRITICAL findings are never deferrable via priority (only via can't-reproduce with evidence).

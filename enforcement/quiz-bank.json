@@ -641,7 +641,7 @@
     "source": "enforcement/hooks/_protocol_cache.py::compute_obligations",
     "keywords": [
       "compute_obligations",
-      "fixes_since_pattern",
+      "pattern_analysis_overdue",
       "pattern_check"
     ]
   },

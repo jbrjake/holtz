@@ -332,7 +332,11 @@ def test_pattern_check_bootstraps_from_zero():
     )
     q = next((g for g in pattern_check["gates"] if g["type"] == "query"), None)
     assert q is not None, "pattern_check must use a query gate (#65)"
-    sql = q.get("sql", "")
+    # #82: the predicate moved into protocol.toml [queries] so the block that
+    # names pattern_check as its escape decides by the same object. Resolve the
+    # name the way the engine does rather than reading an inline copy — a test
+    # that insisted on the copy would have made the fix look like a regression.
+    sql = q.get("sql") or _named_query_sql(q.get("query", ""))
     assert "COALESCE" in sql and "pattern_analysis_complete" in sql, (
         "pattern_check must use a COALESCE-scoped query so the first pattern "
         f"analysis fires once 3+ findings resolve (#65). Got: {pattern_check['gates']}"
@@ -341,6 +345,46 @@ def test_pattern_check_bootstraps_from_zero():
         "pattern_check must enforce the 3-resolved-findings minimum in SQL "
         "(the old ledger_has_event_since silently ignored min_count) (#65)"
     )
+
+
+def test_pattern_analysis_overdue_is_one_predicate_with_opposite_gates():
+    """#77/#82: the block and its printed escape must be the same object.
+
+    ``iteration_boundary`` blocks while pattern analysis is overdue and tells
+    the agent to run ``pattern_check``, whose gate decides whether it *is*
+    overdue. When those were two predicates they could both be shut at once —
+    the block's own escape unsatisfiable, which is what #77 was. Referencing
+    one named query with opposite expectations makes exactly one of them open
+    at any moment, by construction rather than by care.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+
+    def _overdue_gate(command: str) -> dict:
+        transition = next(
+            t for t in cfg["transitions"] if t.get("command") == command
+        )
+        gate = next(
+            (
+                g
+                for g in transition.get("gates", [])
+                if g.get("query") == "pattern_analysis_overdue"
+            ),
+            None,
+        )
+        assert gate is not None, (
+            f"{command} must decide 'pattern analysis overdue' by the named "
+            "query, not a copy of its SQL (#82)"
+        )
+        return gate
+
+    assert _overdue_gate("pattern_check")["expect"] == "true"
+    assert _overdue_gate("iteration_boundary")["expect"] == "false"
+
+
+def _named_query_sql(name: str) -> str:
+    queries = tomllib.loads(PROTOCOL_TOML.read_text()).get("queries", {})
+    assert name in queries, f"gate references undeclared query '{name}'"
+    return str(queries[name]["sql"])
 
 
 def test_test_and_lint_gates_are_env_overridable():

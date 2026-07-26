@@ -157,6 +157,16 @@ def _record_finding_resolved(real_daemon, item_id: str, step: str = "10") -> Non
     )
 
 
+def _ledger_events(real_daemon, event_type: str) -> list[dict]:
+    """Every event of one type in the active ledger, as the gates would see it."""
+    result = _run_sahjhan(
+        real_daemon, "query",
+        f"SELECT * FROM events WHERE type='{event_type}'",
+        "--format", "json",
+    )
+    return json.loads(result.stdout) if result.stdout.strip() else []
+
+
 def _run_tracker(real_daemon, command: str) -> None:
     """Run protocol_tracker (PostToolUse) against an arbitrary Bash command."""
     _invoke_hook("protocol_tracker.py", {
@@ -165,6 +175,101 @@ def _run_tracker(real_daemon, command: str) -> None:
         "tool_response": {"exit_code": 0, "output": ""},
         "cwd": real_daemon["project_root"],
     }, real_daemon)
+
+
+class TestDeferralEmitsTheDeferral:
+    """#82: a deferral transition must record the deferral, not ask for it.
+
+    `fix_commit` already auto-emits `finding_resolved` — one command, both
+    facts — but the three `defer_*` transitions still made the agent run a
+    second `sahjhan event finding_deferred` naming the same item. That is a
+    token cost on every deferred finding, and a correctness hazard in both
+    orders: record the event first and the `item_open` gate refuses the
+    transition meant to record it; record only the transition and the finding
+    reads open forever, so `all_findings_closed` never clears and the run
+    cannot converge.
+
+    Emitted fields are pattern-validated by the daemon on write, so this asserts
+    against the real ledger rather than the config: a `reason` that failed its
+    pattern would make the whole transition fail at runtime, and `defer_medium`'s
+    budget gate counts exactly `reason='medium_budget'`.
+    """
+
+    def test_defer_low_records_the_deferral_itself(self, real_daemon):
+        _fast_forward_to_fix_loop(real_daemon)
+        _record_finding(real_daemon, finding_id="BH-101", severity="LOW")
+
+        result = _run_sahjhan(
+            real_daemon, "transition", "defer_low", "--", "BH-101", check=False
+        )
+        assert result.returncode == 0, (
+            f"defer_low rejected:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+
+        deferred = _ledger_events(real_daemon, "finding_deferred")
+        assert [event.get("id") for event in deferred] == ["BH-101"], (
+            "the transition must emit the deferral; the agent should not have "
+            f"to state it again. Ledger held: {deferred}"
+        )
+        assert deferred[0].get("reason") == "low_priority"
+
+    def test_the_item_is_closed_for_convergence(self, real_daemon):
+        """The point of emitting it: the finding stops counting as open."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _record_finding(real_daemon, finding_id="BH-102", severity="LOW")
+        _run_sahjhan(real_daemon, "transition", "defer_low", "--", "BH-102")
+
+        open_findings = _run_sahjhan(
+            real_daemon, "query",
+            "SELECT count(*) AS n FROM events f WHERE f.type='finding' "
+            "AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') "
+            "AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')",
+            "--format", "json",
+        )
+        assert json.loads(open_findings.stdout)[0]["n"] in ("0", 0), (
+            "a deferred finding must not still read as open — that is what "
+            f"blocks convergence. Got: {open_findings.stdout}"
+        )
+
+    def test_defer_medium_emits_the_reason_its_budget_gate_counts(
+        self, real_daemon
+    ):
+        """`reason` is load-bearing here, not decoration.
+
+        The MEDIUM budget gate counts `finding_deferred AND
+        reason='medium_budget'`. If the emit wrote a different literal — or one
+        its pattern rejected — the cap would either stop counting or the whole
+        transition would fail at runtime. Four findings so the 50% cap admits
+        the first deferral.
+        """
+        _fast_forward_to_fix_loop(real_daemon)
+        for n in range(1, 5):
+            _record_finding(real_daemon, finding_id=f"BH-2{n:02d}", severity="MEDIUM")
+
+        result = _run_sahjhan(
+            real_daemon, "transition", "defer_medium", "--", "BH-201", check=False
+        )
+        assert result.returncode == 0, (
+            f"defer_medium rejected:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        deferred = _ledger_events(real_daemon, "finding_deferred")
+        assert [(e.get("id"), e.get("reason")) for e in deferred] == [
+            ("BH-201", "medium_budget")
+        ]
+
+    def test_deferring_twice_is_still_refused(self, real_daemon):
+        """The emit must not defeat the gate that made it necessary."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _record_finding(real_daemon, finding_id="BH-103", severity="LOW")
+        _run_sahjhan(real_daemon, "transition", "defer_low", "--", "BH-103")
+
+        again = _run_sahjhan(
+            real_daemon, "transition", "defer_low", "--", "BH-103", check=False
+        )
+        assert again.returncode != 0, (
+            "item_open should refuse a second deferral of the same finding — "
+            "the emit closes the item, which is the point"
+        )
 
 
 class TestTddGateBlocksWriteInFixLoop:
@@ -777,13 +882,17 @@ class TestEventCountFilterSourceEdit:
         )
 
 
-def _record_finding(real_daemon, finding_id="BH-001"):
-    """Record a `finding` event so the ledger has an open item to resolve."""
+def _record_finding(real_daemon, finding_id="BH-001", severity="HIGH"):
+    """Record a `finding` event so the ledger has an open item to resolve.
+
+    `severity` is a parameter because the deferral gates read it: `defer_low`
+    accepts only LOW, `defer_medium` only MEDIUM.
+    """
     _run_sahjhan(
         real_daemon, "event", "finding",
         "--field", "project=holtz", "--field", "run=1", "--field", "auditor=holtz",
         "--field", "phase=audit", "--field", "step=7", "--field", f"id={finding_id}",
-        "--field", "severity=HIGH", "--field", "category=bug/logic",
+        "--field", f"severity={severity}", "--field", "category=bug/logic",
         "--field", "location=x.py:1", "--field", "perspective=component",
         "--field", "description=d", "--field", "predicted_by=1",
     )
@@ -997,4 +1106,53 @@ class TestCommitGatePatternCounterDerivation:
             "commit gate directed the auditor to `transition pattern_check`, but "
             "its own gate rejected it — the exact #77 deadlock.\n"
             f"exit: {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+
+    def test_iteration_boundary_and_pattern_check_are_never_both_shut(
+        self, real_daemon
+    ):
+        """#82: the same deadlock, reachable from the other direction.
+
+        `iteration_boundary` blocks while pattern analysis is overdue and names
+        `pattern_check` as the way out — but it used to count `fix_commit`
+        *transitions* while `pattern_check` counted `finding_resolved`. Resolve
+        three findings without three fix_commit transitions (the standalone
+        path SKILL.md teaches, and what a failed `emits` leaves behind) and the
+        two counts disagree; disagree the wrong way and both doors are shut.
+
+        They now reference one named query with opposite expectations, so this
+        asserts the property that makes the deadlock unreachable: at any ledger
+        state, exactly one of the two is open.
+        """
+        # `gate check` is a diagnostic: it exits 0 whatever the verdict and
+        # prints it. The verdict is the signal, not the exit code.
+        def _blocked(command: str) -> bool:
+            result = _run_sahjhan(
+                real_daemon, "gate", "check", command, check=False
+            )
+            assert "result:" in result.stdout, (
+                f"gate check {command} printed no verdict:\n{result.stdout}"
+            )
+            return "result: blocked" in result.stdout
+
+        _fast_forward_to_fix_loop(real_daemon)
+
+        # Under three: leaving the iteration is fine, analysing is premature.
+        _record_finding_resolved(real_daemon, "BH-001")
+        assert _blocked("pattern_check"), "pattern_check must not be ready at 1"
+        assert not _blocked(
+            "iteration_boundary"
+        ), "iteration_boundary must be open before analysis is due"
+
+        # At three, the doors swap — note that no fix_commit transition has been
+        # recorded at all, which is exactly the case the old predicate missed.
+        _record_finding_resolved(real_daemon, "BH-002")
+        _record_finding_resolved(real_daemon, "BH-003")
+        assert not _blocked(
+            "pattern_check"
+        ), "pattern_check must be ready at 3 resolved findings"
+        assert _blocked("iteration_boundary"), (
+            "iteration_boundary must block once pattern analysis is overdue, "
+            "including when the findings were resolved without a fix_commit "
+            "transition — the divergence #82 closed"
         )

@@ -174,7 +174,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
 | finding must exist | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
 | must have started working on this item | `fix_start` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | reproduction attempts must be documented in investigation file | *direct check* | — | `direct` | n/a |
@@ -184,7 +184,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
 | finding must exist and be LOW severity | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
 
 ### `defer_medium` — fix_loop → fix_loop
@@ -192,17 +192,17 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
 | finding must exist and be MEDIUM severity | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
 | MEDIUM deferrals must not exceed 50% of total MEDIUM findings | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_deferred` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 
 ### `iteration_boundary` — fix_loop → awaiting_clear
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary | `pattern_analysis_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `state_transition` | `engine:sahjhan` | `engine` | no — written by the engine, only by passing the gate |
+| pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 
 ### `resume` — awaiting_clear → fix_loop
 
@@ -239,7 +239,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
 | all findings must be resolved or deferred | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_deferred` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
 | two clean iterations required for stability | `iteration_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | prevent rapid-fire gaming of iteration count | `iteration_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
@@ -274,7 +274,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | tests must pass | *direct check* | — | `direct` | n/a |
 | no lint violations | *direct check* | — | `direct` | n/a |
 | all findings must be resolved or deferred | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_deferred` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
 | no unresolved protocol violations | *direct check* | — | `direct` | n/a |
 | no unresolved quiz exhaustions | `quiz_exhausted` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |

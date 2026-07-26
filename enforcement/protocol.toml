@@ -78,6 +78,19 @@ intent = "all findings must be resolved or deferred"
 sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'"
 intent = "finding must not already be resolved or deferred"
 
+# The predicate #77 deadlocked on, now a single object with three consumers:
+# the `pattern_check` gate (ready when true), the `iteration_boundary` gate
+# (blocked when true), and `protocol_tracker.py`, which resolves this name at
+# runtime so the commit gate's hard block reads the same fact. Three copies of
+# it existed before — one per consumer — and the moment two disagreed, the
+# commit gate blocked a real fix and told the agent to run `pattern_check`,
+# which was itself blocked. Block condition and printed escape are now the same
+# expression by construction; `enforcement_lint.py` H7/H8 fail the build if a
+# fourth copy appears or a consumer stops referencing this name.
+[queries.pattern_analysis_overdue]
+sql = "SELECT count(*) >= 3 FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)"
+intent = "3+ findings resolved since the last pattern analysis"
+
 [queries.quiz_exhaustions_resolved]
 sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')"
 intent = "no unresolved quiz exhaustions"

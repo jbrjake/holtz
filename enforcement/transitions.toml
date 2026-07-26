@@ -110,6 +110,19 @@ gates = [
     { type = "ledger_has_event_since", event = "fix_start", since = "last_transition", intent = "must have started working on this item" },
     { type = "command_succeeds", cmd = "test -f docs/holtz/investigations/{{item_id}}.md && test -s docs/holtz/investigations/{{item_id}}.md", intent = "reproduction attempts must be documented in investigation file" },
 ]
+# Like fix_commit, the deferral transitions AUTO-EMIT the state they imply
+# (#82). The gate above requires the item to be open; recording the transition
+# without recording the deferral left it open, so the agent had to state the
+# same fact a second time — `defer cant-reproduce BH-001` followed by `event
+# finding_deferred --field id=BH-001 …`. Two commands per deferred finding, on
+# a run that defers many, for a fact the engine already had from the arg. Worse
+# than the token cost: run them in the other order and the `item_open` gate
+# refuses the transition that was meant to record it, and forget the second and
+# convergence blocks on a finding that reads open while its transition says
+# otherwise. The gate evaluates before the emit, so this cannot satisfy itself.
+emits = [
+    { event = "finding_deferred", fields = { id = "{{item_id}}", reason = "cant_reproduce", evidence_path = "docs/holtz/investigations/{{item_id}}.md", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
+]
 
 # ── Deferral: LOW severity ──
 
@@ -121,6 +134,10 @@ args = ["item_id"]
 gates = [
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='LOW'", expect = "true", intent = "finding must exist and be LOW severity" },
     { type = "query", query = "item_open", expect = "true" },
+]
+# Auto-emits the deferral; see defer_cant_reproduce above (#82).
+emits = [
+    { event = "finding_deferred", fields = { id = "{{item_id}}", reason = "low_priority", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
 ]
 
 # ── Deferral: MEDIUM severity (budget-capped) ──
@@ -135,6 +152,13 @@ gates = [
     { type = "query", query = "item_open", expect = "true" },
     { type = "query", sql = "SELECT (SELECT count(*) FROM events WHERE type='finding_deferred' AND reason='medium_budget') < (SELECT count(*) FROM events WHERE type='finding' AND severity='MEDIUM') / 2", expect = "true", intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings" },
 ]
+# Auto-emits the deferral; see defer_cant_reproduce above (#82). `reason` is
+# load-bearing here rather than decorative: the budget gate counts exactly
+# `reason='medium_budget'`, so the emit is what keeps the cap countable. It is
+# evaluated before this emit, so a deferral cannot fund its own budget.
+emits = [
+    { event = "finding_deferred", fields = { id = "{{item_id}}", reason = "medium_budget", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
+]
 
 # ── Context Reset (enforces /clear boundaries) ──
 
@@ -143,10 +167,20 @@ from = "fix_loop"
 to = "awaiting_clear"
 command = "iteration_boundary"
 gates = [
-    # BH-020: Enforce pattern analysis after 3+ fixes to prevent recurring band-aid fixes.
-    # Counts fix_commits since the last pattern_analysis_complete. If 3+, blocks until
-    # pattern analysis is done. The auditor cannot skip Step 11 and escape to /clear.
-    { type = "query", sql = "SELECT count(*) < 3 FROM events WHERE type='state_transition' AND command='fix_commit' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)", expect = "true", intent = "pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary" },
+    # BH-020: Enforce pattern analysis after 3+ fixes to prevent recurring
+    # band-aid fixes. The auditor cannot skip Step 11 and escape to /clear.
+    #
+    # #82: this counted `state_transition WHERE command='fix_commit'` while the
+    # escape it names — `pattern_check` — counted `finding_resolved`. Two
+    # expressions of one fact, so they could disagree: a finding resolved
+    # without a fix_commit (the standalone path SKILL.md teaches) advanced one
+    # count and not the other, and a fix_commit whose `emits` failed advanced
+    # the other and not this one. In that second case this gate blocked while
+    # `pattern_check` was not yet ready — the block and its own printed escape,
+    # both shut. That is #77's deadlock, reachable from a different direction.
+    # Now both reference the same named query with opposite expectations, so
+    # exactly one of them is open at any moment, always.
+    { type = "query", query = "pattern_analysis_overdue", expect = "false", intent = "pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary" },
 ]
 
 # The filter is what makes this gate mean what it says. `context_reset` used to
@@ -197,15 +231,18 @@ from = "fix_loop"
 to = "pattern_analysis"
 command = "pattern_check"
 gates = [
-    # #65: use a COALESCE-scoped query (mirroring iteration_boundary) rather than
-    # ledger_has_event_since. The old gate referenced `last_event_of_type:...`, a
-    # syntax that gate type does not understand: it matched no event, silently fell
-    # back to "since last state_transition", and ignored min_count entirely — so the
-    # first pattern_check could never fire (chicken-and-egg: you need a prior
+    # #65: use a COALESCE-scoped query rather than ledger_has_event_since. The
+    # old gate referenced `last_event_of_type:...`, a syntax that gate type does
+    # not understand: it matched no event, silently fell back to "since last
+    # state_transition", and ignored min_count entirely — so the first
+    # pattern_check could never fire (chicken-and-egg: you need a prior
     # pattern_analysis_complete to satisfy the gate that produces the first one).
-    # COALESCE(..., 0) treats "no prior pattern analysis" as the run start, so the
-    # first pattern_check becomes ready once 3+ findings are resolved.
-    { type = "query", sql = "SELECT count(*) >= 3 FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)", expect = "true", intent = "pattern analysis needs 3+ findings resolved since the last pattern analysis" },
+    # COALESCE(..., 0) treats "no prior pattern analysis" as the run start, so
+    # the first pattern_check becomes ready once 3+ findings are resolved.
+    #
+    # #82: the predicate itself now lives in protocol.toml [queries], shared
+    # with iteration_boundary's block and the commit gate's. See that comment.
+    { type = "query", query = "pattern_analysis_overdue", expect = "true", intent = "pattern analysis needs 3+ findings resolved since the last pattern analysis" },
 ]
 
 [[transitions]]

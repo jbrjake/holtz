@@ -35,6 +35,12 @@ H5   An event claims non-agent attestation but is not ``restricted``, so
      ``sahjhan event`` can write it anyway.
 H6   A transition command no skill file teaches, or a skill file teaches a
      transition that does not exist.
+H7   A gate predicate that also lives as a string literal in a Python hook —
+     two expressions of one fact, which is how #77 deadlocked.
+H8   A block whose printed escape is decided by a different predicate than the
+     block itself, so the escape can be unsatisfiable when it is printed.
+H9   An item-scoped transition that does not record the item state it implies,
+     forcing the agent to state the same fact twice.
 ===  =========================================================================
 
 Usage::
@@ -47,6 +53,8 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import ast
+import difflib
 import json
 import re
 import sys
@@ -123,6 +131,23 @@ _TERA_EVENT_TYPE = re.compile(
 _SQL_TYPE_EQ = re.compile(r"type\s*=\s*'([a-z_][a-z0-9_]*)'")
 _SQL_TYPE_IN = re.compile(r"type\s+IN\s*\(([^)]*)\)", re.IGNORECASE)
 _SQL_QUOTED = re.compile(r"'([a-z_][a-z0-9_]*)'")
+
+
+@dataclass(frozen=True)
+class Predicate:
+    """One gate predicate, wherever it was written down."""
+
+    origin: str  # "transitions.toml: pattern_check" or "protocol_tracker.py:102"
+    sql: str
+
+
+@dataclass(frozen=True)
+class BlockSite:
+    """A place that refuses the agent and prints a way out."""
+
+    origin: str
+    message: str
+    source: str  # the whole file, so the check can ask what else it names
 
 
 @dataclass(frozen=True)
@@ -204,6 +229,11 @@ class Model:
     # blocking hook prints is itself a taught command.
     hooks: list[dict] = field(default_factory=list)
     monitors: list[dict] = field(default_factory=list)
+    # Every predicate that decides a gate, from both sides of the seam: the
+    # ones declared in TOML, and the ones a Python hook carries as a string.
+    toml_predicates: list[Predicate] = field(default_factory=list)
+    python_predicates: list[Predicate] = field(default_factory=list)
+    block_sites: list[BlockSite] = field(default_factory=list)
     aliases: dict[str, str] = field(default_factory=dict)
     attestation_levels: list[str] = field(default_factory=list)
     consumed: dict[str, list[str]] = field(default_factory=dict)
@@ -325,6 +355,8 @@ def parse_config(model: Model) -> None:
                 sql = named_queries[named].get("sql", "")
                 for event in _sql_event_types(sql):
                     _record_consumer(event, f"{where} (query {named})")
+            if isinstance(gate.get("sql"), str):
+                model.toml_predicates.append(Predicate(where, gate["sql"]))
             for event in _gate_consumed(gate):
                 _record_consumer(event, where)
         # `emits` is a write path, not a read.
@@ -336,6 +368,9 @@ def parse_config(model: Model) -> None:
                 )
 
     for name, spec in named_queries.items():
+        model.toml_predicates.append(
+            Predicate(f"protocol.toml: [queries.{name}]", spec.get("sql", ""))
+        )
         for event in _sql_event_types(spec.get("sql", "")):
             _record_consumer(event, f"protocol.toml: [queries.{name}]")
 
@@ -348,6 +383,7 @@ def parse_config(model: Model) -> None:
         if isinstance(gate.get("event"), str):
             _record_consumer(gate["event"], label)
         if isinstance(gate.get("sql"), str):
+            model.toml_predicates.append(Predicate(label, gate["sql"]))
             for event in _sql_event_types(gate["sql"]):
                 _record_consumer(event, label)
         for event in hook.get("check", {}).get("event_types", []) or []:
@@ -384,6 +420,40 @@ def parse_config(model: Model) -> None:
             body = template_path.read_text(encoding="utf-8")
             for event in _TERA_EVENT_TYPE.findall(body):
                 _record_consumer(event, f"{template} → {target}", kind="render")
+
+
+_SQL_IN_PYTHON = re.compile(r"\bFROM\s+events\b", re.I)
+
+
+def parse_python_predicates(model: Model) -> None:
+    """Find gate predicates a Python hook carries as a string literal.
+
+    Parsed rather than grepped, for one reason that matters: Python folds
+    adjacent string literals at compile time, and the predicate this check
+    exists to find is written as four concatenated fragments across four
+    lines. A regex would have to reassemble them; ``ast`` already has.
+    """
+    for directory in model.tree.py_dirs:
+        if not directory.is_dir():
+            continue
+        for py in sorted(directory.rglob("*.py")):
+            if "__pycache__" in py.parts:
+                continue
+            try:
+                parsed = ast.parse(py.read_text(encoding="utf-8"))
+            except SyntaxError:  # pragma: no cover - not our file to fix
+                continue
+            rel = model.tree.rel(py)
+            for node in ast.walk(parsed):
+                if not isinstance(node, ast.Constant) or not isinstance(
+                    node.value, str
+                ):
+                    continue
+                value = node.value
+                if "SELECT" in value.upper() and _SQL_IN_PYTHON.search(value):
+                    model.python_predicates.append(
+                        Predicate(f"{rel}:{node.lineno}", value)
+                    )
 
 
 def parse_python_writers(model: Model) -> None:
@@ -604,6 +674,8 @@ def build_model(tree: Tree | None = None) -> Model:
     model = Model(tree=tree or Tree())
     parse_config(model)
     parse_agent_denylist(model)
+    parse_python_predicates(model)
+    parse_block_sites(model)
     parse_python_writers(model)
     parse_skill_writers(model)
     parse_hook_registration(model)
@@ -931,6 +1003,325 @@ def check_h6_skill_agreement(model: Model) -> list[Finding]:
     return findings
 
 
+# Matches sahjhan's `lint::similarity::DEFAULT_THRESHOLD`. Deliberately the
+# same number: L6 compares TOML predicates to each other and H7 compares
+# Python's copies to those, so two different thresholds would mean two
+# different answers to "is this the same predicate" — the defect being hunted,
+# committed by the tools hunting it.
+SIMILARITY_THRESHOLD = 0.85
+
+
+def normalize_sql(sql: str) -> list[str]:
+    """Token form of a predicate: lowercase, punctuation split out.
+
+    A reformatted copy must not read as a different predicate, so spacing and
+    case are discarded and punctuation becomes its own token. Ported from
+    sahjhan's `normalize_sql` rather than reinvented, for the same reason the
+    threshold is shared.
+    """
+    tokens: list[str] = []
+    current = ""
+    for char in sql.strip().rstrip(";"):
+        if char.isspace():
+            if current:
+                tokens.append(current)
+                current = ""
+        elif char.isalnum() or char in "_'\"":
+            current += char.lower()
+        else:
+            if current:
+                tokens.append(current)
+                current = ""
+            tokens.append(char)
+    if current:
+        tokens.append(current)
+    return tokens
+
+
+def sql_similarity(left: str, right: str) -> float:
+    """0.0–1.0 token-level similarity of two predicates."""
+    return difflib.SequenceMatcher(
+        None, normalize_sql(left), normalize_sql(right)
+    ).ratio()
+
+
+def check_h7_predicate_copies(model: Model) -> list[Finding]:
+    """A gate predicate that also exists as a string literal in Python.
+
+    #77 was two copies of one fact drifting apart: the commit gate blocked on a
+    hand-maintained mirror while the escape it printed was decided by the
+    ledger, so the block's own instruction was unsatisfiable — a deadlock. The
+    fix made the hook run the gate's query. But *run the same SQL* and *hold a
+    copy of the same SQL* are different things, and the tree still holds a
+    copy: nothing compares a Python string to a TOML gate, so the next edit to
+    one of them re-opens #77 silently.
+
+    The escape is not "keep them in sync". It is to name the predicate in
+    ``protocol.toml [queries]`` and have both sides resolve the name, so they
+    are one object and cannot disagree. A hook that does that has no SQL in it
+    for this check to find.
+    """
+    findings = []
+    for predicate in model.python_predicates:
+        matches = [
+            (sql_similarity(predicate.sql, other.sql), other)
+            for other in model.toml_predicates
+        ]
+        if not matches:
+            continue
+        score, nearest = max(matches, key=lambda pair: pair[0])
+        if score < SIMILARITY_THRESHOLD:
+            continue
+        named = [
+            origin.split("[queries.")[1].rstrip("]")
+            for origin, _ in [(p.origin, p.sql) for p in model.toml_predicates]
+            if "[queries." in origin
+        ]
+        findings.append(
+            Finding(
+                "H7",
+                "error",
+                f"{predicate.origin}",
+                f"holds a copy of the predicate at {nearest.origin} "
+                f"({score:.0%} identical) — two expressions of one fact, which "
+                "is how #77 deadlocked a commit gate against its own printed "
+                "escape",
+                "declare it once in protocol.toml [queries.<name>], reference "
+                "it from the gate with query = \"<name>\", and have the hook "
+                "resolve the same name at runtime instead of carrying the SQL"
+                + (f" (existing names: {', '.join(sorted(named))})" if named else ""),
+            )
+        )
+    return findings
+
+
+# The helpers that end a hook by refusing the tool call. A string reaching one
+# of these is not documentation — it is what the agent reads at the moment it
+# is stuck, so the command in it is a promise that the escape is reachable.
+BLOCK_HELPERS = frozenset({"exit_block", "exit_stop_block"})
+
+# "run pattern_check", "Run: sahjhan … transition pattern_check". Both forms
+# appear in the tree; the second is the one an agent can paste. Matches are
+# filtered against the real transition list, so prose like "run the suite"
+# cannot become an escape.
+_ESCAPE_FORMS = (
+    re.compile(r"\btransition\s+`?([a-z_][a-z0-9_]*)`?"),
+    re.compile(r"\brun\s+`?([a-z_][a-z0-9_]*)`?", re.I),
+)
+
+
+def _named_escapes(text: str, commands: set[str], own: str = "") -> list[str]:
+    found = []
+    for pattern in _ESCAPE_FORMS:
+        for match in pattern.findall(text):
+            if match in commands and match != own and match not in found:
+                found.append(match)
+    return found
+
+
+def parse_block_sites(model: Model) -> None:
+    """Collect every place that blocks the agent and prints a way out.
+
+    Python blocks are found at the *call site* rather than by scanning strings:
+    ``exit_block("… transition pattern_check")`` is an escape, while the same
+    sentence in an obligation nudge or a status line is not, and a check that
+    cannot tell them apart would report five sites to catch one.
+    """
+    for directory in model.tree.py_dirs:
+        if not directory.is_dir():
+            continue
+        for py in sorted(directory.rglob("*.py")):
+            if "__pycache__" in py.parts:
+                continue
+            source = py.read_text(encoding="utf-8")
+            try:
+                parsed = ast.parse(source)
+            except SyntaxError:  # pragma: no cover - not our file to fix
+                continue
+            rel = model.tree.rel(py)
+            for node in ast.walk(parsed):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                name = getattr(func, "id", None) or getattr(func, "attr", None)
+                if name not in BLOCK_HELPERS:
+                    continue
+                text = " ".join(
+                    part.value
+                    for part in ast.walk(node)
+                    if isinstance(part, ast.Constant) and isinstance(part.value, str)
+                )
+                model.block_sites.append(
+                    BlockSite(f"{rel}:{node.lineno}", text, source)
+                )
+
+
+def check_h8_escape_identity(model: Model) -> list[Finding]:
+    """A block whose printed escape is decided by a different predicate.
+
+    This is #77 stated as a property. The commit gate blocked on "3+ fixes
+    since the last pattern analysis" and told the agent to run
+    ``transition pattern_check`` — whose own gate decided the *same* fact with
+    a different expression. When the two drifted, the gate blocked a real fix
+    commit and the escape it printed was itself blocked. The agent was told to
+    do the one thing it could not do.
+
+    Two predicates that mean to be the same fact cannot be kept in agreement by
+    care. They agree when they are one object: a named query both sides
+    reference. So the rule is nominal, not textual — the block must name the
+    query its escape is gated on.
+    """
+    findings: list[Finding] = []
+    commands = {
+        transition.get("command", "")
+        for transition in model.transitions
+        if transition.get("command")
+    }
+    # Which named queries decide each transition's readiness.
+    escape_queries: dict[str, set[str]] = {}
+    for transition in model.transitions:
+        command = transition.get("command", "")
+        for gate in transition.get("gates", []) or []:
+            escape_queries.setdefault(command, set()).update(_gate_query_names(gate))
+
+    def _judge(
+        where: str,
+        text: str,
+        referenced: set[str],
+        own: str = "",
+        unnamed_is_finding: bool = True,
+    ) -> None:
+        for escape in _named_escapes(text, commands, own):
+            available = escape_queries.get(escape) or set()
+            if not available and not unnamed_is_finding:
+                # A block whose escape is gated on inline predicates may be a
+                # perfectly good block: `fix_commit`'s gates are *more work*
+                # (record the blast radius, pass the suite), not a restatement
+                # of the fact that blocked. Only the nominal case is decidable
+                # here, so the undecidable one stays quiet rather than crying
+                # wolf at every honest escape in the tree.
+                continue
+            if not available:
+                findings.append(
+                    Finding(
+                        "H8",
+                        "warning",
+                        where,
+                        f"prints `{escape}` as the way out, but {escape}'s own "
+                        "readiness is decided by an inline predicate — nothing "
+                        "can check that the fact blocking here is the fact "
+                        "that unblocks there",
+                        f"name {escape}'s predicate in protocol.toml "
+                        "[queries.<name>] and decide both sides by it",
+                    )
+                )
+            elif not (available & referenced):
+                findings.append(
+                    Finding(
+                        "H8",
+                        "error",
+                        where,
+                        f"blocks on a fact that is not the one `{escape}` is "
+                        f"gated on ({', '.join(sorted(available))}) — the "
+                        "escape it prints can be unsatisfiable at the moment "
+                        "it is printed, which is exactly how #77 deadlocked",
+                        f"decide this block with query = "
+                        f"\"{sorted(available)[0]}\" so the block condition and "
+                        "the escape's readiness are one object",
+                    )
+                )
+
+    for transition in model.transitions:
+        command = transition.get("command", "")
+        for gate in transition.get("gates", []) or []:
+            _judge(
+                f"transitions.toml: transition '{command}'",
+                str(gate.get("intent", "")),
+                _gate_query_names(gate),
+                own=command,
+            )
+    for hook in model.hooks:
+        if hook.get("action") != "block":
+            continue
+        _judge(
+            f"hooks.toml: {hook.get('event', '?')} block",
+            str(hook.get("message", "")),
+            _gate_query_names(hook.get("gate", {})),
+        )
+    for site in model.block_sites:
+        # A Python hook cannot reference a gate; it can only *use the name*.
+        # Requiring the name to appear in the file makes the chain checkable:
+        # block → the value it reads → the query that derived it → the gate.
+        # A file that names no query is not making a claim this check can
+        # falsify, so it is left alone.
+        referenced = {name for name in model.queries if name in site.source}
+        if referenced:
+            _judge(site.origin, site.message, referenced, unnamed_is_finding=False)
+    return findings
+
+
+_ABSENCE_PREDICATE = re.compile(r"count\s*\(\s*\*\s*\)\s*=\s*0", re.I)
+
+
+def check_h9_transition_state_decoupling(model: Model) -> list[Finding]:
+    """A transition that acts on an item without recording the item's new state.
+
+    A gate reading "this item must not already be resolved or deferred" is the
+    transition saying, in config, that it is *about to* resolve or defer it.
+    If it then emits nothing, the ledger holds a state_transition and the item
+    stays open — the transition and the state it implies are two facts, and the
+    agent is left to state the second one by hand.
+
+    That costs twice. It burns a command per item on a fact the engine already
+    has (holtz's core principle is that the agent should never restate what the
+    system knows), and it is a correctness hazard: run the pair in the wrong
+    order and the ``item_open`` gate refuses the transition that was supposed
+    to record it. ``fix_commit`` already solved this with ``emits``; this check
+    is that fix stated as a property, so the next item-scoped transition cannot
+    ship without it.
+    """
+    findings = []
+    for transition in model.transitions:
+        args = transition.get("args") or []
+        if not args:
+            continue
+        command = transition.get("command", "?")
+        emitted = {
+            emit.get("event") for emit in transition.get("emits", []) or [] if emit
+        }
+        for gate in transition.get("gates", []) or []:
+            sql = gate.get("sql")
+            for name in _gate_query_names(gate):
+                sql = sql or model.queries.get(name, {}).get("sql")
+            if not isinstance(sql, str):
+                continue
+            # Per-item, and phrased as "none of these has happened yet".
+            if not any(f"{{{{{arg}}}}}" in sql for arg in args):
+                continue
+            if not _ABSENCE_PREDICATE.search(sql):
+                continue
+            closing = _sql_event_types(sql)
+            if not closing or closing & emitted:
+                continue
+            findings.append(
+                Finding(
+                    "H9",
+                    "error",
+                    f"transitions.toml: transition '{command}'",
+                    f"is gated on {args[0]} not yet being closed by "
+                    + ", ".join(f"'{event}'" for event in sorted(closing))
+                    + ", but emits none of them — recording the transition "
+                    "leaves the item open, so the fact has to be stated a "
+                    "second time by hand",
+                    "add an emits block "
+                    f"(event = \"{sorted(closing)[0]}\", "
+                    f"fields = {{ id = \"{{{{{args[0]}}}}}\" }}) so one command "
+                    "records both, the way fix_commit does",
+                )
+            )
+    return findings
+
+
 CHECKS = {
     "H1": check_h1_unsatisfiable,
     "H2": check_h2_false_declarations,
@@ -938,6 +1329,9 @@ CHECKS = {
     "H4": check_h4_hook_registration,
     "H5": check_h5_attestation,
     "H6": check_h6_skill_agreement,
+    "H7": check_h7_predicate_copies,
+    "H8": check_h8_escape_identity,
+    "H9": check_h9_transition_state_decoupling,
 }
 
 

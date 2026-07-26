@@ -632,6 +632,348 @@ class TestH6SkillAgreement:
         assert model.writers == {}
 
 
+# ── H7: a gate predicate with a copy in Python ───────────────────────────────
+
+
+class TestH7PredicateCopies:
+    """#77, as it still sat in the tree after being fixed once.
+
+    The deadlock was two expressions of one fact. The fix made the hook run the
+    *ledger* rather than a token-counting mirror — but it ran it from a SQL
+    string of its own, so the tree still held two copies and nothing compared
+    them. This is the check that would have made the next drift fail at rest.
+    """
+
+    PATTERN_CHECK_GATE = """
+        [[transitions]]
+        from = "fix_loop"
+        to = "pattern_analysis"
+        command = "pattern_check"
+        gates = [
+            { type = "query", sql = "SELECT count(*) >= 3 FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)", expect = "true", intent = "3+ fixes since the last pattern analysis" },
+        ]
+        """
+
+    # Written the way the real hook wrote it: implicitly concatenated
+    # fragments across four lines. A regex would have to reassemble them.
+    TRACKER = '''
+        _FIXES_SINCE_PATTERN_SQL = (
+            "SELECT count(*) AS n FROM events "
+            "WHERE type='finding_resolved' "
+            "AND seq > COALESCE((SELECT MAX(seq) FROM events "
+            "WHERE type='pattern_analysis_complete'), 0)"
+        )
+        '''
+
+    def test_fires_on_the_third_copy(self, tmp_path: Path) -> None:
+        tree = build_tree(
+            tmp_path,
+            events="",
+            transitions=self.PATTERN_CHECK_GATE,
+            hook_scripts={"protocol_tracker.py": self.TRACKER},
+        )
+        findings = findings_for(tree, "H7")
+        assert len(findings) == 1
+        assert findings[0].level == "error"
+        assert "protocol_tracker.py" in findings[0].subject
+        assert "pattern_check" in findings[0].message
+
+    def test_silent_once_the_hook_resolves_the_name(self, tmp_path: Path) -> None:
+        """The fix is not a tidier copy — it is having no copy at all."""
+        tree = build_tree(
+            tmp_path,
+            events="",
+            protocol="""
+            [protocol]
+            name = "fixture"
+            version = "1.0.0"
+
+            [queries.pattern_analysis_overdue]
+            sql = "SELECT count(*) >= 3 FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)"
+            intent = "3+ fixes since the last pattern analysis"
+            """,
+            transitions="""
+            [[transitions]]
+            from = "fix_loop"
+            to = "pattern_analysis"
+            command = "pattern_check"
+            gates = [
+                { type = "query", query = "pattern_analysis_overdue", expect = "true" },
+            ]
+            """,
+            hook_scripts={
+                "protocol_tracker.py": 'QUERY = "pattern_analysis_overdue"\n'
+            },
+        )
+        assert findings_for(tree, "H7") == []
+
+    def test_unrelated_sql_in_a_hook_is_left_alone(self, tmp_path: Path) -> None:
+        """Sharing SQL keywords is not sharing a fact."""
+        tree = build_tree(
+            tmp_path,
+            events="",
+            transitions=self.PATTERN_CHECK_GATE,
+            hook_scripts={
+                "other.py": '''SQL = "SELECT file_path FROM events WHERE type='file_read'"\n'''
+            },
+        )
+        assert findings_for(tree, "H7") == []
+
+
+# ── H8: the printed escape must be the fact that blocked ─────────────────────
+
+
+class TestH8EscapeIdentity:
+    """#77's deadlock stated as a property rather than a hand-written test."""
+
+    DRIFTED = """
+        [[transitions]]
+        from = "fix_loop"
+        to = "awaiting_clear"
+        command = "iteration_boundary"
+        gates = [
+            { type = "query", sql = "SELECT count(*) < 3 FROM events WHERE type='state_transition' AND command='fix_commit' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)", expect = "true", intent = "pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary" },
+        ]
+
+        [[transitions]]
+        from = "fix_loop"
+        to = "pattern_analysis"
+        command = "pattern_check"
+        gates = [
+            { type = "query", sql = "SELECT count(*) >= 3 FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)", expect = "true", intent = "3+ findings resolved since the last pattern analysis" },
+        ]
+        """
+
+    SHARED = """
+        [protocol]
+        name = "fixture"
+        version = "1.0.0"
+
+        [queries.pattern_analysis_overdue]
+        sql = "SELECT count(*) >= 3 FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)"
+        intent = "3+ findings resolved since the last pattern analysis"
+        """
+
+    def test_warns_while_the_escape_is_decided_inline(self, tmp_path: Path) -> None:
+        """Two inline predicates cannot be proven to be one fact."""
+        tree = build_tree(tmp_path, events="", transitions=self.DRIFTED)
+        findings = findings_for(tree, "H8")
+        assert [f.subject for f in findings] == [
+            "transitions.toml: transition 'iteration_boundary'"
+        ]
+        assert findings[0].level == "warning"
+        assert "pattern_check" in findings[0].message
+
+    def test_errors_when_the_block_ignores_the_escape_s_query(
+        self, tmp_path: Path
+    ) -> None:
+        """The escape has a name; the block still decided its own way."""
+        transitions = """
+            [[transitions]]
+            from = "fix_loop"
+            to = "awaiting_clear"
+            command = "iteration_boundary"
+            gates = [
+                { type = "query", sql = "SELECT count(*) < 3 FROM events WHERE type='state_transition' AND command='fix_commit'", expect = "true", intent = "run pattern_check first" },
+            ]
+
+            [[transitions]]
+            from = "fix_loop"
+            to = "pattern_analysis"
+            command = "pattern_check"
+            gates = [
+                { type = "query", query = "pattern_analysis_overdue", expect = "true" },
+            ]
+            """
+        tree = build_tree(
+            tmp_path, events="", protocol=self.SHARED, transitions=transitions
+        )
+        findings = findings_for(tree, "H8")
+        assert len(findings) == 1
+        assert findings[0].level == "error"
+        assert "pattern_analysis_overdue" in findings[0].message
+
+    def test_silent_when_both_sides_reference_one_query(self, tmp_path: Path) -> None:
+        """Complementary expectations of one predicate cannot deadlock."""
+        transitions = """
+            [[transitions]]
+            from = "fix_loop"
+            to = "awaiting_clear"
+            command = "iteration_boundary"
+            gates = [
+                { type = "query", query = "pattern_analysis_overdue", expect = "false", intent = "run pattern_check before leaving the iteration" },
+            ]
+
+            [[transitions]]
+            from = "fix_loop"
+            to = "pattern_analysis"
+            command = "pattern_check"
+            gates = [
+                { type = "query", query = "pattern_analysis_overdue", expect = "true" },
+            ]
+            """
+        tree = build_tree(
+            tmp_path, events="", protocol=self.SHARED, transitions=transitions
+        )
+        assert findings_for(tree, "H8") == []
+
+    def test_a_python_block_must_name_the_query_it_points_at(
+        self, tmp_path: Path
+    ) -> None:
+        """The commit gate's block is the site #77 actually deadlocked."""
+        transitions = """
+            [[transitions]]
+            from = "fix_loop"
+            to = "pattern_analysis"
+            command = "pattern_check"
+            gates = [
+                { type = "query", query = "pattern_analysis_overdue", expect = "true" },
+            ]
+            """
+        drifted = (
+            'QUERY = "some_other_query"\n'
+            'def main():\n'
+            '    exit_block("BLOCKED: run sahjhan transition pattern_check")\n'
+        )
+        tree = build_tree(
+            tmp_path,
+            events="",
+            protocol=self.SHARED
+            + '\n[queries.some_other_query]\nsql = "SELECT 1 FROM events"\n',
+            transitions=transitions,
+            hook_scripts={"commit_gate.py": drifted},
+        )
+        findings = findings_for(tree, "H8")
+        assert [f.level for f in findings] == ["error"]
+        assert "commit_gate.py" in findings[0].subject
+
+    def test_a_block_naming_no_query_is_not_this_check_s_business(
+        self, tmp_path: Path
+    ) -> None:
+        """`fix_commit` as an escape means *do the work*, not *the same fact*.
+
+        The unregistered-commit block tells the agent to run `fix_commit`,
+        whose gates are additional obligations — a passing suite, a recorded
+        blast radius. Demanding it share a predicate would be nonsense, and
+        reporting it would train everyone to ignore this check.
+        """
+        transitions = """
+            [[transitions]]
+            from = "fix_loop"
+            to = "fix_loop"
+            command = "fix_commit"
+            args = ["item_id"]
+            gates = [
+                { type = "command_succeeds", cmd = "pytest", intent = "tests must pass" },
+            ]
+            """
+        tree = build_tree(
+            tmp_path,
+            events="",
+            transitions=transitions,
+            hook_scripts={
+                "commit_gate.py": (
+                    "def main():\n"
+                    '    exit_block("BLOCKED: run sahjhan transition fix_commit")\n'
+                )
+            },
+        )
+        assert findings_for(tree, "H8") == []
+
+
+# ── H9: a transition that does not record the state it implies ───────────────
+
+
+class TestH9TransitionStateDecoupling:
+    """The `fix_commit`/`finding_resolved` decoupling, generalised.
+
+    That one shipped as a *gate* forcing the agent to type the fact twice,
+    which was rejected on the grounds that holtz exists to minimise agent
+    tokens; the accepted fix was `emits`. The three deferral transitions were
+    never converted and still carry the two-command shape.
+    """
+
+    DEFER = """
+        [[transitions]]
+        from = "fix_loop"
+        to = "fix_loop"
+        command = "defer_low"
+        args = ["item_id"]
+        gates = [
+            { type = "query", sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'", expect = "true", intent = "finding must not already be resolved or deferred" },
+        ]
+        """
+
+    def test_fires_when_nothing_records_the_deferral(self, tmp_path: Path) -> None:
+        tree = build_tree(tmp_path, events="", transitions=self.DEFER)
+        findings = findings_for(tree, "H9")
+        assert len(findings) == 1
+        assert findings[0].level == "error"
+        assert "finding_deferred" in findings[0].message
+
+    def test_silent_once_the_transition_emits_it(self, tmp_path: Path) -> None:
+        tree = build_tree(
+            tmp_path,
+            events="",
+            transitions=self.DEFER
+            + """
+            emits = [
+                { event = "finding_deferred", fields = { id = "{{item_id}}", reason = "low_priority" } },
+            ]
+            """,
+        )
+        assert findings_for(tree, "H9") == []
+
+    def test_resolves_the_predicate_through_a_named_query(
+        self, tmp_path: Path
+    ) -> None:
+        """Naming the predicate must not blind the check to it."""
+        tree = build_tree(
+            tmp_path,
+            events="",
+            protocol="""
+            [protocol]
+            name = "fixture"
+            version = "1.0.0"
+
+            [queries.item_open]
+            sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'"
+            intent = "finding must not already be resolved or deferred"
+            """,
+            transitions="""
+            [[transitions]]
+            from = "fix_loop"
+            to = "fix_loop"
+            command = "defer_low"
+            args = ["item_id"]
+            gates = [
+                { type = "query", query = "item_open", expect = "true" },
+            ]
+            """,
+        )
+        assert len(findings_for(tree, "H9")) == 1
+
+    def test_ignores_a_transition_that_only_reads_the_item(
+        self, tmp_path: Path
+    ) -> None:
+        """Requiring an event to *exist* is not claiming to change its state."""
+        tree = build_tree(
+            tmp_path,
+            events="",
+            transitions="""
+            [[transitions]]
+            from = "perspective_clean"
+            to = "audit"
+            command = "lens_rotate"
+            args = ["completed_perspective"]
+            gates = [
+                { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='set_member_complete' AND member='{{completed_perspective}}'", expect = "true", intent = "perspective must be marked complete before rotating" },
+            ]
+            """,
+        )
+        assert findings_for(tree, "H9") == []
+
+
 # ── Discovery soundness ──────────────────────────────────────────────────────
 
 
