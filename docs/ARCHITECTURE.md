@@ -136,6 +136,19 @@ Example gate from `transitions.toml` (the fix_commit transition):
 
 Translation: you cannot commit a fix unless you ran blast radius analysis first. This gate exists because Run 19 had zero blast radius queries across an entire audit.
 
+### Suite evidence
+
+Four gates need "the test suite passes" to be true. Running the suite to find out is the obvious implementation and the expensive one — the fix loop used to run it three times per finding, ~4.7 hours across a 90-fix audit.
+
+Instead, `enforcement/scripts/verify_suite.py` runs the suite **once** and records a restricted `suite_green` event carrying a hash of the working tree. The gates recompute that hash and read the ledger, so they are predicates rather than second executions.
+
+Two mechanisms, and the difference between them is the safety argument:
+
+- **The tree hash is an integrity claim.** It is content-addressed (the git tree oid), so `git commit` cannot invalidate a green it did not change — that is what collapses three runs to one. The agent cannot forge it: the event is `restricted`, the writer sits on a managed path, its SHA-256 is pinned in `trusted-callers.toml`, and it accepts no caller-supplied hash or result.
+- **Impact-graph test selection is only a cost optimisation.** `--scope affected` runs the tests the graph says cover what changed, but the graph is agent-authored, so a bogus edge could narrow one `fix_commit`. It cannot survive the next `iteration_boundary`, which accepts `full` and nothing else. Every uncertainty in the selection — an unmapped file, a `conftest.py`, an empty collection — widens back to the full suite.
+
+Full design, including the racy-index trap in the hash and the per-file widening rules: [docs/design/suite-evidence.md](design/suite-evidence.md).
+
 ### Enforcement hooks
 
 Python hooks in two locations:

@@ -142,6 +142,11 @@ caller-supplied hash or result.
 
 - [x] **T4 + T4a** — DONE, commit `f3ea05f`, v0.141.2. See Session 4.
 
+- [x] **T6 — commit-invariant tree hash** — DONE, commit `6cdaf43`, v0.141.3.
+  Not in the original plan; it is Session 4's open question, put to the user at
+  the start of Session 5 and answered "do it now, before the release."
+  See Session 5.
+
 - [ ] **T5 — release**  <- RESUME HERE
   - `scripts/pre-release-check.sh`, changelog, release PR dev -> main
 
@@ -431,3 +436,90 @@ fail against the pre-change linter, verified by stashing it.
 **Handoff state:** T5 (release) is all that remains. The mechanism is fully
 wired: nothing in `transitions.toml` runs pytest, and `DEFAULT_PYTEST` exists
 in exactly one place.
+
+### Session 5 (2026-07-27)
+
+Put Session 4's open question to the user before starting T5. Answer: **content
+hash now, before the release.** Shipped as T6 (`6cdaf43`, v0.141.3), plus the
+project documentation the user asked for mid-session
+(`docs/design/suite-evidence.md`, linked from `ARCHITECTURE.md`).
+
+**Session 4's two objections, re-measured rather than re-argued.**
+
+*(a) "O(repo) on every `--check`" does not survive the implementation.* Seeding
+the temp index from the real `.git/index` preserves git's stat cache, so only
+files whose stat data changed are re-hashed. Measured: 8000-file/63 MB repo,
+34 ms (old) vs 42 ms (new); a *cold* index on the same repo is 190 ms, which is
+the cost Session 4 was picturing. holtz itself is 65 ms vs 237 ms, and that gap
+is almost entirely a 98 MB **untracked** binary in `.claude-plugin/bin/`. Either
+way it is ~0.2 s against the ~3 s affected run it removes. Worth noting the old
+hash was never O(1) either — it runs `git diff --name-only HEAD`, which stats
+every tracked file.
+
+*(b) "a green transfers across a commit" stands, and is now pinned as a test
+rather than a paragraph.* `test_amending_only_the_message_preserves_it` is the
+bound made concrete: a suite that lints commit messages can pass on evidence
+proven under a different message.
+
+**D19 (new, and the reason this was not a one-line change). Content addressing
+alone does not produce one run per fix.** The plan's arithmetic assumed the two
+per-fix records were "before commit" and "after commit". They were not. The
+subagent recorded at step 5 and then wrote a hardening test at step 8, so the
+orchestrator's step-10 `--check` recomputed a hash no green named — it could
+**never** pass, and the skill file's own instruction on failure is "the fix is
+not real — send it back or defer; do not commit." v0.141.2 shipped telling the
+orchestrator to reject every good fix. The enforced `fix_commit` gate still
+passed, because step 12 re-recorded, which is exactly why T4's green run did not
+catch it: the *gate* was fine and the *prose validation step* was broken.
+
+Demonstrated with three `--print-tree-hash` calls before touching anything.
+So T6 is two changes, and either alone leaves two runs: content-address the
+hash (kills the post-commit record) **and** move the record to the subagent's
+last step (kills the pre-commit staleness). `test_the_subagent_records_the_green_last`
+now pins the ordering; the old `test_the_orchestrator_records_the_green_after_committing`
+asserted the opposite and was inverted, not deleted.
+
+**D20 (new). The index copy must preserve mtime, and this was a live false
+green.** Git answers "has this file changed?" from the index stat cache — same
+size and same mtime is taken as unchanged without reading a byte — and guards
+the same-second case by distrusting any entry whose mtime is not older than the
+*index file's own* mtime. `shutil.copyfile` stamps the copy with the current
+time, which makes every entry look safely older and silently disables that
+guard. A same-second, same-size edit (`return a + b` → `return b + a`) then
+reads off the stale cached oid and the hash names a tree that no longer exists.
+
+Found by `test_an_affected_green_does_not_satisfy_a_full_check` failing in a
+file run and passing in isolation; reproduced 5 times in 12 with a loop harness,
+0 in 40 after `shutil.copy2`. The regression test forces the condition
+deterministically via `core.trustctime = false` — with ctime in play the rewrite
+is caught by the changed ctime, which masks the mtime question entirely and is
+why a first attempt at this test showed no difference between the two copiers.
+
+**D21 (new). A predicate must not write to the repository it inspects.**
+Content hashing means `git add`, and `git add` writes blobs. Measured on this
+repo: a benchmark run left 282 loose objects, 39 MB, including the 98 MB
+untracked binary. Fixed with `GIT_OBJECT_DIRECTORY` at a temp dir plus
+`GIT_ALTERNATE_OBJECT_DIRECTORIES` at the real store — dedup still resolves
+through the alternate, and new writes are discarded. Verified: object-count
+delta 0. (The benchmark residue was cleaned up by intersecting "created in the
+last hour" with `git prune --dry-run`; 24 objects were genuinely mine, the other
+258 were pre-existing objects whose mtime `git add` had *freshened*.
+`git fsck --connectivity-only` exit 0 afterwards.)
+
+**Two guesses that were wrong, recorded so they are not re-run.** A conflicted
+tree does **not** fail closed — `git add -A` resolves the unmerged entries
+against the working tree, so the marker content hashes like any other content,
+which is honest. And `git add -A` tolerates a FIFO rather than erroring. The
+`TreeHashError` path is reached by an unreadable index, which is what the test
+now uses.
+
+**Observed green** (all exit 0 unless noted): ruff, mypy (52 files), full suite
+exit 0 with coverage 91.09% ≥ 80 (verify_suite.py at 89%), contract gate 37
+commands, `scripts/lint-enforcement.sh` 0 errors (L1–L7, H1–H10; the same 12
+pre-existing warnings as T1–T4), `docs/ENFORCEMENT-CONTRACT.md` current (no gate
+row changed — the gates were already `--check`). README badge 1953 → 1961.
+`scripts/hash-trusted-callers.sh` rerun twice, once after each edit to
+`verify_suite.py`; both times the stale manifest surfaced exactly as memory
+`trusted-callers-manifest-regen` describes.
+
+**Handoff state:** T5 (release) is the only task left, now covering v0.141.3.
