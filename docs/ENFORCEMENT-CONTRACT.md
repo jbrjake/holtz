@@ -23,7 +23,7 @@ Every event gets exactly one, declared in `events.toml` and ordered by `[attesta
 
 ## Posture
 
-**21 of 28 gate-consumed events are the agent's own word.**
+**21 of 29 gate-consumed events are the agent's own word.**
 
 This is not a bug — self-attestation is fine for bookkeeping, and a protocol whose every step needed host evidence would not be usable. It is here because it should be a *deliberate, visible* posture rather than an accident nobody had counted. The defect is a **mismatch**: a gate whose purpose is to constrain the agent, fed by evidence the agent controls.
 
@@ -31,7 +31,7 @@ This is not a bug — self-attestation is fine for bookkeeping, and a protocol w
 |---|---|
 | `agent` (21) | `audit_claim`, `baseline_updated`, `blast_radius`, `finding`, `finding_deferred`, `finding_resolved`, `fix_start`, `hardening_complete`, `iteration_complete`, `justine_dispatched`, `lens_sweep_started`, `living_punchlist_updated`, `merge_agent_dispatched`, `pattern_analysis_complete`, `pattern_contribution_complete`, `recon_step`, `reference_read`, `set_member_complete`, `snapshot`, `source_edit`, `test_failed_before_fix` |
 | `engine` (1) | `state_transition` |
-| `tool` (4) | `quiz_answered`, `quiz_bank_generated`, `quiz_exhausted`, `quiz_posed` |
+| `tool` (5) | `quiz_answered`, `quiz_bank_generated`, `quiz_exhausted`, `quiz_posed`, `suite_green` |
 | `host` (1) | `context_reset` |
 | `human` (1) | `quiz_exhausted_resolved` |
 

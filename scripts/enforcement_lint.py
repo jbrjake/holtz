@@ -196,9 +196,24 @@ class Tree:
     def py_dirs(self) -> tuple[Path, ...]:
         return (
             self.config_dir / "hooks",
+            self.config_dir / "scripts",
             self.root / "hooks",
             self.skills_dir / "holtz" / "scripts",
         )
+
+    @property
+    def tool_dirs(self) -> tuple[Path, ...]:
+        """Dirs whose scripts run because something invokes them by path.
+
+        A hook is fired by the harness, so "is it in hooks.json?" decides
+        whether it ever runs. A gate helper under ``enforcement/scripts`` is
+        run by a gate command or a documented agent command instead, and will
+        never appear there — asking the hook question about it produces a
+        permanent false error. The producer grammar therefore separates the
+        two: ``hook:<path>`` and ``tool:<path>``. Both are hash-pinned when
+        they write a restricted event; only one is registered.
+        """
+        return (self.config_dir / "scripts",)
 
     @property
     def trusted_callers(self) -> Path:
@@ -458,9 +473,11 @@ def parse_python_predicates(model: Model) -> None:
 
 def parse_python_writers(model: Model) -> None:
     """Discover write paths and SQL consumers in Python."""
+    tool_dirs = set(model.tree.tool_dirs)
     for directory in model.tree.py_dirs:
         if not directory.is_dir():
             continue
+        kind = "tool" if directory in tool_dirs else "hook"
         for py in sorted(directory.rglob("*.py")):
             if "__pycache__" in py.parts:
                 continue
@@ -475,7 +492,7 @@ def parse_python_writers(model: Model) -> None:
                     event = match.group(1)
                     line = text.count("\n", 0, match.start()) + 1
                     model.writers.setdefault(event, []).append(
-                        Writer(event, f"hook:{rel}", f"{rel}:{line}")
+                        Writer(event, f"{kind}:{rel}", f"{rel}:{line}")
                     )
             for match in _PY_SQL_CONSUMER.finditer(text):
                 line = text.count("\n", 0, match.start()) + 1
@@ -792,7 +809,7 @@ def check_h2_false_declarations(model: Model) -> list[Finding]:
                 continue
             if producer_id in discovered:
                 continue
-            if producer_id.startswith("hook:"):
+            if producer_id.startswith(("hook:", "tool:")):
                 path = producer_id.split(":", 1)[1]
                 detail = (
                     "names a file that does not exist"
@@ -861,14 +878,26 @@ def check_h3_undeclared_writers(model: Model) -> list[Finding]:
 
 
 def check_h4_hook_registration(model: Model) -> list[Finding]:
-    """A hook producer must be registered and hash-pinned to actually run."""
+    """A named Python writer must actually be able to run, and be pinned.
+
+    Two producer kinds reach this check, and they differ in exactly one way.
+    A ``hook:`` runs because the *harness* fires it, so being absent from
+    ``hooks/hooks.json`` means it never runs at all. A ``tool:`` runs because
+    something invokes it by path — a gate command, or a command a skill file
+    teaches — and will never be in ``hooks.json``; demanding registration of
+    one would be a permanent false error rather than a check.
+
+    What both owe is the pin: whichever process the daemon sees, it
+    authenticates by content hash, so an unpinned writer of a ``restricted``
+    event is refused at runtime no matter how it was started.
+    """
     findings = []
     for event, spec in sorted(model.events.items()):
         for producer in spec.get("producers", []) or []:
             producer_id = producer.get("id", "")
-            if not producer_id.startswith("hook:"):
+            if not producer_id.startswith(("hook:", "tool:")):
                 continue
-            path = producer_id.split(":", 1)[1]
+            kind, path = producer_id.split(":", 1)
             script = path.split("/")[-1]
             if not (model.tree.root / path).exists():
                 findings.append(
@@ -881,7 +910,7 @@ def check_h4_hook_registration(model: Model) -> list[Finding]:
                     )
                 )
                 continue
-            if script not in model.hook_entrypoints:
+            if kind == "hook" and script not in model.hook_entrypoints:
                 findings.append(
                     Finding(
                         "H4",

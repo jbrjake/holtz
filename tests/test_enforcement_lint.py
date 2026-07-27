@@ -57,6 +57,7 @@ def build_tree(
     renders: str = "",
     skills: dict[str, str] | None = None,
     hook_scripts: dict[str, str] | None = None,
+    tool_scripts: dict[str, str] | None = None,
     hooks_json: dict | None = None,
     trusted: list[str] | None = None,
 ) -> el.Tree:
@@ -81,15 +82,22 @@ def build_tree(
         _write(root / "skills" / name, body)
     for name, body in (hook_scripts or {}).items():
         _write(config / "hooks" / name, body)
+    # enforcement/scripts holds gate helpers — invoked by path, never fired by
+    # the harness. They are `tool:` producers, not `hook:` ones.
+    for name, body in (tool_scripts or {}).items():
+        _write(config / "scripts" / name, body)
 
     _write(root / "hooks" / "hooks.json", json.dumps(hooks_json or {"hooks": {}}))
 
     lines = ["[callers]"]
     for name in trusted or []:
+        # The daemon keys the manifest by the caller's path relative to the
+        # config dir, so a tool lands under `scripts/`, a hook under `hooks/`.
+        subdir = "scripts" if (config / "scripts" / name).exists() else "hooks"
         digest = hashlib.sha256(
-            (config / "hooks" / name).read_bytes()
+            (config / subdir / name).read_bytes()
         ).hexdigest()
-        lines.append(f'"hooks/{name}" = "sha256:{digest}"')
+        lines.append(f'"{subdir}/{name}" = "sha256:{digest}"')
     _write(config / "trusted-callers.toml", "\n".join(lines) + "\n")
 
     # Every path must be overridden. Leaving `hooks_json` at its default let
@@ -463,6 +471,78 @@ class TestH4HookRegistration:
             trusted=["quiz_capture.py"],
         )
         assert findings_for(tree, "H4") == []
+
+
+class TestToolProducers:
+    """`tool:` — a writer invoked by path rather than fired by the harness.
+
+    `verify_suite.py` (#83 P4) is the first: a gate runs it, and the fix loop
+    teaches the agent to. Asking the hook question about it — "is it in
+    hooks.json?" — produces a permanent false error, because the answer is
+    always no and always fine. What it still owes is the pin, since the daemon
+    authenticates whichever process connects, however it was started.
+    """
+
+    EVENTS = """
+        [events.suite_green]
+        description = "Suite passed on a named tree"
+        restricted = true
+        fields = []
+
+        [[events.suite_green.producers]]
+        id = "tool:enforcement/scripts/verify_suite.py"
+        """
+    WRITER = {"verify_suite.py": 'record_authed_event("suite_green", f, cwd)\n'}
+
+    def test_discovered_as_a_tool_not_a_hook(self, tmp_path: Path) -> None:
+        """The producer kind follows the directory, and H2 accepts it."""
+        tree = build_tree(
+            tmp_path, events=self.EVENTS, tool_scripts=self.WRITER,
+            trusted=["verify_suite.py"],
+        )
+        writers = el.build_model(tree).writers["suite_green"]
+        assert [w.producer_id for w in writers] == [
+            "tool:enforcement/scripts/verify_suite.py"
+        ]
+        assert findings_for(tree, "H2") == []
+
+    def test_registration_is_not_demanded(self, tmp_path: Path) -> None:
+        """Nothing in hooks.json, and that is correct for a gate helper."""
+        tree = build_tree(
+            tmp_path, events=self.EVENTS, tool_scripts=self.WRITER,
+            trusted=["verify_suite.py"],
+        )
+        assert findings_for(tree, "H4") == []
+
+    def test_a_restricted_tool_must_still_be_hash_pinned(
+        self, tmp_path: Path
+    ) -> None:
+        """`tool:` must not become an escape hatch out of H4.
+
+        Skipping the pin is the stale-manifest class: the daemon refuses the
+        caller, the write is swallowed, and the gate it feeds fails open.
+        """
+        tree = build_tree(tmp_path, events=self.EVENTS, tool_scripts=self.WRITER)
+        messages = [f.message for f in findings_for(tree, "H4")]
+        assert any("hash-pinned" in m for m in messages), messages
+
+    def test_a_missing_file_is_still_flagged(self, tmp_path: Path) -> None:
+        tree = build_tree(tmp_path, events=self.EVENTS)
+        messages = [f.message for f in findings_for(tree, "H4")]
+        assert any("does not exist" in m for m in messages), messages
+
+    def test_a_tool_that_does_not_write_the_event_is_flagged(
+        self, tmp_path: Path
+    ) -> None:
+        """The declaration is a claim about a file, whatever kind it is."""
+        tree = build_tree(
+            tmp_path,
+            events=self.EVENTS,
+            tool_scripts={"verify_suite.py": "# writes nothing\n"},
+            trusted=["verify_suite.py"],
+        )
+        messages = [f.message for f in findings_for(tree, "H2")]
+        assert any("does not write this event" in m for m in messages), messages
 
 
 # ── H5: evidence the constrained party can manufacture ───────────────────────

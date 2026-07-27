@@ -525,6 +525,41 @@ fields = [
 [[events.lens_coverage_recorded.producers]]
 id = "agent:cli"
 
+# The suite ran, on a *named* tree, and passed (#83 P4).
+#
+# The fix loop ran the target's full suite three times per finding and enforced
+# one of them; two of the three executed on a byte-identical tree. `tree_hash`
+# is what makes the redundancy removable: it pins the result to the exact
+# working-tree contents that produced it, so a later gate can ask "was this
+# tree proven green?" instead of proving it again. A tree that changed by one
+# byte has a different hash and no longer satisfies anything.
+#
+# `restricted` + hash-pinned writer is what makes the answer trustworthy. The
+# writer computes the hash and runs the suite itself; it accepts no
+# caller-supplied hash and no caller-supplied result, so the strongest thing an
+# agent can do is run the suite for real.
+[events.suite_green]
+description = "The test suite ran and passed on a specific working-tree hash"
+attestation = "tool"
+restricted = true
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "tree_hash", type = "string", pattern = "^[0-9a-f]{64}$" },
+    { name = "scope", type = "string", pattern = "^(full|affected)$" },
+    { name = "command", type = "string" },
+    { name = "test_count", type = "string", pattern = "^\\d+$", optional = true },
+]
+
+# `tool:`, not `hook:`. Nothing in the harness fires this script — a gate runs
+# it, and the fix loop teaches the agent to. The distinction is load-bearing
+# for H4: a `hook:` that is absent from hooks.json never runs at all, whereas
+# demanding registration of a gate helper would be a permanent false error.
+# Both kinds still owe the hash pin, which is what the daemon actually checks.
+[[events.suite_green.producers]]
+id = "tool:enforcement/scripts/verify_suite.py"
+
 [events.fix_start]
 description = "Starting work on a punchlist item"
 attestation = "agent"

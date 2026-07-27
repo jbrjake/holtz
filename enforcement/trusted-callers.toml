@@ -22,4 +22,5 @@
 "hooks/bash_guard.py" = "sha256:a534dca9da6509d573c25965dda2c29d7cd2196cd8486a1837d0965f6d5e5a09"
 "hooks/protocol_tracker.py" = "sha256:51003e0a152040464c3f09ed4f928942dacf133888b106571eb2275b03fb26f9"
 "hooks/quiz_capture.py" = "sha256:3d1697849e6a9a313f29bb9745c1181ba69a31258eec27f4bb84b65afe0484aa"
+"scripts/verify_suite.py" = "sha256:b69177f56f4477f12f4e940742ba2614a89c6f52d53a1d3441ebd9e5248c1ea5"
 "hooks/subagent_findings_check.py" = "sha256:f97d12f1d431dad0f9a88ea25c24e923acb3d0a6f4722c0bfb4d047fb161d921"

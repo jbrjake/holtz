@@ -80,7 +80,7 @@ caller-supplied hash or result.
     (37 commands), `sahjhan lint` 0 errors, `enforcement_lint` 0 errors.
   - Also bumped the README test-count badge 1878 -> 1880 (pre-commit caught it).
 
-- [ ] **T2 — P4 `suite_green` event + verify_suite.py**  <- RESUME HERE
+- [x] **T2 — P4 `suite_green` event + verify_suite.py** — DONE, see Session 2
 
   **D7 (found while scoping T2, do not rediscover): the enforcement linter does
   not scan `enforcement/scripts/`.** `enforcement_lint.py:196-201` defines
@@ -133,19 +133,39 @@ caller-supplied hash or result.
      for the record path, and a `real_daemon` test that the gate `--check`
      rejects a forged/mismatched hash.
 
-- [ ] **T3 — P3 selective per-fix + full at boundary**
+- [ ] **T3 — P3 selective per-fix + full at boundary**  <- RESUME HERE
   - Confirm `impact_graph.py` CLI exposes `--types` on `blast_radius`
   - `verify_suite.py --scope affected`: changed files -> graph nodes ->
     `tests` edges -> test file list
   - `fix_commit` gate -> affected scope; `iteration_boundary` gate -> full scope
   - Fallback: if the graph has no `tests` edges, fall back to full suite
     (never silently narrow — cf. #83)
+  - `--scope affected` is already accepted by the CLI, the event pattern, and
+    `accepted_scopes()` (full satisfies affected, never the reverse). What T3
+    adds is the *selection*: nothing narrows the command yet.
 
 - [ ] **T4 — P1 collapse the redundant runs**
   - `skills/holtz/references/phase-fix-loop.md`: subagent step 5 -> affected
     subset via verify_suite; orchestrator B.10 -> ledger check, not a re-run
   - Contract tests must be updated in the SAME commit (CLAUDE.md rule)
   - `test_subagent_contract_consistency.py` may need updating
+  - **Record AFTER the commit, not before.** The tree hash includes HEAD's oid,
+    so committing changes it even when the content is identical. Pinned by
+    `TestTreeHash::test_committing_the_same_content_changes_it`. A `--record`
+    placed before `git commit` would leave every `fix_commit` gate re-running
+    the suite — the exact cost T2 exists to remove, silently restored.
+  - Replace all three `${HOLTZ_PYTEST:-...}` gate commands in
+    `transitions.toml` with `verify_suite.py --check`. Until then the pytest
+    default lives in four places; after T4 it lives only in verify_suite.py.
+  - Then add the `tool:`-reachability check deferred below.
+
+- [ ] **T4a — ratchet: a `tool:` producer nothing invokes**
+  - H4 asks a `hook:` "is it registered in hooks.json?". The `tool:` analogue
+    is "does anything invoke it by path?" — a gate `cmd` in transitions.toml,
+    a skill file, or another hook. Today nothing invokes `verify_suite.py`
+    (T3/T4 wire it), so adding the check now would fail the build on a
+    deliberately half-wired tree. Add it in the T4 commit, where it is green
+    on arrival — the same discipline as #82's ratchet rounds.
 
 - [ ] **T5 — release**
   - `scripts/pre-release-check.sh`, changelog, release PR dev -> main
@@ -176,5 +196,69 @@ caller-supplied hash or result.
 - Shipped T1 (`ba697a2`, v0.140.2).
 - Filed #83 (adjacent, separate work: non-Python false-green).
 
-**Handoff state:** working tree clean except this plan doc. T1 committed and
-green. T2 fully designed above — start at step 1. Nothing is half-written.
+### Session 2 (2026-07-27)
+
+Shipped T2. Four design points changed from the Session-1 plan, each after
+looking at the code rather than reasoning from the plan:
+
+**D8 (supersedes D4's mechanism, keeps its constraint).** `--check` reads the
+ledger through `sahjhan query`, not by parsing `ledger.jsonl`. D4's rule — the
+gate path must not call the daemon — is right and is satisfied: `cmd_query`
+(`sahjhan/src/cli/query.rs`) loads config, resolves the ledger via
+`resolve_ledger_from_targeting` (the *same* function the gates use), and runs
+SQL over the file. There is no socket anywhere in that path; verified by
+reading it and by running `sahjhan query` against this repo with no daemon up
+for its config dir. The plan's "read `docs/holtz/runs/{active}/ledger.jsonl`"
+was both a mirror of engine resolution (marker → `ledgers.toml` → registry
+default → `data_dir/ledger.jsonl`) and factually wrong about the path — this
+repo's active ledger is `docs/holtz/.sahjhan/ledger.jsonl` and `runs/` does not
+exist. Delegating means block condition and evidence read one file by
+construction.
+
+**D9 (new). The producer grammar needed a `tool:` kind.** D7's fix (add
+`enforcement/scripts` to `py_dirs`) is necessary but not sufficient: H4 demands
+that a `hook:` producer appear in `hooks/hooks.json`, and `verify_suite.py` is
+not a Claude Code hook and never will be. Observed, not predicted — declaring
+it as `hook:` produced `H4 error: … is not registered in hooks/hooks.json …
+the harness never runs it`. So `tool:<path>` now names a writer invoked *by
+path* (a gate command, or a command a skill file teaches). H4 skips the
+registration question for it and keeps the hash-pin requirement, which is what
+the daemon actually checks. `TestToolProducers` pins both halves; four of its
+five tests fail against the pre-change linter (verified by stashing it).
+
+**D10 (new). The event type must be a string literal at the write site.**
+Writing `record_authed_event(EVENT_TYPE, …)` hid the writer from H2/H3 —
+"real writers: none" — because discovery scans for the literal. That is not a
+linter shortcoming to work around; the literal is what makes the
+`[[producers]]` declaration falsifiable. Constant dropped, comment left at the
+top of the file so nobody re-hoists it.
+
+**D11 (new). Every `--check` block prints its escape, including the
+configuration failures.** A project whose ledger has never been initialised
+makes `sahjhan query` exit 2 with an I/O error, and the first implementation
+reported that verbatim with no next step. To the agent, "no ledger" and "no
+matching event" mean the same thing and are cleared by the same command, so
+`_block()` now prints the underlying reason *and* the `--record` line. Found by
+a test, not by reading.
+
+Also observed: D7's expectation that scanning `enforcement/scripts` would
+surface pre-existing findings in the other gate helpers did **not** hold — 0
+new findings. The discovery regexes are narrow enough that
+`check_sweep_evidence.py`'s `("final_sweep_start", "lens_sweep_started")` tuple
+is not mistaken for a write.
+
+`available_in_states` deliberately omitted from the producer: which states may
+record a green is T3/T4's question (`fix_commit` and `iteration_boundary` at
+minimum), and guessing it now would be a claim nothing checks.
+
+**Observed green** (all exit 0 unless noted): ruff, mypy (52 files), full
+pytest suite `1912 passed` with coverage 91.15% ≥ 80 (verify_suite.py at 89%),
+contract gate 37 commands, `scripts/lint-enforcement.sh` exit 0 (L1–L7 and
+H1–H9, 0 errors; the same 12 pre-existing warnings as the T1 baseline),
+`enforcement_contract.py --write` regenerated (`tool` count 4 → 5, posture
+"21 of 29"). README badge 1880 → 1912. `scripts/hash-trusted-callers.sh` rerun
+after the final edit to `verify_suite.py`.
+
+**Handoff state:** T2 committed and green. T3 is next — the mechanism exists
+and is unused, which is the intended increment: `verify_suite.py --check` is
+wired into no gate and taught in no skill file until T3/T4.
