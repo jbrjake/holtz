@@ -70,6 +70,40 @@ gates = [
     { type = "ledger_has_event", event = "reference_read", filter = { path = "step-10-fix-loop.md" }, min_count = 1, intent = "must read fix loop procedure before starting" },
 ]
 
+# The four suite gates in this file no longer *run* the suite — they ask
+# whether it was already run and passed on this exact working tree.
+#
+# The fix loop used to execute the target's full suite three times per finding
+# (fix subagent, orchestrator re-validation, and this gate), of which only this
+# one was enforced, and the last two ran on a byte-identical tree because
+# `git commit` does not touch working-tree contents. `verify_suite.py` splits
+# "run the suite" from "know the suite passed": `--record` runs it and writes a
+# `suite_green` naming a hash of the tree, `--check` recomputes that hash and
+# asks the ledger. So the run happens where the work happens (taught in
+# references/phase-fix-loop.md) and every gate downstream is a predicate.
+#
+# `--check` is safe inside a transition: it reads via `sahjhan query`, which
+# opens the ledger file directly and never touches the daemon socket — so a
+# gate cannot re-enter the daemon that is evaluating it.
+#
+# `--scope affected` here and `full` everywhere else is the whole cost model.
+# An affected run covers the tests the impact graph says reach what changed
+# since the last *full* green; because that graph is agent-written, an affected
+# green is a cost optimisation and not an independent integrity claim. What
+# bounds it is `iteration_boundary` below, which accepts `full` and nothing
+# else — so the narrowed window can never span more than one iteration. Weaken
+# that gate and the affected scope here stops meaning anything.
+#
+# `evidence` is not a sahjhan gate param — the engine flattens unknown keys
+# into `params` and ignores them. It is here so the event this gate really
+# depends on is *named* rather than buried in the script's SQL: H10 fails the
+# build if the named event is not what the invoked tool queries, H1 fails it if
+# nothing can write that event, and docs/ENFORCEMENT-CONTRACT.md renders the
+# writer and forgeability instead of calling this a direct check.
+#
+# The suite command itself (and why it is `-x --ff` and never `--lf`) now lives
+# in exactly one place: `DEFAULT_PYTEST` in verify_suite.py. `$HOLTZ_PYTEST`
+# still overrides it; it is read there rather than expanded here.
 [[transitions]]
 from = "fix_loop"
 to = "fix_loop"
@@ -77,7 +111,7 @@ command = "fix_commit"
 args = ["item_id"]
 gates = [
     { type = "command_succeeds", cmd = "git log -1 --format=%B | grep -q '{{item_id}}'", intent = "commit must reference the punchlist item" },
-    { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest --tb=short -q}", timeout = 120, intent = "test suite must pass after fix" },
+    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope affected', timeout = 60, evidence = "suite_green", intent = "test suite must pass after fix" },
     { type = "ledger_has_event_since", event = "blast_radius", since = "last_transition", intent = "blast radius must be checked after each fix" },
     { type = "ledger_has_event_since", event = "hardening_complete", since = "last_transition", intent = "edge cases must be hardened after each fix" },
     { type = "query", sql = "SELECT count(*) < 15 FROM events WHERE type='state_transition' AND command='fix_commit' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='state_transition' AND command='iteration_boundary'), 0)", expect = "true", intent = "circuit breaker: max 15 fixes per iteration (scoped since the last iteration_boundary /clear, so the cap resets each context reset instead of capping the whole run)" },
@@ -106,9 +140,22 @@ command = "defer_cant_reproduce"
 args = ["item_id"]
 gates = [
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}'", expect = "true", intent = "finding must exist" },
-    { type = "query", sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'", expect = "true", intent = "finding must not already be resolved or deferred" },
+    { type = "query", query = "item_open", expect = "true" },
     { type = "ledger_has_event_since", event = "fix_start", since = "last_transition", intent = "must have started working on this item" },
     { type = "command_succeeds", cmd = "test -f docs/holtz/investigations/{{item_id}}.md && test -s docs/holtz/investigations/{{item_id}}.md", intent = "reproduction attempts must be documented in investigation file" },
+]
+# Like fix_commit, the deferral transitions AUTO-EMIT the state they imply
+# (#82). The gate above requires the item to be open; recording the transition
+# without recording the deferral left it open, so the agent had to state the
+# same fact a second time — `defer cant-reproduce BH-001` followed by `event
+# finding_deferred --field id=BH-001 …`. Two commands per deferred finding, on
+# a run that defers many, for a fact the engine already had from the arg. Worse
+# than the token cost: run them in the other order and the `item_open` gate
+# refuses the transition that was meant to record it, and forget the second and
+# convergence blocks on a finding that reads open while its transition says
+# otherwise. The gate evaluates before the emit, so this cannot satisfy itself.
+emits = [
+    { event = "finding_deferred", fields = { id = "{{item_id}}", reason = "cant_reproduce", evidence_path = "docs/holtz/investigations/{{item_id}}.md", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
 ]
 
 # ── Deferral: LOW severity ──
@@ -120,7 +167,11 @@ command = "defer_low"
 args = ["item_id"]
 gates = [
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='LOW'", expect = "true", intent = "finding must exist and be LOW severity" },
-    { type = "query", sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'", expect = "true", intent = "finding must not already be resolved or deferred" },
+    { type = "query", query = "item_open", expect = "true" },
+]
+# Auto-emits the deferral; see defer_cant_reproduce above (#82).
+emits = [
+    { event = "finding_deferred", fields = { id = "{{item_id}}", reason = "low_priority", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
 ]
 
 # ── Deferral: MEDIUM severity (budget-capped) ──
@@ -132,8 +183,15 @@ command = "defer_medium"
 args = ["item_id"]
 gates = [
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='MEDIUM'", expect = "true", intent = "finding must exist and be MEDIUM severity" },
-    { type = "query", sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'", expect = "true", intent = "finding must not already be resolved or deferred" },
+    { type = "query", query = "item_open", expect = "true" },
     { type = "query", sql = "SELECT (SELECT count(*) FROM events WHERE type='finding_deferred' AND reason='medium_budget') < (SELECT count(*) FROM events WHERE type='finding' AND severity='MEDIUM') / 2", expect = "true", intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings" },
+]
+# Auto-emits the deferral; see defer_cant_reproduce above (#82). `reason` is
+# load-bearing here rather than decorative: the budget gate counts exactly
+# `reason='medium_budget'`, so the emit is what keeps the cap countable. It is
+# evaluated before this emit, so a deferral cannot fund its own budget.
+emits = [
+    { event = "finding_deferred", fields = { id = "{{item_id}}", reason = "medium_budget", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
 ]
 
 # ── Context Reset (enforces /clear boundaries) ──
@@ -143,10 +201,30 @@ from = "fix_loop"
 to = "awaiting_clear"
 command = "iteration_boundary"
 gates = [
-    # BH-020: Enforce pattern analysis after 3+ fixes to prevent recurring band-aid fixes.
-    # Counts fix_commits since the last pattern_analysis_complete. If 3+, blocks until
-    # pattern analysis is done. The auditor cannot skip Step 11 and escape to /clear.
-    { type = "query", sql = "SELECT count(*) < 3 FROM events WHERE type='state_transition' AND command='fix_commit' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)", expect = "true", intent = "pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary" },
+    # BH-020: Enforce pattern analysis after 3+ fixes to prevent recurring
+    # band-aid fixes. The auditor cannot skip Step 11 and escape to /clear.
+    #
+    # #82: this counted `state_transition WHERE command='fix_commit'` while the
+    # escape it names — `pattern_check` — counted `finding_resolved`. Two
+    # expressions of one fact, so they could disagree: a finding resolved
+    # without a fix_commit (the standalone path SKILL.md teaches) advanced one
+    # count and not the other, and a fix_commit whose `emits` failed advanced
+    # the other and not this one. In that second case this gate blocked while
+    # `pattern_check` was not yet ready — the block and its own printed escape,
+    # both shut. That is #77's deadlock, reachable from a different direction.
+    # Now both reference the same named query with opposite expectations, so
+    # exactly one of them is open at any moment, always.
+    { type = "query", query = "pattern_analysis_overdue", expect = "false", intent = "pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary" },
+    # The re-basing gate, and the reason `fix_commit` may narrow at all.
+    #
+    # Each affected run measures its diff from the last *full* green, so
+    # without a full run somewhere the window only widens — and the impact
+    # graph that decides "affected" is written by the agent, so a bogus `tests`
+    # edge could narrow one fix_commit. Neither survives here: this accepts
+    # `full` and nothing else, and it fires at every /clear boundary (every 3-5
+    # fixes), so the untested gap is bounded by one iteration. Cheap for the
+    # same reason: one full run per boundary, not one per fix.
+    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope full', timeout = 60, evidence = "suite_green", intent = "the full suite must pass on this tree before a context reset — this is what re-bases the affected scope" },
 ]
 
 # The filter is what makes this gate mean what it says. `context_reset` used to
@@ -160,9 +238,18 @@ gates = [
 from = "awaiting_clear"
 to = "fix_loop"
 command = "resume"
+boundary = "context-reset"
 gates = [
     { type = "ledger_has_event_since", event = "context_reset", since = "last_transition", filter = { trigger = "session_start" }, intent = "context must be reset via /clear (or compaction) before resuming" },
 ]
+
+# The third layer, and the one that fails at rest rather than at runtime (#82).
+# `context_reset` is declared `attestation = "host"`; requiring host here means
+# that if anyone ever re-points the event at a weaker signal — as #79 did, to
+# UserPromptSubmit, which is `ambient` — `sahjhan lint` L7 fails the build
+# instead of the gate silently opening on the next prompt that arrives.
+  [transitions.integrity]
+  requires_attestation = "host"
 
 # ── Pause for human (#69) ──
 # Reversible pause so the agent can yield the turn to answer a user question
@@ -188,15 +275,18 @@ from = "fix_loop"
 to = "pattern_analysis"
 command = "pattern_check"
 gates = [
-    # #65: use a COALESCE-scoped query (mirroring iteration_boundary) rather than
-    # ledger_has_event_since. The old gate referenced `last_event_of_type:...`, a
-    # syntax that gate type does not understand: it matched no event, silently fell
-    # back to "since last state_transition", and ignored min_count entirely — so the
-    # first pattern_check could never fire (chicken-and-egg: you need a prior
+    # #65: use a COALESCE-scoped query rather than ledger_has_event_since. The
+    # old gate referenced `last_event_of_type:...`, a syntax that gate type does
+    # not understand: it matched no event, silently fell back to "since last
+    # state_transition", and ignored min_count entirely — so the first
+    # pattern_check could never fire (chicken-and-egg: you need a prior
     # pattern_analysis_complete to satisfy the gate that produces the first one).
-    # COALESCE(..., 0) treats "no prior pattern analysis" as the run start, so the
-    # first pattern_check becomes ready once 3+ findings are resolved.
-    { type = "query", sql = "SELECT count(*) >= 3 FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)", expect = "true", intent = "pattern analysis needs 3+ findings resolved since the last pattern analysis" },
+    # COALESCE(..., 0) treats "no prior pattern analysis" as the run start, so
+    # the first pattern_check becomes ready once 3+ findings are resolved.
+    #
+    # #82: the predicate itself now lives in protocol.toml [queries], shared
+    # with iteration_boundary's block and the commit gate's. See that comment.
+    { type = "query", query = "pattern_analysis_overdue", expect = "true", intent = "pattern analysis needs 3+ findings resolved since the last pattern analysis" },
 ]
 
 [[transitions]]
@@ -215,10 +305,10 @@ to = "perspective_clean"
 command = "set complete perspective"
 args = ["current_perspective"]
 gates = [
-    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')", expect = "0", intent = "all findings must be resolved or deferred" },
+    { type = "query", query = "all_findings_closed", expect = "0" },
     { type = "query", sql = "SELECT count(*) >= 2 FROM events WHERE type='iteration_complete' AND perspective='{{current_perspective}}'", expect = "true", intent = "two clean iterations required for stability" },
     { type = "min_elapsed", event = "iteration_complete", seconds = 120, intent = "prevent rapid-fire gaming of iteration count" },
-    { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest --tb=short -q}", timeout = 120, intent = "tests must pass" },
+    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope full', timeout = 60, evidence = "suite_green", intent = "tests must pass" },
     { type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", timeout = 30, intent = "no lint violations" },
     { type = "no_violations", intent = "no unresolved protocol violations" },
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='quiz_answered' AND pass='true' AND perspective='{{current_perspective}}'", expect = "true", intent = "lens quiz must be passed" },
@@ -257,11 +347,11 @@ to = "final_sweep_clean"
 command = "converge"
 gates = [
     { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member", intent = "all lenses must be complete" },
-    { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest --tb=short -q}", timeout = 120, intent = "tests must pass" },
+    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope full', timeout = 60, evidence = "suite_green", intent = "tests must pass" },
     { type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", timeout = 30, intent = "no lint violations" },
-    { type = "query", sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')", expect = "0", intent = "all findings must be resolved or deferred" },
+    { type = "query", query = "all_findings_closed", expect = "0" },
     { type = "no_violations", intent = "no unresolved protocol violations" },
-    { type = "query", sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')", expect = "true", intent = "no unresolved quiz exhaustions" },
+    { type = "query", query = "quiz_exhaustions_resolved", expect = "true" },
 ]
 
 [[transitions]]

@@ -75,11 +75,16 @@ def main() -> None:
     if (cache is not None
             and cache.get("state") == "fix_loop"
             and is_git_commit(cmd)
-            and cache.get("fixes_since_pattern", 0) >= 3
+            and cache.get("pattern_analysis_overdue", False)
             and not cache.get("unregistered_commits")):
+        # The flag is the `pattern_analysis_overdue` named query, evaluated
+        # against the ledger by protocol_tracker. `pattern_check`'s own gate is
+        # that same query — so the escape printed here is ready precisely when
+        # this block fires. #77 was the version where it was not. (#82 H8
+        # checks this file still names the query the escape is gated on.)
         exit_block(
             "BLOCKED: Pattern analysis overdue "
-            f"({cache['fixes_since_pattern']} fixes since last analysis). "
+            "(3+ findings resolved since the last analysis). "
             f"Run: sahjhan --config-dir {config_dir} transition pattern_check"
         )
 

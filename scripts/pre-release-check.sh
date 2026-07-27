@@ -40,6 +40,10 @@ run_check() {
 run_check "Ruff" ruff check .
 run_check "Mypy" mypy --explicit-package-bases skills/holtz/scripts/ hooks/ enforcement/hooks/ scripts/ enforcement/scripts/
 
+# --- Enforcement layering: is every gate satisfiable, and does it mean what
+#     it says? (#82) Config in, findings out — no ledger, no gate execution. ---
+run_check "Enforcement Lint" bash scripts/lint-enforcement.sh
+
 # --- Contract and schema gates ---
 run_check "Contract Gate" python3 scripts/contract_gate.py
 run_check "Schema Freshness" python3 -m pytest tests/test_hook_schema_freshness.py -v

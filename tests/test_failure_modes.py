@@ -545,7 +545,7 @@ class TestConcurrentCacheAccess:
             "stall": 0,
             "unregistered_commits": [],
             "last_sahjhan_cmd": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
-            "fixes_since_pattern": 0,
+            "pattern_analysis_overdue": False,
             "perspective": "integration",
             "perspectives_done": 3,
             "perspectives_total": 13,

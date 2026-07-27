@@ -107,6 +107,117 @@ def test_per_item_procedure_couples_fix_commit_to_resolution() -> None:
     )
 
 
+def _fix_loop_lines() -> list[str]:
+    return (
+        (SKILL_DIR / "references" / "phase-fix-loop.md")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    )
+
+
+def test_subagent_proves_the_suite_instead_of_asserting_it() -> None:
+    """The subagent's suite step must produce evidence, not a claim.
+
+    It used to read "Run full suite. Confirm all pass." — a report the
+    orchestrator could only take on faith, which is why the orchestrator ran
+    the suite again and the gate ran it a third time. `--record` binds the
+    result to a hash of the working tree, so the next two steps can read it.
+    """
+    text = "\n".join(_fix_loop_lines())
+    assert "verify_suite.py --record --scope affected" in text, (
+        "the fix subagent must record a suite_green, not report a pass-count"
+    )
+    assert "Run full suite. Confirm all pass." not in text, (
+        "retired: an unevidenced suite claim forces the orchestrator to re-run"
+    )
+
+
+def test_orchestrator_reads_the_evidence_instead_of_re_running() -> None:
+    """B.10 validates by ledger read. Re-running is the cost T4 removed."""
+    text = "\n".join(_fix_loop_lines())
+    assert "verify_suite.py --check --scope affected" in text, (
+        "the orchestrator must validate the subagent's green by checking the "
+        "ledger for this tree"
+    )
+    assert "re-run the full suite" not in text.lower(), (
+        "retired: the orchestrator's re-run and the gate's run execute on a "
+        "byte-identical tree, so one of them is pure waste"
+    )
+
+
+def test_the_commit_needs_no_second_green() -> None:
+    """The tree hash names content, so `git commit` cannot invalidate a green.
+
+    While the hash included HEAD's oid the loop had to record twice per fix —
+    once for the orchestrator to read, once more after the commit purely to
+    restore evidence the commit had invalidated without changing a byte. That
+    second record is the last of the three original suite runs, and its
+    absence here is what makes the collapse a real 3 -> 1. Pinned by
+    TestTreeHash::test_committing_the_same_content_preserves_it on the other
+    side of the seam.
+    """
+    lines = _fix_loop_lines()
+    commit = [i for i, line in enumerate(lines) if "`git commit` with finding ID" in line]
+    assert len(commit) == 1, f"expected one commit step, found {len(commit)}"
+    late = [
+        line
+        for i, line in enumerate(lines)
+        if i > commit[0] and "verify_suite.py --record --scope affected" in line
+    ]
+    assert not late, (
+        "a per-fix green must not be re-recorded after the commit — the hash is "
+        f"content-addressed, so step 10's evidence still holds. Found: {late}"
+    )
+
+
+def test_the_subagent_records_the_green_last() -> None:
+    """Nothing may change the tree between the record and the orchestrator's read.
+
+    The subagent writes a hardening test (`hardening_complete`) as its final
+    piece of work. Record the green before that write and the hardening test
+    lands *after* the tree it was proven on, so the orchestrator's `--check`
+    recomputes a hash no green names, and the fix loop rejects a fix that is
+    perfectly good. That is not hypothetical: it shipped in v0.141.2, where
+    the record sat at subagent step 5 and the hardening write at step 8.
+
+    So the ordering rule is stronger than "before the commit": the record must
+    be the subagent's *last* step.
+    """
+    lines = _fix_loop_lines()
+    record = [i for i, line in enumerate(lines) if "verify_suite.py --record --scope affected" in line]
+    assert len(record) == 1, f"expected one per-fix record, found {len(record)}"
+    # `event hardening_complete`, not the bare event name: the orchestrator's
+    # step 10 also names `hardening_complete` when listing what it reads out of
+    # the ledger, and that mention is not a step that writes to the tree.
+    hardening = [i for i, line in enumerate(lines) if "event hardening_complete" in line]
+    assert len(hardening) == 1, (
+        f"expected one hardening_complete recording step, found {len(hardening)}"
+    )
+    assert record[0] > hardening[0], (
+        "the suite green must be recorded after the hardening test is written "
+        "and its event recorded — otherwise the hardening write invalidates "
+        "the very green the orchestrator is about to read"
+    )
+    validate = [i for i, line in enumerate(lines) if "verify_suite.py --check --scope affected" in line]
+    assert validate and record[0] < min(validate), (
+        "and still before the orchestrator reads it"
+    )
+
+
+def test_the_full_scope_transitions_are_taught() -> None:
+    """`affected` is only sound because something periodically runs everything.
+
+    The three transitions whose gates demand `--scope full` must be named
+    together with the command that satisfies them. A skill file that teaches
+    the narrowing but not the re-basing leaves the agent blocked at the first
+    /clear with no instruction that clears it.
+    """
+    text = "\n".join(_fix_loop_lines())
+    assert "verify_suite.py --record --scope full" in text
+    for command in ("iteration_boundary", "set complete perspective", "converge"):
+        assert command in text, f"{command} needs a full green; say so"
+
+
 def test_step_10_cross_references_resolution_event() -> None:
     """step-10-fix-loop.md's triage paths end at 'Commit'; it must point at the
     resolution event so a reader of that file alone doesn't think commit is the

@@ -265,7 +265,7 @@ class TestProtocolCache:
         from _protocol_cache import compute_obligations, empty_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
-        cache["fixes_since_pattern"] = 4
+        cache["pattern_analysis_overdue"] = True
         obligations = compute_obligations(cache)
         assert any("pattern_check" in o["msg"] for o in obligations)
 
@@ -287,7 +287,7 @@ class TestProtocolCache:
         cache["perspective"] = "component"
         cache["perspectives_done"] = 2
         cache["perspectives_total"] = 13
-        cache["fixes_since_pattern"] = 5
+        cache["pattern_analysis_overdue"] = True
         obligations = compute_obligations(cache)
         text = format_injection(obligations, cache)
         # Rough token estimate: words + punctuation
@@ -802,7 +802,7 @@ class TestCommitGate:
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
-        cache["fixes_since_pattern"] = 4
+        cache["pattern_analysis_overdue"] = True
         cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
@@ -824,7 +824,7 @@ class TestCommitGate:
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
-        cache["fixes_since_pattern"] = 4
+        cache["pattern_analysis_overdue"] = True
         cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
         write_cache(str(tmp_path), cache)
 
@@ -844,7 +844,7 @@ class TestCommitGate:
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
-        cache["fixes_since_pattern"] = 4
+        cache["pattern_analysis_overdue"] = True
         write_cache(str(tmp_path), cache)
 
         event = {
@@ -882,7 +882,7 @@ class TestPrimerStateLine:
         cache["perspectives_done"] = 2
         cache["perspectives_total"] = 13
         cache["unregistered_commits"] = ["abc"]
-        cache["fixes_since_pattern"] = 4
+        cache["pattern_analysis_overdue"] = True
         line = format_state_line(cache)
         assert line
         assert len(line.split()) <= 25, f"State line too long: {line}"
@@ -1008,11 +1008,12 @@ class TestEnforcementIntegration:
         # 5. Verify unregistered commits cleared
         c = read_cache(str(tmp_path))
         assert c["unregistered_commits"] == []
-        # #77: fixes_since_pattern is derived from the ledger, no longer a
-        # token-incremented mirror. With no real ledger behind the mock daemon
-        # the transition can't bump it — the derived-count path is covered by the
-        # real_daemon test in tests/test_e2e_audit_flow.py.
-        assert c["fixes_since_pattern"] == 0
+        # #77/#82: pattern_analysis_overdue is derived by running the gate's
+        # own named query against the ledger, no longer a token-incremented
+        # mirror. With no real ledger behind the mock daemon the transition
+        # can't raise it — the derived path is covered by the real_daemon test
+        # in tests/test_e2e_audit_flow.py.
+        assert c["pattern_analysis_overdue"] is False
 
         # 6. Gate allows next commit
         _, out, _ = run_enforcement_hook("commit_gate.py", {
@@ -1828,7 +1829,22 @@ class TestTransitionsToml:
     """Validate transitions.toml doesn't contain Holtz-specific paths."""
 
     def test_no_holtz_paths_in_command_gates(self):
-        """Issue #29 R9: command_succeeds gates must not reference Holtz plugin paths."""
+        """Issue #29 R9: a gate must not reference a Holtz path the target lacks.
+
+        The defect was gates running `mypy --explicit-package-bases
+        skills/holtz/scripts/ hooks/ enforcement/hooks/`. Those paths are
+        *relative*, and a gate command runs with the target project as cwd, so
+        they resolved to directories that do not exist there — permanently
+        blocking lens rotation and convergence for every non-Holtz audit.
+
+        What makes that broken is the relativity, not the substring. A path
+        anchored to `$CLAUDE_PLUGIN_ROOT` resolves into the installed plugin
+        from any cwd, which is precisely what the variable is for and how the
+        suite gates reach `verify_suite.py`. So the check is anchoring, not
+        absence — and it now covers every gate that carries a `cmd`, closing
+        the gap that let the `snapshot_compare` gate reference
+        `skills/holtz/scripts/impact_graph.py` without ever being examined.
+        """
         try:
             import tomllib
         except ModuleNotFoundError:
@@ -1838,17 +1854,27 @@ class TestTransitionsToml:
             data = tomllib.load(f)
 
         holtz_paths = ["skills/holtz/", "enforcement/hooks/", "enforcement/scripts/"]
+        checked = 0
         for transition in data.get("transitions", []):
             for gate in transition.get("gates", []):
-                if gate.get("type") != "command_succeeds":
-                    continue
                 cmd = gate.get("cmd", "")
+                if not cmd:
+                    continue
                 for path in holtz_paths:
-                    assert path not in cmd, (
-                        f"Gate command references Holtz path '{path}': {cmd}\n"
-                        f"Transition: {transition.get('command')} "
-                        f"({transition.get('from')} -> {transition.get('to')})"
-                    )
+                    at = cmd.find(path)
+                    while at != -1:
+                        checked += 1
+                        prefix = cmd[:at]
+                        at = cmd.find(path, at + 1)
+                        assert "CLAUDE_PLUGIN_ROOT" in prefix, (
+                            f"Gate command references Holtz path '{path}' "
+                            f"without anchoring it to $CLAUDE_PLUGIN_ROOT, so "
+                            f"it resolves against the target project's cwd and "
+                            f"will not exist there: {cmd}\n"
+                            f"Transition: {transition.get('command')} "
+                            f"({transition.get('from')} -> {transition.get('to')})"
+                        )
+        assert checked, "expected at least one gate command reaching a Holtz path"
 
 
 class TestBashGuardFailClosed:

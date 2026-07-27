@@ -370,6 +370,34 @@ class TestExtractSahjhanSubcmd:
         extract = self._get_extract()
         assert extract("git status") is None
 
+    # --- #81/#82: bash's `!` negation must not hide the command ---
+
+    def test_bang_prefix_wrapper(self):
+        """`! sahjhan …` RUNS sahjhan — bash `!` only inverts the exit status.
+
+        Found while adding the second-level block on
+        `event quiz_exhausted_resolved`: the parser saw tokens[0] == "!",
+        concluded "not a sahjhan command", and the hook allowed it. One
+        character defeated every allowlist and second-level block, including
+        `daemon stop`'s mid-audit denial.
+        """
+        extract = self._get_extract()
+        assert extract("! sahjhan daemon stop") == ("daemon", "stop")
+
+    def test_bang_prefix_no_space(self):
+        """`!sahjhan` is a single token — same negation, same bypass."""
+        extract = self._get_extract()
+        assert extract("!sahjhan reset") == ("reset", "")
+
+    def test_bang_prefix_with_env_and_wrapper(self):
+        """The bypass must not survive combination with the other wrappers."""
+        extract = self._get_extract()
+        assert extract("! FOO=bar nohup sahjhan daemon stop") == ("daemon", "stop")
+
+    def test_bang_prefix_on_non_sahjhan_still_none(self):
+        extract = self._get_extract()
+        assert extract("! git status") is None
+
     def test_env_var_prefix_single(self):
         """Env var prefix before sahjhan must be skipped — FOO=bar sahjhan reset
         must be recognized as ('reset', '') so the allowlist can block it."""

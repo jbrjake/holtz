@@ -134,7 +134,7 @@ sahjhan transition run_start           # begin a new audit run
 sahjhan transition recon_complete      # after Steps 0-5 (Step 5 generates the lens quiz bank; gate requires quiz_bank_generated)
 sahjhan transition audit_complete      # after Steps 6-8
 sahjhan transition merge_complete      # after Step 9
-sahjhan transition fix_commit          # after each fix commit
+sahjhan transition fix_commit          # after each fix commit (needs a suite_green for the committed tree)
 sahjhan set complete perspective <name> # when a perspective passes clean
 sahjhan transition lens_rotate         # switch to next perspective
 sahjhan transition converge            # attempt convergence

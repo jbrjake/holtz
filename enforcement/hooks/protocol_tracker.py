@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -92,33 +93,53 @@ def _runs_transition(cmd: str, command: str) -> bool:
 
 
 # #77: the authoritative backlog for "pattern analysis overdue" is the ledger,
-# NOT a hand-mirrored counter. This is the SAME query the `pattern_check`
-# transition gate uses (enforcement/transitions.toml) — count finding_resolved
-# events since the last pattern_analysis_complete. Deriving fixes_since_pattern
-# from it means the commit gate's block condition (>= 3) and the pattern_check
-# gate's readiness (>= 3) are one fact and can never disagree, so the block's
-# printed escape ("run transition pattern_check") is always satisfiable.
-_FIXES_SINCE_PATTERN_SQL = (
-    "SELECT count(*) AS n FROM events "
-    "WHERE type='finding_resolved' "
-    "AND seq > COALESCE((SELECT MAX(seq) FROM events "
-    "WHERE type='pattern_analysis_complete'), 0)"
-)
+# NOT a hand-mirrored counter that a hook increments by matching command text.
+#
+# #82: and not a copy of the ledger query either. This used to hold its own SQL
+# string — the same fact the `pattern_check` gate expressed in TOML — so the
+# tree carried two expressions of one predicate with nothing comparing them,
+# which is precisely the shape that deadlocked in the first place. The name
+# below is resolved out of the protocol config at runtime, so the commit gate's
+# block, the `pattern_check` gate's readiness and the `iteration_boundary`
+# gate's block are all the same object. `enforcement_lint.py` H7 fails the
+# build if SQL reappears here; H8 fails it if this name stops matching the
+# query the escape is gated on.
+PATTERN_OVERDUE_QUERY = "pattern_analysis_overdue"
 
 
-def _query_fixes_since_pattern(binary: str, config_dir: str, cwd: str) -> int | None:
-    """Ledger-derived count of finding_resolved since the last pattern analysis.
+def _named_query_sql(config_dir: str, name: str) -> str | None:
+    """The SQL of a `[queries.<name>]` predicate, read from the protocol config.
 
-    Runs sahjhan's generic `query` primitive against the active ledger (the same
-    ledger the gates evaluate). Returns None on any failure — binary/daemon
-    unavailable, timeout, non-zero exit, or malformed output — so the caller
-    preserves the last known counter instead of resetting it. An under-count
-    only delays the pattern nudge; it never deadlocks a commit. #77.
+    Reading it rather than restating it is the whole point: there is one
+    predicate, and every consumer resolves the same one.
     """
     try:
+        with open(os.path.join(config_dir, "protocol.toml"), "rb") as fh:
+            queries = tomllib.load(fh).get("queries", {})
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    sql = queries.get(name, {}).get("sql")
+    return sql if isinstance(sql, str) else None
+
+
+def _query_pattern_analysis_overdue(
+    binary: str, config_dir: str, cwd: str
+) -> bool | None:
+    """Is pattern analysis overdue, per the gate's own predicate?
+
+    Runs sahjhan's generic `query` primitive against the active ledger — the
+    same ledger the gates evaluate — with the same SQL the gates use. Returns
+    None on any failure (binary/daemon unavailable, timeout, non-zero exit,
+    malformed output, or the query missing from the config) so the caller keeps
+    the last known value rather than resetting it. Failing to *raise* the flag
+    only delays the pattern nudge; it never deadlocks a commit. #77, #82.
+    """
+    sql = _named_query_sql(config_dir, PATTERN_OVERDUE_QUERY)
+    if sql is None:
+        return None
+    try:
         result = subprocess.run(
-            [binary, "--config-dir", config_dir, "query",
-             _FIXES_SINCE_PATTERN_SQL, "--format", "json"],
+            [binary, "--config-dir", config_dir, "query", sql, "--format", "json"],
             capture_output=True, text=True, timeout=5, cwd=cwd,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -127,8 +148,10 @@ def _query_fixes_since_pattern(binary: str, config_dir: str, cwd: str) -> int | 
         return None
     try:
         rows = json.loads(result.stdout)
-        return int(rows[0]["n"])
-    except (json.JSONDecodeError, KeyError, IndexError, ValueError, TypeError):
+        # A boolean predicate renders as the string "true"/"false", which is
+        # also exactly what the gate's `expect` compares against.
+        return str(next(iter(rows[0].values()))).lower() == "true"
+    except (json.JSONDecodeError, StopIteration, IndexError, TypeError):
         return None
 
 
@@ -140,9 +163,9 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     timeout below and silently keep stale bookkeeping (#57). The refresh
     only needs state/sets, never gate readiness.
 
-    fixes_since_pattern is re-derived from the ledger here (only while it
-    matters — fix_loop/pattern_analysis), never mirrored by token-matching the
-    command text. #77.
+    pattern_analysis_overdue is re-derived from the gate's own named query here
+    (only while it matters — fix_loop/pattern_analysis), never mirrored by
+    token-matching the command text. #77, #82.
     """
     binary = ensure_sahjhan()
     if binary is None:
@@ -174,9 +197,9 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     # states where it's consumed — avoids a subprocess on every recon/audit
     # sahjhan command. Query failure keeps the previous value.
     if cache.get("state") in ("fix_loop", "pattern_analysis"):
-        fixes = _query_fixes_since_pattern(binary, config_dir, cwd)
-        if fixes is not None:
-            cache["fixes_since_pattern"] = fixes
+        overdue = _query_pattern_analysis_overdue(binary, config_dir, cwd)
+        if overdue is not None:
+            cache[PATTERN_OVERDUE_QUERY] = overdue
     return cache
 
 
@@ -215,7 +238,7 @@ def _apply_sahjhan_cmd(cwd: str, cache: dict | None, cmd: str) -> dict:
     # Stop daemon after finalization (teardown safety net)
     if cache.get("state") == "finalized":
         _stop_daemon(cwd)
-    # #77: fixes_since_pattern is DERIVED from the ledger in _refresh_from_sahjhan
+    # #77: pattern_analysis_overdue is DERIVED from the ledger in _refresh_from_sahjhan
     # (the same query the pattern_check gate uses), not mirrored by token-matching
     # the command text — a read-only diagnostic that only mentions `fix_commit`/
     # `pattern_check` no longer moves it. The pending-commit registration is still

@@ -25,6 +25,10 @@ TRUSTED_SCRIPTS=(
     "enforcement/hooks/bash_guard.py"
     "enforcement/hooks/protocol_tracker.py"
     "enforcement/hooks/quiz_capture.py"
+    # Not a hook — a gate helper the agent and the fix_commit gate invoke by
+    # path. It records the restricted `suite_green` event, so the daemon
+    # resolves *this* script from the caller's cmdline and checks its hash.
+    "enforcement/scripts/verify_suite.py"
     "hooks/subagent_findings_check.py"
 )
 

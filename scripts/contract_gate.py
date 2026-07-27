@@ -102,9 +102,25 @@ def normalize_command(cmd: str) -> str:
     return cmd.strip()
 
 
+def is_user_command(cmd: str) -> bool:
+    """True if the skill file addresses this command to the *user*, not the agent.
+
+    A leading `!` is Claude Code's run-it-yourself prefix, and holtz uses it for
+    the two things the agent must not do on its own: stopping the daemon
+    mid-audit, and clearing an exhausted lens quiz (#81). For those, "the hook
+    denies it" is the contract — so the gate inverts its expectation rather
+    than exempting the line. Without this the gate asserted the exact opposite
+    of the intended behaviour, and would have gone green only once the
+    human-only channel was broken open.
+    """
+    return normalize_command(cmd).startswith("!")
+
+
 def is_known_blocked(cmd: str) -> bool:
     """Check if a command matches any known-blocked pattern."""
     normalized = normalize_command(cmd)
+    if is_user_command(normalized):
+        return True
     return any(
         normalized == blocked or normalized.startswith(blocked + " ")
         for blocked in KNOWN_BLOCKED
@@ -155,9 +171,16 @@ def main() -> int:
         if expected_blocked:
             blocked_count += 1
             if decision == "allow":
+                why = (
+                    "This command is addressed to the user (leading `!`), so the "
+                    "hook must deny it on the agent's path — otherwise the agent "
+                    "can do it too and the human-only channel is fiction."
+                    if is_user_command(cmd)
+                    else "This command is in KNOWN_BLOCKED but the hook allowed it."
+                )
                 failures.append(
                     f"  FAIL (should be BLOCKED): {rel_path}:{line_no}: {cmd}\n"
-                    f"         This command is in KNOWN_BLOCKED but the hook allowed it."
+                    f"         {why}"
                 )
             elif verbose:
                 print(f"  BLOCKED (expected): {rel_path}:{line_no}: {cmd}")

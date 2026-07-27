@@ -38,7 +38,10 @@ def empty_cache() -> dict[str, Any]:
         "active": True,
         "state": "",
         "unregistered_commits": [],
-        "fixes_since_pattern": 0,
+        # The gate's own predicate, resolved from protocol.toml [queries] by
+        # protocol_tracker. The key IS the query name: block, derivation and
+        # gate all say the same word, which is what enforcement_lint H8 checks.
+        "pattern_analysis_overdue": False,
         "perspective": "",
         "perspectives_done": 0,
         "perspectives_total": _read_perspectives_total(),
@@ -371,7 +374,7 @@ def compute_obligations(
     obligations: list[dict[str, Any]] = []
     commits = cache.get("unregistered_commits", [])
     stall = cache.get("stall", 0)
-    fixes = cache.get("fixes_since_pattern", 0)
+    overdue = cache.get("pattern_analysis_overdue", False)
     perspective = cache.get("perspective", "?")
     p_done = cache.get("perspectives_done", 0)
     p_total = cache.get("perspectives_total", 13)
@@ -394,9 +397,9 @@ def compute_obligations(
             "blocks_all": True,
         })
 
-    if fixes >= 3 and not commits and state == "fix_loop":
+    if overdue and not commits and state == "fix_loop":
         obligations.append({
-            "msg": f"pattern_check due ({fixes} fixes). sahjhan{cfg} transition pattern_check",
+            "msg": f"pattern_check due (3+ fixes). sahjhan{cfg} transition pattern_check",
             "blocks_commit": False,
             "blocks_all": False,
         })
@@ -425,7 +428,6 @@ def format_state_line(cache: dict[str, Any] | None) -> str:
     parts = [f"Protocol: {state}", f"{perspective} {p_done}/{p_total}"]
     if commits:
         parts.append(f"{commits} pending commits")
-    fixes = cache.get("fixes_since_pattern", 0)
-    if fixes >= 3:
+    if cache.get("pattern_analysis_overdue", False):
         parts.append("pattern_check due")
     return " | ".join(parts)

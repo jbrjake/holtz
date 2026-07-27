@@ -164,6 +164,39 @@ class TestPhaseReconQuizStage:
         )
 
 
+class TestVerifySuite(TestPhaseReconQuizStage):
+    """The fix loop's suite commands must survive the bootstrap hook.
+
+    `verify_suite.py` lives under `enforcement/`, which the hook protects from
+    *writes*. Running it is not writing to it, but the distinction is exactly
+    the sort a guard gets wrong, and a block here would be fatal: `--record` is
+    the only way to satisfy the `fix_commit` suite gate, so an agent that
+    cannot run it cannot commit a fix at all — a gate whose printed escape the
+    enforcement layer itself refuses.
+    """
+
+    def test_record_affected(self):
+        self._assert_allowed_in_plugin(
+            "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py "
+            "--record --scope affected",
+            "phase-fix-loop.md steps 5 and 12: prove the suite green",
+        )
+
+    def test_record_full(self):
+        self._assert_allowed_in_plugin(
+            "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py "
+            "--record --scope full",
+            "phase-fix-loop.md: before iteration_boundary / lens completion",
+        )
+
+    def test_check_affected(self):
+        self._assert_allowed_in_plugin(
+            "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py "
+            "--check --scope affected",
+            "phase-fix-loop.md step 10: orchestrator validates without re-running",
+        )
+
+
 # ---------------------------------------------------------------------------
 # Contract commands: extracted from SKILL.md quick reference
 # ---------------------------------------------------------------------------
@@ -429,6 +462,49 @@ class TestBlockedContractCommands:
 
     def test_bare_sahjhan_blocked(self):
         _assert_blocked("sahjhan", "No subcommand should be blocked")
+
+    def test_quiz_exhaustion_resolution_blocked(self):
+        """#81: the agent must not clear its own exhausted lens quiz.
+
+        A lens quiz exists so "I looked again" means the code was re-read.
+        `quiz_exhausted_resolved` says a human accepted a lens that failed to
+        demonstrate that, so it is the one event the agent must not record.
+        `restricted = true` cannot express this — that admits trusted hooks,
+        and no hook can attest a human decision — so the write path is closed
+        here instead, leaving the user's own `! sahjhan …` as the only way in
+        (phase-convergence.md).
+        """
+        _assert_blocked(
+            "sahjhan --config-dir enforcement event quiz_exhausted_resolved "
+            "--field project=holtz --field run=1 --field auditor=holtz "
+            "--field perspective=concurrency --field resolution=human_reviewed",
+            "phase-convergence.md: only the user may clear an exhausted quiz",
+        )
+
+    def test_other_event_types_still_allowed(self):
+        """The denial is per-event-type, not a blanket ban on `event`."""
+        _assert_allowed(
+            "sahjhan --config-dir enforcement event finding --field id=BH-001",
+            "denying one event type must not close the `event` verb",
+        )
+
+    @pytest.mark.parametrize("prefix", ["! ", "!", "!  "])
+    def test_quiz_resolution_block_survives_bang_prefix(self, prefix: str):
+        """`!` must not smuggle the command past the guard.
+
+        Bash's `!` negates a pipeline's exit status — it does not stop the
+        command running. The guard used to see tokens[0] == "!" and report "not
+        a sahjhan command", so a single character reopened every second-level
+        block. The user's own `! sahjhan …` still works because Claude Code
+        runs it directly rather than as a tool call, which is the whole basis
+        of the human-only channel; if the agent's tool-call path also honoured
+        the prefix, that channel would be fiction.
+        """
+        _assert_blocked(
+            f"{prefix}sahjhan --config-dir enforcement "
+            "event quiz_exhausted_resolved --field resolution=human_reviewed",
+            "a bang prefix must not bypass a second-level block",
+        )
 
 
 # ---------------------------------------------------------------------------

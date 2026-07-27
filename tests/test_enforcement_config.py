@@ -18,17 +18,22 @@ EVENTS_TOML = ENFORCEMENT_DIR / "events.toml"
 TRANSITIONS_TOML = ENFORCEMENT_DIR / "transitions.toml"
 RENDERS_TOML = ENFORCEMENT_DIR / "renders.toml"
 PROTOCOL_TOML = ENFORCEMENT_DIR / "protocol.toml"
+VERIFY_SUITE = ENFORCEMENT_DIR / "scripts" / "verify_suite.py"
 
 BREADCRUMBS = ["project", "run", "auditor"]
 
 # Auto-recorded events don't need breadcrumb fields — they're telemetry, not audit events
 _AUTO_RECORDED_EVENTS = {"file_read", "source_edit", "file_search", "bash_command"}
 
+# The JSONL-migration vocabulary that is actually reachable. Six others
+# (merge_result, convergence_iteration, run_summary, pattern_discovered,
+# baseline_delta, run_postmortem) were declared and never wired to anything —
+# no gate, template, hook, skill file, or alias — and this list was what kept
+# them alive: a test asserting the noun exists, while nothing meant it. Removed
+# in #82 along with the declarations. See `sahjhan lint` L5.
 NEW_EVENT_TYPES = [
     "recon_finding", "audit_claim", "test_audit_finding",
-    "code_audit_finding", "merge_result", "convergence_iteration",
-    "run_summary", "graph_delta", "pattern_discovered",
-    "baseline_delta", "run_postmortem",
+    "code_audit_finding", "graph_delta",
 ]
 
 
@@ -328,7 +333,11 @@ def test_pattern_check_bootstraps_from_zero():
     )
     q = next((g for g in pattern_check["gates"] if g["type"] == "query"), None)
     assert q is not None, "pattern_check must use a query gate (#65)"
-    sql = q.get("sql", "")
+    # #82: the predicate moved into protocol.toml [queries] so the block that
+    # names pattern_check as its escape decides by the same object. Resolve the
+    # name the way the engine does rather than reading an inline copy — a test
+    # that insisted on the copy would have made the fix look like a regression.
+    sql = q.get("sql") or _named_query_sql(q.get("query", ""))
     assert "COALESCE" in sql and "pattern_analysis_complete" in sql, (
         "pattern_check must use a COALESCE-scoped query so the first pattern "
         f"analysis fires once 3+ findings resolve (#65). Got: {pattern_check['gates']}"
@@ -337,6 +346,46 @@ def test_pattern_check_bootstraps_from_zero():
         "pattern_check must enforce the 3-resolved-findings minimum in SQL "
         "(the old ledger_has_event_since silently ignored min_count) (#65)"
     )
+
+
+def test_pattern_analysis_overdue_is_one_predicate_with_opposite_gates():
+    """#77/#82: the block and its printed escape must be the same object.
+
+    ``iteration_boundary`` blocks while pattern analysis is overdue and tells
+    the agent to run ``pattern_check``, whose gate decides whether it *is*
+    overdue. When those were two predicates they could both be shut at once —
+    the block's own escape unsatisfiable, which is what #77 was. Referencing
+    one named query with opposite expectations makes exactly one of them open
+    at any moment, by construction rather than by care.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+
+    def _overdue_gate(command: str) -> dict:
+        transition = next(
+            t for t in cfg["transitions"] if t.get("command") == command
+        )
+        gate = next(
+            (
+                g
+                for g in transition.get("gates", [])
+                if g.get("query") == "pattern_analysis_overdue"
+            ),
+            None,
+        )
+        assert gate is not None, (
+            f"{command} must decide 'pattern analysis overdue' by the named "
+            "query, not a copy of its SQL (#82)"
+        )
+        return gate
+
+    assert _overdue_gate("pattern_check")["expect"] == "true"
+    assert _overdue_gate("iteration_boundary")["expect"] == "false"
+
+
+def _named_query_sql(name: str) -> str:
+    queries = tomllib.loads(PROTOCOL_TOML.read_text()).get("queries", {})
+    assert name in queries, f"gate references undeclared query '{name}'"
+    return str(queries[name]["sql"])
 
 
 def test_test_and_lint_gates_are_env_overridable():
@@ -351,24 +400,132 @@ def test_test_and_lint_gates_are_env_overridable():
     the engine.
     """
     cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
-    pytest_cmds, lint_cmds = [], []
-    for t in cfg["transitions"]:
-        for g in t.get("gates", []):
-            cmd = g.get("cmd", "")
-            if "pytest" in cmd:
-                pytest_cmds.append(cmd)
-            if "ruff" in cmd:
-                lint_cmds.append(cmd)
-    assert pytest_cmds, "expected at least one pytest gate command"
+    lint_cmds = [
+        g.get("cmd", "")
+        for t in cfg["transitions"]
+        for g in t.get("gates", [])
+        if "ruff" in g.get("cmd", "")
+    ]
     assert lint_cmds, "expected at least one ruff gate command"
-    for cmd in pytest_cmds:
-        assert cmd.startswith("${HOLTZ_PYTEST:-") and cmd.endswith("}"), (
-            f"pytest gate must be overridable via $HOLTZ_PYTEST (#63/#70.5): {cmd}"
-        )
     for cmd in lint_cmds:
         assert cmd.startswith("${HOLTZ_LINT:-") and cmd.endswith("}"), (
             f"lint gate must be overridable via $HOLTZ_LINT (#63/#70.5): {cmd}"
         )
+    # The suite half of the same contract moved into verify_suite.py when the
+    # gates stopped running pytest and started reading the ledger. The override
+    # still exists and still flows to every gate — it is read where the suite
+    # is actually run, so it reaches the agent's `--record` too, which the
+    # shell-expansion form never did.
+    assert "HOLTZ_PYTEST" in VERIFY_SUITE.read_text(), (
+        "the suite command must stay overridable via $HOLTZ_PYTEST (#63/#70.5)"
+    )
+
+
+@pytest.mark.contract
+def test_gate_commands_never_truncate_the_suite():
+    """A gate asserting "the suite passes" must actually run the suite.
+
+    ``--lf``/``--last-failed`` runs *only* the tests that failed on the previous
+    run. Dropped into a gate command it reads as a harmless speedup and behaves
+    as a false green: seed a 4-test suite with one failure, fix it, re-run under
+    ``--lf`` and pytest reports ``1 passed`` / exit 0 — the gate certifies
+    "test suite must pass" having executed one test. Same defect class as #83,
+    where ``ruff check .`` returns exit 0 on a repo with no Python files.
+
+    ``--ff``/``--failed-first`` is the safe form of the same idea: it reorders so
+    the known-failing test is hit first (which is what makes ``-x`` pay off in
+    the fix/re-run loop) but still runs everything.
+
+    This constrains the *defaults* in transitions.toml. An operator who exports
+    ``HOLTZ_PYTEST='pytest --lf'`` can still defeat their own gate — that is
+    outside what a config test can reach, and is called out in
+    references/phase-fix-loop.md.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    banned = ("--lf", "--last-failed")
+    for t in cfg["transitions"]:
+        for g in t.get("gates", []):
+            cmd = g.get("cmd", "")
+            for flag in banned:
+                assert flag not in cmd.split(), (
+                    f"gate command truncates the suite with {flag!r} — use --ff. "
+                    f"transition={t.get('command')!r} cmd={cmd!r}"
+                )
+
+
+@pytest.mark.contract
+def test_suite_gates_delegate_to_verify_suite():
+    """No gate runs pytest; every suite gate reads the ledger instead.
+
+    Three gates used to carry a copy of the pytest command and execute it, so
+    the fix loop ran the target's full suite three times per finding for one
+    enforced answer. They now run ``verify_suite.py --check``, which recomputes
+    the working-tree hash and asks whether a ``suite_green`` already names it.
+
+    Two invariants, and the second is what keeps the first honest: a gate that
+    reintroduced ``pytest`` would be both a second copy of a default that now
+    lives in exactly one place, and a suite execution inside a transition —
+    silently restoring the cost this design removed. Its evidence must also be
+    *named* (``evidence = "suite_green"``), which is what lets H1 and the
+    generated contract see a gate whose predicate lives inside a script.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    suite_gates = []
+    for t in cfg["transitions"]:
+        for g in t.get("gates", []):
+            cmd = g.get("cmd", "")
+            assert "pytest" not in cmd, (
+                f"gate runs the suite instead of reading the ledger — use "
+                f"verify_suite.py --check. transition={t.get('command')!r} "
+                f"cmd={cmd!r}"
+            )
+            if "verify_suite.py" in cmd:
+                suite_gates.append((t.get("command"), g))
+    commands = {command for command, _ in suite_gates}
+    assert commands == {
+        "fix_commit",
+        "iteration_boundary",
+        "set complete perspective",
+        "converge",
+    }, f"unexpected set of suite gates: {commands}"
+    for command, gate in suite_gates:
+        assert "--check" in gate["cmd"].split(), (
+            f"{command}'s suite gate must be the read-only --check mode, never "
+            f"--record: a gate that records its own evidence proves nothing"
+        )
+        assert gate.get("evidence") == "suite_green", (
+            f"{command}'s suite gate must name the event it depends on so H10 "
+            f"and ENFORCEMENT-CONTRACT.md can see it"
+        )
+    # `affected` is the per-fix optimisation; every other suite gate is the
+    # thing that bounds it. Widen one of those to `affected` and an audit could
+    # converge having never run the whole suite on the converged tree.
+    scopes = {command: gate["cmd"].split()[-1] for command, gate in suite_gates}
+    assert scopes["fix_commit"] == "affected", scopes
+    assert set(scopes.values()) - {"affected"} == {"full"}, scopes
+
+
+@pytest.mark.contract
+def test_the_suite_command_fails_fast_in_its_one_home():
+    """The suite default carries ``-x --ff`` (fail-fast, no truncation).
+
+    The gate consumes a boolean, so it has no use for the remaining passing
+    tests once one fails. ``-x`` costs nothing on the green path and collapses
+    the red path; ``--ff`` reaches the previously-failing test immediately.
+    Paired with test_gate_commands_never_truncate_the_suite, which bans the
+    unsafe way to get the same effect (``--lf``, which runs *only* the
+    previously-failing tests).
+    """
+    default = re.search(
+        r'^DEFAULT_PYTEST\s*=\s*"([^"]+)"', VERIFY_SUITE.read_text(), re.M
+    )
+    assert default, "verify_suite.py must define DEFAULT_PYTEST as a literal"
+    tokens = default.group(1).split()
+    assert "-x" in tokens, f"suite command should fail fast with -x: {tokens}"
+    assert "--ff" in tokens, f"suite command should order failed-first: {tokens}"
+    assert "--lf" not in tokens and "--last-failed" not in tokens, (
+        f"suite command must never truncate to the last failures: {tokens}"
+    )
 
 
 # ── Task 1.3: renders.toml ──
@@ -479,12 +636,33 @@ def test_perspective_clean_has_quiz_gate():
     raise AssertionError("set complete perspective transition not found")
 
 
+def _resolved_gate_predicates(transition: dict) -> list[str]:
+    """Gate JSON with `query = "<name>"` replaced by the SQL it names.
+
+    A gate's predicate can now live in `protocol.toml [queries]` rather than
+    inline (#82), so asserting on the gate's own text stops seeing it — this
+    test passed on the inline SQL and failed the moment the predicate became a
+    shared object, without the gate's meaning changing at all. Resolve the
+    name, then assert on what actually runs.
+    """
+    queries = tomllib.loads(PROTOCOL_TOML.read_text()).get("queries", {})
+    resolved = []
+    for gate in transition.get("gates", []) or []:
+        named = gate.get("query")
+        if named:
+            assert named in queries, f"gate references undeclared query '{named}'"
+            resolved.append(json.dumps({**gate, "sql": queries[named]["sql"]}))
+        else:
+            resolved.append(json.dumps(gate))
+    return resolved
+
+
 def test_converge_has_quiz_exhaustion_gate():
     """converge transition checks for unresolved quiz_exhausted."""
     cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
     for t in cfg["transitions"]:
         if t.get("command") == "converge":
-            gate_strs = [json.dumps(g) for g in t.get("gates", [])]
+            gate_strs = _resolved_gate_predicates(t)
             assert any("quiz_exhausted" in g for g in gate_strs), \
                 "converge missing quiz_exhausted gate"
             return

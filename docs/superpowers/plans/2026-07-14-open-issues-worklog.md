@@ -275,6 +275,34 @@ NOT run: a full end-to-end audit through an actual `/clear` boundary in a live
 Claude Code session — the SessionStart wiring is verified by hook subprocess +
 real daemon, not by an observed live clear.
 
+### ⏳ #82 — statically analyze the enforcement layering. NOT STARTED (next up).
+Follow-on from #79. #73/#77/#79 are one defect class — *the gate does not mean
+what it says* — and all three were decidable at rest from config we already
+parse. Each was found the expensive way, by a live run hitting it.
+
+**RESUME AT PHASE 0.** Full design:
+`docs/superpowers/plans/2026-07-25-enforcement-static-analysis.md` — read it
+first; it has the check catalogue (C1–C12, each mapped to the real bug it would
+have caught), the proposed TOML surface, the sahjhan/holtz split, and a
+"Next session starts here" block at the top.
+
+- Engine-generic portion (graph reachability, closure, satisfiability, boundary
+  traversal, named queries) filed as **jbrjake/sahjhan#32**. Do NOT start it
+  before holtz Phase 0 — the measurement decides whether it's worth building.
+- Phase 0 is measurement only: harden the throwaway prototype into
+  `scripts/enforcement_lint.py`, run it, triage every hit into the plan doc.
+  **No TOML changes, nothing blocking.** If it finds two things, say so and stop.
+- The prototype is not in the tree; rebuild from the "Prototype methodology"
+  section, which records the unsoundness to fix (write paths are `sahjhan
+  event`, `sahjhan set complete`, transition `emits`, and
+  `record_authed_event` — not one grep).
+
+Already paid for itself before being built: found **#81** (converge gate can be
+blocked forever — `quiz_exhausted_resolved` has no writer anywhere, and is
+agent-writable despite meaning "a human reviewed this"), plus 12 dead event
+declarations and the fact that 19 of 24 gate-consumed events are the agent's own
+word.
+
 ## Test/verify commands (holtz)
 ```
 source .venv/bin/activate

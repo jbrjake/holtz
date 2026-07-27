@@ -61,3 +61,88 @@ path = "docs/holtz/project.jsonl"
 "defer low" = "transition defer_low"
 "defer medium" = "transition defer_medium"
 
+# ── Named queries (#82) ──
+#
+# A predicate that decides a fact should exist once. #77 was two copies of one
+# fact drifting apart until the blocking condition was strictly stronger than
+# the escape it printed, and the agent deadlocked while being told exactly
+# which impossible thing to do. A named query makes the two gates the same
+# object, so they cannot disagree. `sahjhan lint` L6 reports the copies not yet
+# migrated.
+
+[queries.all_findings_closed]
+sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
+intent = "all findings must be resolved or deferred"
+
+[queries.item_open]
+sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'"
+intent = "finding must not already be resolved or deferred"
+
+# The predicate #77 deadlocked on, now a single object with three consumers:
+# the `pattern_check` gate (ready when true), the `iteration_boundary` gate
+# (blocked when true), and `protocol_tracker.py`, which resolves this name at
+# runtime so the commit gate's hard block reads the same fact. Three copies of
+# it existed before — one per consumer — and the moment two disagreed, the
+# commit gate blocked a real fix and told the agent to run `pattern_check`,
+# which was itself blocked. Block condition and printed escape are now the same
+# expression by construction; `enforcement_lint.py` H7/H8 fail the build if a
+# fourth copy appears or a consumer stops referencing this name.
+[queries.pattern_analysis_overdue]
+sql = "SELECT count(*) >= 3 FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)"
+intent = "3+ findings resolved since the last pattern analysis"
+
+[queries.quiz_exhaustions_resolved]
+sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')"
+intent = "no unresolved quiz exhaustions"
+
+# ── Boundaries (#82) ──
+#
+# The /clear between building the punchlist and the first fix is the whole
+# point of `awaiting_clear`. Declaring it as a boundary turns "no second
+# `resume` quietly became a way around it" from a hand-written test into a
+# property: lint L3 deletes every edge tagged `context-reset` and proves
+# fix_loop is then unreachable from merge_done. `awaiting_human` also exposes a
+# `resume` command, and that is exactly the shape this check exists to watch.
+
+[[boundaries]]
+name = "context-reset"
+must_traverse = { from = "merge_done", to = "fix_loop" }
+
+# ── Attestation (#82) ──
+#
+# Evidence has strength, and the vocabulary #79 was missing. The engine never
+# learns what these mean; it only compares positions (lint L7).
+#
+#   agent   — a command the agent runs. Forgeable at will. Fine for
+#             bookkeeping, wrong for a gate meant to constrain the agent.
+#   tool    — a Pre/PostToolUse hook observing a real tool call. The agent can
+#             cause it, but only by doing the thing.
+#   ambient — a signal that fires without anyone intending it. This is the
+#             class that had no name, which is why #79's UserPromptSubmit
+#             provenance read as host-attested to every reader.
+#   host    — a session-lifecycle act no tool call can produce.
+#   human   — a person typed the command themselves. The only class that
+#             entails a *decision*, as opposed to an occurrence: `host` proves
+#             a context was wiped, but nothing about `host` proves anyone
+#             agreed to anything. Reached by denying the agent's tool-call
+#             path in the bootstrap hook and telling the user to run
+#             `! sahjhan …`, which the harness executes directly (#81).
+#
+# `scripts/enforcement_lint.py` H5 falsifies these against reality: an event
+# claiming anything above `agent` must be unwritable by the agent — either
+# `restricted = true` (trusted hooks only) or denied in the bootstrap hook's
+# allowlist. Otherwise `sahjhan event` writes it anyway and the declaration is
+# decoration.
+
+[attestation]
+levels = ["agent", "tool", "ambient", "host", "human"]
+
+# ── Lint (#82) ──
+
+[lint]
+# Not yet enabled: `require_producers` holds every event to full closure, but
+# holtz's producers are Python hooks and skill-file commands the engine cannot
+# see, so the declarations below are the input that makes it meaningful.
+# scripts/enforcement_lint.py H1 already enforces closure against the tree.
+require_producers = false
+
