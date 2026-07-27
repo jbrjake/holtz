@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.141.3] - 2026-07-27
+
+_Changes since v0.138.3_
+
+### Added
+- **enforcement:** prove the suite green once, keyed to the working tree
+- **enforcement:** generate the enforcement contract from the config (#82)
+- **enforcement:** statically analyze the enforcement layering (#82)
+
+### Fixed
+- **enforcement:** prove the suite once, on content rather than on HEAD
+- **enforcement:** three checks for the gate defects still in the tree (#82)
+- **enforcement:** close the bang-prefix bypass of sahjhan command blocks
+
+### Changed
+- **enforcement:** read the suite result instead of running it again
+- **enforcement:** run only the tests that cover what changed
+- **enforcement:** fail fast in the pytest gates without truncating the suite
+
+### Documentation
+- document the suite-evidence mechanism and record T6
+- record T4/T4a and the commit-invariant-hash question
+- record T1 and the T2 design for the suite-cost work
+- record Phase 4 and the ratchet's first round (#82)
+- plan for static analysis of the enforcement layering (#82)
+
 ## [0.138.3] - 2026-07-25
 
 _Changes since v0.138.2_
