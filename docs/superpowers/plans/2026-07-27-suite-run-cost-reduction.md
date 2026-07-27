@@ -133,18 +133,14 @@ caller-supplied hash or result.
      for the record path, and a `real_daemon` test that the gate `--check`
      rejects a forged/mismatched hash.
 
-- [ ] **T3 — P3 selective per-fix + full at boundary**  <- RESUME HERE
-  - Confirm `impact_graph.py` CLI exposes `--types` on `blast_radius`
-  - `verify_suite.py --scope affected`: changed files -> graph nodes ->
-    `tests` edges -> test file list
-  - `fix_commit` gate -> affected scope; `iteration_boundary` gate -> full scope
-  - Fallback: if the graph has no `tests` edges, fall back to full suite
-    (never silently narrow — cf. #83)
-  - `--scope affected` is already accepted by the CLI, the event pattern, and
-    `accepted_scopes()` (full satisfies affected, never the reverse). What T3
-    adds is the *selection*: nothing narrows the command yet.
+- [x] **T3 — P3 selective per-fix** — DONE, see Session 3
 
-- [ ] **T4 — P1 collapse the redundant runs**
+  The gate wiring bullet that was filed under T3 (`fix_commit` -> affected,
+  `iteration_boundary` -> full) **moved to T4 deliberately** — see Session 3's
+  closing note. Shipping the gate without the skill file that teaches
+  `--record` would deadlock every fix_commit.
+
+- [ ] **T4 — P1 collapse the redundant runs**  <- RESUME HERE
   - `skills/holtz/references/phase-fix-loop.md`: subagent step 5 -> affected
     subset via verify_suite; orchestrator B.10 -> ledger check, not a re-run
   - Contract tests must be updated in the SAME commit (CLAUDE.md rule)
@@ -172,16 +168,14 @@ caller-supplied hash or result.
 
 ## Open questions
 
-- Does `impact_graph.py`'s CLI expose `--types` for `blast_radius`? The Python
-  API does (`impact_graph.py:186`, bidirectional BFS with an edge-type filter,
-  so `--types tests --depth 1` walks `tests` edges backwards to the covering
-  test files). CLI exposure unverified — check `_build_parser` at `:327`.
+- ~~Does `impact_graph.py`'s CLI expose `--types` for `blast_radius`?~~
+  **Answered:** yes, spelled `--type` with `dest="types"`, comma-separated
+  (`impact_graph.py:352`). Moot in the end — T3 does not shell out to it (D13).
 - `iteration_boundary` currently carries only the `pattern_analysis_overdue`
   gate; adding a full-suite gate lengthens that transition. Acceptable — it
   fires every 3–5 fixes, not every fix.
-- T3's fallback needs deciding explicitly: when the impact graph has no `tests`
-  edges for a changed file, fall back to the FULL suite. Never silently narrow
-  — that is the #83 failure mode arriving by another road.
+- ~~T3's fallback needs deciding explicitly.~~ **Answered:** D14 — per changed
+  file, and again at run time on a pytest exit of 4 or 5.
 
 ## Session log
 
@@ -262,3 +256,92 @@ after the final edit to `verify_suite.py`.
 **Handoff state:** T2 committed and green. T3 is next — the mechanism exists
 and is unused, which is the intended increment: `verify_suite.py --check` is
 wired into no gate and taught in no skill file until T3/T4.
+
+### Session 3 (2026-07-27)
+
+Shipped T3. Four decisions the Session-1 plan left open; each is a place where
+the obvious implementation would have produced a false green.
+
+**D12 (new). `affected` is measured from the last *full* green's commit, not
+from `HEAD~1` and not from the working tree alone.** The plan says "changed
+files" without saying *since when*, and T4's own note makes the omission
+load-bearing: the record happens **after** `git commit` (step 11 → 12 of
+`phase-fix-loop.md`), so at record time `git diff HEAD` is empty. Read
+literally, "changed files" would be the empty set on every fix — a selection of
+zero tests, recorded green. `HEAD~1` fixes the symptom but is a heuristic
+("one fix = one commit") standing in for a fact. So `suite_green` now carries
+`commit_hash` (reusing `finding_resolved`'s existing field name and its column
+— the query schema is the union of declared fields, and an undeclared column
+makes `sahjhan query` fail outright, verified), and `_baseline_commit` reads
+the newest **`scope='full'`** green. `git diff --name-only <baseline>` then
+spans committed *and* uncommitted work in one command, which is what the loop
+needs because it records on both sides of a commit.
+
+Baselining on the last *full* green rather than the last green of any scope is
+the substantive half. Chaining affected runs off each other is only sound if
+the selection is complete, and a hand-authored graph is not — a file nobody
+drew a `tests` edge for would drop out of every window forever. Measuring from
+the last full green bounds the gap to one iteration, and `iteration_boundary`
+re-bases it.
+
+**D13 (new). The graph is read as *data*; `impact_graph.py` is never
+imported.** This process is the one the daemon authenticates to write a
+restricted event. `skills/holtz/scripts/` is **not** in `_sahjhan_bootstrap`'s
+`PROTECTED` list (checked: `enforcement/`, `bin/sahjhan`, `hooks/hooks.json`,
+`_sahjhan_bootstrap.py`), so importing from it would let agent-authored *code*
+execute under the trusted identity — an import-time `subprocess.run` monkeypatch
+would forge greens outright. Reading agent-authored *data* is a strictly
+smaller hole, and it is the hole the design already accepts. What was needed
+was a one-hop edge lookup, not a copy of `blast_radius`, so this is not the
+mirror D8 warned about.
+
+**Stated plainly, because it is the honest bound:** an `affected` green is a
+**cost** optimisation, not an integrity claim. `docs/holtz/impact-graph.json`
+is agent-written, so a bogus `tests` edge can narrow one `fix_commit`. It
+cannot survive the next `iteration_boundary`, which accepts `full` and nothing
+else. That layering is the reason the boundary gate must stay strict in T4.
+
+**D14 (new). Narrowing is earned per changed file, and again at run time.**
+The plan's fallback ("if the graph has no `tests` edges") is global; per-file
+is the correct grain — one unaccounted-for file widens the whole run, so a
+subset can never quietly skip the file just edited. Concretely: a changed
+`test_*.py`/`*_test.py` selects itself (the TDD loop writes one every fix and
+recon has never heard of it — without this rule `affected` would never narrow
+once); any `conftest.py` widens (its reach is every test below it and no edge
+says so); a source file with no `tests` edge widens; a stale edge naming a
+deleted test widens. Then a second guard at run time: pytest exits 4 on a usage
+error and 5 on an empty collection, and **neither is a statement about the
+code** — so a narrowed run ending that way re-runs full instead of recording.
+Zero tests executed must never satisfy a gate. This is also what keeps exotic
+`$HOLTZ_PYTEST` overrides working: one that rejects trailing paths widens
+instead of wedging.
+
+**D15 (new). The recorded scope is what *ran*, not what was asked for.** A
+request for `affected` that widened records `full` — true, and strictly
+stronger, since `full` satisfies an `affected` check. Recording the request
+would understate the run and waste the stronger evidence.
+
+Also added `--print-affected`, because a selection that degrades to the full
+suite forever is otherwise indistinguishable from one that works, and the cost
+this task exists to remove would come back unnoticed.
+
+**Observed green** (all exit 0 unless noted): ruff, mypy (52 files),
+`tests/test_verify_suite.py` 51 passed including 10 `real_daemon` integration
+tests, full suite `1936 passed` with coverage 91.07% ≥ 80 (verify_suite.py at
+89%), contract gate 37 commands, `scripts/lint-enforcement.sh` exit 0 (L1–L7
+and H1–H9, 0 errors, the same 12 pre-existing warnings as T1/T2),
+`docs/ENFORCEMENT-CONTRACT.md` reported current (a new optional field does not
+change the gate table). README badge 1912 → 1936.
+`scripts/hash-trusted-callers.sh` rerun after the last edit to
+`verify_suite.py` — required before the `real_daemon` runs, per memory
+`trusted-callers-manifest-regen`.
+
+**Handoff state / why T3 stopped where it did.** The mechanism is complete and
+still invoked by nothing. Wiring `fix_commit` to `--check --scope affected`
+**must land in the same commit as the `phase-fix-loop.md` change that teaches
+`--record`** — a gate demanding evidence no one is told to produce blocks every
+fix with a message the agent cannot satisfy, which is #77's deadlock shape
+rebuilt on purpose. So T4 is one commit: transitions.toml (all three
+`${HOLTZ_PYTEST:-...}` gates → `verify_suite.py --check`, `fix_commit` at
+`affected` and the rest at `full`), the skill file, the contract tests, and
+T4a's `tool:`-reachability ratchet — green on arrival.

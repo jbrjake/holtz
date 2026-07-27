@@ -550,6 +550,14 @@ fields = [
     { name = "scope", type = "string", pattern = "^(full|affected)$" },
     { name = "command", type = "string" },
     { name = "test_count", type = "string", pattern = "^\\d+$", optional = true },
+    # HEAD when the suite ran. `scope = "affected"` means "the tests covering
+    # what changed since a tree where everything passed", and this is what the
+    # *next* affected run measures that change from: it diffs against the
+    # commit named by the most recent `full` green. Optional because a repo
+    # with no commits has no HEAD, and an affected run that cannot find a
+    # baseline widens to the full suite rather than guessing one. Reuses
+    # `commit_hash` — the same name `finding_resolved` already gives a git oid.
+    { name = "commit_hash", type = "string", pattern = "^[0-9a-f]{7,40}$", optional = true },
 ]
 
 # `tool:`, not `hook:`. Nothing in the harness fires this script — a gate runs

@@ -82,9 +82,38 @@ def _run_verify(repo, *args, env=None):
     )
 
 
+def _head(repo):
+    return _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+
+def _node(node_id, file, node_type="function"):
+    return {"id": node_id, "type": node_type, "file": file, "line": 1}
+
+
+def _write_graph(repo, nodes, edges):
+    _write(
+        repo,
+        os.path.join("docs", "holtz", "impact-graph.json"),
+        json.dumps({"nodes": nodes, "edges": edges}),
+    )
+
+
 @pytest.fixture
 def repo(tmp_path):
     return _init_repo(str(tmp_path / "proj"))
+
+
+@pytest.fixture
+def baselined(repo, monkeypatch):
+    """A repo whose last full green was recorded at HEAD.
+
+    Stubs the ledger read so the selection logic can be exercised as a unit.
+    What it returns is a *real* commit in the repo, so everything downstream —
+    the diff, the file existence checks — runs for real.
+    """
+    head = _head(repo)
+    monkeypatch.setattr(verify_suite, "_baseline_commit", lambda cwd: (head, ""))
+    return repo
 
 
 # ── Unit: the tree hash ──────────────────────────────────────────────────────
@@ -208,6 +237,226 @@ class TestSuiteCommand:
         assert verify_suite.suite_command() == verify_suite.DEFAULT_PYTEST
 
 
+# ── Unit: affected-scope selection ───────────────────────────────────────────
+
+
+class TestChangedSince:
+    """What counts as "changed" — the input the whole selection rests on."""
+
+    def test_sees_both_committed_and_uncommitted_work(self, repo):
+        """One `git diff <commit>` spans both, and the fix loop needs both.
+
+        The subagent proves its work before committing; the orchestrator
+        proves the committed tree after. A baseline diff that only looked at
+        commits would miss the first, and one that only looked at the working
+        tree would miss the second.
+        """
+        base = _head(repo)
+        _write(repo, "committed.py", "x = 1\n")
+        _git(repo, "add", "committed.py")
+        _git(repo, "commit", "-qm", "add")
+        _write(repo, "app.py", "def add(a, b):\n    return b + a\n")
+        _write(repo, "untracked.py", "y = 2\n")
+
+        changed, reason = verify_suite._changed_since(repo, base)
+        assert reason == ""
+        assert changed == ["app.py", "committed.py", "untracked.py"]
+
+    def test_docs_holtz_is_not_a_change(self, repo):
+        """Same exclusion the tree hash makes, for the same reason."""
+        base = _head(repo)
+        _write(repo, "docs/holtz/STATUS.md", "rewritten\n")
+        assert verify_suite._changed_since(repo, base) == ([], "")
+
+    def test_an_unknown_baseline_is_refused_not_ignored(self, repo):
+        """A baseline git cannot resolve must widen, never silently diff.
+
+        `git diff` against a bad rev fails, and an empty result read as "no
+        files changed" would look identical to a clean tree — which is how a
+        selection of nothing gets recorded as a green.
+        """
+        changed, reason = verify_suite._changed_since(repo, "0" * 40)
+        assert changed is None
+        assert "not in this repository" in reason
+
+
+class TestCoveringTests:
+    def test_follows_the_edge_from_test_to_covered_entity(self):
+        """Pins the direction the skill file teaches.
+
+        `impact-graph-operations.md` says
+        `add_edge <test_file_id> <function_id> tests`, so the source is the
+        test. Reading it backwards would return an empty set here and a wrong
+        set on a graph that happens to be symmetric — a comment cannot hold
+        that down, so a test does.
+        """
+        nodes = {
+            "app:add": _node("app:add", "app.py"),
+            "t": _node("t", "tests/test_app.py", "test"),
+        }
+        edges = [{"source": "t", "target": "app:add", "type": "tests"}]
+        assert verify_suite._covering_tests("app.py", nodes, edges) == {
+            "tests/test_app.py"
+        }
+
+    def test_a_backwards_edge_covers_nothing(self):
+        nodes = {
+            "app:add": _node("app:add", "app.py"),
+            "t": _node("t", "tests/test_app.py", "test"),
+        }
+        edges = [{"source": "app:add", "target": "t", "type": "tests"}]
+        assert verify_suite._covering_tests("app.py", nodes, edges) == set()
+
+    def test_other_edge_types_do_not_count_as_coverage(self):
+        nodes = {
+            "app:add": _node("app:add", "app.py"),
+            "t": _node("t", "tests/test_app.py", "test"),
+        }
+        edges = [{"source": "t", "target": "app:add", "type": "calls"}]
+        assert verify_suite._covering_tests("app.py", nodes, edges) == set()
+
+
+class TestSelectAffected:
+    """Every uncertainty must widen. These are the ways it can be uncertain."""
+
+    def test_a_changed_test_file_selects_itself(self, baselined):
+        """The TDD loop writes a new test every fix, and the graph built
+        during recon has never heard of it. If that alone forced the full
+        suite, `affected` would never narrow once."""
+        _write(baselined, "tests/test_new.py", "def test_x():\n    assert True\n")
+        assert verify_suite.select_affected(baselined, baselined) == (
+            ["tests/test_new.py"],
+            "",
+        )
+
+    def test_a_changed_source_file_selects_its_covering_tests(
+        self, repo, monkeypatch
+    ):
+        """The graph edge is the only thing that can pull this test in.
+
+        The test file is committed *before* the baseline, so it is not itself
+        in the diff — if the edge lookup were broken this would widen instead
+        of selecting.
+        """
+        _write(repo, "tests/test_app.py", "def test_add():\n    assert True\n")
+        _git(repo, "add", "tests/test_app.py")
+        _git(repo, "commit", "-qm", "test")
+        head = _head(repo)
+        monkeypatch.setattr(verify_suite, "_baseline_commit", lambda cwd: (head, ""))
+
+        _write_graph(
+            repo,
+            {
+                "app:add": _node("app:add", "app.py"),
+                "t": _node("t", "tests/test_app.py", "test"),
+            },
+            [{"source": "t", "target": "app:add", "type": "tests"}],
+        )
+        _write(repo, "app.py", "def add(a, b):\n    return b + a\n")
+
+        files, reason = verify_suite.select_affected(repo, repo)
+        assert reason == ""
+        assert files == ["tests/test_app.py"]
+
+    def test_an_uncovered_source_file_widens(self, baselined):
+        """#83's lesson stated positively: narrowing is earned per file.
+
+        One changed file the graph cannot account for widens the *whole* run.
+        A subset that quietly skips the file you just edited is a green that
+        means nothing.
+        """
+        _write(baselined, "tests/test_app.py", "def test_add():\n    assert True\n")
+        _write_graph(baselined, {}, [])
+        _write(baselined, "app.py", "def add(a, b):\n    return b + a\n")
+
+        files, reason = verify_suite.select_affected(baselined, baselined)
+        assert files is None
+        assert "no `tests` edge covers app.py" in reason
+
+    def test_a_changed_conftest_widens(self, baselined):
+        """A conftest's reach is every test beneath it, and no edge says so."""
+        _write(baselined, "tests/conftest.py", "import pytest\n")
+        files, reason = verify_suite.select_affected(baselined, baselined)
+        assert files is None
+        assert "conftest" in reason
+
+    def test_an_unreadable_graph_widens(self, baselined):
+        _write(baselined, "app.py", "def add(a, b):\n    return b + a\n")
+        _write(baselined, "docs/holtz/impact-graph.json", "{not json")
+        files, reason = verify_suite.select_affected(baselined, baselined)
+        assert files is None
+        assert "impact graph" in reason
+
+    def test_an_edge_to_a_deleted_test_file_widens(self, baselined):
+        """A stale edge names a path pytest would reject; widen instead."""
+        _write_graph(
+            baselined,
+            {
+                "app:add": _node("app:add", "app.py"),
+                "t": _node("t", "tests/test_gone.py", "test"),
+            },
+            [{"source": "t", "target": "app:add", "type": "tests"}],
+        )
+        _write(baselined, "app.py", "def add(a, b):\n    return b + a\n")
+        files, reason = verify_suite.select_affected(baselined, baselined)
+        assert files is None
+        assert "missing from the working tree" in reason
+
+    def test_an_unchanged_tree_widens_rather_than_running_nothing(self, baselined):
+        """An empty selection is not "nothing to prove" — it is no evidence.
+
+        Reaching a record with nothing changed means the baseline is not what
+        was assumed, and running zero tests to earn a green is exactly the
+        false-green this mechanism exists to stop.
+        """
+        files, reason = verify_suite.select_affected(baselined, baselined)
+        assert files is None
+        assert "nothing has changed" in reason
+
+    def test_no_baseline_widens(self, repo, monkeypatch):
+        """A first run has no proven tree to measure against."""
+        monkeypatch.setattr(
+            verify_suite, "_baseline_commit", lambda cwd: (None, "no full-scope green")
+        )
+        files, reason = verify_suite.select_affected(repo, repo)
+        assert files is None
+        assert reason == "no full-scope green"
+
+
+class TestSuiteInvocation:
+    """What actually gets run, and what scope that run may claim."""
+
+    def test_affected_appends_the_selection_and_keeps_the_scope(self, baselined):
+        _write(baselined, "tests/test_new.py", "def test_x():\n    assert True\n")
+        command, scope = verify_suite._suite_invocation(
+            baselined, baselined, "affected"
+        )
+        assert scope == "affected"
+        assert command == verify_suite.suite_command() + " tests/test_new.py"
+
+    def test_a_request_that_cannot_narrow_becomes_full(self, baselined):
+        """The recorded scope is what ran, not what was asked for.
+
+        Recording `affected` for a run that executed everything would
+        understate it, and `full` satisfies an `affected` check anyway.
+        """
+        command, scope = verify_suite._suite_invocation(
+            baselined, baselined, "affected"
+        )
+        assert scope == "full"
+        assert command == verify_suite.suite_command()
+
+    def test_full_never_consults_the_graph(self, repo, monkeypatch):
+        def _explode(*_args, **_kwargs):
+            raise AssertionError("--scope full must not select")
+
+        monkeypatch.setattr(verify_suite, "select_affected", _explode)
+        assert verify_suite._suite_invocation(repo, repo, "full") == (
+            verify_suite.suite_command(),
+            "full",
+        )
+
+
 # ── Subprocess: the CLI contract a gate depends on ───────────────────────────
 
 
@@ -257,6 +506,32 @@ class TestCliContract:
         assert escape.startswith("python3 ")
         assert os.path.isfile(escape.split()[1]), escape
         assert "--record" in escape
+
+    def test_print_affected_says_why_it_would_not_narrow(self, repo):
+        """The diagnostic exists so a graph that never narrows is visible.
+
+        A selective run that silently degrades to the full suite forever is
+        indistinguishable from one that works, and the cost it was meant to
+        remove comes back unnoticed.
+        """
+        result = _run_verify(repo, "--print-affected")
+        assert result.returncode == 0
+        assert result.stdout.strip() == ""
+        assert "would run the full suite —" in result.stderr
+
+    def test_record_affected_without_a_baseline_runs_everything(self, repo):
+        """No proven tree to diff against means no honest subset.
+
+        This project has no ledger, so there is no full green to measure from.
+        The run must widen — and say so — rather than pick some other
+        baseline.
+        """
+        result = _run_verify(
+            repo, "--record", "--scope", "affected", env={"HOLTZ_PYTEST": "true"}
+        )
+        assert "running the full suite —" in result.stderr
+        # The unadorned command: no selection was appended to it.
+        assert "verify_suite: running true\n" in result.stderr
 
 
 # ── real_daemon: what only the engine can decide ─────────────────────────────
@@ -398,3 +673,135 @@ class TestAgainstRealDaemon:
         # A different tree, proven green, is still a different tree.
         _write(root, "app.py", "def add(a, b):\n    return a * b\n")
         assert _run_verify(root, "--check", env=env).returncode == 1
+
+    def _baseline(self, real_daemon, root, env):
+        """Commit a covering test, prove everything green, return that HEAD.
+
+        This is the state `--scope affected` is defined against, so building
+        it through the real CLI — rather than hand-writing an event — is what
+        makes the affected tests below mean anything.
+        """
+        _write(root, "tests/test_app.py", "def test_add():\n    assert True\n")
+        _git(root, "add", "tests/test_app.py")
+        _git(root, "commit", "-qm", "tests")
+        assert _run_verify(root, "--record", env=env).returncode == 0
+        return _head(root)
+
+    def test_a_full_green_records_the_commit_it_proved(self, real_daemon):
+        """The baseline every later affected run measures its diff from."""
+        root = self._prepare(real_daemon)
+        assert _run_verify(root, "--record", env=self._env(real_daemon)).returncode == 0
+        assert self._greens(real_daemon)[-1]["commit_hash"] == _head(root)
+
+    def test_affected_narrows_to_the_covering_tests(self, real_daemon):
+        """The whole point of T3, proven against a real ledger.
+
+        The baseline commit comes out of the ledger, the diff comes out of
+        git, and the covering test comes out of the graph — so this is the
+        only test that exercises all three joins at once.
+        """
+        root = self._prepare(real_daemon)
+        env = self._env(real_daemon)
+        base = self._baseline(real_daemon, root, env)
+
+        _write_graph(
+            root,
+            {
+                "app:add": _node("app:add", "app.py"),
+                "t": _node("t", "tests/test_app.py", "test"),
+            },
+            [{"source": "t", "target": "app:add", "type": "tests"}],
+        )
+        _write(root, "app.py", "def add(a, b):\n    return b + a\n")
+
+        result = _run_verify(root, "--record", "--scope", "affected", env=env)
+        assert result.returncode == 0, (
+            f"stdout={result.stdout}\nstderr={result.stderr}"
+        )
+
+        latest = self._greens(real_daemon)[-1]
+        assert latest["scope"] == "affected"
+        assert latest["command"].endswith(" tests/test_app.py"), latest["command"]
+        assert latest["commit_hash"] == base  # nothing committed since
+
+    def test_an_uncovered_change_records_a_full_green(self, real_daemon):
+        """A change the graph cannot account for must not narrow.
+
+        `scope` is recorded as what *ran*, so the ledger says `full` here —
+        which is both true and strong enough to satisfy any later check.
+        """
+        root = self._prepare(real_daemon)
+        env = self._env(real_daemon)
+        self._baseline(real_daemon, root, env)
+
+        _write_graph(root, {}, [])
+        _write(root, "app.py", "def add(a, b):\n    return b + a\n")
+
+        result = _run_verify(root, "--record", "--scope", "affected", env=env)
+        assert result.returncode == 0
+        assert "no `tests` edge covers app.py" in result.stderr
+        assert self._greens(real_daemon)[-1]["scope"] == "full"
+
+    def test_a_subset_that_collects_nothing_widens_before_recording(
+        self, real_daemon, tmp_path
+    ):
+        """A narrowed command that could not run tests proved nothing.
+
+        pytest exits 4 on a usage error and 5 on an empty collection; neither
+        is a statement about the code. Recording a green off either would be
+        the false green in its purest form — zero tests executed, gate
+        satisfied — so the run widens and the ledger says `full`.
+        """
+        root = self._prepare(real_daemon)
+        fake = str(tmp_path / "fake_pytest.py")
+        with open(fake, "w", encoding="utf-8") as fh:
+            fh.write(
+                "import sys\n"
+                "if len(sys.argv) > 1:\n"
+                "    sys.exit(5)\n"
+                "print('9 passed')\n"
+            )
+        env = {
+            "SAHJHAN_DAEMON_SOCKET": real_daemon["sock_path"],
+            "HOLTZ_PYTEST": f"{sys.executable} {fake}",
+        }
+        self._baseline(real_daemon, root, env)
+
+        _write(root, "tests/test_app.py", "def test_add():\n    assert 1 == 1\n")
+        result = _run_verify(root, "--record", "--scope", "affected", env=env)
+        assert result.returncode == 0, (
+            f"stdout={result.stdout}\nstderr={result.stderr}"
+        )
+        assert "widening to the full suite" in result.stderr
+
+        latest = self._greens(real_daemon)[-1]
+        assert latest["scope"] == "full"
+        assert latest["test_count"] == "9"
+
+    def test_an_affected_green_does_not_satisfy_a_full_check(self, real_daemon):
+        """`fix_commit` will ask for `affected`, `iteration_boundary` for
+        `full`. The ordering that lets one gate be cheap while the other stays
+        strict has to hold against a real ledger, not just in the tuple."""
+        root = self._prepare(real_daemon)
+        env = self._env(real_daemon)
+        self._baseline(real_daemon, root, env)
+
+        _write_graph(
+            root,
+            {
+                "app:add": _node("app:add", "app.py"),
+                "t": _node("t", "tests/test_app.py", "test"),
+            },
+            [{"source": "t", "target": "app:add", "type": "tests"}],
+        )
+        _write(root, "app.py", "def add(a, b):\n    return b + a\n")
+        assert _run_verify(
+            root, "--record", "--scope", "affected", env=env
+        ).returncode == 0
+
+        assert _run_verify(
+            root, "--check", "--scope", "affected", env=env
+        ).returncode == 0
+        strict = _run_verify(root, "--check", "--scope", "full", env=env)
+        assert strict.returncode == 1
+        assert "no suite_green for this working tree" in strict.stderr

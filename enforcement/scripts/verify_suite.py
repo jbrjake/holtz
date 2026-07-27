@@ -47,6 +47,13 @@ And it accepts no caller-supplied hash or result: the tree hash is computed
 here, the suite is run here, and the event is written only on an observed
 exit 0.
 
+``--scope affected`` narrows the run to the tests the impact graph says cover
+what changed since the last ``full`` green. It is a **cost** optimisation, not
+a second integrity claim: the source-to-test map is agent-authored, so the
+guarantee comes from the periodic full run that ``iteration_boundary``
+demands. Every uncertainty in the selection widens back to the full suite —
+see ``select_affected``.
+
 Known limitation, stated so nobody "fixes" it by accident: the hash covers
 tracked and untracked-but-not-ignored file *contents*, not the interpreter or
 installed dependencies. Upgrading a dependency without touching a lockfile
@@ -55,8 +62,9 @@ case is covered; a bare ``pip install -U`` is not.
 
 Usage::
 
-    python3 verify_suite.py --record [--scope full] [--cwd .]
-    python3 verify_suite.py --check  [--scope full] [--cwd .]
+    python3 verify_suite.py --record [--scope full|affected] [--cwd .]
+    python3 verify_suite.py --check  [--scope full|affected] [--cwd .]
+    python3 verify_suite.py --print-affected [--cwd .]
 """
 from __future__ import annotations
 
@@ -65,6 +73,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 
@@ -90,9 +99,9 @@ DEFAULT_PYTEST = "python3 -m pytest -x --ff --tb=short -q"
 # confirmed is exactly the class of defect those checks exist to catch.
 
 # `full` ran everything; `affected` ran the impact-graph subset for the files
-# that changed (T3). Ordered weakest-first: a `full` run satisfies a request
-# for `affected`, never the reverse — narrowing must always be the explicit
-# ask, so a missing scope can only ever over-test.
+# that changed. Ordered weakest-first: a `full` run satisfies a request for
+# `affected`, never the reverse — narrowing must always be the explicit ask,
+# so a missing scope can only ever over-test.
 SCOPES: tuple[str, ...] = ("affected", "full")
 
 # STATUS.md and PUNCHLIST.md are rewritten on every fix, and the ledger itself
@@ -100,8 +109,29 @@ SCOPES: tuple[str, ...] = ("affected", "full")
 # including them would invalidate the hash the instant it was recorded.
 EXCLUDED_PREFIXES = ("docs/holtz/",)
 
+# The only map holtz has from a changed source file to the tests that cover it.
+# It is agent-authored, which bounds what an `affected` green may claim — see
+# `select_affected`.
+GRAPH_PATH = os.path.join("docs", "holtz", "impact-graph.json")
+
+# pytest's exit codes for "the narrowed command could not be run", as distinct
+# from "the tests ran and something failed": 4 is a usage error (a path that
+# does not collect, or a `$HOLTZ_PYTEST` override that rejects trailing paths)
+# and 5 is nothing-collected. Either way the narrowed run proved nothing, so
+# the answer is to widen to the full suite. Widening can only ever run more
+# tests, so it is always the safe direction; recording the narrow result is
+# not.
+SELECTION_FAILURE_EXITS = (4, 5)
+
 _PASSED_RE = re.compile(r"(\d+) passed")
 _TREE_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
+_COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
+
+# pytest's own default collection patterns, applied to the basename. Notably
+# *not* "anything under tests/": `tests/helpers.py` collects nothing, so
+# treating it as a test file could hand pytest a selection with zero tests in
+# it. Files that do not match simply need a `tests` edge like any other.
+_TEST_FILE_RE = re.compile(r"^(test_.*\.py|.*_test\.py)$")
 
 
 # ── Tree hashing ─────────────────────────────────────────────────────────────
@@ -245,7 +275,274 @@ def _block(reason: str, tree_hash: str, accepted: tuple[str, ...], scope: str) -
     return 1
 
 
+# ── Ledger reads ─────────────────────────────────────────────────────────────
+
+
+def _sahjhan_target(cwd: str) -> tuple[str | None, str | None, str]:
+    """Locate the sahjhan binary and the enforcement config for ``cwd``.
+
+    Returns ``(binary, config_dir, "")`` or ``(None, None, problem)``.
+    """
+    sys.path.insert(0, _hooks_dir())
+    from _common import resolve_config_dir  # noqa: PLC0415
+    from _resolve import ensure_sahjhan  # noqa: PLC0415
+
+    binary = ensure_sahjhan()
+    config_dir, found = resolve_config_dir(cwd)
+    if binary is None or not found:
+        return None, None, (
+            f"sahjhan binary={'missing' if binary is None else binary}, "
+            f"config_dir={'not found' if not found else config_dir}"
+        )
+    return binary, config_dir, ""
+
+
+def _query_ledger(
+    binary: str, config_dir: str, cwd: str, sql: str
+) -> tuple[list[dict] | None, str]:
+    """Run SQL over the active ledger, returning ``(rows, problem)``.
+
+    Daemon-free by construction — see the module docstring. Both readers go
+    through here so the gate's evidence and the baseline lookup can never
+    resolve to different ledgers.
+    """
+    try:
+        proc = subprocess.run(
+            [binary, "--config-dir", config_dir, "query", sql, "--format", "json"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, f"cannot query the ledger: {exc}"
+
+    if proc.returncode != 0:
+        # A ledger that has never been initialised surfaces here as an I/O
+        # error rather than a zero count. Either way there is no evidence.
+        return None, (
+            f"ledger query failed (exit {proc.returncode}): {proc.stderr.strip()}"
+        )
+
+    try:
+        rows = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        return None, f"cannot read the ledger query result: {exc}"
+    if not isinstance(rows, list):
+        return None, f"ledger query returned {type(rows).__name__}, not a list"
+    return rows, ""
+
+
+# ── Affected-scope selection ─────────────────────────────────────────────────
+
+
+def _baseline_commit(cwd: str) -> tuple[str | None, str]:
+    """HEAD of the most recent tree proven green at ``full`` scope.
+
+    Basing ``affected`` on the last *full* green, rather than on the last
+    green of any scope, is deliberate. Chaining affected runs off each other
+    is only sound if the selection is complete, and a hand-authored impact
+    graph is not — a source file nobody drew a `tests` edge for would fall out
+    of every window forever. Measuring from the last full green instead bounds
+    the untested gap to one iteration: `iteration_boundary` demands a full
+    run every few fixes, and that re-bases the window.
+    """
+    binary, config_dir, problem = _sahjhan_target(cwd)
+    if binary is None or config_dir is None:
+        return None, f"cannot reach the ledger — {problem}"
+
+    rows, problem = _query_ledger(
+        binary,
+        config_dir,
+        cwd,
+        "SELECT commit_hash FROM events WHERE type='suite_green' "
+        "AND scope='full' AND commit_hash IS NOT NULL ORDER BY seq DESC LIMIT 1",
+    )
+    if rows is None:
+        return None, problem
+    if not rows:
+        return None, "no full-scope suite_green to measure changes against"
+
+    commit = str(rows[0].get("commit_hash") or "")
+    if not _COMMIT_RE.match(commit):
+        return None, f"the last full suite_green names no usable commit ({commit!r})"
+    return commit, ""
+
+
+def _changed_since(root: str, baseline: str) -> tuple[list[str] | None, str]:
+    """Paths that differ from ``baseline``, including uncommitted work.
+
+    ``git diff --name-only <commit>`` compares the commit against the
+    *working tree*, so one command covers both the commits made since the
+    baseline and edits not yet committed. That matters because the fix loop
+    records on both sides of a commit: the subagent proves its work before
+    committing, the orchestrator proves the committed tree after.
+    """
+    if _git(["cat-file", "-e", f"{baseline}^{{commit}}"], root) is None:
+        return None, f"baseline commit {baseline} is not in this repository"
+
+    diff = _git(["diff", "--name-only", "--no-renames", baseline], root)
+    if diff is None:
+        return None, f"git could not diff against {baseline}"
+    untracked = _git(["ls-files", "--others", "--exclude-standard"], root) or ""
+
+    changed = {
+        path
+        for path in (diff.splitlines() + untracked.splitlines())
+        if path and not path.startswith(EXCLUDED_PREFIXES)
+    }
+    return sorted(changed), ""
+
+
+def _load_graph(cwd: str) -> tuple[dict, list] | None:
+    """Read the impact graph as *data*, or None if it is unusable.
+
+    Parsed here rather than imported from
+    ``skills/holtz/scripts/impact_graph.py`` on purpose. This process is the
+    one the daemon authenticates to write a restricted ``suite_green``;
+    importing a module from a path the agent can write would let
+    agent-authored *code* run under that identity, which is a strictly bigger
+    hole than reading agent-authored *data*. What is needed here is a
+    one-hop edge lookup, not a copy of ``blast_radius``.
+    """
+    try:
+        with open(os.path.join(cwd, GRAPH_PATH), encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    nodes = data.get("nodes") if isinstance(data, dict) else None
+    edges = data.get("edges") if isinstance(data, dict) else None
+    if not isinstance(nodes, dict) or not isinstance(edges, list):
+        return None
+    return nodes, edges
+
+
+def _covering_tests(rel: str, nodes: dict, edges: list) -> set[str]:
+    """Files of the test nodes joined to ``rel`` by a ``tests`` edge.
+
+    Direction follows ``references/impact-graph-operations.md``, which teaches
+    ``add_edge <test_file_id> <function_id> tests`` — the *source* is the
+    test. Reading it the other way round would silently return the wrong set,
+    so it is asserted by a test rather than left to the comment.
+    """
+    covered = {
+        nid for nid, node in nodes.items()
+        if isinstance(node, dict) and node.get("file") == rel
+    }
+    if not covered:
+        return set()
+
+    sources = {
+        edge.get("source") for edge in edges
+        if isinstance(edge, dict)
+        and edge.get("type") == "tests"
+        and edge.get("target") in covered
+    }
+    files = set()
+    for source in sources:
+        node = nodes.get(source)
+        if isinstance(node, dict) and node.get("file"):
+            files.add(node["file"])
+    return files
+
+
+def select_affected(root: str, cwd: str) -> tuple[list[str] | None, str]:
+    """Test files covering everything changed since the last full green.
+
+    Returns ``(files, "")`` when the subset can be trusted, or
+    ``(None, reason)`` when it cannot — and *every* uncertainty returns None.
+    Narrowing is earned per changed file: one file the graph cannot account
+    for widens the whole run back to the full suite. That is #83's lesson
+    stated positively — a selective suite that quietly skips the file you just
+    changed is a green that means nothing.
+
+    What an ``affected`` green does and does not claim: the source-to-test map
+    is ``docs/holtz/impact-graph.json``, which the agent writes. So this is a
+    **cost** optimisation bounded by the periodic full run that
+    ``iteration_boundary`` requires, not an independent integrity claim. A
+    bogus ``tests`` edge can narrow one ``fix_commit``; it cannot survive the
+    next boundary, which accepts ``full`` and nothing else.
+    """
+    baseline, reason = _baseline_commit(cwd)
+    if baseline is None:
+        return None, reason
+
+    changed, reason = _changed_since(root, baseline)
+    if changed is None:
+        return None, reason
+    if not changed:
+        return None, f"nothing has changed since {baseline[:7]}"
+
+    # Loaded on first need, not up front: a change that is only test files
+    # answers itself, and a project that has not been mapped yet should not be
+    # denied that. Once a source file needs the map, an unreadable one widens.
+    graph: tuple[dict, list] | None = None
+
+    selected: set[str] = set()
+    for rel in changed:
+        if os.path.basename(rel) == "conftest.py":
+            # A conftest reshapes collection and fixtures for every test
+            # beneath it. No `tests` edge expresses that, and no selection
+            # short of the full suite is honest about it.
+            return None, f"{rel} changed — a conftest's reach is every test below it"
+        if _TEST_FILE_RE.match(os.path.basename(rel)):
+            selected.add(rel)
+            continue
+        if graph is None:
+            graph = _load_graph(cwd)
+            if graph is None:
+                return None, f"no readable impact graph at {GRAPH_PATH}"
+        nodes, edges = graph
+        covering = _covering_tests(rel, nodes, edges)
+        if not covering:
+            return None, (
+                f"no `tests` edge covers {rel} — add one with "
+                "`impact_graph.py add_edge <test_file_id> <entity_id> tests`"
+            )
+        selected |= covering
+
+    present = sorted(
+        path for path in selected if os.path.isfile(os.path.join(root, path))
+    )
+    if not present:
+        return None, "every selected test file is missing from the working tree"
+    return present, ""
+
+
+def _suite_invocation(cwd: str, root: str, scope: str) -> tuple[str, str]:
+    """The command to run and the scope it will actually prove.
+
+    The returned scope is what gets recorded, so it is always what ran: a
+    request for ``affected`` that could not be narrowed comes back as
+    ``full``. Recording the request rather than the result would understate a
+    full run, and ``full`` satisfies an ``affected`` check anyway.
+    """
+    base = suite_command()
+    if scope != "affected":
+        return base, "full"
+
+    files, reason = select_affected(root, cwd)
+    if files is None:
+        print(f"verify_suite: running the full suite — {reason}", file=sys.stderr)
+        return base, "full"
+
+    print(
+        f"verify_suite: affected subset, {len(files)} file(s): {' '.join(files)}",
+        file=sys.stderr,
+    )
+    return base + " " + " ".join(shlex.quote(path) for path in files), "affected"
+
+
 # ── Modes ────────────────────────────────────────────────────────────────────
+
+
+def _run_suite(command: str, cwd: str) -> subprocess.CompletedProcess:
+    """Run the suite command, echoing its output as it is a user's evidence."""
+    print(f"verify_suite: running {command}", file=sys.stderr)
+    proc = subprocess.run(command, shell=True, cwd=cwd, capture_output=True, text=True)
+    sys.stdout.write(proc.stdout)
+    sys.stderr.write(proc.stderr)
+    return proc
 
 
 def mode_record(cwd: str, root: str, scope: str) -> int:
@@ -254,18 +551,34 @@ def mode_record(cwd: str, root: str, scope: str) -> int:
     from _common import record_authed_event  # noqa: PLC0415
 
     tree_hash = compute_tree_hash(root)
-    command = suite_command()
-
     print(f"verify_suite: tree_hash={tree_hash}", file=sys.stderr)
-    print(f"verify_suite: running {command}", file=sys.stderr)
-    proc = subprocess.run(command, shell=True, cwd=cwd, capture_output=True, text=True)
-    sys.stdout.write(proc.stdout)
-    sys.stderr.write(proc.stderr)
+
+    command, scope = _suite_invocation(cwd, root, scope)
+    proc = _run_suite(command, cwd)
+
+    if scope == "affected" and proc.returncode in SELECTION_FAILURE_EXITS:
+        # The narrowed command did not run tests and fail — it failed to run
+        # tests. A usage error or an empty collection says the selection is
+        # unusable here, not that the code is broken, and the honest response
+        # to "I could not test the subset" is to test everything.
+        print(
+            f"verify_suite: the affected subset proved nothing "
+            f"(exit {proc.returncode}) — widening to the full suite",
+            file=sys.stderr,
+        )
+        command, scope = suite_command(), "full"
+        proc = _run_suite(command, cwd)
 
     if proc.returncode != 0:
         print(
             f"FAIL: suite exited {proc.returncode} — nothing recorded. "
-            "Fix the failures and run this again.",
+            "Fix the failures and run this again."
+            + (
+                "\n  If the failure is the subset itself rather than the code, "
+                f"--scope full always satisfies a --scope {scope} check."
+                if scope == "affected"
+                else ""
+            ),
             file=sys.stderr,
         )
         return proc.returncode
@@ -278,6 +591,11 @@ def mode_record(cwd: str, root: str, scope: str) -> int:
         "scope": scope,
         "command": command,
     }
+    # The baseline the *next* affected run measures its diff from. Recorded
+    # from `git rev-parse` here, never from a caller.
+    head = _git(["rev-parse", "HEAD"], root)
+    if head and _COMMIT_RE.match(head):
+        fields["commit_hash"] = head
     passed = _PASSED_RE.search(proc.stdout)
     if passed:
         fields["test_count"] = passed.group(1)
@@ -297,10 +615,6 @@ def mode_record(cwd: str, root: str, scope: str) -> int:
 
 def mode_check(cwd: str, root: str, scope: str) -> int:
     """Exit 0 iff a ``suite_green`` already covers this exact tree."""
-    sys.path.insert(0, _hooks_dir())
-    from _common import resolve_config_dir  # noqa: PLC0415
-    from _resolve import ensure_sahjhan  # noqa: PLC0415
-
     tree_hash = compute_tree_hash(root)
     accepted = accepted_scopes(scope)
     scope_list = ", ".join(f"'{s}'" for s in accepted)
@@ -316,44 +630,24 @@ def mode_check(cwd: str, root: str, scope: str) -> int:
         f"AND tree_hash='{tree_hash}' AND scope IN ({scope_list})"
     )
 
-    binary = ensure_sahjhan()
-    config_dir, found = resolve_config_dir(cwd)
-    # Fail closed. An unevaluable suite gate that allowed the transition would
-    # be a silent false green — exactly what this whole mechanism exists to
-    # prevent — so a broken toolchain blocks and says which part broke.
-    if binary is None or not found:
-        print(
-            "FAIL: cannot evaluate the suite gate — "
-            f"sahjhan binary={'missing' if binary is None else binary}, "
-            f"config_dir={'not found' if not found else config_dir}",
-            file=sys.stderr,
-        )
+    binary, config_dir, problem = _sahjhan_target(cwd)
+    # Fail closed, and *without* an escape line. An unevaluable suite gate that
+    # allowed the transition would be a silent false green — the thing this
+    # whole mechanism exists to prevent — so a broken toolchain blocks and says
+    # which part broke. It does not print `Run: … --record`, because with no
+    # sahjhan binary that command cannot work either; an escape that does not
+    # run is the #77 deadlock shape.
+    if binary is None or config_dir is None:
+        print(f"FAIL: cannot evaluate the suite gate — {problem}", file=sys.stderr)
         return 1
 
-    try:
-        proc = subprocess.run(
-            [binary, "--config-dir", config_dir, "query", sql, "--format", "json"],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return _block(f"cannot query the ledger: {exc}", tree_hash, accepted, scope)
-
-    if proc.returncode != 0:
-        # A ledger that has never been initialised surfaces here as an I/O
-        # error rather than a zero count. Either way there is no evidence, and
-        # either way `--record` is the thing to run.
-        return _block(
-            f"ledger query failed (exit {proc.returncode}): {proc.stderr.strip()}",
-            tree_hash, accepted, scope,
-        )
+    rows, problem = _query_ledger(binary, config_dir, cwd, sql)
+    if rows is None:
+        return _block(problem, tree_hash, accepted, scope)
 
     try:
-        rows = json.loads(proc.stdout)
         count = int(rows[0]["n"])
-    except (json.JSONDecodeError, IndexError, KeyError, TypeError, ValueError) as exc:
+    except (IndexError, KeyError, TypeError, ValueError) as exc:
         return _block(
             f"cannot read the ledger query result: {exc}", tree_hash, accepted, scope
         )
@@ -390,11 +684,24 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print the computed tree hash and exit (diagnostic)",
     )
+    group.add_argument(
+        "--print-affected",
+        action="store_true",
+        help=(
+            "print the test files --scope affected would run, one per line, "
+            "and why it would not narrow (diagnostic; empty means full suite)"
+        ),
+    )
     parser.add_argument(
         "--scope",
         choices=SCOPES,
         default="full",
-        help="which slice of the suite: 'full' runs everything (default)",
+        help=(
+            "which slice of the suite: 'full' runs everything (default); "
+            "'affected' runs the tests covering what changed since the last "
+            "full green, and widens back to 'full' whenever it cannot prove "
+            "that subset is complete"
+        ),
     )
     parser.add_argument("--cwd", default=".", help="target project directory")
     return parser
@@ -415,6 +722,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.print_tree_hash:
         print(compute_tree_hash(root))
+        return 0
+
+    if args.print_affected:
+        files, reason = select_affected(root, cwd)
+        if files is None:
+            print(f"verify_suite: would run the full suite — {reason}", file=sys.stderr)
+            return 0
+        print("\n".join(files))
         return 0
 
     if args.record:
