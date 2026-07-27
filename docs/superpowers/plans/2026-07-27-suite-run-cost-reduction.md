@@ -140,30 +140,9 @@ caller-supplied hash or result.
   closing note. Shipping the gate without the skill file that teaches
   `--record` would deadlock every fix_commit.
 
-- [ ] **T4 — P1 collapse the redundant runs**  <- RESUME HERE
-  - `skills/holtz/references/phase-fix-loop.md`: subagent step 5 -> affected
-    subset via verify_suite; orchestrator B.10 -> ledger check, not a re-run
-  - Contract tests must be updated in the SAME commit (CLAUDE.md rule)
-  - `test_subagent_contract_consistency.py` may need updating
-  - **Record AFTER the commit, not before.** The tree hash includes HEAD's oid,
-    so committing changes it even when the content is identical. Pinned by
-    `TestTreeHash::test_committing_the_same_content_changes_it`. A `--record`
-    placed before `git commit` would leave every `fix_commit` gate re-running
-    the suite — the exact cost T2 exists to remove, silently restored.
-  - Replace all three `${HOLTZ_PYTEST:-...}` gate commands in
-    `transitions.toml` with `verify_suite.py --check`. Until then the pytest
-    default lives in four places; after T4 it lives only in verify_suite.py.
-  - Then add the `tool:`-reachability check deferred below.
+- [x] **T4 + T4a** — DONE, commit `f3ea05f`, v0.141.2. See Session 4.
 
-- [ ] **T4a — ratchet: a `tool:` producer nothing invokes**
-  - H4 asks a `hook:` "is it registered in hooks.json?". The `tool:` analogue
-    is "does anything invoke it by path?" — a gate `cmd` in transitions.toml,
-    a skill file, or another hook. Today nothing invokes `verify_suite.py`
-    (T3/T4 wire it), so adding the check now would fail the build on a
-    deliberately half-wired tree. Add it in the T4 commit, where it is green
-    on arrival — the same discipline as #82's ratchet rounds.
-
-- [ ] **T5 — release**
+- [ ] **T5 — release**  <- RESUME HERE
   - `scripts/pre-release-check.sh`, changelog, release PR dev -> main
 
 ## Open questions
@@ -336,6 +315,9 @@ change the gate table). README badge 1912 → 1936.
 `verify_suite.py` — required before the `real_daemon` runs, per memory
 `trusted-callers-manifest-regen`.
 
+**Superseded by Session 4:** the closing note below says T4 is "one commit …
+green on arrival". It was, and the four bullets it lists are what shipped.
+
 **Handoff state / why T3 stopped where it did.** The mechanism is complete and
 still invoked by nothing. Wiring `fix_commit` to `--check --scope affected`
 **must land in the same commit as the `phase-fix-loop.md` change that teaches
@@ -345,3 +327,107 @@ rebuilt on purpose. So T4 is one commit: transitions.toml (all three
 `${HOLTZ_PYTEST:-...}` gates → `verify_suite.py --check`, `fix_commit` at
 `affected` and the rest at `full`), the skill file, the contract tests, and
 T4a's `tool:`-reachability ratchet — green on arrival.
+
+### Session 4 (2026-07-27)
+
+Shipped T4 + T4a in one commit (`f3ea05f`, v0.141.2).
+
+**The per-fix shape, stated plainly, because it is two runs and not one.**
+3 full runs per fix became **2 affected runs**, and each is consumed by
+something:
+
+| Step | Command | Consumer |
+|---|---|---|
+| subagent 5 | `--record --scope affected` | orchestrator step 10 |
+| orchestrator 10 | `--check --scope affected` | — (free ledger read) |
+| orchestrator 12 (post-commit) | `--record --scope affected` | `fix_commit` gate |
+
+Step 10 is the P1 saving: the orchestrator's full-suite re-validation became a
+ledger read, which is *stronger* than the re-run it replaced — it proves the
+subagent really ran the suite **and** that the tree has not drifted since,
+where a re-run only proved the second. The second `--record` exists because
+the tree hash covers HEAD's oid (D12/T2), so the commit invalidates step 10's
+evidence. Session 1's target arithmetic holds: 2 affected runs (~6 s) × 90
+fixes + one full run per boundary ≈ 40 min against ~4.7 h today.
+
+**Rejected, and the next session should raise it with the user rather than
+rediscover it: making the tree hash commit-invariant.** If the hash were pure
+content (temp-index `git add -A` + `git write-tree`, or a post-hoc
+"recompute the pre-commit hash from HEAD~1" bridge), step 12 would disappear
+and the collapse would be a true 3 → 1. Two reasons it did not ship here.
+(a) The current hash is O(changed files) — HEAD's oid covers everything that
+matches HEAD, and only the differences are digested. A content hash is
+O(repo) on **every** `--check`, i.e. on every fix_commit, which on a large
+target could cost more than the subset run it saves. (b) A green then
+transfers across a commit, which is right for content-determined tests and
+wrong for a target whose tests read git history (a conventional-commit
+linter, a "working tree is clean" assertion). The bridge form fails closed —
+a `pre-commit` hook that reformats and re-stages simply makes the hashes not
+match — but it is a second acceptance path in the predicate a `restricted`
+event gates, and that is a design call to make deliberately, not on the way
+past.
+
+**D16 (new). A `command_succeeds` gate that delegates must NAME its evidence.**
+This was not in the plan and is the substantive addition. `command_succeeds`
+is the one gate shape whose predicate is invisible to static analysis — it
+lives inside the invoked script — so wiring the four gates would have made
+`docs/ENFORCEMENT-CONTRACT.md` print `*direct check* / — / direct / n/a` for
+four rows that are now ledger-mediated, and H1 could not have asked whether
+anything can write `suite_green`. A generated contract that lies is worse than
+none, and the posture count ("N of M gate-consumed events are the agent's own
+word") stops being a measurement. So each gate carries
+`evidence = "suite_green"`. sahjhan flattens unknown gate keys into `params`
+and ignores them, which is exactly why the declaration is free to add **and**
+worthless alone — **H10** makes it a claim by falsifying it against the
+invoked script's own SQL. Same technique as H8 (`[[enforcement-name-the-fact-
+not-the-text]]`), extended across the config/Python seam. Verified to fire on
+the real config by deleting one `evidence` key.
+
+**D17 (new). #29 R9's path ban was a proxy that had gone wrong.**
+`test_no_holtz_paths_in_command_gates` banned the substring
+`enforcement/scripts/` in any `command_succeeds` cmd. Read the issue: the
+defect was gates running `mypy … skills/holtz/scripts/ hooks/` — *relative*
+paths, resolved against the **target project's** cwd, which permanently
+blocked lens rotation and convergence for every non-Holtz audit. The
+relativity is what breaks, not the substring; a `$CLAUDE_PLUGIN_ROOT`-anchored
+path is the sanctioned form and `snapshot_compare` already used it. The check
+now requires anchoring and covers **every** gate carrying a `cmd`, which also
+closed the gap that let that `snapshot_compare` gate reference
+`skills/holtz/scripts/impact_graph.py` without ever being examined — the check
+had a hole in the shape of its own filter.
+
+**D18 (new). #82's "never both shut" property is about a gate, not a
+transition.** Adding the full-suite gate to `iteration_boundary` broke
+`test_iteration_boundary_and_pattern_check_are_never_both_shut`, which asked
+"is the transition open?". That is the wrong question and would break on any
+future gate for any reason. The property is about one predicate —
+`pattern_analysis_overdue`, read with opposite expectations at two commands —
+so the test now reads per-gate verdicts out of `--json gate check`. Worth
+being explicit about why the new gate is not a new deadlock: #77/#82 deadlocks
+were states where every *printed escape* was itself gated shut. The suite
+gate's escape is `verify_suite.py --record --scope full`, an unconditional
+action that is always available.
+
+Also: the gate command is
+`python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/…"`.
+The `:?` is POSIX and load-bearing — with the variable unset, `sh` exits 127
+printing that message, which sahjhan's `annotate_failure` surfaces in the
+block reason. Without it the failure reads `python3: can't open file
+'/enforcement/scripts/verify_suite.py'`. Both forms verified by running them.
+
+**Observed green** (all exit 0 unless noted): ruff, mypy (52 files), full
+suite `1953 passed` with coverage 91.07% ≥ 80 (verify_suite.py at 89%),
+contract gate 37 commands, `scripts/lint-enforcement.sh` exit 0 (L1–L7 and
+H1–H10, 0 errors, the same 12 pre-existing warnings as T1/T2/T3),
+`docs/ENFORCEMENT-CONTRACT.md` regenerated (four gate rows moved from
+"*direct check*" to `suite_green` / `tool:…/verify_suite.py` / `tool` /
+"no — daemon refuses unauthenticated callers"; `tool` census 4 → 5). README
+badge 1936 → 1953. `scripts/hash-trusted-callers.sh` rerun after the edit to
+`verify_suite.py` — the stale manifest showed up exactly as memory
+`trusted-callers-manifest-regen` describes ("caller not authenticated" from a
+`real_daemon` test, nothing else failing). Six of the seven new lint tests
+fail against the pre-change linter, verified by stashing it.
+
+**Handoff state:** T5 (release) is all that remains. The mechanism is fully
+wired: nothing in `transitions.toml` runs pytest, and `DEFAULT_PYTEST` exists
+in exactly one place.
