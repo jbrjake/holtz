@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -148,21 +149,173 @@ class TestTreeHash:
         os.remove(os.path.join(repo, "app.py"))
         assert verify_suite.compute_tree_hash(repo) != before
 
-    def test_committing_the_same_content_changes_it(self, repo):
-        """Committing moves HEAD, and HEAD's oid is part of the hash.
+    def test_committing_the_same_content_preserves_it(self, repo):
+        """The hash names content, so `git commit` cannot move it.
 
-        This is the one place the hash is *stricter* than "same content":
-        `fix_commit` records a commit, so the tree it gates and the tree the
-        subagent proved are the same content under different HEADs. T4 has to
-        record the green after the commit, not before — this test is here so
-        that constraint is discovered by a failing test rather than by a fix
-        loop that silently re-runs the suite every time.
+        This is the property the whole one-run-per-fix collapse rests on.
+        `git commit` does not touch a single working-tree byte, so a green
+        proven before it is still true after it. While the hash included
+        HEAD's oid it was *stricter* than "same content", and the fix loop had
+        to record a second green after every commit purely to restore evidence
+        the commit had invalidated for no reason.
+
+        Sensitivity is not traded away for this — see the tests either side:
+        editing, deleting, and reverting all still move the hash. What is
+        given up is stated in the module docstring and pinned by
+        `test_amending_only_the_message_preserves_it`: a suite that asserts
+        things about git *history* rather than about content can pass a check
+        on evidence proven under a different history.
         """
         _write(repo, "app.py", "def add(a, b):\n    return a + b  # x\n")
+        _write(repo, "test_new.py", "def test_x(): pass\n")
         before = verify_suite.compute_tree_hash(repo)
         _git(repo, "add", "-A")
         _git(repo, "commit", "-qm", "same content, new HEAD")
+        assert verify_suite.compute_tree_hash(repo) == before
+
+    def test_amending_only_the_message_preserves_it(self, repo):
+        """The accepted bound, pinned so it is a decision and not a surprise.
+
+        Content is all the hash sees, so rewording a commit leaves a green
+        valid. For a target whose suite lints commit messages that is a false
+        green. It is accepted deliberately: the alternative — the HEAD-oid
+        hash — costs a whole extra suite run on every fix to defend against a
+        case where the *test suite reads git history*, which is rare, while
+        the cost it imposes is universal.
+        """
+        before = verify_suite.compute_tree_hash(repo)
+        _git(repo, "commit", "--amend", "-qm", "a completely different message")
+        assert verify_suite.compute_tree_hash(repo) == before
+
+    def test_staging_without_committing_does_not_move_it(self, repo):
+        """`git add` is not a content change, so it must not invalidate a green.
+
+        The fix loop stages before it commits. If staging moved the hash, the
+        commit step would need its own re-record all over again — the exact
+        cost this design removes, reintroduced one step earlier.
+        """
+        _write(repo, "app.py", "def add(a, b):\n    return a + b  # staged\n")
+        before = verify_suite.compute_tree_hash(repo)
+        _git(repo, "add", "-A")
+        assert verify_suite.compute_tree_hash(repo) == before
+
+    def test_hashing_writes_nothing_into_the_repo(self, repo):
+        """`--check` is a predicate; it must not mutate the tree it inspects.
+
+        Computing a content hash means asking git to hash file contents, and
+        `git add` writes those blobs into the object store by default. A gate
+        that grew the target's `.git/objects` on every check would be leaving
+        unreferenced garbage in a repo it was only supposed to read, so the
+        object directory is redirected at a temp dir with the real store as an
+        alternate: dedup still works, the writes are discarded.
+        """
+        _write(repo, "brand_new_content.py", "x = 'never seen before'\n")
+        objects = os.path.join(repo, ".git", "objects")
+
+        def _snapshot():
+            return {
+                os.path.join(dirpath, name)
+                for dirpath, _, names in os.walk(objects)
+                for name in names
+            }
+
+        before = _snapshot()
+        verify_suite.compute_tree_hash(repo)
+        assert _snapshot() == before
+
+        # And the real index is untouched — the hash uses a copy.
+        status = _git(repo, "status", "--porcelain").stdout
+        assert "?? brand_new_content.py" in status, status
+
+    def test_a_same_second_same_size_edit_is_not_missed(self, repo):
+        """The stat cache must never be trusted for a racily-clean entry.
+
+        Hashing content means asking git, and git answers from the index's
+        stat cache: same size and same mtime is taken as "unchanged" without
+        reading a byte. Since git records whole seconds, a file rewritten in
+        the same second it was staged is indistinguishable that way — the
+        classic racy-git case. Git's own guard is to distrust any entry whose
+        mtime is not older than the *index file's* mtime and re-read it.
+
+        A copy of the index that does not carry the original's mtime silently
+        turns that guard off: every entry then looks safely older than the
+        copy, so a same-second same-size edit is read off the stale cached oid
+        and the hash names a tree that no longer exists — a green for code
+        nobody ran. Reproduced 5 times in 12 before the fix, which is why this
+        test forces the condition instead of racing for it.
+
+        `core.trustctime = false` is what makes it deterministic rather than
+        timing-dependent: with ctime in play the rewrite is caught by the
+        changed ctime, which masks the mtime question this test is about.
+        """
+        _git(repo, "config", "core.trustctime", "false")
+        before = verify_suite.compute_tree_hash(repo)
+
+        debug = _git(repo, "ls-files", "--debug", "app.py").stdout
+        cached = int(re.search(r"mtime:\s*(\d+)", debug).group(1))
+        original = "def add(a, b):\n    return a + b\n"
+        edited = "def add(a, b):\n    return b + a\n"
+        assert len(edited) == len(original), "the point is a same-size edit"
+        _write(repo, "app.py", edited)
+        # Entry mtime == what the index cached, and the index no newer than the
+        # entry — precisely the state git must refuse to take on trust.
+        os.utime(os.path.join(repo, "app.py"), (cached, cached))
+        os.utime(os.path.join(repo, ".git", "index"), (cached, cached))
+
         assert verify_suite.compute_tree_hash(repo) != before
+
+    def test_a_conflicted_tree_hashes_its_conflict_markers(self, repo):
+        """A half-merged tree is a real content state, and hashes as one.
+
+        Worth pinning because the intuition points the other way: `git
+        write-tree` refuses an index with unmerged entries, so this looks like
+        it should fail closed. It does not, because `git add -A` resolves the
+        entries against the working tree first — and that is the honest
+        answer. The files on disk contain conflict markers, which is content
+        the suite will fail on, so it deserves a hash of its own rather than
+        an error.
+        """
+        _git(repo, "checkout", "-qb", "other")
+        _write(repo, "app.py", "def add(a, b):\n    return a * b\n")
+        _git(repo, "commit", "-qam", "other side")
+        _git(repo, "checkout", "-q", "-")
+        _write(repo, "app.py", "def add(a, b):\n    return a - b\n")
+        _git(repo, "commit", "-qam", "this side")
+        merge = subprocess.run(
+            ["git", "merge", "other"], cwd=repo, capture_output=True, text=True
+        )
+        assert merge.returncode != 0, "expected a conflict to set up this test"
+
+        conflicted = verify_suite.compute_tree_hash(repo)
+        assert verify_suite._TREE_HASH_RE.match(conflicted)
+        _git(repo, "checkout", "--theirs", "--", "app.py")
+        assert verify_suite.compute_tree_hash(repo) != conflicted
+
+    def test_an_unusable_index_fails_closed(self, repo):
+        """No honest hash exists, so raise rather than invent one.
+
+        A fabricated digest is worse than an error in both directions: it
+        either collides with a green that never covered this tree, or it
+        blocks with a reason nobody can act on.
+        """
+        with open(os.path.join(repo, ".git", "index"), "wb") as fh:
+            fh.write(b"not an index at all")
+        with pytest.raises(verify_suite.TreeHashError):
+            verify_suite.compute_tree_hash(repo)
+
+    def test_an_unusable_index_blocks_the_cli_rather_than_crashing(self, repo):
+        """And the CLI turns that into a block, not a traceback.
+
+        A gate that dies with a stack trace still exits non-zero, so it fails
+        closed either way — but the operator gets no usable statement of what
+        broke, and `command_succeeds` surfaces the reason in the block.
+        """
+        with open(os.path.join(repo, ".git", "index"), "wb") as fh:
+            fh.write(b"not an index at all")
+        result = _run_verify(repo, "--check")
+        assert result.returncode == 1
+        assert "cannot hash the working tree" in result.stderr
+        assert "Traceback" not in result.stderr
 
     @pytest.mark.parametrize(
         "rel",

@@ -145,24 +145,62 @@ def test_orchestrator_reads_the_evidence_instead_of_re_running() -> None:
     )
 
 
-def test_the_orchestrator_records_the_green_after_committing() -> None:
-    """Order is load-bearing: the tree hash covers HEAD's oid.
+def test_the_commit_needs_no_second_green() -> None:
+    """The tree hash names content, so `git commit` cannot invalidate a green.
 
-    Record before `git commit` and the gate that runs after it computes a
-    different hash, finds no green, and blocks — leaving every fix_commit to
-    run the suite again, which is exactly the cost this mechanism exists to
-    remove, silently restored. Pinned by
-    TestTreeHash::test_committing_the_same_content_changes_it on the other
+    While the hash included HEAD's oid the loop had to record twice per fix —
+    once for the orchestrator to read, once more after the commit purely to
+    restore evidence the commit had invalidated without changing a byte. That
+    second record is the last of the three original suite runs, and its
+    absence here is what makes the collapse a real 3 -> 1. Pinned by
+    TestTreeHash::test_committing_the_same_content_preserves_it on the other
     side of the seam.
     """
     lines = _fix_loop_lines()
     commit = [i for i, line in enumerate(lines) if "`git commit` with finding ID" in line]
     assert len(commit) == 1, f"expected one commit step, found {len(commit)}"
-    records = [i for i, line in enumerate(lines) if "verify_suite.py --record" in line]
-    assert any(i > commit[0] for i in records), (
-        "the orchestrator must re-record the green *after* the commit — the "
-        "fix_commit gate hashes the committed tree, not the one the subagent "
-        "proved"
+    late = [
+        line
+        for i, line in enumerate(lines)
+        if i > commit[0] and "verify_suite.py --record --scope affected" in line
+    ]
+    assert not late, (
+        "a per-fix green must not be re-recorded after the commit — the hash is "
+        f"content-addressed, so step 10's evidence still holds. Found: {late}"
+    )
+
+
+def test_the_subagent_records_the_green_last() -> None:
+    """Nothing may change the tree between the record and the orchestrator's read.
+
+    The subagent writes a hardening test (`hardening_complete`) as its final
+    piece of work. Record the green before that write and the hardening test
+    lands *after* the tree it was proven on, so the orchestrator's `--check`
+    recomputes a hash no green names, and the fix loop rejects a fix that is
+    perfectly good. That is not hypothetical: it shipped in v0.141.2, where
+    the record sat at subagent step 5 and the hardening write at step 8.
+
+    So the ordering rule is stronger than "before the commit": the record must
+    be the subagent's *last* step.
+    """
+    lines = _fix_loop_lines()
+    record = [i for i, line in enumerate(lines) if "verify_suite.py --record --scope affected" in line]
+    assert len(record) == 1, f"expected one per-fix record, found {len(record)}"
+    # `event hardening_complete`, not the bare event name: the orchestrator's
+    # step 10 also names `hardening_complete` when listing what it reads out of
+    # the ledger, and that mention is not a step that writes to the tree.
+    hardening = [i for i, line in enumerate(lines) if "event hardening_complete" in line]
+    assert len(hardening) == 1, (
+        f"expected one hardening_complete recording step, found {len(hardening)}"
+    )
+    assert record[0] > hardening[0], (
+        "the suite green must be recorded after the hardening test is written "
+        "and its event recorded — otherwise the hardening write invalidates "
+        "the very green the orchestrator is about to read"
+    )
+    validate = [i for i, line in enumerate(lines) if "verify_suite.py --check --scope affected" in line]
+    assert validate and record[0] < min(validate), (
+        "and still before the orchestrator reads it"
     )
 
 

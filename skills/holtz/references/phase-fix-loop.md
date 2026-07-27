@@ -46,11 +46,13 @@ Launch **one** Agent subagent for the finding. Give it: the finding (ID, descrip
 2. Write a failing test that reproduces the finding. Run it. Confirm it FAILS. (Files under `tests/**` are exempt from the pre-edit gate, so this write is allowed.)
 3. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event test_failed_before_fix --field finding_id=BH-NNN --field test_name=...`
 4. Write the fix. (The pre-edit hook now allows the source edit because step 3 is on the ledger.) Run the failing test. Confirm it PASSES.
-5. `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record --scope affected` — runs the tests covering your change (widens to full if it can't prove the subset), records `suite_green` for this tree. Red records nothing.
-6. Run blast radius: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json blast_radius <node> --depth 2`
-7. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field finding_id=BH-NNN --field affected_count=N`
-8. Write ≥1 edge-case hardening test. Run it. Confirm it passes.
-9. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event hardening_complete --field finding_id=BH-NNN --field edge_cases_tested=N`
+5. Run blast radius: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json blast_radius <node> --depth 2`
+6. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field finding_id=BH-NNN --field affected_count=N`
+7. Write ≥1 edge-case hardening test. Run it. Confirm it passes.
+8. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event hardening_complete --field finding_id=BH-NNN --field edge_cases_tested=N`
+9. **Last, once nothing else will touch the tree:** `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record --scope affected` — runs the tests covering your change (widens to full if it can't prove the subset), records `suite_green` for this tree. Red records nothing.
+
+   Ordering is load-bearing: the green is bound to a hash of the working tree, so **any** later edit — the hardening test above especially — invalidates it, and the orchestrator's step 10 would then reject a fix that is perfectly good. Record after the last write, not before.
 
 The subagent returns a **compact result**, not artifacts to apply: root cause + confidence (`bug/*` needs HIGH confidence before any fix), the blast-radius node, the test name(s), and the suite pass-count. The edits and the ledger events are already on disk — that is the whole point. The subagent does **NOT** `git commit` and does **NOT** run any `transition`; those are yours.
 
@@ -60,9 +62,8 @@ If the subagent cannot reach HIGH confidence, it records nothing, leaves the tre
 
 10. **Validate — read the evidence, don't redo it.** `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --check --scope affected` exits 0 only if a `suite_green` names *this exact tree*, and the ledger must show this finding's `test_failed_before_fix` and `hardening_complete` (`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" status`). If either fails, the fix is not real — send it back or defer; do not commit.
 11. `git commit` with finding ID in body. Format: `fix(<scope>): <desc>`
-12. `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record --scope affected` — **after** the commit: the tree hash covers HEAD, so committing invalidates step 10's evidence. This is what the `fix_commit` gate reads.
-13. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit BH-NNN` — the item id is **positional** (`item_id=BH-NNN` also works); the CLI rejects `--item-id`. **This transition auto-records the `finding_resolved` event for BH-NNN** (id from the arg, commit hash from `HEAD`, run context inherited from the ledger). That resolution event — not the transition itself — is what marks the finding resolved for STATUS.md / PUNCHLIST.md "Resolved" counts and every downstream gate (`pattern_check`, `set complete perspective`, `converge`). You do **not** record `finding_resolved` by hand; one command does both. (Emitted by sahjhan ≥ 0.18.0; the pin is enforced by `scripts/check_sahjhan_pin.py`.)
-14. Move to next item.
+12. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit BH-NNN` — the item id is **positional** (`item_id=BH-NNN` also works); the CLI rejects `--item-id`. Its suite gate re-reads the same `suite_green` step 10 did: the tree hash names content, and `git commit` does not change content, so no second run is needed. **This transition auto-records the `finding_resolved` event for BH-NNN** (id from the arg, commit hash from `HEAD`, run context inherited from the ledger). That resolution event — not the transition itself — is what marks the finding resolved for STATUS.md / PUNCHLIST.md "Resolved" counts and every downstream gate (`pattern_check`, `set complete perspective`, `converge`). You do **not** record `finding_resolved` by hand; one command does both. (Emitted by sahjhan ≥ 0.18.0; the pin is enforced by `scripts/check_sahjhan_pin.py`.)
+13. Move to next item.
 
 Dispatch subagents **one finding at a time** — the ledger is a single hash chain and commits land on one branch, so concurrent fix subagents would race on both. Because the subagent is gated by the **same** TDD pre-edit hook you are, it cannot write the fix (step 4) before recording `test_failed_before_fix` (step 3), and its `suite_green` is bound to a tree hash rather than to its word — that pair is what lets you commit on a ledger read instead of a second suite run.
 

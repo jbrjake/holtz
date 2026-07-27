@@ -74,8 +74,10 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
+import tempfile
 
 # The suite command, in one place. `-x --ff` is the fail-fast pair T1 settled
 # on: `--lf`/`--last-failed` is banned because it runs *only* the previously
@@ -160,56 +162,125 @@ def repo_root(cwd: str) -> str | None:
     return _git(["rev-parse", "--show-toplevel"], cwd)
 
 
-def _file_digest(root: str, rel: str) -> str:
-    """SHA-256 of one file's bytes, or ``deleted`` when it is gone.
+class TreeHashError(RuntimeError):
+    """The working tree has no single content, so no honest hash exists.
 
-    A deleted-but-tracked file is a real tree difference, so it must move the
-    hash — dropping it would let "delete the failing test" reuse a green.
+    Raised rather than papered over with a fallback digest. A made-up hash
+    either matches a green that never covered this tree — a false green — or
+    blocks with a reason nobody can act on. Both callers turn this into a
+    fail-closed message naming the git error.
     """
-    path = os.path.join(root, rel)
-    digest = hashlib.sha256()
+
+
+def _git_or_raise(args: list[str], cwd: str, env: dict[str, str] | None = None) -> str:
+    """Run a git command, raising ``TreeHashError`` on any failure."""
     try:
-        with open(path, "rb") as fh:
-            for chunk in iter(lambda: fh.read(65536), b""):
-                digest.update(chunk)
-    except OSError:
-        return "deleted"
-    return digest.hexdigest()
+        proc = subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise TreeHashError(f"git {' '.join(args)}: {exc}") from exc
+    if proc.returncode != 0:
+        raise TreeHashError(
+            f"git {' '.join(args)} exited {proc.returncode}: {proc.stderr.strip()}"
+        )
+    return proc.stdout.strip()
+
+
+def _exclude_pathspecs() -> list[str]:
+    """``:(exclude)`` pathspecs for the directories the hash must not see."""
+    return [f":(exclude){p.rstrip('/')}" for p in EXCLUDED_PREFIXES]
 
 
 def compute_tree_hash(root: str) -> str:
-    """A stable 64-hex digest of the working tree's testable content.
+    """A stable 64-hex digest of the working tree's testable *content*.
 
-    HEAD's oid covers every tracked file that matches HEAD; the per-file
-    digests cover exactly the ones that do not — tracked-and-modified plus
-    untracked-and-not-ignored. Ignored paths (``.venv``, ``__pycache__``,
-    build output) are excluded by ``--exclude-standard``, which is what keeps
-    a byte-compile from invalidating a green suite.
+    Content and nothing else: the digest is taken over the git tree object
+    that the current working tree would produce, so it is invariant under
+    every operation that leaves file contents alone — `git add`, `git commit`,
+    `git commit --amend`. That invariance is the point. `git commit` does not
+    touch a working-tree byte, so a suite proven green before it is still
+    green after it, and the fix loop needs one recorded run per fix instead of
+    one on each side of the commit.
+
+    Mechanically: copy the real index (which carries git's stat cache, so only
+    files whose stat data changed are re-hashed — the reason this stays
+    O(changed) rather than O(repo)), stage everything against the copy, drop
+    the excluded directories, and ask git for the tree oid. Ignored paths are
+    skipped by `git add`'s own gitignore handling, which is what keeps a
+    byte-compile or a venv write from invalidating a green suite.
+
+    Two side effects are deliberately suppressed, because `--check` is a
+    predicate that runs against someone else's repository:
+
+    * the **index** is a throwaway copy, so staging state is untouched;
+    * the **object directory** is redirected at a temp dir with the real store
+      as an alternate, so blobs git would otherwise write land somewhere that
+      is deleted on the way out. Dedup still works — existing objects are
+      found through the alternate and not rewritten.
     """
-    head = _git(["rev-parse", "HEAD"], root)
-    parts = [f"head:{head or ''}"]
+    index_path = _git_or_raise(["rev-parse", "--git-path", "index"], root)
+    if not os.path.isabs(index_path):
+        index_path = os.path.join(root, index_path)
+    objects_path = _git_or_raise(["rev-parse", "--git-path", "objects"], root)
+    if not os.path.isabs(objects_path):
+        objects_path = os.path.join(root, objects_path)
 
-    changed: set[str] = set()
-    # With no commits HEAD names nothing, so every tracked file has to be
-    # digested individually rather than covered by the oid.
-    diff = (
-        _git(["diff", "--name-only", "--no-renames", "HEAD"], root)
-        if head
-        else _git(["ls-files"], root)
-    )
-    if diff:
-        changed.update(diff.splitlines())
+    scratch = tempfile.mkdtemp(prefix="holtz-tree-hash-")
+    try:
+        scratch_index = os.path.join(scratch, "index")
+        if os.path.exists(index_path):
+            # A fresh index would re-hash every file in the repo; the copy
+            # keeps the stat cache, so unchanged files are taken on their
+            # recorded oid. On a repo with no index yet there is nothing to
+            # copy and nothing to save.
+            #
+            # `copy2`, not `copyfile`, and the difference is a false green.
+            # Git decides an index entry is trustworthy by comparing the
+            # file's stat data against the entry's — but a file written in the
+            # same clock second as the index cannot be judged that way, since
+            # git stores whole seconds. Git's own guard is to distrust any
+            # entry whose mtime is not older than *the index file's own
+            # mtime*, and re-read the content. `copyfile` stamps the copy with
+            # the current time, which makes every entry look safely older than
+            # the index and silently disables that guard: a same-second,
+            # same-size edit is then read off the stale cached oid, and the
+            # hash names a tree that no longer exists. `copy2` preserves the
+            # timestamp, so the copy inherits the guard along with the cache.
+            shutil.copy2(index_path, scratch_index)
+        scratch_objects = os.path.join(scratch, "objects")
+        os.makedirs(scratch_objects, exist_ok=True)
 
-    untracked = _git(["ls-files", "--others", "--exclude-standard"], root)
-    if untracked:
-        changed.update(untracked.splitlines())
+        env = dict(os.environ)
+        env["GIT_INDEX_FILE"] = scratch_index
+        env["GIT_OBJECT_DIRECTORY"] = scratch_objects
+        env["GIT_ALTERNATE_OBJECT_DIRECTORIES"] = objects_path
 
-    for rel in sorted(changed):
-        if not rel or rel.startswith(EXCLUDED_PREFIXES):
-            continue
-        parts.append(f"{rel}:{_file_digest(root, rel)}")
+        _git_or_raise(["add", "-A", "--", *_exclude_pathspecs()], root, env)
+        # `add` never introduces an excluded path, but one may already be in
+        # the copied index from a previous commit — STATUS.md is committed by
+        # the fix loop — and a committed change there would move the tree oid.
+        for prefix in EXCLUDED_PREFIXES:
+            _git_or_raise(
+                ["rm", "--cached", "-r", "-q", "--ignore-unmatch", prefix.rstrip("/")],
+                root,
+                env,
+            )
+        tree_oid = _git_or_raise(["write-tree"], root, env)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
 
-    return hashlib.sha256("\n".join(parts).encode()).hexdigest()
+    if not tree_oid:
+        raise TreeHashError("git write-tree produced no tree oid")
+    # Digested rather than used raw so the width is fixed at 64 hex whatever
+    # the repository's object format is — `suite_green.tree_hash` declares
+    # that shape in events.toml, and a sha1 repo's 40-hex oid would not match.
+    return hashlib.sha256(f"tree:{tree_oid}".encode()).hexdigest()
 
 
 # ── Shared helpers ───────────────────────────────────────────────────────────
@@ -721,10 +792,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    if args.print_tree_hash:
-        print(compute_tree_hash(root))
-        return 0
-
     if args.print_affected:
         files, reason = select_affected(root, cwd)
         if files is None:
@@ -733,9 +800,26 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(files))
         return 0
 
-    if args.record:
-        return mode_record(cwd, root, args.scope)
-    return mode_check(cwd, root, args.scope)
+    # Every remaining mode hashes the tree first, and a tree with no single
+    # content has no honest hash. Fail closed here rather than in three places,
+    # and *without* an escape line: `--record` would hit the identical error, so
+    # printing it as the next step would be the #77 shape — a block whose only
+    # stated remedy cannot run. The remedy is to resolve the conflict.
+    try:
+        if args.print_tree_hash:
+            print(compute_tree_hash(root))
+            return 0
+        if args.record:
+            return mode_record(cwd, root, args.scope)
+        return mode_check(cwd, root, args.scope)
+    except TreeHashError as exc:
+        print(
+            f"FAIL: cannot hash the working tree — {exc}\n"
+            "  A tree with unmerged paths has no single content to prove a "
+            "suite against. Resolve the conflict, then run this again.",
+            file=sys.stderr,
+        )
+        return 1
 
 
 if __name__ == "__main__":
