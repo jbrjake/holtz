@@ -84,10 +84,11 @@ import sys
 # it is a pytest-cov option, and on a target without that plugin pytest exits 4
 # on the unrecognized argument, breaking every such target.
 #
-# `enforcement/transitions.toml` currently carries three copies of this string.
-# That duplication is transient: T4 replaces those gate commands with
-# `verify_suite.py --check`, at which point this is the only copy in the tree.
-# Do not add a fourth.
+# This is the only copy in the tree: every suite gate in
+# `enforcement/transitions.toml` delegates to `--check`, which reads the ledger
+# rather than running pytest. Do not add a second — a gate that invokes pytest
+# itself is both a duplicate default and a suite run this design exists to
+# remove (asserted by test_suite_gates_delegate_to_verify_suite).
 DEFAULT_PYTEST = "python3 -m pytest -x --ff --tb=short -q"
 
 # `suite_green` is spelled out as a string literal at the write site and in the

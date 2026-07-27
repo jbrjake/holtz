@@ -493,12 +493,22 @@ class TestToolProducers:
         id = "tool:enforcement/scripts/verify_suite.py"
         """
     WRITER = {"verify_suite.py": 'record_authed_event("suite_green", f, cwd)\n'}
+    # What replaces hooks.json for a tool: a gate command that names the path.
+    GATE = """
+        [[transitions]]
+        from = "fix_loop"
+        to = "fix_loop"
+        command = "fix_commit"
+        gates = [
+            { type = "command_succeeds", cmd = "python3 $CLAUDE_PLUGIN_ROOT/enforcement/scripts/verify_suite.py --check" },
+        ]
+        """
 
     def test_discovered_as_a_tool_not_a_hook(self, tmp_path: Path) -> None:
         """The producer kind follows the directory, and H2 accepts it."""
         tree = build_tree(
             tmp_path, events=self.EVENTS, tool_scripts=self.WRITER,
-            trusted=["verify_suite.py"],
+            transitions=self.GATE, trusted=["verify_suite.py"],
         )
         writers = el.build_model(tree).writers["suite_green"]
         assert [w.producer_id for w in writers] == [
@@ -510,6 +520,42 @@ class TestToolProducers:
         """Nothing in hooks.json, and that is correct for a gate helper."""
         tree = build_tree(
             tmp_path, events=self.EVENTS, tool_scripts=self.WRITER,
+            transitions=self.GATE, trusted=["verify_suite.py"],
+        )
+        assert findings_for(tree, "H4") == []
+
+    def test_a_tool_nothing_invokes_is_flagged(self, tmp_path: Path) -> None:
+        """The `tool:` analogue of the registration question.
+
+        A hook that is absent from hooks.json never runs; a tool that no gate
+        command, skill command, hook message, or registration names never runs
+        either. Both leave an event with a declared producer and no live write
+        path — H1's failure mode arriving through a door H1 cannot see, since
+        from H1's side the declaration looks like a writer.
+        """
+        tree = build_tree(
+            tmp_path, events=self.EVENTS, tool_scripts=self.WRITER,
+            trusted=["verify_suite.py"],
+        )
+        messages = [f.message for f in findings_for(tree, "H4")]
+        assert any("invoked by nothing" in m for m in messages), messages
+
+    def test_a_skill_file_command_is_invocation_enough(
+        self, tmp_path: Path
+    ) -> None:
+        """A tool need not be reached by a gate — being *taught* counts.
+
+        `--record` is run by the agent, not by any gate, and it is the mode
+        that actually writes the event. Requiring a gate `cmd` would report the
+        write path that matters as unreachable.
+        """
+        tree = build_tree(
+            tmp_path, events=self.EVENTS, tool_scripts=self.WRITER,
+            skills={
+                "holtz/references/phase-fix-loop.md":
+                    "Run `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/"
+                    "verify_suite.py --record` after the commit.\n"
+            },
             trusted=["verify_suite.py"],
         )
         assert findings_for(tree, "H4") == []
@@ -522,7 +568,10 @@ class TestToolProducers:
         Skipping the pin is the stale-manifest class: the daemon refuses the
         caller, the write is swallowed, and the gate it feeds fails open.
         """
-        tree = build_tree(tmp_path, events=self.EVENTS, tool_scripts=self.WRITER)
+        tree = build_tree(
+            tmp_path, events=self.EVENTS, tool_scripts=self.WRITER,
+            transitions=self.GATE,
+        )
         messages = [f.message for f in findings_for(tree, "H4")]
         assert any("hash-pinned" in m for m in messages), messages
 
@@ -539,6 +588,7 @@ class TestToolProducers:
             tmp_path,
             events=self.EVENTS,
             tool_scripts={"verify_suite.py": "# writes nothing\n"},
+            transitions=self.GATE,
             trusted=["verify_suite.py"],
         )
         messages = [f.message for f in findings_for(tree, "H2")]
@@ -1052,6 +1102,109 @@ class TestH9TransitionStateDecoupling:
             """,
         )
         assert findings_for(tree, "H9") == []
+
+
+class TestH10DelegatedGateEvidence:
+    """A gate that shells out to a tool must name the event that tool reads.
+
+    ``command_succeeds`` is the one gate shape whose predicate is invisible
+    here: it lives inside the invoked script. So a gate whose real evidence is
+    a ledger event reads from config as a direct check — H1 cannot ask whether
+    anything can write that event, and the generated contract prints "*direct
+    check* / — / direct / n/a" for a row that is ledger-mediated, which turns
+    the posture count into a guess.
+    """
+
+    EVENTS = """
+        [events.suite_green]
+        description = "Suite passed on a named tree"
+        restricted = true
+        fields = []
+
+        [[events.suite_green.producers]]
+        id = "tool:enforcement/scripts/verify_suite.py"
+        """
+    # The reader whose SQL the declaration is checked against.
+    TOOL = {
+        "verify_suite.py": (
+            'record_authed_event("suite_green", f, cwd)\n'
+            'SQL = "SELECT count(*) FROM events WHERE type=\'suite_green\'"\n'
+        )
+    }
+
+    def _tree(self, tmp_path: Path, gate: str) -> el.Tree:
+        return build_tree(
+            tmp_path,
+            events=self.EVENTS,
+            tool_scripts=self.TOOL,
+            trusted=["verify_suite.py"],
+            transitions=f"""
+            [[transitions]]
+            from = "fix_loop"
+            to = "fix_loop"
+            command = "fix_commit"
+            gates = [{gate}]
+            """,
+        )
+
+    _CMD = "python3 $CLAUDE_PLUGIN_ROOT/enforcement/scripts/verify_suite.py --check"
+
+    def test_a_named_evidence_event_the_tool_reads_is_clean(
+        self, tmp_path: Path
+    ) -> None:
+        tree = self._tree(
+            tmp_path,
+            f'{{ type = "command_succeeds", cmd = "{self._CMD}", '
+            'evidence = "suite_green" }',
+        )
+        assert findings_for(tree, "H10") == []
+
+    def test_an_unnamed_delegation_is_flagged(self, tmp_path: Path) -> None:
+        """The shape T4 would have shipped without this check."""
+        tree = self._tree(
+            tmp_path, f'{{ type = "command_succeeds", cmd = "{self._CMD}" }}'
+        )
+        messages = [f.message for f in findings_for(tree, "H10")]
+        assert any("names no evidence" in m for m in messages), messages
+
+    def test_naming_an_event_the_tool_does_not_read_is_flagged(
+        self, tmp_path: Path
+    ) -> None:
+        """Otherwise the declaration is decoration that drifts silently.
+
+        This is the half that makes ``evidence`` worth having: sahjhan
+        flattens unknown gate keys into ``params`` and ignores them, so
+        nothing at runtime would ever notice the name going stale.
+        """
+        tree = self._tree(
+            tmp_path,
+            f'{{ type = "command_succeeds", cmd = "{self._CMD}", '
+            'evidence = "context_reset" }',
+        )
+        messages = [f.message for f in findings_for(tree, "H10")]
+        assert any("that script's SQL reads" in m for m in messages), messages
+
+    def test_evidence_on_a_gate_that_runs_nothing_is_flagged(
+        self, tmp_path: Path
+    ) -> None:
+        """A gate with its own `event`/`sql` already says what it consumes."""
+        tree = self._tree(
+            tmp_path,
+            '{ type = "ledger_has_event", event = "blast_radius", '
+            'evidence = "suite_green" }',
+        )
+        messages = [f.message for f in findings_for(tree, "H10")]
+        assert any("runs no command" in m for m in messages), messages
+
+    def test_a_gate_command_that_is_not_a_tool_is_left_alone(
+        self, tmp_path: Path
+    ) -> None:
+        """`git log | grep` decides its fact directly; there is no event."""
+        tree = self._tree(
+            tmp_path,
+            '{ type = "command_succeeds", cmd = "git log -1 | grep -q x" }',
+        )
+        assert findings_for(tree, "H10") == []
 
 
 # ── Discovery soundness ──────────────────────────────────────────────────────

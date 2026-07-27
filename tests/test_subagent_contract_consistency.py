@@ -107,6 +107,79 @@ def test_per_item_procedure_couples_fix_commit_to_resolution() -> None:
     )
 
 
+def _fix_loop_lines() -> list[str]:
+    return (
+        (SKILL_DIR / "references" / "phase-fix-loop.md")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    )
+
+
+def test_subagent_proves_the_suite_instead_of_asserting_it() -> None:
+    """The subagent's suite step must produce evidence, not a claim.
+
+    It used to read "Run full suite. Confirm all pass." — a report the
+    orchestrator could only take on faith, which is why the orchestrator ran
+    the suite again and the gate ran it a third time. `--record` binds the
+    result to a hash of the working tree, so the next two steps can read it.
+    """
+    text = "\n".join(_fix_loop_lines())
+    assert "verify_suite.py --record --scope affected" in text, (
+        "the fix subagent must record a suite_green, not report a pass-count"
+    )
+    assert "Run full suite. Confirm all pass." not in text, (
+        "retired: an unevidenced suite claim forces the orchestrator to re-run"
+    )
+
+
+def test_orchestrator_reads_the_evidence_instead_of_re_running() -> None:
+    """B.10 validates by ledger read. Re-running is the cost T4 removed."""
+    text = "\n".join(_fix_loop_lines())
+    assert "verify_suite.py --check --scope affected" in text, (
+        "the orchestrator must validate the subagent's green by checking the "
+        "ledger for this tree"
+    )
+    assert "re-run the full suite" not in text.lower(), (
+        "retired: the orchestrator's re-run and the gate's run execute on a "
+        "byte-identical tree, so one of them is pure waste"
+    )
+
+
+def test_the_orchestrator_records_the_green_after_committing() -> None:
+    """Order is load-bearing: the tree hash covers HEAD's oid.
+
+    Record before `git commit` and the gate that runs after it computes a
+    different hash, finds no green, and blocks — leaving every fix_commit to
+    run the suite again, which is exactly the cost this mechanism exists to
+    remove, silently restored. Pinned by
+    TestTreeHash::test_committing_the_same_content_changes_it on the other
+    side of the seam.
+    """
+    lines = _fix_loop_lines()
+    commit = [i for i, line in enumerate(lines) if "`git commit` with finding ID" in line]
+    assert len(commit) == 1, f"expected one commit step, found {len(commit)}"
+    records = [i for i, line in enumerate(lines) if "verify_suite.py --record" in line]
+    assert any(i > commit[0] for i in records), (
+        "the orchestrator must re-record the green *after* the commit — the "
+        "fix_commit gate hashes the committed tree, not the one the subagent "
+        "proved"
+    )
+
+
+def test_the_full_scope_transitions_are_taught() -> None:
+    """`affected` is only sound because something periodically runs everything.
+
+    The three transitions whose gates demand `--scope full` must be named
+    together with the command that satisfies them. A skill file that teaches
+    the narrowing but not the re-basing leaves the agent blocked at the first
+    /clear with no instruction that clears it.
+    """
+    text = "\n".join(_fix_loop_lines())
+    assert "verify_suite.py --record --scope full" in text
+    for command in ("iteration_boundary", "set complete perspective", "converge"):
+        assert command in text, f"{command} needs a full green; say so"
+
+
 def test_step_10_cross_references_resolution_event() -> None:
     """step-10-fix-loop.md's triage paths end at 'Commit'; it must point at the
     resolution event so a reader of that file alone doesn't think commit is the

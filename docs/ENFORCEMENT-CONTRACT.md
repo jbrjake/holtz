@@ -164,7 +164,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
 | commit must reference the punchlist item | *direct check* | — | `direct` | n/a |
-| test suite must pass after fix | *direct check* | — | `direct` | n/a |
+| test suite must pass after fix | `suite_green` | `tool:enforcement/scripts/verify_suite.py` | `tool` | no — daemon refuses unauthenticated callers |
 | blast radius must be checked after each fix | `blast_radius` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | edge cases must be hardened after each fix | `hardening_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | circuit breaker: max 15 fixes per iteration (scoped since the last iteration_boundary /clear, so the cap resets each context reset instead of capping the whole run) | `state_transition` | `engine:sahjhan` | `engine` | no — written by the engine, only by passing the gate |
@@ -203,6 +203,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| the full suite must pass on this tree before a context reset — this is what re-bases the affected scope | `suite_green` | `tool:enforcement/scripts/verify_suite.py` | `tool` | no — daemon refuses unauthenticated callers |
 
 ### `resume` — awaiting_clear → fix_loop
 
@@ -243,7 +244,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
 | two clean iterations required for stability | `iteration_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | prevent rapid-fire gaming of iteration count | `iteration_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| tests must pass | *direct check* | — | `direct` | n/a |
+| tests must pass | `suite_green` | `tool:enforcement/scripts/verify_suite.py` | `tool` | no — daemon refuses unauthenticated callers |
 | no lint violations | *direct check* | — | `direct` | n/a |
 | no unresolved protocol violations | *direct check* | — | `direct` | n/a |
 | lens quiz must be passed | `quiz_answered` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
@@ -271,7 +272,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
 | all lenses must be complete | `set_member_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| tests must pass | *direct check* | — | `direct` | n/a |
+| tests must pass | `suite_green` | `tool:enforcement/scripts/verify_suite.py` | `tool` | no — daemon refuses unauthenticated callers |
 | no lint violations | *direct check* | — | `direct` | n/a |
 | all findings must be resolved or deferred | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |

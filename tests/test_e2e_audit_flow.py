@@ -898,9 +898,33 @@ def _record_finding(real_daemon, finding_id="BH-001", severity="HIGH"):
     )
 
 
+def _record_suite_green(real_daemon):
+    """Prove the suite green on this tree, the way the fix loop does.
+
+    `fix_commit`'s suite gate is a ledger read (`verify_suite.py --check`), so
+    driving the transition means producing the evidence rather than making a
+    trivially-true pytest command. `HOLTZ_PYTEST` stands in for the suite; the
+    hash, the daemon call, and the `restricted` write are all real — which is
+    the point, since a test that stubbed those would stop exercising the gate.
+    """
+    env = os.environ.copy()
+    env["SAHJHAN_DAEMON_SOCKET"] = real_daemon["sock_path"]
+    result = subprocess.run(
+        [sys.executable,
+         os.path.join(REPO_ROOT, "enforcement", "scripts", "verify_suite.py"),
+         "--record", "--cwd", real_daemon["project_root"]],
+        cwd=real_daemon["project_root"],
+        capture_output=True, text=True, env=env, timeout=60,
+    )
+    assert result.returncode == 0, (
+        f"verify_suite --record failed:\n{result.stdout}\n{result.stderr}"
+    )
+
+
 def _satisfy_fix_commit_gates(real_daemon, finding_id="BH-001"):
     """Record the per-fix TDD events fix_commit requires (blast_radius +
-    hardening_complete since the last transition)."""
+    hardening_complete since the last transition), plus the suite_green its
+    suite gate reads."""
     _run_sahjhan(
         real_daemon, "event", "blast_radius",
         "--field", "project=holtz", "--field", "run=1", "--field", "auditor=holtz",
@@ -915,6 +939,9 @@ def _satisfy_fix_commit_gates(real_daemon, finding_id="BH-001"):
         "--field", f"finding_id={finding_id}",
         "--field", "edge_cases_tested=1", "--field", "tests_added=1",
     )
+    # Last: the tree hash covers HEAD and the working tree, and everything the
+    # ledger writes above lives under docs/holtz/, which the hash excludes.
+    _record_suite_green(real_daemon)
 
 
 def _git_init_with_commit(root, message):
@@ -960,8 +987,11 @@ class TestFixCommitAutoEmitsFindingResolved:
     def _drive_to_fix_commit(self, real_daemon, monkeypatch, finding_id="BH-001"):
         # Gates run in the `sahjhan transition` subprocess env; a trivially-true
         # test/lint command lets us exercise the transition without a real suite.
+        # CLAUDE_PLUGIN_ROOT is how the suite gate finds verify_suite.py — the
+        # gate command fails loudly rather than silently if it is unset.
         monkeypatch.setenv("HOLTZ_PYTEST", "true")
         monkeypatch.setenv("HOLTZ_LINT", "true")
+        monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", REPO_ROOT)
         _git_init_with_commit(
             real_daemon["project_root"], f"fix(x): resolve {finding_id}"
         )
@@ -1124,16 +1154,37 @@ class TestCommitGatePatternCounterDerivation:
         asserts the property that makes the deadlock unreachable: at any ledger
         state, exactly one of the two is open.
         """
-        # `gate check` is a diagnostic: it exits 0 whatever the verdict and
-        # prints it. The verdict is the signal, not the exit code.
+        # Asserted per *gate*, not per transition, and that distinction is the
+        # test. The property #82 established is about one predicate —
+        # `pattern_analysis_overdue`, read with opposite expectations at the
+        # two commands. `iteration_boundary` also carries an unrelated
+        # full-suite gate, so "is the transition open?" would answer a
+        # different question and would break the moment any gate is added for
+        # any reason. What must never happen is the *pattern* gate being shut
+        # at both commands at once; an independent gate whose escape is an
+        # unconditional action (`verify_suite.py --record --scope full`) is not
+        # a deadlock, because running it is always available.
+        #
+        # `gate check` is a diagnostic: it exits 0 whatever the verdict.
         def _blocked(command: str) -> bool:
             result = _run_sahjhan(
-                real_daemon, "gate", "check", command, check=False
+                real_daemon, "--json", "gate", "check", command, check=False
             )
-            assert "result:" in result.stdout, (
-                f"gate check {command} printed no verdict:\n{result.stdout}"
+            payload = json.loads(result.stdout)["data"]
+            gates = payload.get("gates") or [
+                gate
+                for candidate in payload.get("candidates", [])
+                for gate in candidate.get("gates", [])
+            ]
+            overdue = [
+                gate for gate in gates
+                if "pattern_analysis_overdue" in gate.get("description", "")
+            ]
+            assert len(overdue) == 1, (
+                f"gate check {command} should carry exactly one "
+                f"pattern_analysis_overdue gate, got: {gates}"
             )
-            return "result: blocked" in result.stdout
+            return not overdue[0]["passed"]
 
         _fast_forward_to_fix_loop(real_daemon)
 

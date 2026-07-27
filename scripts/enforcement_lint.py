@@ -30,7 +30,8 @@ Checks (H-series, to keep them distinct from sahjhan's L1–L7):
 H1   A gate consumes an event nothing in the tree can write (unsatisfiable).
 H2   A declared producer does not resolve to a real writer (a false claim).
 H3   A real writer is not declared (the declaration is not the *only* writer).
-H4   A hook producer is not registered in hooks.json / not hash-pinned.
+H4   A hook producer is not registered in hooks.json, or a tool producer is
+     invoked by nothing, or either is not hash-pinned.
 H5   An event claims non-agent attestation but is not ``restricted``, so
      ``sahjhan event`` can write it anyway.
 H6   A transition command no skill file teaches, or a skill file teaches a
@@ -41,6 +42,8 @@ H8   A block whose printed escape is decided by a different predicate than the
      block itself, so the escape can be unsatisfiable when it is printed.
 H9   An item-scoped transition that does not record the item state it implies,
      forcing the agent to state the same fact twice.
+H10  A gate that delegates its check to a tool without naming the ledger event
+     that tool reads, so the gate reads as a direct check everywhere else.
 ===  =========================================================================
 
 Usage::
@@ -256,6 +259,14 @@ class Model:
     # "render" only leaves a document section permanently empty.
     consumer_kinds: dict[str, set[str]] = field(default_factory=dict)
     writers: dict[str, list[Writer]] = field(default_factory=dict)
+    # Repo-relative script path -> where something invokes it by path. This is
+    # the `tool:` analogue of hooks.json registration: a hook runs because the
+    # harness fires it, a tool runs because a gate command or a taught command
+    # names it, and a writer nothing can reach is dead either way.
+    tool_invocations: dict[str, list[str]] = field(default_factory=dict)
+    # Repo-relative Python path -> event types its SQL literals read. Per-file,
+    # unlike `consumed`, because H10 asks about one specific script.
+    python_sql_consumers: dict[str, set[str]] = field(default_factory=dict)
     skill_transitions: dict[str, list[str]] = field(default_factory=dict)
     hook_entrypoints: dict[str, list[str]] = field(default_factory=dict)
     # script name -> entrypoint scripts whose process can run it (itself
@@ -315,6 +326,14 @@ def _gate_consumed(gate: dict, queries: dict[str, dict] | None = None) -> set[st
     consumed: set[str] = set()
     if isinstance(gate.get("event"), str):
         consumed.add(gate["event"])
+    # A gate that shells out to a tool has its predicate in that tool's SQL,
+    # where nothing here can see it — so the gate names the event instead.
+    # Unknown keys land in sahjhan's `params` and are ignored by the engine,
+    # which is what makes this declaration free to add and worthless on its
+    # own; H10 is what turns it into a claim, by failing when the named event
+    # is not the one the invoked script actually queries.
+    if isinstance(gate.get("evidence"), str):
+        consumed.add(gate["evidence"])
     if isinstance(gate.get("sql"), str):
         consumed |= _sql_event_types(gate["sql"])
     if queries is not None:
@@ -497,6 +516,7 @@ def parse_python_writers(model: Model) -> None:
             for match in _PY_SQL_CONSUMER.finditer(text):
                 line = text.count("\n", 0, match.start()) + 1
                 model.consumed.setdefault(match.group(1), []).append(f"{rel}:{line}")
+                model.python_sql_consumers.setdefault(rel, set()).add(match.group(1))
 
 
 _INLINE_CODE_SPAN = re.compile(r"`([^`\n]+)`")
@@ -609,6 +629,82 @@ def parse_skill_writers(model: Model) -> None:
         _scan_taught_command(model, message, "agent:enforcement/hooks.toml", origin)
 
 
+def _code_text(md: Path) -> list[tuple[int, str]]:
+    """Every fenced line and inline code span in a markdown file.
+
+    Broader than ``_skill_command_lines``, which filters to sahjhan
+    invocations: a tool is reached by an interpreter line
+    (``python3 …/verify_suite.py --record``), which that filter drops. Still
+    code-only, so prose naming a script is not mistaken for a way to run it.
+    """
+    out: list[tuple[int, str]] = []
+    in_fence = False
+    for number, raw in enumerate(md.read_text(encoding="utf-8").splitlines(), 1):
+        if raw.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            out.append((number, raw.strip()))
+            continue
+        for span in _INLINE_CODE_SPAN.findall(raw):
+            out.append((number, span.strip()))
+    return out
+
+
+def parse_tool_invocations(model: Model) -> None:
+    """Find, for each script under ``tool_dirs``, what invokes it by path.
+
+    The reachability question a producer owes depends on how it is reached.
+    H4 asks a ``hook:`` whether the harness is registered to fire it. The
+    ``tool:`` form of the same question is whether *anything* names it: a gate
+    command, a command a skill file teaches, a hook's block message, or a hook
+    registration. A declared writer that no surface invokes never runs, and an
+    event whose only producer never runs is an unsatisfiable gate wearing a
+    write path — H1's failure mode arriving through a door H1 cannot see.
+    """
+    scripts = [
+        model.tree.rel(py)
+        for directory in model.tree.tool_dirs
+        if directory.is_dir()
+        for py in sorted(directory.rglob("*.py"))
+        if "__pycache__" not in py.parts
+    ]
+    if not scripts:
+        return
+
+    surfaces: list[tuple[str, str]] = []
+    for transition in model.transitions:
+        command = transition.get("command", "?")
+        stack = list(transition.get("gates", []) or [])
+        while stack:
+            gate = stack.pop()
+            stack.extend(_gate_branches(gate))
+            if isinstance(gate.get("cmd"), str):
+                surfaces.append((f"transitions.toml: {command} gate", gate["cmd"]))
+    for origin, message in _hook_message_lines(model.tree.config_dir):
+        surfaces.append((origin, message))
+    if model.tree.skills_dir.is_dir():
+        for md in sorted(model.tree.skills_dir.rglob("*.md")):
+            if ".pytest_cache" in md.parts:
+                continue
+            rel = model.tree.rel(md)
+            for number, text in _code_text(md):
+                surfaces.append((f"{rel}:{number}", text))
+    if model.tree.hooks_json.exists():
+        doc = json.loads(model.tree.hooks_json.read_text(encoding="utf-8"))
+        for host_event, groups in doc.get("hooks", {}).items():
+            for group in groups:
+                for entry in group.get("hooks", []):
+                    surfaces.append(
+                        (f"hooks.json: {host_event}", entry.get("command", ""))
+                    )
+
+    for script in scripts:
+        for origin, text in surfaces:
+            if script in text:
+                model.tool_invocations.setdefault(script, []).append(origin)
+
+
 def parse_hook_registration(model: Model) -> None:
     """Map each hook script to the harness events it is registered for.
 
@@ -695,6 +791,7 @@ def build_model(tree: Tree | None = None) -> Model:
     parse_block_sites(model)
     parse_python_writers(model)
     parse_skill_writers(model)
+    parse_tool_invocations(model)
     parse_hook_registration(model)
     return model
 
@@ -919,6 +1016,19 @@ def check_h4_hook_registration(model: Model) -> list[Finding]:
                         "is not registered in hooks/hooks.json, and nothing "
                         "registered imports it — the harness never runs it",
                         "register the hook, or record the event from one that is",
+                    )
+                )
+            if kind == "tool" and not model.tool_invocations.get(path):
+                findings.append(
+                    Finding(
+                        "H4",
+                        "error",
+                        f"events.toml: event '{event}' producer '{producer_id}'",
+                        "is invoked by nothing — no gate command, skill-file "
+                        "command, hook message, or hook registration names "
+                        "this path, so it never runs",
+                        "wire it into a gate `cmd`, or teach the command in a "
+                        "skill file, or drop the declaration",
                     )
                 )
             # The daemon authenticates the *process* (SO_PEERCRED → pid →
@@ -1351,6 +1461,93 @@ def check_h9_transition_state_decoupling(model: Model) -> list[Finding]:
     return findings
 
 
+def _invoked_tool(model: Model, cmd: str) -> str | None:
+    """The tool script a gate command runs, if it runs one."""
+    for script in sorted(model.python_sql_consumers):
+        if script in cmd and any(
+            script.startswith(model.tree.rel(d)) for d in model.tree.tool_dirs
+        ):
+            return script
+    return None
+
+
+def check_h10_delegated_gate_evidence(model: Model) -> list[Finding]:
+    """A gate that shells out to a tool must name the event that tool reads.
+
+    ``command_succeeds`` is opaque to every other check here: the predicate is
+    inside the script, so a gate whose real evidence is a ledger event reads
+    from config as a direct check. That is not merely untidy. H1 cannot ask
+    whether anything can write the event, and docs/ENFORCEMENT-CONTRACT.md —
+    whose entire job is one truthful row per gate — prints "*direct check* / —
+    / direct / n/a" for a row that is in fact ledger-mediated, which is how the
+    posture count ("N of M gate-consumed events are the agent's own word")
+    stops being a measurement.
+
+    So the gate declares ``evidence = "<event>"`` and this check makes the
+    declaration falsifiable: it must be an event that script's own SQL reads.
+    Same technique as H8 — give the block a *name* to check rather than two
+    texts to compare — extended across the config/Python seam.
+    """
+    findings = []
+    for transition in model.transitions:
+        command = transition.get("command", "?")
+        stack = list(transition.get("gates", []) or [])
+        while stack:
+            gate = stack.pop()
+            stack.extend(_gate_branches(gate))
+            cmd = gate.get("cmd")
+            declared = gate.get("evidence")
+            if not isinstance(cmd, str):
+                if isinstance(declared, str):
+                    findings.append(
+                        Finding(
+                            "H10",
+                            "error",
+                            f"transitions.toml: transition '{command}'",
+                            f"declares evidence '{declared}' on a "
+                            f"{gate.get('type', '?')} gate, which runs no "
+                            "command — nothing can check the claim",
+                            "drop `evidence`, or express the dependency in the "
+                            "gate's own `event`/`sql`",
+                        )
+                    )
+                continue
+            script = _invoked_tool(model, cmd)
+            if script is None:
+                continue
+            reads = model.python_sql_consumers.get(script, set())
+            subject = f"transitions.toml: transition '{command}' gate `{script}`"
+            if not isinstance(declared, str):
+                findings.append(
+                    Finding(
+                        "H10",
+                        "error",
+                        subject,
+                        "delegates its check to a script that queries "
+                        + ", ".join(f"'{event}'" for event in sorted(reads))
+                        + ", but names no evidence — the gate reads as a "
+                        "direct check everywhere the ledger is reasoned about",
+                        f'add evidence = "{sorted(reads)[0]}" to the gate',
+                    )
+                )
+            elif declared not in reads:
+                findings.append(
+                    Finding(
+                        "H10",
+                        "error",
+                        subject,
+                        f"declares evidence '{declared}', but that script's "
+                        "SQL reads "
+                        + (
+                            ", ".join(f"'{event}'" for event in sorted(reads))
+                            or "no event type"
+                        ),
+                        "name the event the script actually queries",
+                    )
+                )
+    return findings
+
+
 CHECKS = {
     "H1": check_h1_unsatisfiable,
     "H2": check_h2_false_declarations,
@@ -1361,6 +1558,7 @@ CHECKS = {
     "H7": check_h7_predicate_copies,
     "H8": check_h8_escape_identity,
     "H9": check_h9_transition_state_decoupling,
+    "H10": check_h10_delegated_gate_evidence,
 }
 
 

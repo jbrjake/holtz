@@ -18,6 +18,7 @@ EVENTS_TOML = ENFORCEMENT_DIR / "events.toml"
 TRANSITIONS_TOML = ENFORCEMENT_DIR / "transitions.toml"
 RENDERS_TOML = ENFORCEMENT_DIR / "renders.toml"
 PROTOCOL_TOML = ENFORCEMENT_DIR / "protocol.toml"
+VERIFY_SUITE = ENFORCEMENT_DIR / "scripts" / "verify_suite.py"
 
 BREADCRUMBS = ["project", "run", "auditor"]
 
@@ -399,24 +400,25 @@ def test_test_and_lint_gates_are_env_overridable():
     the engine.
     """
     cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
-    pytest_cmds, lint_cmds = [], []
-    for t in cfg["transitions"]:
-        for g in t.get("gates", []):
-            cmd = g.get("cmd", "")
-            if "pytest" in cmd:
-                pytest_cmds.append(cmd)
-            if "ruff" in cmd:
-                lint_cmds.append(cmd)
-    assert pytest_cmds, "expected at least one pytest gate command"
+    lint_cmds = [
+        g.get("cmd", "")
+        for t in cfg["transitions"]
+        for g in t.get("gates", [])
+        if "ruff" in g.get("cmd", "")
+    ]
     assert lint_cmds, "expected at least one ruff gate command"
-    for cmd in pytest_cmds:
-        assert cmd.startswith("${HOLTZ_PYTEST:-") and cmd.endswith("}"), (
-            f"pytest gate must be overridable via $HOLTZ_PYTEST (#63/#70.5): {cmd}"
-        )
     for cmd in lint_cmds:
         assert cmd.startswith("${HOLTZ_LINT:-") and cmd.endswith("}"), (
             f"lint gate must be overridable via $HOLTZ_LINT (#63/#70.5): {cmd}"
         )
+    # The suite half of the same contract moved into verify_suite.py when the
+    # gates stopped running pytest and started reading the ledger. The override
+    # still exists and still flows to every gate — it is read where the suite
+    # is actually run, so it reaches the agent's `--record` too, which the
+    # shell-expansion form never did.
+    assert "HOLTZ_PYTEST" in VERIFY_SUITE.read_text(), (
+        "the suite command must stay overridable via $HOLTZ_PYTEST (#63/#70.5)"
+    )
 
 
 @pytest.mark.contract
@@ -452,27 +454,78 @@ def test_gate_commands_never_truncate_the_suite():
 
 
 @pytest.mark.contract
-def test_pytest_gates_fail_fast():
-    """The pytest gate defaults carry ``-x --ff`` (fail-fast, no truncation).
+def test_suite_gates_delegate_to_verify_suite():
+    """No gate runs pytest; every suite gate reads the ledger instead.
+
+    Three gates used to carry a copy of the pytest command and execute it, so
+    the fix loop ran the target's full suite three times per finding for one
+    enforced answer. They now run ``verify_suite.py --check``, which recomputes
+    the working-tree hash and asks whether a ``suite_green`` already names it.
+
+    Two invariants, and the second is what keeps the first honest: a gate that
+    reintroduced ``pytest`` would be both a second copy of a default that now
+    lives in exactly one place, and a suite execution inside a transition —
+    silently restoring the cost this design removed. Its evidence must also be
+    *named* (``evidence = "suite_green"``), which is what lets H1 and the
+    generated contract see a gate whose predicate lives inside a script.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    suite_gates = []
+    for t in cfg["transitions"]:
+        for g in t.get("gates", []):
+            cmd = g.get("cmd", "")
+            assert "pytest" not in cmd, (
+                f"gate runs the suite instead of reading the ledger — use "
+                f"verify_suite.py --check. transition={t.get('command')!r} "
+                f"cmd={cmd!r}"
+            )
+            if "verify_suite.py" in cmd:
+                suite_gates.append((t.get("command"), g))
+    commands = {command for command, _ in suite_gates}
+    assert commands == {
+        "fix_commit",
+        "iteration_boundary",
+        "set complete perspective",
+        "converge",
+    }, f"unexpected set of suite gates: {commands}"
+    for command, gate in suite_gates:
+        assert "--check" in gate["cmd"].split(), (
+            f"{command}'s suite gate must be the read-only --check mode, never "
+            f"--record: a gate that records its own evidence proves nothing"
+        )
+        assert gate.get("evidence") == "suite_green", (
+            f"{command}'s suite gate must name the event it depends on so H10 "
+            f"and ENFORCEMENT-CONTRACT.md can see it"
+        )
+    # `affected` is the per-fix optimisation; every other suite gate is the
+    # thing that bounds it. Widen one of those to `affected` and an audit could
+    # converge having never run the whole suite on the converged tree.
+    scopes = {command: gate["cmd"].split()[-1] for command, gate in suite_gates}
+    assert scopes["fix_commit"] == "affected", scopes
+    assert set(scopes.values()) - {"affected"} == {"full"}, scopes
+
+
+@pytest.mark.contract
+def test_the_suite_command_fails_fast_in_its_one_home():
+    """The suite default carries ``-x --ff`` (fail-fast, no truncation).
 
     The gate consumes a boolean, so it has no use for the remaining passing
     tests once one fails. ``-x`` costs nothing on the green path and collapses
     the red path; ``--ff`` reaches the previously-failing test immediately.
     Paired with test_gate_commands_never_truncate_the_suite, which bans the
-    unsafe way to get the same effect.
+    unsafe way to get the same effect (``--lf``, which runs *only* the
+    previously-failing tests).
     """
-    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
-    checked = 0
-    for t in cfg["transitions"]:
-        for g in t.get("gates", []):
-            cmd = g.get("cmd", "")
-            if "pytest" not in cmd:
-                continue
-            checked += 1
-            tokens = cmd.split()
-            assert "-x" in tokens, f"pytest gate should fail fast with -x: {cmd!r}"
-            assert "--ff" in tokens, f"pytest gate should order failed-first: {cmd!r}"
-    assert checked, "expected at least one pytest gate command"
+    default = re.search(
+        r'^DEFAULT_PYTEST\s*=\s*"([^"]+)"', VERIFY_SUITE.read_text(), re.M
+    )
+    assert default, "verify_suite.py must define DEFAULT_PYTEST as a literal"
+    tokens = default.group(1).split()
+    assert "-x" in tokens, f"suite command should fail fast with -x: {tokens}"
+    assert "--ff" in tokens, f"suite command should order failed-first: {tokens}"
+    assert "--lf" not in tokens and "--last-failed" not in tokens, (
+        f"suite command must never truncate to the last failures: {tokens}"
+    )
 
 
 # ── Task 1.3: renders.toml ──

@@ -46,7 +46,7 @@ Launch **one** Agent subagent for the finding. Give it: the finding (ID, descrip
 2. Write a failing test that reproduces the finding. Run it. Confirm it FAILS. (Files under `tests/**` are exempt from the pre-edit gate, so this write is allowed.)
 3. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event test_failed_before_fix --field finding_id=BH-NNN --field test_name=...`
 4. Write the fix. (The pre-edit hook now allows the source edit because step 3 is on the ledger.) Run the failing test. Confirm it PASSES.
-5. Run full suite. Confirm all pass.
+5. `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record --scope affected` — runs the tests covering your change (widens to full if it can't prove the subset), records `suite_green` for this tree. Red records nothing.
 6. Run blast radius: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json blast_radius <node> --depth 2`
 7. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field finding_id=BH-NNN --field affected_count=N`
 8. Write ≥1 edge-case hardening test. Run it. Confirm it passes.
@@ -58,12 +58,13 @@ If the subagent cannot reach HIGH confidence, it records nothing, leaves the tre
 
 **Step B — Orchestrator validates and commits.** You author and apply nothing. With the finding's work already in the tree and on the ledger:
 
-10. **Validate the verification:** re-run the full suite and confirm it is green, and confirm the ledger shows this finding's `test_failed_before_fix` and `hardening_complete` for BH-NNN (`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" status`, or `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" ledger`). If the suite is red or those events are missing, the subagent's fix is not real — send it back or defer; do not commit.
+10. **Validate — read the evidence, don't redo it.** `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --check --scope affected` exits 0 only if a `suite_green` names *this exact tree*, and the ledger must show this finding's `test_failed_before_fix` and `hardening_complete` (`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" status`). If either fails, the fix is not real — send it back or defer; do not commit.
 11. `git commit` with finding ID in body. Format: `fix(<scope>): <desc>`
-12. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit BH-NNN` — the item id is **positional** (`item_id=BH-NNN` also works); the CLI rejects `--item-id`. **This transition auto-records the `finding_resolved` event for BH-NNN** (id from the arg, commit hash from `HEAD`, run context inherited from the ledger). That resolution event — not the transition itself — is what marks the finding resolved for STATUS.md / PUNCHLIST.md "Resolved" counts and every downstream gate (`pattern_check`, `set complete perspective`, `converge`). You do **not** record `finding_resolved` by hand; one command does both. (Emitted by sahjhan ≥ 0.18.0; the pin is enforced by `scripts/check_sahjhan_pin.py`.)
-13. Move to next item.
+12. `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record --scope affected` — **after** the commit: the tree hash covers HEAD, so committing invalidates step 10's evidence. This is what the `fix_commit` gate reads.
+13. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit BH-NNN` — the item id is **positional** (`item_id=BH-NNN` also works); the CLI rejects `--item-id`. **This transition auto-records the `finding_resolved` event for BH-NNN** (id from the arg, commit hash from `HEAD`, run context inherited from the ledger). That resolution event — not the transition itself — is what marks the finding resolved for STATUS.md / PUNCHLIST.md "Resolved" counts and every downstream gate (`pattern_check`, `set complete perspective`, `converge`). You do **not** record `finding_resolved` by hand; one command does both. (Emitted by sahjhan ≥ 0.18.0; the pin is enforced by `scripts/check_sahjhan_pin.py`.)
+14. Move to next item.
 
-Dispatch subagents **one finding at a time** — the ledger is a single hash chain and commits land on one branch, so concurrent fix subagents would race on both. Because the subagent is gated by the **same** TDD pre-edit hook you are, it cannot write the fix (step 4) before recording `test_failed_before_fix` (step 3) — that hard guarantee is what lets you commit on its word after only re-running the suite.
+Dispatch subagents **one finding at a time** — the ledger is a single hash chain and commits land on one branch, so concurrent fix subagents would race on both. Because the subagent is gated by the **same** TDD pre-edit hook you are, it cannot write the fix (step 4) before recording `test_failed_before_fix` (step 3), and its `suite_green` is bound to a tree hash rather than to its word — that pair is what lets you commit on a ledger read instead of a second suite run.
 
 **The subagent cannot do step 4 before step 3.** The pre-edit hook enforces this — on the subagent, exactly as it would on you.
 
@@ -151,6 +152,8 @@ For each lens sweep, record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcem
 
 After completing a lens sweep (any type), return to Step 10 (fix loop) for any new findings. When a perspective passes clean, run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" set complete perspective`. Then run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition lens_rotate` to switch to the next perspective.
 
+**Three transitions need a `full` green first** — `iteration_boundary`, `set complete perspective`, `converge`. Run `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record --scope full` before each. This is the periodic whole-suite run that re-bases what `--scope affected` measures against; per-fix greens never satisfy it.
+
 **Circuit Breakers:**
 - **MAX_ITERATIONS:** 15 fixes **per iteration window**. Enforced by Sahjhan's `fix_commit` circuit-breaker gate, which counts `fix_commit`s *since the last `iteration_boundary`* — so the cap resets at each `/clear`. If a single uncleared window hits 15, run `iteration_boundary` + `/clear` to continue (or report remaining items). Whole-run convergence is **not** capped: a long audit fixes >15 findings across multiple windows (fixed in #67; a prior lifetime cap made >15-finding audits unconvergeable).
 - **SAME_ITEM:** 3 attempts on the same punchlist item. After 3, escalate to the user.
@@ -161,14 +164,14 @@ After completing a lens sweep (any type), return to Step 10 (fix loop) for any n
 
 This is **not** a licence to ask whether to continue. Continuing is the default (see SKILL.md's Autonomy section) — `pause` is for a question the user actually asked, not for converting a blocked gate into "how would you like me to proceed?"
 
-**Test / lint command for non-standard targets.** The `fix_commit`, perspective-completion, and `converge` gates run the target project's suite and linter. These commands run **in the environment that invoked `sahjhan transition`**, so the interpreter resolves via your current `PATH`. If the target's tests only run under a venv/pyenv/conda/poetry/tox (i.e. the login `python3`/`ruff` isn't the right one), export an override **once at run start** — it flows to every gate:
+**Test / lint command for non-standard targets.** `verify_suite.py` runs the suite; the perspective-completion and `converge` gates still run the linter directly. Both resolve via the `PATH` of the shell you invoke them from. If the target's tests only run under a venv/pyenv/conda/poetry/tox, export an override **once at run start**:
 
 ```bash
-export HOLTZ_PYTEST='.venv/bin/python -m pytest --tb=short -q'   # or: poetry run pytest / tox / python3.12 -m pytest ...
-export HOLTZ_LINT='.venv/bin/ruff check .'                       # or: poetry run ruff check .
+export HOLTZ_PYTEST='.venv/bin/python -m pytest -x --ff --tb=short -q'  # or: poetry run pytest / tox / ...
+export HOLTZ_LINT='.venv/bin/ruff check .'                             # or: poetry run ruff check .
 ```
 
-Unset, the gates default to `python3 -m pytest --tb=short -q` and `ruff check .` (unchanged behavior). When a gate command fails, Sahjhan now surfaces a tail of its stderr in the block reason (e.g. `No module named pytest`), so a missing interpreter is distinguishable from a real test failure (sahjhan ≥ 0.16.0, holtz #63).
+Unset, these default to `python3 -m pytest -x --ff --tb=short -q` and `ruff check .`. Do not put `--lf`/`--last-failed` in `HOLTZ_PYTEST`: it runs only the previously-failing tests, so a green would mean nothing. When a gate command fails, Sahjhan surfaces a tail of its stderr in the block reason (sahjhan ≥ 0.16.0, holtz #63).
 
 ```dot
 digraph {
@@ -176,7 +179,7 @@ digraph {
   node [shape=box]
 
   recover [label="sahjhan status\n+ PUNCHLIST.md\n(filtered: OPEN + last 3 resolved)"]
-  fix_loop [label="Step 10 (next batch)\n→ Step 11 (every 3-5)\n→ full suite + linters"]
+  fix_loop [label="Step 10 (next batch)\n→ Step 11 (every 3-5)\n→ suite green + linters"]
   breaker [label="Circuit breaker\ntriggered?" shape=diamond]
   stop [label="STOP\nReport to user"]
   lens_clean [label="Current lens:\nzero OPEN items AND\nno new items (2 iters)\nAND suite stable?" shape=diamond]

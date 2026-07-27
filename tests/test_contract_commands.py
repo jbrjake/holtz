@@ -164,6 +164,39 @@ class TestPhaseReconQuizStage:
         )
 
 
+class TestVerifySuite(TestPhaseReconQuizStage):
+    """The fix loop's suite commands must survive the bootstrap hook.
+
+    `verify_suite.py` lives under `enforcement/`, which the hook protects from
+    *writes*. Running it is not writing to it, but the distinction is exactly
+    the sort a guard gets wrong, and a block here would be fatal: `--record` is
+    the only way to satisfy the `fix_commit` suite gate, so an agent that
+    cannot run it cannot commit a fix at all — a gate whose printed escape the
+    enforcement layer itself refuses.
+    """
+
+    def test_record_affected(self):
+        self._assert_allowed_in_plugin(
+            "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py "
+            "--record --scope affected",
+            "phase-fix-loop.md steps 5 and 12: prove the suite green",
+        )
+
+    def test_record_full(self):
+        self._assert_allowed_in_plugin(
+            "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py "
+            "--record --scope full",
+            "phase-fix-loop.md: before iteration_boundary / lens completion",
+        )
+
+    def test_check_affected(self):
+        self._assert_allowed_in_plugin(
+            "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py "
+            "--check --scope affected",
+            "phase-fix-loop.md step 10: orchestrator validates without re-running",
+        )
+
+
 # ---------------------------------------------------------------------------
 # Contract commands: extracted from SKILL.md quick reference
 # ---------------------------------------------------------------------------
