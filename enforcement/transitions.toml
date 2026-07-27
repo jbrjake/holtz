@@ -70,6 +70,27 @@ gates = [
     { type = "ledger_has_event", event = "reference_read", filter = { path = "step-10-fix-loop.md" }, min_count = 1, intent = "must read fix loop procedure before starting" },
 ]
 
+# The pytest gate below carries `-x --ff`, and the two flags it deliberately
+# does NOT carry are the interesting part.
+#
+# A `command_succeeds` gate consumes a boolean. Once one test fails the answer
+# is settled, so `-x` (exitfirst) turns the red path from a full suite run into
+# a couple of seconds and costs nothing on the green path — where every test
+# runs regardless. `--ff` (failed-first) reorders so the previously-failing test
+# is reached immediately, which is what makes `-x` bite during the re-run loop
+# after a fix attempt.
+#
+# `--lf` (last-failed) is the trap. It looks like the same optimization but it
+# runs *only* the previously-failing tests, so after one red run the gate would
+# certify on a two-test subset — measured: a 4-test suite with one failure
+# re-runs under `--lf` as "1 passed", exit 0. That is a gate asserting "test
+# suite must pass" having never executed the suite, the same false-green class
+# as #83. `--ff` gets the ordering win with no truncation; `--lf` must never
+# appear here (asserted by test_gate_commands_never_truncate_the_suite).
+#
+# `--no-cov` is likewise excluded from the default: it belongs to pytest-cov,
+# and on a target without that plugin pytest exits 4 on the unrecognized
+# argument, blocking the fix loop outright. It stays an operator override.
 [[transitions]]
 from = "fix_loop"
 to = "fix_loop"
@@ -77,7 +98,7 @@ command = "fix_commit"
 args = ["item_id"]
 gates = [
     { type = "command_succeeds", cmd = "git log -1 --format=%B | grep -q '{{item_id}}'", intent = "commit must reference the punchlist item" },
-    { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest --tb=short -q}", timeout = 120, intent = "test suite must pass after fix" },
+    { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest -x --ff --tb=short -q}", timeout = 120, intent = "test suite must pass after fix" },
     { type = "ledger_has_event_since", event = "blast_radius", since = "last_transition", intent = "blast radius must be checked after each fix" },
     { type = "ledger_has_event_since", event = "hardening_complete", since = "last_transition", intent = "edge cases must be hardened after each fix" },
     { type = "query", sql = "SELECT count(*) < 15 FROM events WHERE type='state_transition' AND command='fix_commit' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='state_transition' AND command='iteration_boundary'), 0)", expect = "true", intent = "circuit breaker: max 15 fixes per iteration (scoped since the last iteration_boundary /clear, so the cap resets each context reset instead of capping the whole run)" },
@@ -264,7 +285,7 @@ gates = [
     { type = "query", query = "all_findings_closed", expect = "0" },
     { type = "query", sql = "SELECT count(*) >= 2 FROM events WHERE type='iteration_complete' AND perspective='{{current_perspective}}'", expect = "true", intent = "two clean iterations required for stability" },
     { type = "min_elapsed", event = "iteration_complete", seconds = 120, intent = "prevent rapid-fire gaming of iteration count" },
-    { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest --tb=short -q}", timeout = 120, intent = "tests must pass" },
+    { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest -x --ff --tb=short -q}", timeout = 120, intent = "tests must pass" },
     { type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", timeout = 30, intent = "no lint violations" },
     { type = "no_violations", intent = "no unresolved protocol violations" },
     { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='quiz_answered' AND pass='true' AND perspective='{{current_perspective}}'", expect = "true", intent = "lens quiz must be passed" },
@@ -303,7 +324,7 @@ to = "final_sweep_clean"
 command = "converge"
 gates = [
     { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member", intent = "all lenses must be complete" },
-    { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest --tb=short -q}", timeout = 120, intent = "tests must pass" },
+    { type = "command_succeeds", cmd = "${HOLTZ_PYTEST:-python3 -m pytest -x --ff --tb=short -q}", timeout = 120, intent = "tests must pass" },
     { type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", timeout = 30, intent = "no lint violations" },
     { type = "query", query = "all_findings_closed", expect = "0" },
     { type = "no_violations", intent = "no unresolved protocol violations" },

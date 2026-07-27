@@ -419,6 +419,62 @@ def test_test_and_lint_gates_are_env_overridable():
         )
 
 
+@pytest.mark.contract
+def test_gate_commands_never_truncate_the_suite():
+    """A gate asserting "the suite passes" must actually run the suite.
+
+    ``--lf``/``--last-failed`` runs *only* the tests that failed on the previous
+    run. Dropped into a gate command it reads as a harmless speedup and behaves
+    as a false green: seed a 4-test suite with one failure, fix it, re-run under
+    ``--lf`` and pytest reports ``1 passed`` / exit 0 — the gate certifies
+    "test suite must pass" having executed one test. Same defect class as #83,
+    where ``ruff check .`` returns exit 0 on a repo with no Python files.
+
+    ``--ff``/``--failed-first`` is the safe form of the same idea: it reorders so
+    the known-failing test is hit first (which is what makes ``-x`` pay off in
+    the fix/re-run loop) but still runs everything.
+
+    This constrains the *defaults* in transitions.toml. An operator who exports
+    ``HOLTZ_PYTEST='pytest --lf'`` can still defeat their own gate — that is
+    outside what a config test can reach, and is called out in
+    references/phase-fix-loop.md.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    banned = ("--lf", "--last-failed")
+    for t in cfg["transitions"]:
+        for g in t.get("gates", []):
+            cmd = g.get("cmd", "")
+            for flag in banned:
+                assert flag not in cmd.split(), (
+                    f"gate command truncates the suite with {flag!r} — use --ff. "
+                    f"transition={t.get('command')!r} cmd={cmd!r}"
+                )
+
+
+@pytest.mark.contract
+def test_pytest_gates_fail_fast():
+    """The pytest gate defaults carry ``-x --ff`` (fail-fast, no truncation).
+
+    The gate consumes a boolean, so it has no use for the remaining passing
+    tests once one fails. ``-x`` costs nothing on the green path and collapses
+    the red path; ``--ff`` reaches the previously-failing test immediately.
+    Paired with test_gate_commands_never_truncate_the_suite, which bans the
+    unsafe way to get the same effect.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+    checked = 0
+    for t in cfg["transitions"]:
+        for g in t.get("gates", []):
+            cmd = g.get("cmd", "")
+            if "pytest" not in cmd:
+                continue
+            checked += 1
+            tokens = cmd.split()
+            assert "-x" in tokens, f"pytest gate should fail fast with -x: {cmd!r}"
+            assert "--ff" in tokens, f"pytest gate should order failed-first: {cmd!r}"
+    assert checked, "expected at least one pytest gate command"
+
+
 # ── Task 1.3: renders.toml ──
 
 
