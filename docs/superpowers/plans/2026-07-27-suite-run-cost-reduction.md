@@ -66,23 +66,72 @@ caller-supplied hash or result.
 
 ## Tasks
 
-- [ ] **T1 — P2 fail-fast gate command** (smallest, independent)
-  - `enforcement/transitions.toml`: default -> `python3 -m pytest -x --ff --tb=line -q`
-  - Applies to all 3 pytest gates (lines 80, 267, 306)
-  - Keep the `${HOLTZ_PYTEST:-...}` wrapper (contract test
-    `tests/test_enforcement_config.py:404` asserts the shape)
-  - Add a contract test asserting `--lf` never appears in a gate cmd (D2)
-  - Gate: `pytest -m contract`, `python3 scripts/contract_gate.py`
+- [x] **T1 — P2 fail-fast gate command** — DONE, commit `ba697a2`, v0.140.2
+  - All 3 pytest gates now `${HOLTZ_PYTEST:-python3 -m pytest -x --ff --tb=short -q}`
+  - Kept `--tb=short` rather than the proposed `--tb=line`: with `-x` at most one
+    traceback prints, so short costs ~5 lines and is materially better for
+    diagnosing a gate block. The win is `-x --ff`, not the tb format.
+  - Two contract tests added: `test_gate_commands_never_truncate_the_suite`
+    (bans `--lf`/`--last-failed`), `test_pytest_gates_fail_fast` (requires
+    `-x --ff`).
+  - D2 verified empirically before committing: 4-test suite, one failure, fix
+    it, re-run under `--lf` -> "1 passed" exit 0. Under `--ff` -> "4 passed".
+  - Observed green: ruff, mypy (51 files), 1880-test fast subset, contract gate
+    (37 commands), `sahjhan lint` 0 errors, `enforcement_lint` 0 errors.
+  - Also bumped the README test-count badge 1878 -> 1880 (pre-commit caught it).
 
-- [ ] **T2 — P4 `suite_green` event + verify_suite.py**
-  - `enforcement/events.toml`: new `suite_green`, `restricted = true`,
-    attestation `tool`, fields: tree_hash, scope, command, test_count,
-    + run context
-  - `enforcement/scripts/verify_suite.py`: `--record` / `--check` modes
-  - `scripts/hash-trusted-callers.sh` regen (MANDATORY — see memory
-    `trusted-callers-manifest-regen`; skipping silently disables enforcement)
-  - `scripts/enforcement_lint.py` must stay green (H1 closure, H5 attestation)
-  - Tests: hook_e2e for the daemon record path, unit for tree hashing
+- [ ] **T2 — P4 `suite_green` event + verify_suite.py**  <- RESUME HERE
+
+  **D7 (found while scoping T2, do not rediscover): the enforcement linter does
+  not scan `enforcement/scripts/`.** `enforcement_lint.py:196-201` defines
+  `py_dirs` as exactly `enforcement/hooks`, `<root>/hooks`, and
+  `skills/holtz/scripts`. Writers are discovered by regex over those dirs and
+  recorded as `hook:{rel}` (`:478`). So a restricted-event writer dropped into
+  `enforcement/scripts/` is invisible: H1 reports "no write path exists" for
+  `suite_green` and the restricted-writer check (`:900`) fails.
+
+  Chosen resolution: keep the script at `enforcement/scripts/verify_suite.py`
+  (semantically right — it sits beside `check_repro_evidence.py` and
+  `check_sweep_evidence.py`, which are also gate-invoked helpers) and **add
+  `enforcement/scripts` to `py_dirs`**. That is a correct small linter fix, not
+  a workaround: gate-invoked scripts under `enforcement/` are exactly the
+  category `py_dirs` means to cover, and today two such scripts already escape
+  every H-check. Rejected alternatives: renaming it into `enforcement/hooks/`
+  (misleading — it is not a hook) and putting it in `skills/holtz/scripts/`
+  (that dir is agent-facing, and a trusted caller does not belong there).
+
+  Daemon keying is fine either way: trusted-callers keys strip the config-dir
+  prefix, so `enforcement/scripts/verify_suite.py` -> `scripts/verify_suite.py`.
+
+  Steps:
+  1. `enforcement/events.toml`: new `suite_green`, `restricted = true`,
+     `attestation = "tool"`, producer `hook:enforcement/scripts/verify_suite.py`.
+     Fields: `tree_hash` (`^[0-9a-f]{64}$`), `scope` (`^(full|affected)$`),
+     `command`, `test_count` (optional), + `project`/`run`/`auditor`.
+     Run context is built like `lens_quiz.py:403` (`base_fields`) — note that
+     hook writes `project`/`run`/`auditor` only, so phase/step can be omitted.
+  2. `enforcement/scripts/verify_suite.py` with two modes (D4):
+     - `--record`: agent path. Computes tree hash, runs `$HOLTZ_PYTEST`, on
+       green calls `record_authed_event("suite_green", …, cwd)`.
+     - `--check`: gate path. Reads `docs/holtz/runs/{active}/ledger.jsonl`
+       directly (NO daemon call — avoids re-entrancy while a transition is being
+       evaluated). Pure predicate, exit 0/1, and on failure prints the exact
+       `--record` command to run.
+     Active run resolution: `docs/holtz/.sahjhan/active-ledger` marker, per
+     `lens_quiz.py:347` / `quiz_vault.py:44`.
+     Tree hash: HEAD oid + sorted (path, sha256) over tracked-modified and
+     untracked files, **excluding `docs/holtz/**`** (D5).
+     Accepts NO caller-supplied hash or result (D6).
+  3. `scripts/enforcement_lint.py`: add `enforcement/scripts` to `py_dirs`.
+     Expect this to surface pre-existing findings for the two existing
+     gate-helper scripts — triage them, do not suppress.
+  4. `scripts/hash-trusted-callers.sh`: add
+     `enforcement/scripts/verify_suite.py` to `TRUSTED_SCRIPTS`, then RUN IT.
+     MANDATORY — see memory `trusted-callers-manifest-regen`: skipping this
+     silently disables enforcement and only `real_daemon` tests catch it.
+  5. Tests: unit for tree hashing (stability, docs/holtz exclusion), `hook_e2e`
+     for the record path, and a `real_daemon` test that the gate `--check`
+     rejects a forged/mismatched hash.
 
 - [ ] **T3 — P3 selective per-fix + full at boundary**
   - Confirm `impact_graph.py` CLI exposes `--types` on `blast_radius`
@@ -103,17 +152,29 @@ caller-supplied hash or result.
 
 ## Open questions
 
-- Does `impact_graph.py`'s CLI expose `--types` for `blast_radius`? (API does.)
-- `iteration_boundary` currently has the `pattern_analysis_overdue` gate only;
-  adding a full-suite gate there lengthens that transition — acceptable since it
+- Does `impact_graph.py`'s CLI expose `--types` for `blast_radius`? The Python
+  API does (`impact_graph.py:186`, bidirectional BFS with an edge-type filter,
+  so `--types tests --depth 1` walks `tests` edges backwards to the covering
+  test files). CLI exposure unverified — check `_build_parser` at `:327`.
+- `iteration_boundary` currently carries only the `pattern_analysis_overdue`
+  gate; adding a full-suite gate lengthens that transition. Acceptable — it
   fires every 3–5 fixes, not every fix.
+- T3's fallback needs deciding explicitly: when the impact graph has no `tests`
+  edges for a changed file, fall back to the FULL suite. Never silently narrow
+  — that is the #83 failure mode arriving by another road.
 
 ## Session log
 
 ### Session 1 (2026-07-27)
-- Investigated cost structure; confirmed 3 runs/fix, 1 enforced.
-- Confirmed no sahjhan change needed (D1).
-- Caught D2 (`--lf` false-green) and D3 (`--no-cov` breaks non-cov targets)
-  before writing them into the config.
-- Filed #83 (unrelated but adjacent: non-Python false-green).
-- Wrote this plan.
+- Investigated cost structure; confirmed 3 full-suite runs per fix, 1 enforced.
+- Confirmed no sahjhan change needed (D1) — `record_authed_event`, `restricted`
+  events, trusted-callers SO_PEERCRED auth, and the active-ledger marker all
+  already exist in holtz.
+- Caught D2 (`--lf` false-green, verified empirically) and D3 (`--no-cov` breaks
+  targets without pytest-cov) before writing either into the config.
+- Found D7 (linter does not scan `enforcement/scripts/`) while scoping T2.
+- Shipped T1 (`ba697a2`, v0.140.2).
+- Filed #83 (adjacent, separate work: non-Python false-green).
+
+**Handoff state:** working tree clean except this plan doc. T1 committed and
+green. T2 fully designed above — start at step 1. Nothing is half-written.
