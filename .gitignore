@@ -17,3 +17,6 @@ docs/holtz/HISTORY.json
 bin/sahjhan-*
 bin/.sahjhan-bootstrap-failed
 bin/.sahjhan-version
+# Same runtime state, at the path the plugin bootstrap downloads into on a
+# consumer machine. Un-ignored, a stray `git add -A` commits a ~100MB binary.
+.claude-plugin/bin/

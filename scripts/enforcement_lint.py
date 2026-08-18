@@ -315,6 +315,25 @@ def _gate_query_names(gate: dict) -> set[str]:
     return names
 
 
+# Gate types whose predicate lives inside the sahjhan binary, mapped to the
+# event types that predicate reads. A third kind of opaque gate, alongside
+# `command_succeeds` (predicate in the invoked script — H10) and `query`
+# (predicate in SQL): here the predicate is neither in the config nor in this
+# tree, so nothing local can discover it and the gate names no event.
+#
+# Without this table the census under-counts. `no_violations` sits on `set
+# complete perspective` and `converge` — the only two transitions that reach
+# convergence — and reads `protocol_violation`, yet the event was absent from
+# ENFORCEMENT-CONTRACT.md's posture, so the one gate that can terminate a run
+# had no row. Source: sahjhan `src/gates/ledger.rs::eval_no_violations`, which
+# counts `protocol_violation` minus `violation_resolved`. Holtz declares no
+# `violation_resolved` event (violations are permanent by design), so only the
+# declared half is listed; an undeclared event is not consumed evidence.
+_ENGINE_GATE_EVENTS: dict[str, tuple[str, ...]] = {
+    "no_violations": ("protocol_violation",),
+}
+
+
 def _gate_consumed(gate: dict, queries: dict[str, dict] | None = None) -> set[str]:
     """Event types one gate depends on, across every gate shape.
 
@@ -326,6 +345,7 @@ def _gate_consumed(gate: dict, queries: dict[str, dict] | None = None) -> set[st
     consumed: set[str] = set()
     if isinstance(gate.get("event"), str):
         consumed.add(gate["event"])
+    consumed |= set(_ENGINE_GATE_EVENTS.get(gate.get("type", ""), ()))
     # A gate that shells out to a tool has its predicate in that tool's SQL,
     # where nothing here can see it — so the gate names the event instead.
     # Unknown keys land in sahjhan's `params` and are ignored by the engine,

@@ -691,6 +691,218 @@ class TestBashGuard:
         assert "file_path=unknown" in logged
         assert "detail=tampered" in logged
 
+    # --- #85: the violation stream is a condition, not a per-call occurrence ---
+
+    def _violation_mock(self, tmp_path, mismatches_json, query_json="[]"):
+        """Mock binary: verify fails with `mismatches_json`, query returns rows.
+
+        Everything that is neither `verify` nor `query` — i.e. the
+        `event protocol_violation` call — is appended to violation_cmd.log, so
+        the test can count what was actually recorded.
+        """
+        (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "enforcement").mkdir(parents=True, exist_ok=True)
+        import sys
+        sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        _cache = empty_cache()
+        _cache["state"] = "fix_loop"
+        _cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), _cache)
+
+        log_file = tmp_path / "violation_cmd.log"
+        verify_json = (
+            '{"schema_version":1,"ok":true,"command":"manifest_verify",'
+            '"data":{"clean":false,"tracked_count":3,"mismatches":'
+            + mismatches_json + ',"unmanaged":[]}}'
+        )
+        _create_mock_binary(tmp_path, (
+            'case "$*" in\n'
+            '  *"manifest verify"*)\n'
+            "    echo '" + verify_json + "'\n"
+            '    exit 2\n'
+            '    ;;\n'
+            '  *query*)\n'
+            "    echo '" + query_json + "'\n"
+            '    exit 0\n'
+            '    ;;\n'
+            '  *)\n'
+            '    echo "$*" >> ' + str(log_file) + '\n'
+            '    exit 0\n'
+            '    ;;\n'
+            'esac'
+        ))
+        return log_file
+
+    def test_violation_already_on_the_ledger_is_not_recorded_again(
+        self, tmp_path, mock_daemon
+    ):
+        """#85: a standing condition is recorded once, not once per Bash call.
+
+        Manifest verify re-runs after every Bash command and keeps reporting
+        the same mismatch until someone fixes it. The reporter watched 51
+        violation events become 57 across six calls, all identical in
+        substance — inflating the hash chain with no new information.
+        """
+        detail = (
+            "managed file modified: expected aaaa1111bbbb2222, got dddd3333eeee4444"
+        )
+        log_file = self._violation_mock(
+            tmp_path,
+            '[{"path":"docs/holtz/patterns-brief.md",'
+            '"expected":"aaaa1111bbbb2222cccc","actual":"dddd3333eeee4444ffff",'
+            '"kind":"modified"}]',
+            query_json=json.dumps(
+                [{"file_path": "docs/holtz/patterns-brief.md", "detail": detail}]
+            ),
+        )
+        event = {"tool_name": "Bash", "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "bash_guard.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert not log_file.exists(), (
+            "bash_guard re-recorded a violation already on the ledger: "
+            + log_file.read_text()
+        )
+        # The operator is still told — suppressing the duplicate event must not
+        # suppress the warning that the run is blocked.
+        assert code == 0
+        assert "PROTOCOL VIOLATION" in output.get("hookSpecificOutput", {}).get(
+            "additionalContext", ""
+        )
+
+    def test_a_new_condition_is_still_recorded_when_others_exist(
+        self, tmp_path, mock_daemon
+    ):
+        """Dedup is per condition, not a blanket 'already have one' check."""
+        log_file = self._violation_mock(
+            tmp_path,
+            '[{"path":"docs/holtz/patterns-brief.md",'
+            '"expected":"aaaa1111bbbb2222cccc","actual":"dddd3333eeee4444ffff",'
+            '"kind":"modified"},'
+            '{"path":"docs/holtz/STATUS.md",'
+            '"expected":"bbbb2222cccc3333dddd","actual":null,"kind":"missing"}]',
+            query_json=json.dumps([
+                {
+                    "file_path": "docs/holtz/patterns-brief.md",
+                    "detail": (
+                        "managed file modified: expected aaaa1111bbbb2222, "
+                        "got dddd3333eeee4444"
+                    ),
+                }
+            ]),
+        )
+        event = {"tool_name": "Bash", "cwd": str(tmp_path)}
+        run_enforcement_hook(
+            "bash_guard.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert log_file.exists(), "the new condition was not recorded at all"
+        logged = log_file.read_text()
+        assert "file_path=docs/holtz/STATUS.md" in logged
+        assert "file_path=docs/holtz/patterns-brief.md" not in logged, (
+            "the already-recorded condition was recorded a second time"
+        )
+
+    def test_violation_detail_distinguishes_deleted_from_modified(
+        self, tmp_path, mock_daemon
+    ):
+        """#85: 'modified' and 'missing' stop sharing one sentence.
+
+        The old wording said `actual missing` for a deleted file AND for a
+        manifest entry naming a path that never existed, so an operator could
+        not tell tampering from a bookkeeping defect.
+        """
+        log_file = self._violation_mock(
+            tmp_path,
+            '[{"path":"docs/holtz/STATUS.md",'
+            '"expected":"bbbb2222cccc3333dddd","actual":null,"kind":"missing"}]',
+        )
+        event = {"tool_name": "Bash", "cwd": str(tmp_path)}
+        run_enforcement_hook(
+            "bash_guard.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        logged = log_file.read_text()
+        assert "managed file deleted" in logged, logged
+        assert "actual missing" not in logged
+
+    def test_violation_detail_falls_back_for_a_binary_without_kind(
+        self, tmp_path, mock_daemon
+    ):
+        """A pre-0.20.1 binary reports no kind — keep the old wording."""
+        log_file = self._violation_mock(
+            tmp_path,
+            '[{"path":"docs/holtz/STATUS.md",'
+            '"expected":"bbbb2222cccc3333dddd","actual":null}]',
+        )
+        event = {"tool_name": "Bash", "cwd": str(tmp_path)}
+        run_enforcement_hook(
+            "bash_guard.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        logged = log_file.read_text()
+        assert "manifest hash mismatch" in logged, logged
+
+    def test_records_when_the_ledger_query_fails(self, tmp_path, mock_daemon):
+        """An unreadable ledger degrades to recording, never to silence.
+
+        Losing a real violation is worse than logging a duplicate, so a query
+        that cannot run must not be read as "already recorded".
+        """
+        log_file = self._violation_mock(
+            tmp_path,
+            '[{"path":"docs/holtz/STATUS.md",'
+            '"expected":"bbbb2222cccc3333dddd","actual":null,"kind":"missing"}]',
+            query_json="not json at all",
+        )
+        event = {"tool_name": "Bash", "cwd": str(tmp_path)}
+        run_enforcement_hook(
+            "bash_guard.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        assert log_file.exists(), "a failed query suppressed a real violation"
+        assert "file_path=docs/holtz/STATUS.md" in log_file.read_text()
+
+    def test_unmanaged_entries_produce_no_violation(self, tmp_path, mock_daemon):
+        """#85: entries outside managed_paths are not integrity failures.
+
+        sahjhan >= 0.20.1 splits them into `data.unmanaged`; bash_guard reads
+        only `data.mismatches`, so a manifest still carrying pre-fix phantom
+        keys stops generating fresh violations after the upgrade.
+        """
+        log_file = self._violation_mock(tmp_path, "[]")
+        # Rewrite the mock so verify reports ONLY unmanaged entries, still on
+        # the integrity exit code an older engine would have used.
+        verify_json = (
+            '{"schema_version":1,"ok":true,"command":"manifest_verify",'
+            '"data":{"clean":false,"tracked_count":3,"mismatches":[],'
+            '"unmanaged":[{"path":"STATUS.md","expected":"cccc3333dddd4444eeee",'
+            '"actual":null,"kind":"unmanaged"}]}}'
+        )
+        _create_mock_binary(tmp_path, (
+            'case "$*" in\n'
+            '  *"manifest verify"*)\n'
+            "    echo '" + verify_json + "'\n"
+            '    exit 2\n'
+            '    ;;\n'
+            '  *query*)\n'
+            '    echo "[]"\n'
+            '    exit 0\n'
+            '    ;;\n'
+            '  *)\n'
+            '    echo "$*" >> ' + str(log_file) + '\n'
+            '    exit 0\n'
+            '    ;;\n'
+            'esac'
+        ))
+        event = {"tool_name": "Bash", "cwd": str(tmp_path)}
+        run_enforcement_hook(
+            "bash_guard.py", event, cwd=str(tmp_path), env=_mock_env(tmp_path)
+        )
+        recorded = log_file.read_text() if log_file.exists() else ""
+        assert "file_path=STATUS.md" not in recorded, (
+            "an entry outside managed_paths was recorded as tampering"
+        )
+
     def test_skips_manifest_verify_for_sahjhan_commands(self, tmp_path):
         """BH-019: bash_guard skips manifest verification for sahjhan commands.
 

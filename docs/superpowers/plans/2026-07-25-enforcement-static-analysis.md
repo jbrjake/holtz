@@ -485,6 +485,59 @@ check or be recorded here as un-lintable **with the reason**. That is what
 stops this from decaying back into prose — the same discipline the project
 already applies to route-arounds.
 
+### Ratchet round 2 — #85 (2026-08-18)
+
+A field audit permanently tripped `no_violations` because sahjhan derived
+manifest keys from the process cwd while resolving `data_dir` by walking up to
+the project root. Two derivations of one fact, disagreeing. Fixed in sahjhan
+`0.20.1`; plan doc
+`docs/superpowers/plans/2026-08-18-issue-85-manifest-cwd-anchoring.md`.
+
+**Un-lintable from here, and the reason is structural.** The defect lived in
+the engine's *filesystem* layer — below every layer this model has. The linter
+reads TOML, Python and skill markdown; the two disagreeing expressions were
+both Rust, and nothing in holtz's tree could observe either. The engine-side
+analogue is a `sahjhan lint` concern at most, and probably not even that: it is
+an ordinary code defect, caught by the test now pinning it
+(`tests/paths_tests.rs`, `tests/integration_tests.rs`). Recording it here so
+the absence of a check is a decision rather than a gap.
+
+**What the round did yield: a third shape of opaque gate.** Chasing the
+contract's freshness failure surfaced that `no_violations` — on `set complete
+perspective` and `converge`, the only two transitions that reach convergence —
+was **absent from the census entirely**. Its predicate is neither in the config
+nor in this tree: it is compiled into `eval_no_violations`
+(`sahjhan/src/gates/ledger.rs`), which counts `protocol_violation` minus
+`violation_resolved`. So the gate names no event, and
+`ENFORCEMENT-CONTRACT.md` printed `*direct check* / — / direct / n/a` for the
+one gate that can terminate a run.
+
+That is the same failure H10 was built for — a gate whose evidence is invisible
+from config — arriving through a third door:
+
+| shape | predicate lives in | answer |
+|---|---|---|
+| `command_succeeds` | the invoked script | `evidence = "<event>"`, falsified by H10 against that script's SQL |
+| `query` / named query | SQL, in config | resolved directly |
+| **engine gate type** | **the sahjhan binary** | **`_ENGINE_GATE_EVENTS` table, cited to the Rust function** |
+
+H10 could not be extended to cover it: H10 deliberately *errors* when
+`evidence` appears on a gate that runs no command ("only report what you can
+decide"), and `no_violations` runs none. So the third shape gets a table rather
+than a declaration — the mapping is a fact about the engine, not about our
+config, so declaring it per-gate would just be 2 copies of one fact, which is
+the defect this whole document is about.
+
+Posture moved 21/29 → 22/30. The new row reads `protocol_violation` /
+`hook:bash_guard.py` / `agent` / forgeable **yes** — which `events.toml`
+already argued for in prose ("forging one only blocks the forger's own
+convergence") and which nothing had counted.
+
+**Add to this table whenever a new engine gate type reads the ledger.** If
+sahjhan gains one and the table does not, the census silently under-counts
+again and the symptom is a contract row that says `*direct check*` for a gate
+that is anything but.
+
 ## What this cannot catch
 
 Stated plainly, so the green check is not over-read:

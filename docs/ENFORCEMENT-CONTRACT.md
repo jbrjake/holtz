@@ -23,13 +23,13 @@ Every event gets exactly one, declared in `events.toml` and ordered by `[attesta
 
 ## Posture
 
-**21 of 29 gate-consumed events are the agent's own word.**
+**22 of 30 gate-consumed events are the agent's own word.**
 
 This is not a bug — self-attestation is fine for bookkeeping, and a protocol whose every step needed host evidence would not be usable. It is here because it should be a *deliberate, visible* posture rather than an accident nobody had counted. The defect is a **mismatch**: a gate whose purpose is to constrain the agent, fed by evidence the agent controls.
 
 | Class | Gate-consumed events |
 |---|---|
-| `agent` (21) | `audit_claim`, `baseline_updated`, `blast_radius`, `finding`, `finding_deferred`, `finding_resolved`, `fix_start`, `hardening_complete`, `iteration_complete`, `justine_dispatched`, `lens_sweep_started`, `living_punchlist_updated`, `merge_agent_dispatched`, `pattern_analysis_complete`, `pattern_contribution_complete`, `recon_step`, `reference_read`, `set_member_complete`, `snapshot`, `source_edit`, `test_failed_before_fix` |
+| `agent` (22) | `audit_claim`, `baseline_updated`, `blast_radius`, `finding`, `finding_deferred`, `finding_resolved`, `fix_start`, `hardening_complete`, `iteration_complete`, `justine_dispatched`, `lens_sweep_started`, `living_punchlist_updated`, `merge_agent_dispatched`, `pattern_analysis_complete`, `pattern_contribution_complete`, `protocol_violation`, `recon_step`, `reference_read`, `set_member_complete`, `snapshot`, `source_edit`, `test_failed_before_fix` |
 | `engine` (1) | `state_transition` |
 | `tool` (5) | `quiz_answered`, `quiz_bank_generated`, `quiz_exhausted`, `quiz_posed`, `suite_green` |
 | `host` (1) | `context_reset` |
@@ -246,7 +246,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | prevent rapid-fire gaming of iteration count | `iteration_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | tests must pass | `suite_green` | `tool:enforcement/scripts/verify_suite.py` | `tool` | no — daemon refuses unauthenticated callers |
 | no lint violations | *direct check* | — | `direct` | n/a |
-| no unresolved protocol violations | *direct check* | — | `direct` | n/a |
+| no unresolved protocol violations | `protocol_violation` | `hook:enforcement/hooks/bash_guard.py` | `agent` | **yes** — `sahjhan event` |
 | lens quiz must be passed | `quiz_answered` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
 | quiz must be posed by enforcement hook before completion | `quiz_posed` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
 | a lens sweep must be started for this perspective before completion | `lens_sweep_started` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
@@ -277,7 +277,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | all findings must be resolved or deferred | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
-| no unresolved protocol violations | *direct check* | — | `direct` | n/a |
+| no unresolved protocol violations | `protocol_violation` | `hook:enforcement/hooks/bash_guard.py` | `agent` | **yes** — `sahjhan event` |
 | no unresolved quiz exhaustions | `quiz_exhausted` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
 | ↳ | `quiz_exhausted_resolved` | `human:skills/holtz/references/phase-convergence.md` | `human` | no — bootstrap denies `sahjhan event` |
 

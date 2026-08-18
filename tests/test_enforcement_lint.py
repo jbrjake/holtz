@@ -1383,3 +1383,57 @@ class TestCurrentDev:
             if event not in model.events and event not in el.ENGINE_BUILTIN_EVENTS
         }
         assert unknown == set()
+
+
+class TestEngineGateTypes:
+    """#85: a gate whose predicate is compiled into the sahjhan binary.
+
+    The third shape of opaque gate, after ``command_succeeds`` (predicate in
+    the invoked script — H10) and ``query`` (predicate in SQL). Here it is
+    neither in the config nor in this tree, so the gate names no event and
+    every consumer-side check reads it as depending on nothing.
+    """
+
+    def test_no_violations_consumes_protocol_violation(self) -> None:
+        """Source: sahjhan `src/gates/ledger.rs::eval_no_violations`."""
+        gate = {"type": "no_violations", "intent": "no unresolved protocol violations"}
+        assert el._gate_consumed(gate) == {"protocol_violation"}
+
+    def test_an_unmodelled_gate_type_still_consumes_nothing(self) -> None:
+        """The table is a whitelist, not a guess about every gate type."""
+        assert el._gate_consumed({"type": "file_exists", "path": "x.md"}) == set()
+
+    def test_the_live_no_violations_gates_are_counted(self, model: el.Model) -> None:
+        """The census must include the gate that can terminate a run.
+
+        `no_violations` sits on `set complete perspective` and `converge` — the
+        only two transitions that reach convergence. Before #85 it was absent
+        from ENFORCEMENT-CONTRACT.md's posture entirely, so the document that
+        exists to give one truthful row per gate had none for that one.
+        """
+        gated = [
+            transition["command"]
+            for transition in model.transitions
+            if any(
+                gate.get("type") == "no_violations"
+                for gate in transition.get("gates", []) or []
+            )
+        ]
+        assert gated == ["set complete perspective", "converge"], gated
+        assert "protocol_violation" in el.gate_consumed_events(model)
+
+    def test_the_table_names_only_events_the_protocol_declares(
+        self, model: el.Model
+    ) -> None:
+        """An undeclared event is not consumed evidence.
+
+        The engine also subtracts `violation_resolved`, which holtz does not
+        declare — violations are permanent by design (see #86). Listing it
+        would put a phantom row in the contract.
+        """
+        for events in el._ENGINE_GATE_EVENTS.values():
+            for event in events:
+                assert event in model.events, (
+                    f"_ENGINE_GATE_EVENTS names '{event}', which events.toml "
+                    f"does not declare"
+                )
