@@ -54,6 +54,8 @@ Launch **one** Agent subagent for the finding. Give it: the finding (ID, descrip
 
    Ordering is load-bearing: the green is bound to a hash of the working tree, so **any** later edit — the hardening test above especially — invalidates it, and the orchestrator's step 10 would then reject a fix that is perfectly good. Record after the last write, not before.
 
+   **Run it alone on its own Bash line.** Chaining anything before or after it (`&&`, `;`, `|`) records nothing — the line's own success is part of the evidence, so it cannot be carrying other work. If a run is green but step 10 still says there is no `suite_green` for this tree, that is almost always why.
+
 The subagent returns a **compact result**, not artifacts to apply: root cause + confidence (`bug/*` needs HIGH confidence before any fix), the blast-radius node, the test name(s), and the suite pass-count. The edits and the ledger events are already on disk — that is the whole point. The subagent does **NOT** `git commit` and does **NOT** run any `transition`; those are yours.
 
 If the subagent cannot reach HIGH confidence, it records nothing, leaves the tree clean, and returns its investigation notes plus a recommendation (defer-low / defer-medium / can't-reproduce with evidence). You then follow the deferral path in [references/step-10-fix-loop.md](references/step-10-fix-loop.md) — do not invent a fix.

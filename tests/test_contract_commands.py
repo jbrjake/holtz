@@ -75,20 +75,9 @@ class TestPhaseReconInitSequence:
     def test_sahjhan_init_with_config_dir(self):
         _assert_allowed(
             'sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" init',
-            "phase-recon.md: init with --config-dir (plugin context)",
+            "SKILL.md: init with --config-dir (plugin context)",
         )
 
-    def test_nohup_daemon_start(self):
-        _assert_allowed(
-            "nohup sahjhan daemon start > /dev/null 2>&1 &",
-            "phase-recon.md: daemon start with nohup + redirect + background (legacy)",
-        )
-
-    def test_nohup_daemon_start_with_config_dir(self):
-        _assert_allowed(
-            'nohup sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" daemon start > /tmp/sahjhan-daemon.log 2>&1 &',
-            "phase-recon.md: daemon start with --config-dir and log capture",
-        )
 
     def test_ledger_create(self):
         _assert_allowed(
@@ -161,6 +150,21 @@ class TestPhaseReconQuizStage:
         self._assert_allowed_in_plugin(
             "python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/quiz_stage.py --finalize",
             "phase-recon.md Step 5: finalize the quiz bank",
+        )
+
+
+class TestBoundaryCheck(TestPhaseReconQuizStage):
+    """Recon's very first command has to survive the bootstrap hook.
+
+    A block here is the worst possible one: the agent is told to run this
+    before anything else, so a refusal stops the audit at step zero with a
+    message about script readability rather than about the boundary.
+    """
+
+    def test_boundary_check(self):
+        self._assert_allowed_in_plugin(
+            'python3 "$CLAUDE_PLUGIN_ROOT/skills/holtz/scripts/boundary_check.py"',
+            "phase-recon.md and SKILL.md step 0: confirm the boundary first",
         )
 
 

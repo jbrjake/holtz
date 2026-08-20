@@ -534,10 +534,14 @@ id = "agent:cli"
 # tree proven green?" instead of proving it again. A tree that changed by one
 # byte has a different hash and no longer satisfies anything.
 #
-# `restricted` + hash-pinned writer is what makes the answer trustworthy. The
-# writer computes the hash and runs the suite itself; it accepts no
-# caller-supplied hash and no caller-supplied result, so the strongest thing an
-# agent can do is run the suite for real.
+# `restricted` + hash-pinned writer is what makes the answer trustworthy, and
+# the writer is a PostToolUse hook rather than the script that runs the tests.
+# That script executes in the agent's shell, which is sandboxed and cannot
+# reach the daemon; the hook runs outside the sandbox. It computes `tree_hash`
+# and `commit_hash` from git itself and reads `scope` from the command text the
+# host reports, so every field a gate consults is derived beyond the agent's
+# reach. `command` and `test_count` cross from the run's own output and no gate
+# reads either. The strongest thing an agent can do is run the suite for real.
 [events.suite_green]
 description = "The test suite ran and passed on a specific working-tree hash"
 attestation = "tool"
@@ -560,13 +564,14 @@ fields = [
     { name = "commit_hash", type = "string", pattern = "^[0-9a-f]{7,40}$", optional = true },
 ]
 
-# `tool:`, not `hook:`. Nothing in the harness fires this script — a gate runs
-# it, and the fix loop teaches the agent to. The distinction is load-bearing
-# for H4: a `hook:` that is absent from hooks.json never runs at all, whereas
-# demanding registration of a gate helper would be a permanent false error.
-# Both kinds still owe the hash pin, which is what the daemon actually checks.
+# `hook:`, so H4 holds it to being registered in hooks.json — which it must be,
+# since a PostToolUse hook that the harness never fires records nothing and the
+# fix loop simply stops. The suite still runs from `verify_suite.py` in the
+# agent's shell; that shell is sandboxed and cannot reach the daemon, so the
+# courier is what turns a green run into a ledger entry. Both owe the hash pin,
+# which is what the daemon actually checks.
 [[events.suite_green.producers]]
-id = "tool:enforcement/scripts/verify_suite.py"
+id = "hook:enforcement/hooks/suite_courier.py"
 
 [events.fix_start]
 description = "Starting work on a punchlist item"

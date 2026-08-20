@@ -93,13 +93,14 @@ import tempfile
 # remove (asserted by test_suite_gates_delegate_to_verify_suite).
 DEFAULT_PYTEST = "python3 -m pytest -x --ff --tb=short -q"
 
-# `suite_green` is spelled out as a string literal at the write site and in the
-# gate's SQL below, deliberately, and must stay that way. `enforcement_lint.py`
-# discovers write paths by scanning for the event type as a literal argument to
-# `record_authed_event` — that scan is what falsifies the `[[producers]]`
-# declaration in events.toml. Hoisting the name into a module constant hides
-# the writer from H2/H3, and an event whose declared producer cannot be
-# confirmed is exactly the class of defect those checks exist to catch.
+# `suite_green` is spelled out as a string literal in the gate's SQL below, and
+# at the write site in `enforcement/hooks/suite_courier.py`, deliberately, and
+# must stay that way in both. `enforcement_lint.py` discovers write paths by
+# scanning for the event type as a literal argument to `record_authed_event` —
+# that scan is what falsifies the `[[producers]]` declaration in events.toml.
+# Hoisting the name into a module constant hides the writer from H2/H3, and an
+# event whose declared producer cannot be confirmed is exactly the class of
+# defect those checks exist to catch.
 
 # `full` ran everything; `affected` ran the impact-graph subset for the files
 # that changed. Ordered weakest-first: a `full` run satisfies a request for
@@ -125,6 +126,11 @@ GRAPH_PATH = os.path.join("docs", "holtz", "impact-graph.json")
 # tests, so it is always the safe direction; recording the narrow result is
 # not.
 SELECTION_FAILURE_EXITS = (4, 5)
+
+# The line `--record` prints on green and `suite_courier.py` requires before it
+# writes anything. Named here, imported there — the two ends of a channel that
+# would fail silently if they ever disagreed about the word.
+RECORD_MARKER = "SUITE-GREEN:"
 
 _PASSED_RE = re.compile(r"(\d+) passed")
 _TREE_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -324,6 +330,59 @@ def _record_command(scope: str) -> str:
     this names the absolute path of the very file being executed.
     """
     return f"python3 {os.path.abspath(__file__)} --record --scope {scope}"
+
+
+# One recognizer, defined beside the command it recognizes. `suite_courier.py`
+# imports it rather than carrying a second regex: the courier records only for
+# a command it can identify, so a drift between "what the skill file teaches"
+# and "what the courier accepts" would be a silent deadlock — the agent runs a
+# green suite and nothing is ever written.
+_SCRIPT_TAIL = os.path.join("enforcement", "scripts", "verify_suite.py")
+_INTERPRETERS = frozenset({"python", "python3", "py"})
+
+
+def record_scope_of(segment: str) -> str | None:
+    """The scope a shell segment records for, or None if it is not that command.
+
+    Read from the command text *as typed*, which is what the host reports to a
+    PostToolUse hook — `${CLAUDE_PLUGIN_ROOT}` is still a literal at that
+    point, so the script is identified by its tail rather than by resolving a
+    path the hook cannot expand the same way the shell did.
+
+    Scope comes from here rather than from the run's own report on purpose. A
+    `--scope affected` run that could not prove a subset widens to the whole
+    suite, and recording that as `full` would let an implicit widening satisfy
+    the three transitions that demand an explicit full green. The claim the
+    command made is the conservative one, and it is the one the host saw.
+
+    `--cwd` is rejected rather than parsed. The courier hashes the tree at the
+    *event's* cwd, so a run pointed somewhere else would have this repo's hash
+    attached to another repo's result — and the flag exists for tests and
+    diagnostics, not for the recorded path.
+    """
+    try:
+        tokens = shlex.split(segment)
+    except ValueError:
+        return None
+    if len(tokens) < 3:
+        return None
+    if os.path.basename(tokens[0]) not in _INTERPRETERS:
+        return None
+    if not tokens[1].endswith(_SCRIPT_TAIL):
+        return None
+
+    scope = "full"  # build_parser's default for --scope
+    rest = tokens[2:]
+    seen_record = False
+    while rest:
+        flag = rest.pop(0)
+        if flag == "--record":
+            seen_record = True
+        elif flag == "--scope" and rest and rest[0] in SCOPES:
+            scope = rest.pop(0)
+        else:
+            return None
+    return scope if seen_record else None
 
 
 def _block(reason: str, tree_hash: str, accepted: tuple[str, ...], scope: str) -> int:
@@ -618,10 +677,20 @@ def _run_suite(command: str, cwd: str) -> subprocess.CompletedProcess:
 
 
 def mode_record(cwd: str, root: str, scope: str) -> int:
-    """Run the suite and, on green, record ``suite_green`` for this tree."""
-    sys.path.insert(0, _hooks_dir())
-    from _common import record_authed_event  # noqa: PLC0415
+    """Run the suite and, on green, emit the evidence a courier hook records.
 
+    This runs inside the sandbox — it is the agent's own shell — so it cannot
+    reach the daemon socket and cannot write the restricted ``suite_green``
+    event itself. It does the one thing only a process in the project can do:
+    run the tests. ``suite_courier.py``, which Claude Code fires outside the
+    sandbox, turns that into a ledger entry.
+
+    The split is not just plumbing, it is better provenance. Everything a gate
+    reads is now derived by the courier from git and from the command text the
+    host reports, rather than computed by a process the agent controls. What
+    crosses this boundary — the marker below — carries only the fields no gate
+    consults.
+    """
     tree_hash = compute_tree_hash(root)
     print(f"verify_suite: tree_hash={tree_hash}", file=sys.stderr)
 
@@ -655,33 +724,19 @@ def mode_record(cwd: str, root: str, scope: str) -> int:
         )
         return proc.returncode
 
-    fields = {
-        "project": os.path.basename(root),
-        "run": _run_number(cwd),
-        "auditor": "holtz",
-        "tree_hash": tree_hash,
-        "scope": scope,
-        "command": command,
-    }
-    # The baseline the *next* affected run measures its diff from. Recorded
-    # from `git rev-parse` here, never from a caller.
-    head = _git(["rev-parse", "HEAD"], root)
-    if head and _COMMIT_RE.match(head):
-        fields["commit_hash"] = head
+    evidence = {"command": command, "scope_ran": scope}
     passed = _PASSED_RE.search(proc.stdout)
     if passed:
-        fields["test_count"] = passed.group(1)
+        evidence["test_count"] = passed.group(1)
 
-    try:
-        record_authed_event("suite_green", fields, cwd)
-    except (OSError, RuntimeError) as exc:
-        print(
-            f"FAIL: suite passed but recording suite_green failed: {exc}",
-            file=sys.stderr,
-        )
-        return 1
-
-    print(f"PASS: suite green, recorded suite_green scope={scope} tree_hash={tree_hash}")
+    # Printed last so it survives output truncation, and only on green — the
+    # courier requires it, which is what keeps "the host fired PostToolUse"
+    # from being the sole thing standing between a red suite and a recorded
+    # green. Claude Code 2.x omits `exit_code` from the event and fires
+    # PostToolUse only on success, so on its own that signal has no second
+    # opinion; this is the second opinion.
+    print(f"PASS: suite green scope={scope} tree_hash={tree_hash}")
+    print(f"{RECORD_MARKER} {json.dumps(evidence, sort_keys=True)}")
     return 0
 
 

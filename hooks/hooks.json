@@ -70,6 +70,10 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/quiz_capture.py\""
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/suite_courier.py\""
           }
         ]
       }

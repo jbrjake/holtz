@@ -906,19 +906,37 @@ def _record_suite_green(real_daemon):
     trivially-true pytest command. `HOLTZ_PYTEST` stands in for the suite; the
     hash, the daemon call, and the `restricted` write are all real — which is
     the point, since a test that stubbed those would stop exercising the gate.
+
+    Both halves of the taught sequence run: `--record` in the agent's shell,
+    which under the sandbox cannot reach the daemon, and then the PostToolUse
+    courier that turns its output into the ledger entry. Recording the event
+    directly here would leave the channel the fix loop actually uses untested,
+    which is the shape `test-the-taught-sequence-not-just-the-gate` describes.
     """
+    root = real_daemon["project_root"]
+    script = os.path.join(REPO_ROOT, "enforcement", "scripts", "verify_suite.py")
     env = os.environ.copy()
     env["SAHJHAN_DAEMON_SOCKET"] = real_daemon["sock_path"]
     result = subprocess.run(
-        [sys.executable,
-         os.path.join(REPO_ROOT, "enforcement", "scripts", "verify_suite.py"),
-         "--record", "--cwd", real_daemon["project_root"]],
-        cwd=real_daemon["project_root"],
-        capture_output=True, text=True, env=env, timeout=60,
+        [sys.executable, script, "--record"],
+        cwd=root, capture_output=True, text=True, env=env, timeout=60,
     )
     assert result.returncode == 0, (
         f"verify_suite --record failed:\n{result.stdout}\n{result.stderr}"
     )
+    courier = subprocess.run(
+        [sys.executable,
+         os.path.join(REPO_ROOT, "enforcement", "hooks", "suite_courier.py")],
+        input=json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": f"python3 {script} --record"},
+            "tool_response": {"output": result.stdout, "exit_code": 0},
+            "cwd": root,
+        }),
+        capture_output=True, text=True, env=env, timeout=60,
+    )
+    assert courier.returncode == 0, courier.stderr
+    assert "NOT recorded" not in courier.stdout, courier.stdout
 
 
 def _satisfy_fix_commit_gates(real_daemon, finding_id="BH-001"):

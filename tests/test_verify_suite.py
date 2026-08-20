@@ -726,11 +726,46 @@ class TestAgainstRealDaemon:
         return {"SAHJHAN_DAEMON_SOCKET": real_daemon["sock_path"],
                 "HOLTZ_PYTEST": "echo '4 passed'"}
 
+    @staticmethod
+    def _record(root, real_daemon, *scope_args, env=None):
+        """Run `--record` and then the courier, as a real session does.
+
+        `--record` runs in the agent's shell, which under the boundary cannot
+        reach the daemon; `suite_courier.py` is what writes the event, fired by
+        the harness afterwards. Driving only half of that would be the shape
+        described in `test-the-taught-sequence-not-just-the-gate`: a gate check
+        that passes while the sequence the agent actually performs is broken.
+
+        Invoked without `--cwd`, which the agent never passes and the courier
+        deliberately refuses to recognize.
+        """
+        env = {**os.environ, **(env or TestAgainstRealDaemon._env(real_daemon))}
+        command = f"python3 {VERIFY_SUITE} --record " + " ".join(scope_args)
+        run = subprocess.run(
+            [sys.executable, VERIFY_SUITE, "--record", *scope_args],
+            cwd=root, capture_output=True, text=True, env=env, timeout=120,
+        )
+        if run.returncode != 0:
+            return run
+        courier = subprocess.run(
+            [sys.executable, os.path.join(REPO_ROOT, "enforcement", "hooks", "suite_courier.py")],
+            input=json.dumps({
+                "tool_name": "Bash",
+                "tool_input": {"command": command.strip()},
+                "tool_response": {"output": run.stdout, "exit_code": 0},
+                "cwd": root,
+            }),
+            capture_output=True, text=True, env=env, timeout=60,
+        )
+        assert courier.returncode == 0, courier.stderr
+        assert "NOT recorded" not in courier.stdout, courier.stdout
+        return run
+
     def test_green_suite_records_an_accepted_event(self, real_daemon):
         root = self._prepare(real_daemon)
         expected = verify_suite.compute_tree_hash(root)
 
-        result = _run_verify(root, "--record", env=self._env(real_daemon))
+        result = self._record(root, real_daemon, env=self._env(real_daemon))
         assert result.returncode == 0, (
             f"stdout={result.stdout}\nstderr={result.stderr}"
         )
@@ -750,7 +785,7 @@ class TestAgainstRealDaemon:
         root = self._prepare(real_daemon)
         env = self._env(real_daemon)
 
-        assert _run_verify(root, "--record", env=env).returncode == 0
+        assert self._record(root, real_daemon, env=env).returncode == 0
         assert _run_verify(root, "--check", env=env).returncode == 0
 
         _write(root, "app.py", "def add(a, b):\n    return a - b\n")
@@ -766,7 +801,7 @@ class TestAgainstRealDaemon:
         root = self._prepare(real_daemon)
         env = self._env(real_daemon)
 
-        assert _run_verify(root, "--record", env=env).returncode == 0
+        assert self._record(root, real_daemon, env=env).returncode == 0
         _write(root, "docs/holtz/STATUS.md", "rewritten\n")
         assert _run_verify(root, "--check", env=env).returncode == 0
 
@@ -821,7 +856,7 @@ class TestAgainstRealDaemon:
         """Even a well-formed hash for another tree must not open the gate."""
         root = self._prepare(real_daemon)
         env = self._env(real_daemon)
-        assert _run_verify(root, "--record", env=env).returncode == 0
+        assert self._record(root, real_daemon, env=env).returncode == 0
 
         # A different tree, proven green, is still a different tree.
         _write(root, "app.py", "def add(a, b):\n    return a * b\n")
@@ -837,13 +872,13 @@ class TestAgainstRealDaemon:
         _write(root, "tests/test_app.py", "def test_add():\n    assert True\n")
         _git(root, "add", "tests/test_app.py")
         _git(root, "commit", "-qm", "tests")
-        assert _run_verify(root, "--record", env=env).returncode == 0
+        assert self._record(root, real_daemon, env=env).returncode == 0
         return _head(root)
 
     def test_a_full_green_records_the_commit_it_proved(self, real_daemon):
         """The baseline every later affected run measures its diff from."""
         root = self._prepare(real_daemon)
-        assert _run_verify(root, "--record", env=self._env(real_daemon)).returncode == 0
+        assert self._record(root, real_daemon, env=self._env(real_daemon)).returncode == 0
         assert self._greens(real_daemon)[-1]["commit_hash"] == _head(root)
 
     def test_affected_narrows_to_the_covering_tests(self, real_daemon):
@@ -867,7 +902,7 @@ class TestAgainstRealDaemon:
         )
         _write(root, "app.py", "def add(a, b):\n    return b + a\n")
 
-        result = _run_verify(root, "--record", "--scope", "affected", env=env)
+        result = self._record(root, real_daemon, "--scope", "affected", env=env)
         assert result.returncode == 0, (
             f"stdout={result.stdout}\nstderr={result.stderr}"
         )
@@ -890,7 +925,7 @@ class TestAgainstRealDaemon:
         _write_graph(root, {}, [])
         _write(root, "app.py", "def add(a, b):\n    return b + a\n")
 
-        result = _run_verify(root, "--record", "--scope", "affected", env=env)
+        result = self._record(root, real_daemon, "--scope", "affected", env=env)
         assert result.returncode == 0
         assert "no `tests` edge covers app.py" in result.stderr
         assert self._greens(real_daemon)[-1]["scope"] == "full"
@@ -921,14 +956,21 @@ class TestAgainstRealDaemon:
         self._baseline(real_daemon, root, env)
 
         _write(root, "tests/test_app.py", "def test_add():\n    assert 1 == 1\n")
-        result = _run_verify(root, "--record", "--scope", "affected", env=env)
+        result = self._record(root, real_daemon, "--scope", "affected", env=env)
         assert result.returncode == 0, (
             f"stdout={result.stdout}\nstderr={result.stderr}"
         )
         assert "widening to the full suite" in result.stderr
 
+        # Recorded as `affected`, and deliberately so. The widening here is a
+        # *runtime* fact — pytest collected nothing from the subset, so the
+        # script re-ran everything — and the courier cannot re-derive it: the
+        # selection it recomputes does narrow, and it will not take the run's
+        # word for a field the gates read. Under-claiming costs one extra full
+        # run before the transitions that demand a full green; over-claiming
+        # would let a subset satisfy them.
         latest = self._greens(real_daemon)[-1]
-        assert latest["scope"] == "full"
+        assert latest["scope"] == "affected"
         assert latest["test_count"] == "9"
 
     def test_an_affected_green_does_not_satisfy_a_full_check(self, real_daemon):
@@ -948,8 +990,8 @@ class TestAgainstRealDaemon:
             [{"source": "t", "target": "app:add", "type": "tests"}],
         )
         _write(root, "app.py", "def add(a, b):\n    return b + a\n")
-        assert _run_verify(
-            root, "--record", "--scope", "affected", env=env
+        assert self._record(
+            root, real_daemon, "--scope", "affected", env=env
         ).returncode == 0
 
         assert _run_verify(
