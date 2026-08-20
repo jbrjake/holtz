@@ -13,11 +13,19 @@ MANIFEST="$REPO_ROOT/enforcement/trusted-callers.toml"
 # unlisted callers with "caller not authenticated" and the hook falls
 # back to cache=None / is_enforcement_fresh=False, which silently
 # disables enforcement.
+#
+# Since sahjhan 0.21.0 the daemon authenticates only the process *directly*
+# holding the socket, and its script must canonicalize under --config-dir
+# (i.e. live under enforcement/). A script outside that tree can never
+# authenticate however it is invoked, so listing one is decoration — which is
+# why hooks/subagent_findings_check.py is no longer here. It never opened the
+# socket in the first place; it only warns about missing files.
 TRUSTED_SCRIPTS=(
     "enforcement/hooks/_common.py"
     "enforcement/hooks/lens_quiz.py"
     "enforcement/hooks/stop_hook.py"
     "enforcement/hooks/primer.py"
+    "enforcement/hooks/sandbox_control.py"
     "enforcement/hooks/session_start.py"
     "enforcement/hooks/pre_tool_hook.py"
     "enforcement/hooks/post_tool_hook.py"
@@ -29,7 +37,6 @@ TRUSTED_SCRIPTS=(
     # path. It records the restricted `suite_green` event, so the daemon
     # resolves *this* script from the caller's cmdline and checks its hash.
     "enforcement/scripts/verify_suite.py"
-    "hooks/subagent_findings_check.py"
 )
 
 cat > "$MANIFEST" << 'HEADER'

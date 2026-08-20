@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 from types import ModuleType
 from unittest import mock
@@ -195,17 +196,60 @@ def test_daemon_request_raises_on_error_response():
         )
 
 
-def test_get_daemon_socket_path():
+def test_get_daemon_socket_path(monkeypatch, tmp_path):
     """Issue #35 bug 3: Socket path must use daemon.sock (binary's actual name)."""
+    monkeypatch.delenv("SAHJHAN_DAEMON_SOCKET", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
     path = _enforcement_common._get_daemon_socket_path("/tmp/project")
-    assert path == "/tmp/project/docs/holtz/.sahjhan/daemon.sock"
+    assert os.path.basename(path) == "daemon.sock"
+    assert path.startswith(str(tmp_path))
 
 
-def test_get_daemon_socket_path_defaults_to_cwd():
+def test_get_daemon_socket_path_defaults_to_cwd(monkeypatch, tmp_path):
     """With no argument, uses os.getcwd()."""
+    monkeypatch.delenv("SAHJHAN_DAEMON_SOCKET", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
     with mock.patch("os.getcwd", return_value="/fake/cwd"):
         path = _enforcement_common._get_daemon_socket_path()
-    assert path == "/fake/cwd/docs/holtz/.sahjhan/daemon.sock"
+    assert path == _enforcement_common._get_daemon_socket_path("/fake/cwd")
+
+
+def test_socket_lives_outside_the_project_tree(monkeypatch, tmp_path):
+    """The fuse refuses an in-project socket (``socket_inside_project``).
+
+    Inside the tree the path is agent-writable — deletable, and squattable
+    between daemon restarts — so this is the property the boundary rests on,
+    not a tidiness preference.
+    """
+    monkeypatch.delenv("SAHJHAN_DAEMON_SOCKET", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    project = str(tmp_path / "project")
+    path = _enforcement_common._get_daemon_socket_path(project)
+    assert not os.path.realpath(path).startswith(os.path.realpath(project) + os.sep)
+
+
+def test_socket_path_is_per_project(monkeypatch, tmp_path):
+    """Two checkouts of the same repo must not share one daemon."""
+    monkeypatch.delenv("SAHJHAN_DAEMON_SOCKET", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    a = _enforcement_common._get_daemon_socket_path("/work/holtz")
+    b = _enforcement_common._get_daemon_socket_path("/work/holtz-2")
+    assert a != b
+
+
+def test_socket_path_fits_the_afunix_limit(monkeypatch):
+    """macOS caps sun_path at 104 bytes; a long project path must not blow it."""
+    monkeypatch.delenv("SAHJHAN_DAEMON_SOCKET", raising=False)
+    monkeypatch.setenv("HOME", "/Users/somebody-with-a-long-name")
+    deep = "/Users/somebody/Documents/code/" + "nested/" * 20 + "project"
+    path = _enforcement_common._get_daemon_socket_path(deep)
+    assert len(path.encode()) < 104, path
+
+
+def test_socket_path_env_override_wins(monkeypatch):
+    """holtz-start binds via SAHJHAN_DAEMON_SOCKET; hooks must follow it."""
+    monkeypatch.setenv("SAHJHAN_DAEMON_SOCKET", "/tmp/explicit.sock")
+    assert _enforcement_common._get_daemon_socket_path("/anywhere") == "/tmp/explicit.sock"
 
 
 def test_compute_event_proof_ignores_key_path_kwarg():
@@ -217,14 +261,19 @@ def test_compute_event_proof_ignores_key_path_kwarg():
     assert proof == "compat_proof"
 
 
-def test_compute_event_proof_uses_explicit_cwd():
+def test_compute_event_proof_uses_explicit_cwd(monkeypatch):
     """Issue #35 bug 1: compute_event_proof must use explicit cwd for socket path.
 
     In worktree subagents, os.getcwd() is a temp dir. Callers must be able
     to pass cwd so the socket path resolves to the main project daemon.
     """
+    # Without this the override would make both sides equal and the
+    # assertion below would hold no matter which cwd was used.
+    monkeypatch.delenv("SAHJHAN_DAEMON_SOCKET", raising=False)
+    expected = _enforcement_common._get_daemon_socket_path("/main/project")
+
     def _fake_request(sock_path, request):
-        assert sock_path == "/main/project/docs/holtz/.sahjhan/daemon.sock"
+        assert sock_path == expected
         return {"ok": True, "proof": "worktree_proof"}
 
     with mock.patch.object(_enforcement_common, '_daemon_request', side_effect=_fake_request):

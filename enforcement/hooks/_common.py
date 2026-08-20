@@ -13,6 +13,7 @@ Also provides enforcement-specific utilities:
 """
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -40,6 +41,7 @@ bash_exit_code: Callable[[dict], int] = _mod.bash_exit_code
 exit_ok: Callable[..., NoReturn] = _mod.exit_ok
 exit_warn: Callable[..., NoReturn] = _mod.exit_warn
 exit_block: Callable[[str], NoReturn] = _mod.exit_block
+exit_prompt_block: Callable[[str], NoReturn] = _mod.exit_prompt_block
 exit_stop_allow: Callable[[], NoReturn] = _mod.exit_stop_allow
 exit_stop_warn: Callable[[str], NoReturn] = _mod.exit_stop_warn
 exit_stop_block: Callable[[str], NoReturn] = _mod.exit_stop_block
@@ -155,18 +157,47 @@ def exit_enforcement_error(
         exit_ok()
 
 
+def boundary_dir(cwd: str | None = None) -> str:
+    """Return this project's out-of-tree directory for daemon state.
+
+    Holds the daemon socket and the sandbox-settings backup — the two things
+    that must survive *outside* the project the agent is confined to. Inside
+    the tree, the socket path sits in agent-writable territory: deletable, and
+    squattable between daemon restarts. sahjhan's fuse refuses to serve at all
+    when the socket resolves inside the project root (``socket_inside_project``),
+    so this is not merely tidiness.
+
+    Keyed by a digest of the project path rather than its basename so two
+    checkouts of the same repo get different sockets, and short enough to stay
+    inside the 104-byte macOS ``AF_UNIX`` limit.
+
+    If ``~`` cannot be resolved the result is a relative path, which lands
+    inside the project and trips the fuse — failing closed, which is the
+    correct direction for "we could not put this somewhere safe."
+    """
+    if cwd is None:
+        cwd = os.getcwd()
+    key = hashlib.sha256(os.path.realpath(cwd).encode()).hexdigest()[:12]
+    return os.path.join(os.path.expanduser("~"), ".holtz", "run", key)
+
+
 def _get_daemon_socket_path(cwd: str | None = None) -> str:
     """Return the path to the sahjhan daemon Unix socket.
 
-    Checks SAHJHAN_DAEMON_SOCKET env var first (used by test fixtures
-    to work around macOS AF_UNIX 104-char path limit).
+    Checks SAHJHAN_DAEMON_SOCKET env var first — the same override the Rust
+    daemon honors since sahjhan 0.21.0, which is how ``holtz-start`` binds the
+    socket where this resolves it. Test fixtures use it too (short tmp paths,
+    for the macOS AF_UNIX 104-char limit).
+
+    Both sides derive the default from one expression, so an arming hook and a
+    consumer hook cannot drift onto different sockets. When they do disagree —
+    a hook firing with a different cwd — the socket is simply unreachable, and
+    the consumer fails closed rather than talking to the wrong daemon.
     """
     override = os.environ.get("SAHJHAN_DAEMON_SOCKET")
     if override:
         return override
-    if cwd is None:
-        cwd = os.getcwd()
-    return os.path.join(cwd, "docs", "holtz", ".sahjhan", "daemon.sock")
+    return os.path.join(boundary_dir(cwd), "daemon.sock")
 
 
 class DaemonError(RuntimeError):
