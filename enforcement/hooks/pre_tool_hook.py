@@ -18,8 +18,16 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import exit_block, exit_enforcement_error, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
-from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
+from _common import (  # noqa: E402
+    exit_block,
+    exit_boundary_missing,
+    exit_enforcement_error,
+    exit_ok,
+    exit_warn,
+    read_event,
+    resolve_config_dir,
+)
+from _protocol_cache import is_enforcement_fresh, read_cache_with_boundary  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
 from _sahjhan_bootstrap import MANAGED_DOCS  # noqa: E402
 
@@ -87,8 +95,15 @@ def main() -> None:
     if tool_name in ("Edit", "Write", "NotebookEdit") and _tdd_gate_exempt(file_path, cwd):
         exit_ok("PreToolUse")
 
+    cache, boundary = read_cache_with_boundary(cwd)
+
+    # A refusing daemon returns no cache, so the staleness check below reads
+    # it as "no audit" and allows. That inverts the fuse: the moment the
+    # boundary goes missing, every gate it protects would stop applying.
+    if boundary:
+        exit_boundary_missing(boundary)
+
     # Stale enforcement: skip hook eval for abandoned audits
-    cache = read_cache(cwd)
     if not is_enforcement_fresh(cache):
         exit_ok("PreToolUse")
 

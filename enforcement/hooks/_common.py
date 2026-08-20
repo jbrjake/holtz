@@ -128,6 +128,32 @@ def resolve_config_dir(cwd: str) -> tuple[str, bool]:
     return cwd_candidate, False
 
 
+BOUNDARY_MESSAGE = (
+    "AUDIT BOUNDARY MISSING: the sahjhan daemon refuses to serve because this "
+    "session is not sandboxed ({reason}). Enforcement, the lens quiz, and every "
+    "restricted event are unavailable until it is — an audit run this way would "
+    "prove nothing, so nothing proceeds.\n\n"
+    "Only a human can fix it: ask the user to type `holtz-start` (the bare word, "
+    "on its own line, in the normal input box). Do not attempt to change sandbox "
+    "settings yourself — you cannot, by design."
+)
+
+
+def exit_boundary_missing(reason: str, hook_type: str = "PreToolUse") -> NoReturn:
+    """Refuse the call because the audit boundary is not in place.
+
+    Reached only when a *live* daemon answered with sahjhan's `sandbox_required`
+    refusal, which is a fact rather than an inference: the daemon read the
+    project's settings and could not confirm the agent is confined. That is
+    self-limiting — no daemon, no refusal — so this cannot fire in a project
+    that simply is not being audited.
+    """
+    message = BOUNDARY_MESSAGE.format(reason=reason)
+    if hook_type == "PreToolUse":
+        exit_block(message)
+    exit_warn(message, hook_type)
+
+
 def exit_enforcement_error(
     cwd: str,
     reason: str,
@@ -140,11 +166,16 @@ def exit_enforcement_error(
     (PostToolUse). Outside audits or with stale enforcement, fail-open
     as before.
     """
-    from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: PLC0415
+    from _protocol_cache import is_enforcement_fresh, read_cache_with_boundary  # noqa: PLC0415
 
     data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
     if os.path.isdir(data_dir):
-        cache = read_cache(cwd)
+        cache, boundary = read_cache_with_boundary(cwd)
+        # Checked before freshness on purpose: a refusing daemon serves no
+        # cache, so `is_enforcement_fresh` is False and this degrade path
+        # would otherwise wave through exactly the situation it exists for.
+        if boundary:
+            exit_boundary_missing(boundary, hook_type)
         if is_enforcement_fresh(cache):
             if hook_type == "PreToolUse":
                 exit_block(f"ENFORCEMENT DEGRADED: {reason}")

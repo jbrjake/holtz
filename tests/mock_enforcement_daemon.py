@@ -35,6 +35,11 @@ class MockEnforcementDaemon:
         # canned response. Default success returns a ledger seq in `data`.
         self.recorded_events: list[dict] = []
         self.record_event_response: dict | None = None
+        # Sandbox-fuse simulation. When set to a reason code, every op except
+        # `status` is refused with `sandbox_required` — the real daemon checks
+        # its fuse before auth and exempts only the health check, so this
+        # mirrors where the refusal lands rather than merely that it happens.
+        self.refuse_boundary: str | None = None
         self._server: socket.socket | None = None
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
@@ -91,6 +96,14 @@ class MockEnforcementDaemon:
                 "uptime_seconds": 1,
                 "vault_entries": 0,
                 "enforcement_active": self.state is not None,
+            }
+
+        if self.refuse_boundary is not None:
+            return {
+                "ok": False,
+                "error": "sandbox_required",
+                "reason": self.refuse_boundary,
+                "message": "the sandbox boundary is not in place",
             }
 
         if op == "enforcement_read":

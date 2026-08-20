@@ -55,6 +55,7 @@ from _common import (  # noqa: E402
     read_event,
     resolve_config_dir,
 )
+from _protocol_cache import BOUNDARY_REFUSED  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
 
 ARM_WORD = "holtz-start"
@@ -69,10 +70,10 @@ _BACKUP_NAME = "sandbox-settings-backup.json"
 _DAEMON_READY_TIMEOUT = 15.0
 _POLL_INTERVAL = 0.1
 
-# The fuse's reason codes that no amount of writing *our* settings file can
-# fix, because the offending value lives in a scope we do not own. Reported
-# verbatim so the human edits the right file instead of guessing.
-_FUSE_ERROR = "sandbox_required"
+# The daemon's refusal code for a missing boundary is named once, in
+# _protocol_cache, and imported by everything that decides on it — the hook
+# that raises the boundary and the hooks that fail closed when it is gone are
+# reading the same word rather than each spelling a string literal.
 
 
 # ── the settings we write ────────────────────────────────────────────────────
@@ -305,7 +306,7 @@ def _check_boundary(sock_path: str) -> str | None:
     try:
         _daemon_request(sock_path, {"op": "enforcement_read"})
     except DaemonError as exc:
-        if exc.error == _FUSE_ERROR:
+        if exc.error == BOUNDARY_REFUSED:
             return (
                 "HOLTZ-START INCOMPLETE — the daemon still refuses to serve:\n"
                 f"  {exc.reason or exc}\n\n"

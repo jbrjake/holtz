@@ -172,6 +172,13 @@ class TestStallPenalty:
         with (
             patch.object(_tracker, "read_event", return_value=event),
             patch.object(_tracker, "read_cache", return_value=dict(initial_cache)),
+            # Explicit, not inherited. `_load_tracker_module` only installs its
+            # always-fresh `_protocol_cache` stub when nothing has imported the
+            # real module yet, so whether these tests exercised the stall
+            # branch at all depended on which test file ran first — and the
+            # real `is_enforcement_fresh` rejects a fixture cache with no
+            # `last_sahjhan_cmd`, silently exiting before the counter moves.
+            patch.object(_tracker, "is_enforcement_fresh", return_value=True),
             patch.object(_tracker, "write_cache", side_effect=fake_write_cache),
             patch.object(_tracker, "update_cache", side_effect=fake_update_cache),
             patch.object(_tracker, "is_sahjhan_cmd", return_value=False),

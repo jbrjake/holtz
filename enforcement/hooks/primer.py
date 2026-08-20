@@ -26,6 +26,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
+    BOUNDARY_MESSAGE,
     DaemonError,
     _daemon_request,
     _get_daemon_socket_path,
@@ -37,32 +38,39 @@ from _common import (  # noqa: E402
     read_event,
     resolve_config_dir,
 )
-from _protocol_cache import format_state_line, parse_status_text  # noqa: E402
+from _protocol_cache import BOUNDARY_REFUSED, format_state_line, parse_status_text  # noqa: E402
 from _protocol_cache import read_cache as read_enforcement_cache
 from _resolve import ensure_sahjhan  # noqa: E402
 
 
-def _enforcement_healthy(cwd: str) -> bool:
+def _enforcement_status(cwd: str) -> tuple[bool, str]:
     """Probe the daemon over its socket without touching the ledger.
 
-    The removed `context_reset` write used to prove this as a side effect: it
-    failed loudly when the daemon was unreachable or when this hook's hash no
-    longer matched trusted-callers.toml (which otherwise fails open and
-    silently disables every gate). `enforcement_read` is the cheapest op
-    behind the same peer-identity check, and it is a read — so keeping the
-    signal costs no protocol state.
+    Returns ``(healthy, boundary_refusal)``. The removed `context_reset` write
+    used to prove health as a side effect: it failed loudly when the daemon was
+    unreachable or when this hook's hash no longer matched trusted-callers.toml
+    (which otherwise fails open and silently disables every gate).
+    `enforcement_read` is the cheapest op behind the same peer-identity check,
+    and it is a read — so keeping the signal costs no protocol state.
 
     A `not_found` refusal is healthy: the daemon authenticated this caller
     before dispatching the op, and an audit that hasn't written its cache yet
     simply has nothing stored. Only an authorization refusal is a failure.
+
+    A `sandbox_required` refusal is neither — it is the daemon reporting that
+    the boundary is down, which has a name and a one-word fix, and saying
+    "enforcement is broken, report it and wait" for it would send the user
+    hunting a bug that isn't there.
     """
     try:
         _daemon_request(_get_daemon_socket_path(cwd), {"op": "enforcement_read"})
     except DaemonError as exc:
-        return exc.error != "auth_failed"
+        if exc.error == BOUNDARY_REFUSED:
+            return False, exc.reason or BOUNDARY_REFUSED
+        return exc.error != "auth_failed", ""
     except (OSError, ConnectionError, RuntimeError, ValueError):
-        return False
-    return True
+        return False, ""
+    return True, ""
 
 
 def main() -> None:
@@ -134,13 +142,15 @@ def main() -> None:
     # failed write, so a daemon that dies between turns is caught on the next
     # prompt whether or not anything happened to need the socket.
     enforcement_failed = False
+    boundary_refusal = ""
     audit_terminated = False
     init_pid = _read_init_pid(cwd)
     if init_pid is not None and not _is_process_alive(init_pid):
         _write_terminated_marker(cwd, init_pid, detected_by="primer")
         audit_terminated = True
-    elif not _enforcement_healthy(cwd):
-        enforcement_failed = True
+    else:
+        healthy, boundary_refusal = _enforcement_status(cwd)
+        enforcement_failed = not healthy and not boundary_refusal
 
     if audit_terminated:
         exit_warn(
@@ -188,6 +198,9 @@ def main() -> None:
     state_line = format_state_line(read_enforcement_cache(cwd))
     if state_line:
         context += "\n" + state_line
+
+    if boundary_refusal:
+        context += "\n\n" + BOUNDARY_MESSAGE.format(reason=boundary_refusal)
 
     if enforcement_failed:
         context += (

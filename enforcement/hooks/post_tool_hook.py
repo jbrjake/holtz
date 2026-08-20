@@ -24,13 +24,14 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
+    exit_boundary_missing,
     exit_enforcement_error,
     exit_ok,
     exit_warn,
     read_event,
     resolve_config_dir,
 )
-from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
+from _protocol_cache import is_enforcement_fresh, read_cache_with_boundary  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
 
 
@@ -106,8 +107,16 @@ def main() -> None:
     file_path = tool_input.get("file_path", "")
     cwd = event.get("cwd", os.getcwd())
 
+    cache, boundary = read_cache_with_boundary(cwd)
+
+    # A warning rather than a block: PostToolUse fires after the work is
+    # done, so refusing here undoes nothing. The PreToolUse side is what
+    # actually stops the run; this makes sure the reason reaches the model
+    # even when the blocked call was one that never fires a PreToolUse gate.
+    if boundary:
+        exit_boundary_missing(boundary, "PostToolUse")
+
     # Stale enforcement: skip event recording for abandoned audits
-    cache = read_cache(cwd)
     if not is_enforcement_fresh(cache):
         exit_ok()
 

@@ -14,7 +14,14 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import exit_block, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
+from _common import (  # noqa: E402
+    exit_block,
+    exit_boundary_missing,
+    exit_ok,
+    exit_warn,
+    read_event,
+    resolve_config_dir,
+)
 from _protocol_cache import (  # noqa: E402
     compute_obligations,
     contains_sahjhan_cmd,
@@ -23,7 +30,7 @@ from _protocol_cache import (  # noqa: E402
     is_fix_loop_state,
     is_git_commit,
     is_sahjhan_cmd,
-    read_cache,
+    read_cache_with_boundary,
 )
 
 
@@ -47,7 +54,16 @@ def main() -> None:
     cwd = event.get("cwd", os.getcwd())
     config_dir, _ = resolve_config_dir(cwd)
 
-    cache = read_cache(cwd)
+    cache, boundary = read_cache_with_boundary(cwd)
+
+    # Before the sahjhan-command allowance, not after it. Without the
+    # boundary the daemon serves nothing restricted, but `transition`,
+    # `event` and `set` write the ledger straight to disk — so allowing them
+    # through would let the run keep advancing while the enforcement that is
+    # supposed to be gating it does nothing. The escape is not a command:
+    # the user types `holtz-stop`, which is a prompt, not a tool call.
+    if boundary:
+        exit_boundary_missing(boundary)
 
     # Sahjhan commands are always allowed
     if is_sahjhan_cmd(cmd):

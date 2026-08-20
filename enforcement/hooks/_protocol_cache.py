@@ -51,28 +51,61 @@ def empty_cache() -> dict[str, Any]:
     }
 
 
-def read_cache(cwd: str) -> dict[str, Any] | None:
-    """Read enforcement state from the sahjhan daemon.
+# The daemon's refusal code when its sandbox fuse trips: the boundary that
+# keeps the agent off this socket is not configured. Named once here, so the
+# hooks that must fail closed on it and the hook that arms it say the same
+# word. A live daemon is the only thing that can produce it, which is what
+# keeps the fail-closed path from firing outside a real audit.
+BOUNDARY_REFUSED = "sandbox_required"
 
-    Returns None if the daemon is unreachable or has no enforcement state
-    (fail-open, same behavior as the old "file not found" path).
+
+def read_cache_with_boundary(cwd: str) -> tuple[dict[str, Any] | None, str | None]:
+    """Read enforcement state, and separately report a missing boundary.
+
+    Returns ``(cache, boundary_refusal)``. The refusal is the daemon's own
+    machine-readable reason when it declined because the sandbox boundary is
+    absent, and ``None`` otherwise.
+
+    The two have to be told apart because they mean opposite things. A cache
+    of ``None`` from an unreachable daemon means "no audit here" and allowing
+    is right. A ``None`` because the daemon *refused* means an audit is very
+    much running and its protection just evaporated — treating that as "no
+    audit" is how a tripped fuse deletes enforcement instead of enforcing it.
 
     Only catches expected daemon-unreachable errors. Bugs in parsing code
     (e.g., bad base64, unexpected JSON structure) are NOT caught — they
     should crash visibly rather than silently disabling all enforcement.
     """
     try:
-        from _common import _daemon_request, _get_daemon_socket_path
+        from _common import DaemonError, _daemon_request, _get_daemon_socket_path
         sock_path = _get_daemon_socket_path(cwd)
-        resp = _daemon_request(sock_path, {"op": "enforcement_read"})
-        return json.loads(base64.b64decode(resp["data"]))
+        try:
+            resp = _daemon_request(sock_path, {"op": "enforcement_read"})
+        except DaemonError as exc:
+            if exc.error == BOUNDARY_REFUSED:
+                return None, exc.reason or BOUNDARY_REFUSED
+            raise
+        return json.loads(base64.b64decode(resp["data"])), None
     except (OSError, ConnectionError, RuntimeError, KeyError, json.JSONDecodeError, ValueError):
         # OSError/ConnectionError: daemon socket unreachable
         # RuntimeError: daemon returned an error (from _daemon_request)
         # KeyError: daemon response missing "data" field (no state stored)
         # json.JSONDecodeError: daemon sent invalid/empty JSON (corrupt or dead)
         # ValueError: base64 decode failure (corrupt daemon response)
-        return None
+        return None, None
+
+
+def read_cache(cwd: str) -> dict[str, Any] | None:
+    """Read enforcement state from the sahjhan daemon.
+
+    Returns None if the daemon is unreachable or has no enforcement state
+    (fail-open, same behavior as the old "file not found" path).
+
+    Callers that gate behavior should use ``read_cache_with_boundary`` — this
+    one cannot distinguish "nothing is running" from "the daemon refused",
+    and those need opposite answers.
+    """
+    return read_cache_with_boundary(cwd)[0]
 
 
 def write_cache(cwd: str, cache: dict[str, Any]) -> None:
