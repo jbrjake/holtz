@@ -319,6 +319,15 @@ command = "set complete perspective"
 args = ["current_perspective"]
 gates = [
     { type = "query", query = "all_findings_closed", expect = "0" },
+    # The other end of the fix batch. `iteration_boundary` holds the /clear and
+    # this holds the lens, so the pattern round is owed wherever a batch of
+    # fixes ends and at neither point inside one. Without this a run that
+    # closed a whole perspective without a context reset left the loop having
+    # skipped every round — the commit-path block used to cover that by
+    # accident, at the cost of firing between a verified fix and its own commit.
+    # Same named query as `pattern_check`'s gate with the opposite expectation,
+    # so the escape this prints is ready exactly when this blocks (#82).
+    { type = "query", query = "pattern_analysis_overdue", expect = "false", intent = "pattern analysis required after 3+ fixes — run pattern_check before completing the perspective" },
     { type = "query", sql = "SELECT count(*) >= 2 FROM events WHERE type='iteration_complete' AND perspective='{{current_perspective}}'", expect = "true", intent = "two clean iterations required for stability" },
     { type = "min_elapsed", event = "iteration_complete", seconds = 120, intent = "prevent rapid-fire gaming of iteration count" },
     { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope full', timeout = 60, evidence = "suite_green", intent = "tests must pass" },

@@ -30,10 +30,8 @@ from _protocol_cache import (  # noqa: E402
     is_fix_loop_state,
     is_git_commit,
     is_sahjhan_cmd,
-    query_named_predicate,
     read_cache_with_boundary,
 )
-from _resolve import ensure_sahjhan  # noqa: E402
 
 
 def _is_test_cmd(cmd: str) -> bool:
@@ -48,23 +46,6 @@ def _is_test_cmd(cmd: str) -> bool:
         if seg.startswith("pytest") or seg.startswith("python -m pytest"):
             return True
     return False
-
-
-def _pattern_analysis_still_overdue(cwd: str, config_dir: str) -> bool:
-    """Re-derive the pattern-analysis backlog from the ledger, right now.
-
-    Returns True when the ledger confirms the obligation, and also when the
-    question cannot be answered — the cached flag is the fallback, not a
-    fabricated "all clear".
-    """
-    binary = ensure_sahjhan()
-    if binary is None:
-        return True
-    # The name is spelled out here rather than imported: H8 walks the chain
-    # block -> value -> query -> gate by finding the query name in this file's
-    # source, so a constant from another module would hide the link it checks.
-    overdue = query_named_predicate(binary, config_dir, cwd, "pattern_analysis_overdue")
-    return True if overdue is None else overdue
 
 
 def main() -> None:
@@ -106,33 +87,14 @@ def main() -> None:
     if not obligations:
         exit_ok("PreToolUse")
 
-    # Hard block: pattern analysis overdue after 3+ fixes.
-    #
-    # The flag is the `pattern_analysis_overdue` named query, evaluated against
-    # the ledger by protocol_tracker. `pattern_check`'s own gate is that same
-    # query — so the escape printed here is ready precisely when this block
-    # fires. #77 was the version where it was not. (#82 H8 checks this file
-    # still names the query the escape is gated on.)
-    #
-    # The cached value is a snapshot, written when protocol_tracker observes a
-    # sahjhan command. A command it fails to observe, or a status refresh that
-    # times out, leaves the flag describing a ledger that has since moved on —
-    # and a commit blocked on a stale snapshot is unanswerable, because the
-    # escape it prints has already been done. Held commits for 12-25 minutes at
-    # a time. So the last conjunct re-derives the fact from the ledger now:
-    # same named query, evaluated at the moment of the block. Short-circuit
-    # ordering keeps it off every other path.
-    if (cache is not None
-            and cache.get("state") == "fix_loop"
-            and is_git_commit(cmd)
-            and cache.get("pattern_analysis_overdue", False)
-            and not cache.get("unregistered_commits")
-            and _pattern_analysis_still_overdue(cwd, config_dir)):
-        exit_block(
-            "BLOCKED: Pattern analysis overdue "
-            "(3+ findings resolved since the last analysis). "
-            f"Run: sahjhan --config-dir {config_dir} transition pattern_check"
-        )
+    # Pattern analysis is owed at the batch boundary, not at every commit:
+    # `iteration_boundary` and `set complete perspective` both gate on
+    # `pattern_analysis_overdue`, which is how a run cannot reach a /clear or a
+    # finished lens without the round. A commit is not a boundary — it lands
+    # between a fix that is already written, verified and green and the ledger
+    # entry naming it, so stopping there buys nothing and interrupts the cycle
+    # to run a 17.9-min median analysis on top of an uncommitted tree. It stays
+    # a soft obligation here, which is what `compute_obligations` emits.
 
     blocks_commit = any(o.get("blocks_commit") for o in obligations)
     blocks_all = any(o.get("blocks_all") for o in obligations)

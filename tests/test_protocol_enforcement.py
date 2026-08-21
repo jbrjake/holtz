@@ -804,8 +804,12 @@ class TestCommitGate:
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "deny"
 
-    def test_blocks_commit_when_pattern_overdue(self, tmp_path, mock_daemon):
-        """Pattern check overdue hard-blocks git commit after 3+ fixes."""
+    def test_pattern_overdue_advises_the_commit_instead_of_blocking_it(
+        self, tmp_path, mock_daemon,
+    ):
+        """The round is owed at `iteration_boundary` and `set complete
+        perspective`, not between a verified fix and its own commit. See
+        tests/test_pattern_analysis_boundary.py."""
         from datetime import datetime, timezone  # noqa: UP017
 
         from _protocol_cache import empty_cache, write_cache
@@ -821,10 +825,9 @@ class TestCommitGate:
         }
         code, output, _ = run_enforcement_hook("commit_gate.py", event)
         assert code == 0
-        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
-        assert perm == "deny"
-        reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
-        assert "pattern" in reason.lower()
+        payload = output.get("hookSpecificOutput", {})
+        assert payload.get("permissionDecision") == "allow"
+        assert "pattern_check" in payload.get("additionalContext", "")
 
     def test_injects_soft_obligation_non_commit_cmd(self, tmp_path, mock_daemon):
         """Pattern check due: non-commit commands still get soft injection (not blocked)."""

@@ -1055,17 +1055,16 @@ class TestFixCommitAutoEmitsFindingResolved:
 
 
 class TestCommitGatePatternCounterDerivation:
-    """#77: the commit gate's 'pattern analysis overdue' hard block must be
-    driven by the LEDGER (finding_resolved since the last pattern analysis) —
-    the same fact the pattern_check transition gate reads — not by a cache
-    counter that token-matching kept in a separate, drifting mirror.
+    """#77: 'pattern analysis overdue' must be driven by the LEDGER
+    (finding_resolved since the last pattern analysis) — the same fact the
+    pattern_check transition gate reads — not by a cache counter that
+    token-matching kept in a separate, drifting mirror.
 
-    The regression these guard against is a *deadlock*: the commit gate blocks a
-    legitimate fix commit and tells the auditor to run `transition
-    pattern_check`, while that transition's own gate is simultaneously blocked
-    because the ledger shows < 3 findings resolved. The printed escape is
-    unsatisfiable. Deriving the counter from the ledger makes block-condition ≡
-    escape-readiness, so that can never happen.
+    The commit gate is where that value surfaces on every Bash call, so it is
+    still where the derivation is observable. It advises rather than denies: the
+    round is owed at `iteration_boundary` and `set complete perspective`, and
+    the deadlock property (block ⇒ escape ready) belongs to those, asserted by
+    `test_iteration_boundary_and_pattern_check_are_never_both_shut` below.
 
     These assert observable *enforcement behavior* through the subprocess
     commit_gate hook (a trusted daemon caller) rather than reading the
@@ -1079,81 +1078,73 @@ class TestCommitGatePatternCounterDerivation:
             "cwd": real_daemon["project_root"],
         }, real_daemon).get("hookSpecificOutput", {})
 
-    def test_commit_gate_block_boundary_tracks_ledger(self, real_daemon):
-        """The block boundary is the ledger count: a commit is allowed at 2
-        findings resolved and blocked at 3 — proving the counter that drives the
-        gate is derived from finding_resolved events, not a token mirror."""
+    def test_the_advisory_boundary_tracks_the_ledger(self, real_daemon):
+        """The boundary is the ledger count: silent at 2 findings resolved and
+        advising at 3 — proving the value driving it is derived from
+        finding_resolved events, not a token mirror."""
         _fast_forward_to_fix_loop(real_daemon)
         _record_finding_resolved(real_daemon, "BH-001")
         _record_finding_resolved(real_daemon, "BH-002")
         _freshen_enforcement_cache(real_daemon)  # protocol_tracker derives -> 2
 
-        allowed = self._commit_decision(real_daemon, "fix: BH-002")
-        assert allowed.get("permissionDecision") == "allow", (
-            f"2 findings resolved (< 3) must not be pattern-blocked; got {allowed}"
+        quiet = self._commit_decision(real_daemon, "fix: BH-002")
+        assert "pattern_check" not in quiet.get("additionalContext", ""), (
+            f"2 findings resolved (< 3) must owe no round; got {quiet}"
         )
 
         _record_finding_resolved(real_daemon, "BH-003")
         _freshen_enforcement_cache(real_daemon)  # derives -> 3
 
-        blocked = self._commit_decision(real_daemon, "fix: BH-003")
-        assert blocked.get("permissionDecision") == "deny", (
-            f"3 findings resolved must trigger the pattern-overdue block; got {blocked}"
+        advised = self._commit_decision(real_daemon, "fix: BH-003")
+        assert advised.get("permissionDecision") == "allow", (
+            f"A verified fix must still be recordable; got {advised}"
         )
-        assert "pattern" in blocked.get("permissionDecisionReason", "").lower()
+        assert "pattern_check" in advised.get("additionalContext", ""), (
+            f"3 findings resolved must raise the pattern advisory; got {advised}"
+        )
 
     def test_diagnostics_do_not_move_the_counter(self, real_daemon):
         """Failure modes 1 & 2: read-only diagnostics that merely MENTION
         `fix_commit` / `pattern_check` as tokens must neither inflate the counter
-        (spurious block) nor reset it (silent skip)."""
+        (spurious obligation) nor reset it (silent skip)."""
         _fast_forward_to_fix_loop(real_daemon)
         _record_finding_resolved(real_daemon, "BH-001")
         _record_finding_resolved(real_daemon, "BH-002")
 
         # Mode 1: the old mirror would inflate on each `fix_commit` token. The
-        # ledger truth is 2, so the commit stays allowed after any number of them.
+        # ledger truth is 2, so nothing is owed after any number of them.
         _run_tracker(real_daemon, "sahjhan gate check fix_commit")
         _run_tracker(real_daemon, "sahjhan gate check fix_commit")
         _run_tracker(real_daemon, "sahjhan gate check fix_commit")
-        allowed = self._commit_decision(real_daemon, "fix: BH-002")
-        assert allowed.get("permissionDecision") == "allow", (
+        quiet = self._commit_decision(real_daemon, "fix: BH-002")
+        assert "pattern_check" not in quiet.get("additionalContext", ""), (
             f"diagnostics mentioning fix_commit must not inflate the counter into "
-            f"a spurious block; got {allowed}"
+            f"a spurious obligation; got {quiet}"
         )
 
         # Mode 2: a diagnostic mentioning `pattern_check` must NOT zero the
         # counter. Bring the ledger to 3, then run such a diagnostic to freshen:
-        # the derived counter is 3, so the commit is (correctly) blocked.
+        # the derived counter is 3, so the round is (correctly) still owed.
         _record_finding_resolved(real_daemon, "BH-003")
         _run_tracker(real_daemon, "sahjhan gate check pattern_check")
-        blocked = self._commit_decision(real_daemon, "fix: BH-003")
-        assert blocked.get("permissionDecision") == "deny", (
+        advised = self._commit_decision(real_daemon, "fix: BH-003")
+        assert "pattern_check" in advised.get("additionalContext", ""), (
             f"a diagnostic mentioning pattern_check must not silently reset the "
-            f"ledger-derived count of 3; got {blocked}"
+            f"ledger-derived count of 3; got {advised}"
         )
 
-    def test_hard_block_escape_is_satisfiable(self, real_daemon):
-        """The core of #77: when the commit gate hard-blocks on 'pattern
-        overdue', the escape it prints (`transition pattern_check`) must be
-        runnable at that same instant — its gate ready. No deadlock."""
+    def test_a_verified_fix_is_never_held_back_by_an_owed_round(self, real_daemon):
+        """The commit lands between a fix that is written, verified and green
+        and the ledger entry naming it. Nothing is protected by stopping there,
+        and one measured commit blocked that way turned a 4.9-min fix into 24.0."""
         _fast_forward_to_fix_loop(real_daemon)
-        _record_finding_resolved(real_daemon, "BH-001")
-        _record_finding_resolved(real_daemon, "BH-002")
-        _record_finding_resolved(real_daemon, "BH-003")
+        for finding_id in ("BH-001", "BH-002", "BH-003", "BH-004"):
+            _record_finding_resolved(real_daemon, finding_id)
         _freshen_enforcement_cache(real_daemon)
 
-        blocked = self._commit_decision(real_daemon, "fix: BH-003")
-        assert blocked.get("permissionDecision") == "deny"
-        assert "pattern" in blocked.get("permissionDecisionReason", "").lower()
-
-        # The printed escape is satisfiable: pattern_check transition succeeds NOW
-        # (exit 0). If this were the old drifting mirror, the counter could hit 3
-        # while the ledger held < 3, and this transition would exit 1 — deadlock.
-        result = _run_sahjhan(real_daemon, "transition", "pattern_check", check=False)
-        assert result.returncode == 0, (
-            "commit gate directed the auditor to `transition pattern_check`, but "
-            "its own gate rejected it — the exact #77 deadlock.\n"
-            f"exit: {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        decision = self._commit_decision(real_daemon, "fix: BH-004")
+        assert decision.get("permissionDecision") == "allow", (
+            f"A pattern round was owed and the commit was denied: {decision}"
         )
 
     def test_iteration_boundary_and_pattern_check_are_never_both_shut(

@@ -380,6 +380,41 @@ def test_pattern_analysis_overdue_is_one_predicate_with_opposite_gates():
 
     assert _overdue_gate("pattern_check")["expect"] == "true"
     assert _overdue_gate("iteration_boundary")["expect"] == "false"
+    assert _overdue_gate("set complete perspective")["expect"] == "false"
+
+
+def test_every_exit_from_the_fix_batch_gates_on_pattern_analysis():
+    """The obligation is enforced at the boundaries, so every boundary carries it.
+
+    `git commit` used to be hard-blocked while analysis was overdue, which put
+    the gate between a verified fix and the ledger entry naming it. Dropping
+    that block leaves the transitions as the only enforcement, so a new way out
+    of `fix_loop` added without this gate is a way to skip Step 11 entirely —
+    which is what the commit block had been covering by accident.
+
+    `fix_loop -> fix_loop` (fix_commit, the deferrals) is not an exit, and
+    `pause` is a reversible yield to the human that `resume` comes straight back
+    from. Everything else ends the batch.
+    """
+    cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
+
+    ungated = []
+    for transition in cfg["transitions"]:
+        if transition.get("from") != "fix_loop":
+            continue
+        if transition.get("to") in ("fix_loop", "pattern_analysis", "awaiting_human"):
+            continue
+        gates = transition.get("gates", [])
+        if not any(g.get("query") == "pattern_analysis_overdue" and g.get("expect") == "false"
+                   for g in gates):
+            ungated.append(f"{transition.get('command')} (fix_loop -> {transition.get('to')})")
+
+    assert not ungated, (
+        "These leave the fix batch without requiring the pattern round:\n  "
+        + "\n  ".join(ungated)
+        + "\n\nAdd { type = \"query\", query = \"pattern_analysis_overdue\", "
+        "expect = \"false\" }, or route the transition back through fix_loop."
+    )
 
 
 def _named_query_sql(name: str) -> str:
