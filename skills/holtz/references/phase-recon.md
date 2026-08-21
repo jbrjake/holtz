@@ -14,7 +14,7 @@ python3 "$CLAUDE_PLUGIN_ROOT/skills/holtz/scripts/boundary_check.py"
 
 **If it does not print `BOUNDARY: confined`, stop.** Tell the user to type `holtz-start` — the bare word, on its own line, in the normal input box — and wait. Only they can do it, and the audit cannot proceed without it: the daemon refuses to serve until it can confirm the boundary is up.
 
-Why it exists: this audit quizzes you on code you claim to have read, and the answer key lives in the daemon's memory. If your shell could reach that daemon, the quiz would prove nothing. `holtz-start` puts your shell inside Claude Code's sandbox with the daemon socket outside it. Hooks run outside the sandbox, so enforcement still works; you don't reach the key.
+It sandboxes your shell away from the daemon socket that holds the quiz answers. Hooks run outside the sandbox, so enforcement still works.
 
 #### Run Initialization
 

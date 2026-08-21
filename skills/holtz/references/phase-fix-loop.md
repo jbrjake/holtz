@@ -54,7 +54,7 @@ Launch **one** Agent subagent for the finding. Give it: the finding (ID, descrip
 
    Ordering is load-bearing: the green is bound to a hash of the working tree, so **any** later edit — the hardening test above especially — invalidates it, and the orchestrator's step 10 would then reject a fix that is perfectly good. Record after the last write, not before.
 
-   **Run it alone on its own Bash line.** Chaining anything before or after it (`&&`, `;`, `|`) records nothing — the line's own success is part of the evidence, so it cannot be carrying other work. If a run is green but step 10 still says there is no `suite_green` for this tree, that is almost always why.
+   **Run it alone on its own Bash line.** Chaining anything before or after it (`&&`, `;`, `|`) records nothing. A green run with no `suite_green` at step 10 is almost always this.
 
 The subagent returns a **compact result**, not artifacts to apply: root cause + confidence (`bug/*` needs HIGH confidence before any fix), the blast-radius node, the test name(s), and the suite pass-count. The edits and the ledger events are already on disk — that is the whole point. The subagent does **NOT** `git commit` and does **NOT** run any `transition`; those are yours.
 
@@ -87,15 +87,14 @@ Use extended thinking (ultrathink) for this step — cross-finding pattern disco
 
 There are two ways to run Step 11, and the difference is whether you enter the `pattern_analysis` state:
 
-- **Stay in `fix_loop`** (usual). Just do the work and record `pattern_analysis_complete` at step 5. That satisfies the `iteration_boundary` gate, which counts fix commits since the last pattern analysis.
-- **Enter `pattern_analysis`** (when `iteration_boundary` blocks you and its message says to run `pattern_check`). Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_check` — its gate needs 3+ findings resolved since the last pattern analysis, which is exactly the condition that blocked you. Then do steps 1-6 below, and leave with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_done`, whose gate needs the `pattern_analysis_complete` event from step 5. **`pattern_done` is the only exit from `pattern_analysis`** — nothing else leads out of that state.
+- **Stay in `fix_loop`** (usual). Just do the work and record `pattern_analysis_complete` at step 4. That satisfies the `iteration_boundary` gate, which counts fix commits since the last pattern analysis.
+- **Enter `pattern_analysis`** (when `iteration_boundary` blocks you and its message says to run `pattern_check`). Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_check` — its gate needs 3+ findings resolved since the last pattern analysis, which is exactly the condition that blocked you. Then do steps 1-5 below, and leave with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_done`, whose gate needs the `pattern_analysis_complete` event from step 4. **`pattern_done` is the only exit from `pattern_analysis`** — nothing else leads out of that state.
 
 1. **Re-read `docs/holtz/PUNCHLIST.md`** — For pattern analysis, read the full punchlist (no filter). Pattern grouping requires seeing all resolved items to identify shared root causes across the complete history.
-2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify the pattern, search for siblings, and record each sibling with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding` IMMEDIATELY — one call per sibling, before moving to the next group. The punchlist re-renders from those events; there is nothing to write by hand.
-3. The pattern itself goes in `docs/holtz/patterns-brief.md` at step 6, not in the punchlist — the punchlist carries findings, one row each.
-4. **Update impact graph:** Add `shares_pattern` edges between all instances of the same pattern (e.g., if BH-003 and BH-007 are both PAT-001 instances, link the functions they involve with `shares_pattern` edges including the pattern ID in the note).
-5. **Record:** `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event pattern_analysis_complete --patterns_found N --siblings_found M`. Add new PAT-NNN entries to `docs/holtz/patterns-brief.md`.
-6. **Update `docs/holtz/patterns-brief.md`:** Read `docs/holtz/patterns-brief.md` first (if it exists) to check for existing entries. For each newly identified pattern, append an entry to the patterns brief. Use this format:
+2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify the pattern, search for siblings, record each sibling with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding` IMMEDIATELY — one call per sibling, before the next group.
+3. **Update impact graph:** Add `shares_pattern` edges between all instances of the same pattern (e.g., if BH-003 and BH-007 are both PAT-001 instances, link the functions they involve with `shares_pattern` edges including the pattern ID in the note).
+4. **Record:** `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event pattern_analysis_complete --patterns_found N --siblings_found M`.
+5. **Update `docs/holtz/patterns-brief.md`:** Read it first (if it exists) to check for existing entries. For each newly identified pattern, append an entry. Use this format:
 
    ```markdown
    ## PAT-{NNN}: {name} (Run {R}, {date})

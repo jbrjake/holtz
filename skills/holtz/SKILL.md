@@ -60,7 +60,7 @@ Operate as Holtz — see [references/backstory.md](references/backstory.md) for 
 
 **Subagent-digested** (consumed via reference reader subagent during Step 0):
 - [references/punchlist-format.md](references/punchlist-format.md) — punchlist format
-- [references/status-file-format.md](references/status-file-format.md) — format for an auditor's own hand-maintained status file (Justine's; yours is rendered)
+- [references/status-file-format.md](references/status-file-format.md) — Justine's hand-maintained status file (yours is rendered)
 - [references/recommendation-escalation.md](references/recommendation-escalation.md) — escalation protocol
 - [references/recon-procedures.md](references/recon-procedures.md) — recon procedure (Steps 0-4)
 - [references/architecture-baseline-format.md](references/architecture-baseline-format.md) — baseline format
@@ -280,7 +280,7 @@ digraph {
 
 Before starting ANY work, check for existing Sahjhan state and output files:
 
-0. **Confirm the boundary** — `python3 "$CLAUDE_PLUGIN_ROOT/skills/holtz/scripts/boundary_check.py"`. If it does not print `BOUNDARY: confined`, stop and ask the user to type `holtz-start` (the bare word, on its own line). That one word starts the daemon and confines your shell so the audit's evidence is out of your reach; nothing else works until it has run. Details in [references/phase-recon.md](references/phase-recon.md).
+0. **Confirm the boundary** — `python3 "$CLAUDE_PLUGIN_ROOT/skills/holtz/scripts/boundary_check.py"`. If it does not print `BOUNDARY: confined`, stop and ask the user to type `holtz-start` (the bare word, on its own line). Nothing works until it has run. Details in [references/phase-recon.md](references/phase-recon.md).
 1. **Run `sahjhan status`:** If there's an active run, it tells you exactly where the last run stopped. Resume from that state — do not restart from Step 0.
 2. **If no Sahjhan state but `docs/holtz/recon/` dir exists:** A prior run crashed during recon (Steps 0-4). Create the run ledger (`sahjhan ledger create --from run N --activate`) then run `sahjhan transition run_start`, then check which `docs/holtz/recon/step*.md` files exist. Resume from the first missing step.
 3. **If no Sahjhan state but `docs/holtz/PUNCHLIST.md` exists:** A prior run completed before Sahjhan was installed. Read it + any STATUS.md to determine position. Initialize the ledger and advance to the appropriate state.

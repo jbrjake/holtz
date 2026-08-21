@@ -59,7 +59,7 @@ Use extended thinking (ultrathink) for this step — root cause analysis through
 
 For `bug/*` items where the root cause is not obvious, the bug is intermittent or theoretical, or multiple hypotheses need testing. See [investigation-format.md](investigation-format.md) for the investigation file format.
 
-1. Create the investigation file at `docs/holtz/investigations/{item_id}.md`. The path *is* the link — that exact name is where `defer_cant_reproduce`'s gate looks for it, and where anyone reading a finding goes next.
+1. Create the investigation file at `docs/holtz/investigations/{item_id}.md`. That exact path is where `defer_cant_reproduce`'s gate looks for it.
 2. **Investigate bottom-up** through the layer stack:
 
    | Layer | Check |
@@ -76,7 +76,7 @@ For `bug/*` items where the root cause is not obvious, the bug is intermittent o
 3. **For regressions:** use `git bisect` to find the breaking commit before investigating layers.
 4. **Require HIGH confidence** before fixing. If confidence is LOW or MEDIUM, design one more check to raise it.
 5. Once root cause is confirmed at HIGH confidence: write failing test, verify it fails, minimal fix, full suite, commit.
-6. Record the root cause and the confidence that carried it in the investigation file. That file outlives the fix and is what a later pattern round reads; the resolution and commit hash reach the punchlist on their own via `fix_commit`.
+6. Record the root cause and its confidence in the investigation file.
 
 ## Can't-Reproduce Path
 
@@ -96,8 +96,7 @@ If not reproducible after structured attempts:
 2. Run: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer cant-reproduce {item_id}`
 
 The `finding_deferred` event is auto-emitted by the transition — do not record
-it by hand, and do not go on to set the status anywhere. One command, both
-facts, and PUNCHLIST.md re-renders with the item DEFERRED.
+it by hand. One command, both facts.
 
 Do not silently drop the item.
 
@@ -139,4 +138,4 @@ See [impact-graph-operations.md](impact-graph-operations.md) for the blast radiu
 2. **Query** the impact graph with `blast_radius` (depth 2, or depth 3 for architectural fixes)
 3. **For each node in the blast radius:** check assumptions, update edges
 4. **Update impact graph:** lower risk scores, add/update edges
-5. Record the result: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field finding_id={item_id} --field affected_count=N`. `fix_commit` gates on this event, so the ledger is where it has to land.
+5. **Record:** `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field finding_id={item_id} --field affected_count=N` — `fix_commit` gates on it.

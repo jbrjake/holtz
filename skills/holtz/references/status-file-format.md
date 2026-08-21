@@ -1,8 +1,8 @@
 # Hand-maintained auditor status file — format
 
-This is the format for an auditor's **own** status file: `docs/holtz/justine/STATUS.md`. It is Justine's program counter — the first file she reads after any context compaction and the last she updates after completing a step. Nothing renders it, so keeping it current is her job.
+The format for `docs/holtz/justine/STATUS.md` — Justine's program counter, hand-maintained, updated after each step.
 
-**This is not the format of `docs/holtz/STATUS.md`.** Holtz's status file is rendered from the ledger on every transition (`renders.toml` → `templates/status.md.tera`), and every write vector to it is denied — it is a view, not a document. It carries the current state, the transitions taken, perspective completion, and the finding counts, all derived. There is no Next Action to fill in and no Last Insight to update: the ledger already knows where the run is, because the transition that moved it is the thing that recorded it. Holtz advances the run by recording events, and reads position with `sahjhan status`.
+**Not** the format of `docs/holtz/STATUS.md`. Holtz's is rendered from the ledger on every transition and is read-only; `sahjhan status` is the same information.
 
 ## Template
 
