@@ -60,7 +60,7 @@ Operate as Holtz — see [references/backstory.md](references/backstory.md) for 
 
 **Subagent-digested** (consumed via reference reader subagent during Step 0):
 - [references/punchlist-format.md](references/punchlist-format.md) — punchlist format
-- [references/status-file-format.md](references/status-file-format.md) — STATUS.md format
+- [references/status-file-format.md](references/status-file-format.md) — format for an auditor's own hand-maintained status file (Justine's; yours is rendered)
 - [references/recommendation-escalation.md](references/recommendation-escalation.md) — escalation protocol
 - [references/recon-procedures.md](references/recon-procedures.md) — recon procedure (Steps 0-4)
 - [references/architecture-baseline-format.md](references/architecture-baseline-format.md) — baseline format

@@ -42,4 +42,4 @@ This keeps recently-resolved items visible for pattern recognition while filteri
 
 ### Step 16: Resweep
 
-Full re-run of Steps 6-8 to confirm convergence. This is NOT optional — it catches errors introduced by prior fixes. The resweep must complete before writing SUMMARY.md.
+Full re-run of Steps 6-8 to confirm convergence. This is NOT optional — it catches errors introduced by prior fixes. The resweep must complete before SUMMARY.md is rendered.

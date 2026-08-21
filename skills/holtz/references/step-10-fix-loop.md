@@ -51,9 +51,7 @@ Commit format: `fix(<scope>): <desc>` with punchlist ID in body.
 For straightforward items where the root cause is obvious from the finding:
 
 1. Write failing test. Verify it fails. Minimal fix. Full suite. Commit.
-2. If mutation data exists from step 0e.1, re-run the mutation tool on the changed function(s) and record the before/after mutation kill rate in the punchlist item's Resolution notes (e.g., 'Mutation kill rate: 67% → 92%'). Quality check, not gate.
-3. **Update PUNCHLIST.md with resolution IMMEDIATELY after each commit** (status, commit hash, validating test).
-4. Update STATUS.md with last completed item ID. If this fix revealed a non-obvious insight, update the Strategy section's Last Insight field.
+2. If mutation data exists from step 0e.1, re-run the mutation tool on the changed function(s) and note the before/after mutation kill rate in the commit body (e.g., 'Mutation kill rate: 67% → 92%'). Quality check, not gate.
 
 ## Investigation Path
 
@@ -61,7 +59,7 @@ Use extended thinking (ultrathink) for this step — root cause analysis through
 
 For `bug/*` items where the root cause is not obvious, the bug is intermittent or theoretical, or multiple hypotheses need testing. See [investigation-format.md](investigation-format.md) for the investigation file format.
 
-1. Create an investigation file and link it from the punchlist item's `**Investigation:**` field.
+1. Create the investigation file at `docs/holtz/investigations/{item_id}.md`. The path *is* the link — that exact name is where `defer_cant_reproduce`'s gate looks for it, and where anyone reading a finding goes next.
 2. **Investigate bottom-up** through the layer stack:
 
    | Layer | Check |
@@ -78,8 +76,7 @@ For `bug/*` items where the root cause is not obvious, the bug is intermittent o
 3. **For regressions:** use `git bisect` to find the breaking commit before investigating layers.
 4. **Require HIGH confidence** before fixing. If confidence is LOW or MEDIUM, design one more check to raise it.
 5. Once root cause is confirmed at HIGH confidence: write failing test, verify it fails, minimal fix, full suite, commit.
-6. **Update punchlist** with resolution, root cause confidence, and commit hash IMMEDIATELY.
-7. Update STATUS.md. Update the Strategy section's Last Insight with the root cause finding.
+6. Record the root cause and the confidence that carried it in the investigation file. That file outlives the fix and is what a later pattern round reads; the resolution and commit hash reach the punchlist on their own via `fix_commit`.
 
 ## Can't-Reproduce Path
 
@@ -97,10 +94,10 @@ If not reproducible after structured attempts:
 
 1. Ensure reproduction attempts are documented in `docs/holtz/investigations/{item_id}.md`
 2. Run: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer cant-reproduce {item_id}`
-3. Update PUNCHLIST.md status to DEFERRED
 
 The `finding_deferred` event is auto-emitted by the transition — do not record
-it by hand. One command, both facts.
+it by hand, and do not go on to set the status anywhere. One command, both
+facts, and PUNCHLIST.md re-renders with the item DEFERRED.
 
 Do not silently drop the item.
 
@@ -142,4 +139,4 @@ See [impact-graph-operations.md](impact-graph-operations.md) for the blast radiu
 2. **Query** the impact graph with `blast_radius` (depth 2, or depth 3 for architectural fixes)
 3. **For each node in the blast radius:** check assumptions, update edges
 4. **Update impact graph:** lower risk scores, add/update edges
-5. **Update STATUS.md** Strategy section with blast radius findings
+5. Record the result: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field finding_id={item_id} --field affected_count=N`. `fix_commit` gates on this event, so the ledger is where it has to land.

@@ -114,7 +114,7 @@ After all recon steps, read [recommendation-escalation.md](recommendation-escala
 
 ## Recon Summary (Step 3)
 
-Write `docs/holtz/recon/step3-recon-summary.md` — a SHORT synthesis (this is what you'll re-read later). Update STATUS.md.
+Write `docs/holtz/recon/step3-recon-summary.md` — a SHORT synthesis (this is what you'll re-read later).
 
 ## Step 4 — Predictive Recon
 
@@ -132,4 +132,4 @@ After Step 3, produce `docs/holtz/recon/step4-predictions.md` ranking where bugs
 | Recon observations | Architectural concerns noted during Steps 0-3 → predict specific failure modes |
 | Cold file inventory (Step 2) | Never-audited files → predict unknown risk in uninspected areas. When `cold_file_ratio` > 40%, add at least 3 cold files as MEDIUM-confidence predictions |
 
-Each prediction includes: **Target** (file/function), **Predicted Issue**, **Confidence** (HIGH/MEDIUM/LOW), **Basis** (evidence from recon), **Lens** (which analytical lens), **Graph Support** (relevant edges/risk scores), **Outcome** (CONFIRMED/UNCONFIRMED — filled in after relevant step). Confidence levels: HIGH = multiple converging signals, MEDIUM = two signals or one strong, LOW = single weak signal. Update STATUS.md with Step 4 completion.
+Each prediction includes: **Target** (file/function), **Predicted Issue**, **Confidence** (HIGH/MEDIUM/LOW), **Basis** (evidence from recon), **Lens** (which analytical lens), **Graph Support** (relevant edges/risk scores), **Outcome** (CONFIRMED/UNCONFIRMED — filled in after relevant step). Confidence levels: HIGH = multiple converging signals, MEDIUM = two signals or one strong, LOW = single weak signal.
