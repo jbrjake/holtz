@@ -409,6 +409,63 @@ def is_read_only_cmd(cmd: str) -> bool:
     return bool(segments) and all(_segment_is_read_only(seg) for seg in segments)
 
 
+def named_query_sql(config_dir: str, name: str) -> str | None:
+    """The SQL of a `[queries.<name>]` predicate, read from the protocol config.
+
+    Reading it rather than restating it is the whole point: there is one
+    predicate, and every consumer resolves the same one.
+    """
+    try:
+        import tomllib  # Python 3.11+
+    except ModuleNotFoundError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ModuleNotFoundError:
+            return None
+    try:
+        with open(os.path.join(config_dir, "protocol.toml"), "rb") as fh:
+            queries = tomllib.load(fh).get("queries", {})
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    sql = queries.get(name, {}).get("sql")
+    return sql if isinstance(sql, str) else None
+
+
+def query_named_predicate(
+    binary: str, config_dir: str, cwd: str, name: str,
+) -> bool | None:
+    """Evaluate a `[queries.<name>]` predicate against the active ledger.
+
+    Runs sahjhan's generic `query` primitive — the same ledger the gates
+    evaluate, the same SQL the gates use, so block condition and evidence
+    cannot drift apart. Returns None on any failure (binary or daemon
+    unavailable, timeout, non-zero exit, malformed output, or the query
+    missing from the config) so callers can decide what an unanswerable
+    question means for them rather than being handed a fabricated answer.
+    """
+    import subprocess
+
+    sql = named_query_sql(config_dir, name)
+    if sql is None:
+        return None
+    try:
+        result = subprocess.run(
+            [binary, "--config-dir", config_dir, "query", sql, "--format", "json"],
+            capture_output=True, text=True, timeout=5, cwd=cwd,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        rows = json.loads(result.stdout)
+        # A boolean predicate renders as the string "true"/"false", which is
+        # also exactly what the gate's `expect` compares against.
+        return str(next(iter(rows[0].values()))).lower() == "true"
+    except (json.JSONDecodeError, StopIteration, IndexError, TypeError):
+        return None
+
+
 def _segment_is_sahjhan(seg: str) -> bool:
     """True if a single shell segment invokes the sahjhan CLI.
 

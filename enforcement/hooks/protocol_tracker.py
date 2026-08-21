@@ -7,12 +7,10 @@ updates the enforcement cache file. Never blocks. Pure bookkeeping.
 from __future__ import annotations
 
 import contextlib
-import json
 import os
 import re
 import subprocess
 import sys
-import tomllib
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -32,6 +30,7 @@ from _protocol_cache import (  # noqa: E402
     is_read_only_cmd,
     is_sahjhan_cmd,
     parse_status_text,
+    query_named_predicate,
     read_cache,
     update_cache,
     write_cache,
@@ -108,52 +107,16 @@ def _runs_transition(cmd: str, command: str) -> bool:
 PATTERN_OVERDUE_QUERY = "pattern_analysis_overdue"
 
 
-def _named_query_sql(config_dir: str, name: str) -> str | None:
-    """The SQL of a `[queries.<name>]` predicate, read from the protocol config.
-
-    Reading it rather than restating it is the whole point: there is one
-    predicate, and every consumer resolves the same one.
-    """
-    try:
-        with open(os.path.join(config_dir, "protocol.toml"), "rb") as fh:
-            queries = tomllib.load(fh).get("queries", {})
-    except (OSError, tomllib.TOMLDecodeError):
-        return None
-    sql = queries.get(name, {}).get("sql")
-    return sql if isinstance(sql, str) else None
-
-
 def _query_pattern_analysis_overdue(
     binary: str, config_dir: str, cwd: str
 ) -> bool | None:
     """Is pattern analysis overdue, per the gate's own predicate?
 
-    Runs sahjhan's generic `query` primitive against the active ledger — the
-    same ledger the gates evaluate — with the same SQL the gates use. Returns
-    None on any failure (binary/daemon unavailable, timeout, non-zero exit,
-    malformed output, or the query missing from the config) so the caller keeps
-    the last known value rather than resetting it. Failing to *raise* the flag
-    only delays the pattern nudge; it never deadlocks a commit. #77, #82.
+    Returns None on any failure so the caller keeps the last known value
+    rather than resetting it. Failing to *raise* the flag only delays the
+    pattern nudge; it never deadlocks a commit. #77, #82.
     """
-    sql = _named_query_sql(config_dir, PATTERN_OVERDUE_QUERY)
-    if sql is None:
-        return None
-    try:
-        result = subprocess.run(
-            [binary, "--config-dir", config_dir, "query", sql, "--format", "json"],
-            capture_output=True, text=True, timeout=5, cwd=cwd,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if result.returncode != 0:
-        return None
-    try:
-        rows = json.loads(result.stdout)
-        # A boolean predicate renders as the string "true"/"false", which is
-        # also exactly what the gate's `expect` compares against.
-        return str(next(iter(rows[0].values()))).lower() == "true"
-    except (json.JSONDecodeError, StopIteration, IndexError, TypeError):
-        return None
+    return query_named_predicate(binary, config_dir, cwd, PATTERN_OVERDUE_QUERY)
 
 
 def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
