@@ -52,7 +52,47 @@ terminating and not.** Confidence: **high** (data and transitions already exist)
 
 ---
 
-### P0.2 Get pattern analysis out of the commit path, cap it, and swap it for the stale sweep
+### P0.2 Get pattern analysis out of the commit path, cap it, and swap it for the stale sweep — **PARTIAL**
+
+**Shipped** (`5b0c4f0`, `bb502ca`):
+
+- **The commit path is no longer a pattern gate.** The premise needed correcting first:
+  nothing gates the `fix_commit` *transition* on pattern analysis, and `iteration_boundary`
+  already carried the requirement. The block was in `commit_gate.py`, on the `git commit`
+  Bash command — which fires between a fix that is written, verified and green and the
+  ledger entry naming it. It is gone. `set complete perspective` gains the same gate in the
+  same commit: without it, dropping the block would let a run close a whole perspective
+  without a context reset and skip every round, which the commit block had been covering by
+  accident. A test derives "every exit from the fix batch carries the gate" rather than
+  listing transitions. This retires the block P3.4 made correct — a commit denied on a stale
+  snapshot cannot happen on a path that no longer denies.
+- **The stale sweep is Step 11b**, scoped to open findings in files the run has already
+  changed. It uses only existing transitions; the load-bearing detail is that
+  `defer_cant_reproduce` gates on `fix_start` since the last transition and on a non-empty
+  investigation file, and a sweep has no fix subagent to have recorded either. Taught
+  without them, every retirement it finds is rejected. The test asserts that order on the
+  document's own lines.
+
+**Rejected — the yield conjunct.** "No round after two consecutive rounds that added no new
+PAT entry" is gated on `patterns_found`, which **P5.4 shows is unverified self-report and
+wrong in exactly the rounds this would use it**: rounds 14 and 15 recorded `patterns_found=5`
+and `=2` while `patterns-brief.md` states both added none. Building a gate on it violates
+the project's own rule that a gating event needs provenance that entails the fact. **P5.4 is
+a prerequisite**, not an independent item. The other half — "no round while >25
+pattern-filed findings are open" — has no field to read: the finding schema carries no
+marker for which round filed it.
+
+**Rejected — the ≤3-new-items cap.** It cannot be enforced: a gate on `pattern_done`
+counting findings filed since `pattern_check` would wedge the run permanently, because
+`pattern_done` is the only exit from `pattern_analysis` and filing a fourth finding is not
+undoable. As prose it suppresses discovery of real defects — a pattern round's job is
+finding siblings of a known class, and the measured 2.43-filed-per-fix is a *retirement*
+problem, not a discovery problem. The lever is batch deferral (P0.1).
+
+**Not done: scoping Step 16's resweep.** Belongs with P0.1's convergence redefinition,
+which rewrites the same `protocol.toml:74` line.
+
+**Original proposal below.**
 
 **Problem.** 24 rounds × 17.9 min median = **1.85× a fix cycle, 43% of in-loop time**,
 plus 474 subagent-min and **31% of the run's cache-read**. It is mechanically unskippable:
