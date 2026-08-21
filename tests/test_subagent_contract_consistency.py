@@ -218,6 +218,55 @@ def test_the_full_scope_transitions_are_taught() -> None:
         assert command in text, f"{command} needs a full green; say so"
 
 
+def test_step_10_does_not_mandate_a_second_suite_run() -> None:
+    """Two docs described the same tail suite run, and one of them recorded nothing.
+
+    `phase-fix-loop.md` Step A.9 runs the suite once, last, and records
+    `suite_green` for the tree. `step-10-fix-loop.md`'s hardening section told
+    the subagent to "run full suite again after any hardening tests are added"
+    — a bare run that records nothing, in a place where the recorded run has
+    not happened yet. Measured across one run: 45 back-to-back full-suite runs
+    with an identical pass count within 5 minutes.
+
+    Worse than duplicated, it was ordered wrong. It sat before the blast-radius
+    section, while Step A puts blast radius first, so the two files disagreed
+    about the sequence a subagent performs — the class of defect that shipped
+    v0.141.2.
+    """
+    text = (SKILL_DIR / "references" / "step-10-fix-loop.md").read_text(encoding="utf-8")
+    assert "Run full suite again" not in text, (
+        "step-10-fix-loop.md mandates a second tail suite run; Step A.9's "
+        "recorded run is the one that counts, and it must come after the "
+        "hardening tests this section writes"
+    )
+
+
+def test_the_fix_loop_routes_fast_path_findings_off_opus() -> None:
+    """`phase-audit.md` routes its subagents by task; the fix loop routed none.
+
+    97 of 107 subagents in the measured run were Opus, including every fix
+    agent. The triage paths already separate the mechanical work from the work
+    that needs extended thinking, so the routing line has a rule to follow.
+    """
+    text = "\n".join(_fix_loop_lines())
+    assert 'model: "sonnet"' in text, "phase-fix-loop.md has no model routing line"
+    assert "Fast Path" in text, (
+        "the routing line must name the triage path it applies to, or the "
+        "orchestrator has no rule to apply it by"
+    )
+
+
+def test_the_pattern_round_reads_the_brief_compact() -> None:
+    """The brief reached 181 KB against a ~400 B/entry spec, and the compactor
+    that renders it 26x smaller was invoked once in the whole run — because the
+    doc governing every pattern round never named it."""
+    text = "\n".join(_fix_loop_lines())
+    assert "pattern_brief_compact.py" in text, (
+        "phase-fix-loop.md Step 11 must name the compactor; it is the doc every "
+        "pattern round reads and the only place a whole-file read is prescribed"
+    )
+
+
 def test_step_10_cross_references_resolution_event() -> None:
     """step-10-fix-loop.md's triage paths end at 'Commit'; it must point at the
     resolution event so a reader of that file alone doesn't think commit is the

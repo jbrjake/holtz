@@ -25,7 +25,7 @@ The same `awaiting_clear` boundary recurs mid-loop via `iteration_boundary` (Ste
 
 Read [references/impact-graph-operations.md](references/impact-graph-operations.md) for blast radius queries and risk score updates.
 
-**Re-read worklist** — `docs/holtz/PUNCHLIST.md` is the worklist; it renders both auditors' findings from the ledger. Query it rather than reading the file:
+**Re-read worklist.** Query it; do not read `docs/holtz/PUNCHLIST.md`:
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list
 ```
@@ -39,7 +39,11 @@ Fixes are **delegated to subagents; the orchestrator validates and commits.** Yo
 For EACH punchlist item, in order:
 
 **Step A — Dispatch the fix subagent (investigate + author + verify, in-tree).**
-Launch **one** Agent subagent for the finding. Give it: the finding (ID, description, location, category, Discovery Chain), which triage path it falls under (see [references/step-10-fix-loop.md](references/step-10-fix-loop.md)), the instruction to work **only** this finding, and `$CLAUDE_PLUGIN_ROOT` so it can invoke Sahjhan. The subagent runs the enforced TDD sequence itself, in the real tree:
+Launch **one** Agent subagent for the finding. Give it: the finding (ID, description, location, category, Discovery Chain), which triage path it falls under (see [references/step-10-fix-loop.md](references/step-10-fix-loop.md)), the instruction to work **only** this finding, and `$CLAUDE_PLUGIN_ROOT` so it can invoke Sahjhan.
+
+**Model routing:** Fast Path → `model: "sonnet"`. Investigation and Can't-Reproduce Path → Opus.
+
+The subagent runs the enforced TDD sequence itself, in the real tree:
 
 1. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event fix_start --field finding_id=BH-NNN`
 2. Write a failing test that reproduces the finding. Run it. Confirm it FAILS. (Files under `tests/**` are exempt from the pre-edit gate, so this write is allowed.)
@@ -84,10 +88,10 @@ If you find yourself writing a summary table, STOP. You are not in the finalize 
 
 Use extended thinking (ultrathink) for this step — cross-finding pattern discovery and sibling search require deep reasoning.
 
-There are two ways to run Step 11, and the difference is whether you enter the `pattern_analysis` state:
+Two ways to run it:
 
-- **Stay in `fix_loop`** (usual). Just do the work and record the round at step 5. That satisfies the `iteration_boundary` gate, which counts fix commits since the last pattern analysis.
-- **Enter `pattern_analysis`** (when `iteration_boundary` blocks you and its message says to run `pattern_check`). Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_check` — its gate needs 3+ findings resolved since the last pattern analysis, which is exactly the condition that blocked you. Then do steps 1-5 below, and leave with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_done`, whose gate needs the `pattern_analysis_complete` event from step 5. **`pattern_done` is the only exit from `pattern_analysis`** — nothing else leads out of that state.
+- **Stay in `fix_loop`** (usual). Do steps 1-5. Step 5 satisfies the `iteration_boundary` gate.
+- **Enter `pattern_analysis`**, when `iteration_boundary` blocks you and names `pattern_check`. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_check`, do steps 1-5, then `transition pattern_done` — the only exit from that state, gated on step 5.
 
 1. **Read every finding, open and closed:**
    ```bash
@@ -96,7 +100,11 @@ There are two ways to run Step 11, and the difference is whether you enter the `
    Use `findings.py show BH-NNN` for a finding's full record.
 2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify the pattern, search for siblings, record each sibling with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding` IMMEDIATELY — one call per sibling, before the next group.
 3. **Update impact graph:** Add `shares_pattern` edges between all instances of the same pattern (e.g., if BH-003 and BH-007 are both PAT-001 instances, link the functions they involve with `shares_pattern` edges including the pattern ID in the note).
-4. **Update `docs/holtz/patterns-brief.md`:** Read it first (if it exists) to check for existing entries. For each newly identified pattern, append an entry. Use this format:
+4. **Update `docs/holtz/patterns-brief.md`.** Never read it whole:
+   ```bash
+   python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md
+   ```
+   Read one `PAT-NNN`'s full entry only when updating that entry. Append each new pattern in this format:
 
    ```markdown
    ## PAT-{NNN}: {name} (Run {R}, {date})
@@ -118,15 +126,15 @@ There are two ways to run Step 11, and the difference is whether you enter the `
 
    **Rolling policy:** The brief is capped at 20 active entries. When a new pattern would push the count past 20, move the 5 oldest entries (by discovery date) in a single batch to `docs/holtz/patterns-brief-archive.md`. The archive uses the same format but is not read by subagents by default. If the archive file does not exist, create it with the same header but titled `# Holtz Pattern Brief — Archive`.
 
-5. **Record the round**, after the brief is written and on its own Bash line:
+5. **Record the round.** After step 4, alone on its own Bash line — chaining records nothing:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/pattern_round.py --record --siblings-found M
    ```
-   `patterns_found` is read from the brief's `## PAT-NNN:` headings, so an entry appended after this command is not counted until the next round. Chaining anything before or after it (`&&`, `;`, `|`) records nothing.
+   `patterns_found` is counted from the brief's `## PAT-NNN:` headings; an entry appended after this waits for the next round.
 
 ### Step 11b: Stale Sweep [recurring: at each iteration boundary]
 
-Open findings in files the run has already changed may no longer describe the tree. Triage them in one pass before dispatching another fix.
+Triage open findings in files the run has already changed, in one pass, before dispatching another fix.
 
 1. Take the files the run has changed since the last sweep — since the run base on the first sweep:
    ```bash
@@ -136,17 +144,16 @@ Open findings in files the run has already changed may no longer describe the tr
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list
    ```
-3. Dispatch **one** subagent for the whole set. Give it the listing, the changed files, and `$CLAUDE_PLUGIN_ROOT`. It reads the code at each finding's location, runs the finding's recorded probe where it has one, and returns per finding either *still present* or *not reproducible* with the evidence. It writes no code and records no events.
-4. For each finding the sweep could not reproduce, one finding at a time:
+3. Dispatch **one** subagent for the whole set, with the listing, the changed files, and `$CLAUDE_PLUGIN_ROOT`. It reads the code at each location, runs the finding's recorded probe where there is one, and returns *still present* or *not reproducible* with evidence. It writes no code and records no events.
+4. For each finding it could not reproduce, one at a time:
    ```bash
    sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event fix_start --field finding_id=BH-NNN
    ```
-   Write the sweep's evidence to `docs/holtz/investigations/BH-NNN.md` (format: [references/investigation-format.md](investigation-format.md)), then:
+   Write the evidence to `docs/holtz/investigations/BH-NNN.md` ([format](investigation-format.md)), then:
    ```bash
    sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer cant-reproduce BH-NNN
    ```
-   The deferral is a transition and the `fix_start` gate is scoped to the last one, so record the next finding's `fix_start` after the previous deferral, not ahead of the batch.
-5. Findings the sweep confirms are still present stay open and keep their place in the worklist.
+   Record each `fix_start` after the previous deferral, not ahead of the batch — its gate is scoped to the last transition.
 
 ### Step 12: Per-Fix Hardening [recurring: after each fix in Step 10]
 

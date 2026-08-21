@@ -120,17 +120,17 @@ HIGH and CRITICAL findings are never deferrable via priority (only via can't-rep
 
 ## Per-Fix Hardening
 
-After each fix passes the reproduction test and full suite:
+After the fix passes its reproduction test:
 
 1. **Edge variants:** Does the fix handle null, empty, boundary, and concurrent cases? If not, write tests for them.
 2. **Regression risk:** Could this specific fix regress? If the fix is in a path without existing test coverage, add a regression test beyond the reproduction test.
-3. Run full suite again after any hardening tests are added.
+3. Do not run the suite here. [phase-fix-loop.md](phase-fix-loop.md) A.9 records it, after the last write to the tree.
 
 This is per-fix robustness, not pattern analysis. Step 11 looks across fixes for systemic issues.
 
 ## Blast Radius Analysis
 
-After each fix passes the reproduction test, full suite, and per-fix hardening:
+After the fix passes its reproduction test. Order is [phase-fix-loop.md](phase-fix-loop.md) A.5-A.6 blast radius, A.7-A.8 hardening, A.9 recorded suite run.
 
 See [impact-graph-operations.md](impact-graph-operations.md) for the blast radius query commands and risk score update procedures.
 

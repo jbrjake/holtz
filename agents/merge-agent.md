@@ -25,12 +25,11 @@ If any classification is ambiguous, read `${CLAUDE_PLUGIN_ROOT}/skills/holtz/ref
 
 ## Rules
 
-- Every finding from both auditors ends up on the ledger. None is silently dropped.
-- Contradictions are flagged in the report and left OPEN. Do not resolve them, do not defer them.
+- Every finding from both auditors ends up on the ledger.
+- Flag contradictions in the report, leave them OPEN, never defer one.
 - Higher severity always wins.
 - Use Holtz's description for Agreement items.
-- Never renumber. Holtz's ids stay `BH-`, Justine's stay `BJ-`.
-- The merge is deterministic. Given the same inputs, always produce the same output.
+- Never renumber.
 
 Report exactly one status when done:
 - **DONE** — merge complete, all files written

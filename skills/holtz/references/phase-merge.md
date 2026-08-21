@@ -19,7 +19,7 @@ Before starting any fix work, check whether Justine has produced results:
 Agent(subagent_type="merge-agent", prompt="Merge Justine's punchlist at docs/holtz/justine/PUNCHLIST.md into Holtz's ledger. Follow the merge protocol at ${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/merge-protocol.md: record each Justine-only finding with `sahjhan event finding` keeping her BJ-NNN id, re-file Holtz's id where her severity is higher. Merge impact graphs per protocol. Write MERGE-REPORT.md to docs/holtz/. Archive docs/holtz/justine/ to docs/holtz/archive/justine-{ISO date}/. Return: merged total, agreement count, Holtz-only count, Justine-only count, contradiction count.")
 ```
 
-4. **After the merge completes:** Read `docs/holtz/MERGE-REPORT.md` for blind spot analysis and contradiction flags. `docs/holtz/PUNCHLIST.md` now renders both auditors' findings — that is your worklist for Step 10. **Spot-check 2-3 items** against Justine's punchlist if the report shows disagreements or contradictions.
+4. **After the merge completes:** Read `docs/holtz/MERGE-REPORT.md` for blind spot analysis and contradiction flags. `docs/holtz/PUNCHLIST.md` is your Step 10 worklist. **Spot-check 2-3 items** against Justine's punchlist if the report shows disagreements or contradictions.
 5. **If no Justine output exists** (she wasn't dispatched or produced nothing), the worklist is unchanged.
 
 Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition merge_complete` to advance protocol state.

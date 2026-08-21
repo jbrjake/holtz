@@ -12,10 +12,10 @@ After both auditors reach convergence (or one stalls), the parent process merges
 
 **Inputs:**
 - Holtz's findings — on the ledger. `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list --all`.
-- `docs/holtz/justine/PUNCHLIST.md` — Justine keeps no ledger, so this file is the only copy of her findings.
+- `docs/holtz/justine/PUNCHLIST.md` — the only copy of Justine's findings; she keeps no ledger.
 
 **Outputs:**
-- Justine's unmatched findings, recorded as `finding` events. `docs/holtz/PUNCHLIST.md` renders from the ledger, so it is the unified worklist.
+- Justine's unmatched findings, recorded as `finding` events. `docs/holtz/PUNCHLIST.md` is then the unified worklist.
 - `docs/holtz/MERGE-REPORT.md` — statistics, blind spot analysis, flagged items.
 
 ## Stall Conditions
@@ -50,11 +50,11 @@ sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding \
   --field predicted_by=none --field description={her Problem, Evidence and Discovery Chain}
 ```
 
-Ids are kept as filed; the schema admits both namespaces (`^B[HJ]-\d{3}$`). Re-filing an existing id supersedes it — the punchlist renders one row per id and keeps the last filing.
+Keep ids as filed. Re-filing an existing id supersedes it: the punchlist keeps the last filing per id.
 
 **Note:** Severity disagreement is a sub-case of Agreement — both auditors found the same bug, they just disagree on severity. In the merge report, severity disagreements are counted in the Agreement section total (e.g., "5 items found by both auditors, including 2 with severity disagreements") and listed individually in the Severity Disagreements section for visibility. They are NOT double-counted in the merged total.
 
-Contradictions stay OPEN. Do not run a deferral transition on one — deferral means decided and postponed, and nobody has decided.
+Contradictions stay OPEN. Do not run a deferral transition on one.
 
 ### "Same Bug" Matching Criteria
 
@@ -132,7 +132,7 @@ Based on what each auditor missed:
 
 Post-merge sequence:
 
-1. Holtz's worklist is `docs/holtz/PUNCHLIST.md`, which now renders both auditors' findings and re-renders on every resolution.
+1. Holtz's worklist is `docs/holtz/PUNCHLIST.md`.
 2. Holtz runs Steps 10-16 (fix loop, pattern analysis, convergence, resweep) on the merged items.
 3. Parent process archives `docs/holtz/justine/` to `docs/holtz/archive/justine-{ISO date}/`, then deletes the archived `impact-graph.json` (its data has already been merged into the canonical graph — the archive retains all other files for reference).
 4. Justine is not re-dispatched for the fix loop.
@@ -163,10 +163,9 @@ Consult examples when:
 
 ## Rules
 
-- **Every finding from both auditors ends up on the ledger.** No finding is silently dropped.
-- **Contradictions are never auto-resolved.** Flag in the report, leave OPEN.
-- **Higher severity always wins.** Re-file Holtz's id at the higher one.
-- **Holtz's description is preferred for agreements.** If Justine observed something he did not, re-file his id with it appended.
-- **Ids are never renumbered.**
-- **Patterns are not merged here.** Note any Justine pattern in the report; it enters `docs/holtz/patterns-brief.md` at the next pattern round.
-- **The merge is deterministic.** Given the same two punchlists, the merge always produces the same output. There are no judgment calls in the classification rules (except contradiction detection, which is flagged rather than resolved).
+- **Every finding from both auditors ends up on the ledger.**
+- **Never auto-resolve a contradiction.** Flag in the report, leave OPEN.
+- **Higher severity wins.** Re-file Holtz's id at the higher one.
+- **Use Holtz's description for agreements.** If Justine observed something he did not, re-file his id with it appended.
+- **Never renumber.**
+- **Do not merge patterns here.** Note any Justine pattern in the report; it enters `docs/holtz/patterns-brief.md` at the next pattern round.
