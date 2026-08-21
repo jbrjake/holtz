@@ -18,6 +18,10 @@ import shlex
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _shell_norm import resolve_indirection  # noqa: E402
+
 PROTECTED = [
     "enforcement/",
     "bin/sahjhan",
@@ -398,10 +402,16 @@ def _bash_references_blocked_sahjhan(command: str, cwd: str) -> str | None:
 
     Splits on shell operators (&&, ||, ;, |, newline), checks each segment.
     Returns block reason string if blocked, None if allowed.
+
+    Same-line variables and ``eval``/``sh -c`` wrappers are resolved first.
+    Without that, the block is a check on how the command was spelled: this
+    guard is what makes ``event quiz_exhausted_resolved`` a human-only
+    channel, and a channel that ``"$SAH" event quiz_exhausted_resolved``
+    walks through is not closed to the party it exists to exclude.
     """
     import re
 
-    segments = re.split(r'\s*(?:&&|\|\||[;|\n])\s*', command)
+    segments = re.split(r'\s*(?:&&|\|\||[;|\n])\s*', resolve_indirection(command))
 
     for seg in segments:
         seg = seg.strip()

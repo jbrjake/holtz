@@ -9,8 +9,13 @@ import json
 import os
 import re
 import shlex
+import sys
 from datetime import datetime, timezone
 from typing import Any
+
+sys.path.insert(0, os.path.dirname(__file__))
+
+from _shell_norm import resolve_indirection  # noqa: E402
 
 _ENFORCEMENT_FRESHNESS_MINUTES = 30
 
@@ -268,7 +273,12 @@ def _split_shell_segments(cmd: str) -> list[str]:
     Strips shell redirections like 2>&1, >&2, 2>/dev/null before splitting,
     so they don't produce spurious segments. Also strips leading export
     statements and variable assignments from each segment.
+
+    Same-line variables and ``eval``/``sh -c`` wrappers are resolved first,
+    so every predicate built on these segments sees the command that runs
+    rather than the spelling it was written in.
     """
+    cmd = resolve_indirection(cmd)
     # Strip shell redirections: 2>&1, >&2, 2>/dev/null, etc.
     cleaned = re.sub(r'\d*>&?\d+', '', cmd)
     cleaned = re.sub(r'\d*>/dev/null', '', cleaned)
@@ -421,7 +431,9 @@ def _segment_is_sahjhan(seg: str) -> bool:
             idx += 1
         else:
             break
-    p0 = parts[idx] if idx < len(parts) else ""
+    # Quoting is spelling, not meaning: ``"$SAH" status`` resolves to a
+    # quoted path, and a quoted path names the same binary as a bare one.
+    p0 = parts[idx].strip("\"'") if idx < len(parts) else ""
     return bool(parts) and (
         p0 == "sahjhan"
         or p0.endswith("/sahjhan")
