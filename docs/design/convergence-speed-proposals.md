@@ -106,9 +106,9 @@ subagent-parity rule.
 
 ---
 
-### P0.4 One canonical, machine-queried worklist — **PARTIAL**
+### P0.4 One canonical, machine-queried worklist — **DONE**
 
-**Shipped** (`ac2407e`, `ea89716`, `4c88666`):
+**Shipped** (`ac2407e`, `ea89716`, `4c88666`, `6d78c7f`):
 
 - **Merge writes to the ledger.** Justine's unmatched findings are recorded as `finding`
   events keeping her `BJ-NNN` ids (`^B[HJ]-\d{3}$` already admitted them), so the rendered
@@ -129,10 +129,28 @@ subagent-parity rule.
   write. Reframed as what it actually is, the live format for Justine's own status file.
   `tests/test_skill_files_respect_managed_docs.py` derives the invariant from `MANAGED_DOCS`.
 
-**Remaining:** render `PUNCHLIST.md` as open items only with resolved rows to
-`PUNCHLIST-ARCHIVE.md`. Needs a render rule *and* a `MANAGED_DOCS` entry together
-(`test_managed_docs_consistency.py` enforces the ⇔), and `phase-fix-loop.md`'s pattern
-round reads resolved items, so it must be pointed at the archive in the same change.
+- **The punchlist is open work only** (`6d78c7f`). Resolved and deferred rows render to
+  `PUNCHLIST-ARCHIVE.md`, added to `MANAGED_DOCS` in the same commit. Both templates
+  partition the findings by the rules `status.md.tera` and `findings.py` already
+  share, so the tables and the headline counts cannot disagree; the two cross-view
+  tests read both files. Step 11.1 read the full punchlist for resolved items and now
+  runs `findings.py list --all`; a test pins that no skill file expects closed findings
+  in `PUNCHLIST.md`. `step-10-fix-loop.md`'s flowchart still named the retired
+  `PUNCHLIST-MERGED.md`.
+
+  **The archive is load-bearing, and the report did not say why.** `phase-recon.md:104`
+  decides which source files a prior run ever audited by scanning
+  `docs/holtz/archive/*/PUNCHLIST.md` for finding locations. A converged run has no
+  open findings — every archived punchlist in this repo has **zero** OPEN rows (19, 17,
+  23, 12 and 1 findings, none open). Open-only rendering without the archive would have
+  made every file read as cold on every subsequent run, silently, and the cold-file
+  ratio drives recon's scope. The scan reads both files.
+
+  **Not done: the ≤12-word summary.** The item also asked for truncated descriptions.
+  Post-`4c88666` the fix loop queries `findings.py`, not the file, so the punchlist's
+  size is no longer a per-run cost; the remaining readers are humans and the cold-file
+  scan, which reads locations. Truncating would re-introduce the lossiness P3.7 fixed
+  in exchange for nothing measurable.
 
 **Problem.** `phase-fix-loop.md:28` tells the fix loop to prefer `PUNCHLIST-MERGED.md` —
 574 KB, written **once** on 08-11 17:53, re-rendered by nothing, still marking **all 178
