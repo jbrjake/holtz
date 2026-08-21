@@ -106,7 +106,33 @@ subagent-parity rule.
 
 ---
 
-### P0.4 One canonical, machine-queried worklist
+### P0.4 One canonical, machine-queried worklist — **PARTIAL**
+
+**Shipped** (`ac2407e`, `ea89716`, `4c88666`):
+
+- **Merge writes to the ledger.** Justine's unmatched findings are recorded as `finding`
+  events keeping her `BJ-NNN` ids (`^B[HJ]-\d{3}$` already admitted them), so the rendered
+  `PUNCHLIST.md` is the unified worklist and re-renders on every resolution.
+  `PUNCHLIST-MERGED.md` is retired; `merge_complete` now runs `validate_merge_report.py`
+  against `MERGE-REPORT.md` — a script written for that gate and never wired to it.
+  Renumbering deleted with the file (that is P4.2, done here).
+- **`findings.py list|show`** shipped. This was not a convenience wrapper: the mandated
+  `validate_punchlist.py --filter-status OPEN` exits `ERROR: No punchlist items found` on
+  the rendered punchlist, because that parser wants `### BH-NNN:` prose and the render
+  emits a six-column table. Two formats under one filename — which is why the run wrote a
+  replacement three times. A test pins that the script and the template never disagree
+  about a finding's status.
+- **The blocked write steps are gone**, and more than the two line pairs named: eleven
+  lines across five skill files. `status-file-format.md` was the source of most of them —
+  it described a hand-written `docs/holtz/STATUS.md` with Current Position / Next Action /
+  Strategy / Last Insight sections that the render does not produce and the agent cannot
+  write. Reframed as what it actually is, the live format for Justine's own status file.
+  `tests/test_skill_files_respect_managed_docs.py` derives the invariant from `MANAGED_DOCS`.
+
+**Remaining:** render `PUNCHLIST.md` as open items only with resolved rows to
+`PUNCHLIST-ARCHIVE.md`. Needs a render rule *and* a `MANAGED_DOCS` entry together
+(`test_managed_docs_consistency.py` enforces the ⇔), and `phase-fix-loop.md`'s pattern
+round reads resolved items, so it must be pointed at the archive in the same change.
 
 **Problem.** `phase-fix-loop.md:28` tells the fix loop to prefer `PUNCHLIST-MERGED.md` —
 574 KB, written **once** on 08-11 17:53, re-rendered by nothing, still marking **all 178
@@ -248,7 +274,7 @@ no protocol event is the condition the counter exists to notice. Revisit only if
 a run shows readers still tripping the gate.
 
 | P3.5 **DONE** | **The manifest-anchoring bug (holtz #85 / sahjhan 0.20.1) terminated the run.** All **81 violations sit at seq 8276–8390, 07:46:06–08:10:42Z** — the last 24 minutes. The preceding 8,275 events are clean. Trigger: a `cd` into `docs/holtz` at 07:19:45 to shorten paths while reading 34–52 KB artifacts. | Records carry `project: "holtz", run: "0"` while the run is `tqdm`/run 1 — not even attributable to the run they killed. | already fixed by `d92d468`; **also** cap artifact size so nobody needs to `cd` (see P2.1) |
-| P3.6 **DONE** | **Duplicate finding id.** BH-248 appears twice as two different findings; the "ID CORRECTION" row BH-258 was added but the bad row never deleted. 354 rows, **353 unique ids**. | headline count off by one | `unique_by(attribute="fields.id")` in `punchlist.md.tera`. It keeps the *last* filing, so a correction supersedes what it corrects — pinned by a test, since the whole fix turns on which one survives. |
+| P3.6 **DONE** | **Duplicate finding id.** BH-248 appears twice as two different findings; the "ID CORRECTION" row BH-258 was added but the bad row never deleted. 354 rows, **353 unique ids**. | headline count off by one | `unique_by(attribute="fields.id")` in `punchlist.md.tera`. It keeps the *last* filing, so a correction supersedes what it corrects — pinned by a test, since the whole fix turns on which one survives. **The first pass missed two of three counting sites** (`c480775`): `status.md.tera` deduped Resolved and Deferred but not Total, so STATUS.md and PUNCHLIST.md gave different answers for one ledger — and STATUS.md is where the headline count is read. Its Open was also `total - resolved - deferred`, which underflows to a rendered `-1` when a finding is deferred and later fixed anyway (`fix_commit` has no `item_open` gate). Both counts now come from the same per-id bucketing the punchlist renders by. Third site: `defer_medium`'s budget gate counted rows, so a re-filed MEDIUM bought a deferral past the 50% cap. |
 | P3.7 **DONE** | **`PUNCHLIST.md`'s table format is lossy.** 22 of 354 rows fail to parse into 6 columns because descriptions contain unescaped `\|` (e.g. `` `prog \| head` ``). Any tool counting statuses off this file gets a wrong answer. | 22 rows | Escape `\|` in `description` and `location` at the render, and collapse newlines in `description` — a newline splits the row in two, which is the same defect with a worse failure mode and was not in the report. `test_punchlist_render.py` asserts every row parses into exactly 6 columns. |
 | P3.8 **N/A** | **Open regression the run introduced and never fixed.** BH-248 (`tqdm/utils.py:240`): `32bd5cb` widened `except OSError`, so `tqdm(file=open(p,'rb'))` now silently never draws instead of raising. Probe-confirmed, filed, **still OPEN at pause**. | — | A defect in the audited project, not in the plugin. Out of scope for this punchlist. |
 
@@ -263,14 +289,14 @@ of agent-time**. These are efficiency trims, not a rescue.
 | # | Proposal | Savings | Conf. |
 |---|---|---|---|
 | P4.1 | **Script the merge.** `merge-protocol.md:11` calls it *"mechanical… without judgment calls"* and `:165` *"deterministic"* — yet it ran 36.7 min as a subagent hand-writing throwaway `python3 -c` scripts. **This is a script running as an LLM.** Ship `scripts/merge_punchlists.py`; the agent reviews only contradiction candidates. | ~35 min, ~160k tok | high |
-| P4.2 | **Delete the renumbering rule** (`merge-protocol.md:76,163`). The ledger already owned 124 ids, so per `PUNCHLIST-MERGED.md:7` "the two namespaces **disagreed on 121 of 124 items**"; reconciliation ran 17:19–17:30. Merged items keep ledger ids. | ~11 min | high |
+| P4.2 **DONE** | **Delete the renumbering rule** (`merge-protocol.md:76,163`). Landed with P0.4 in `4c88666` — the rule went with the file it served. Both namespaces are now first-class on the ledger and the prefix is the provenance. | ~11 min | high |
 | P4.3 REJECTED | REJECTED DO NOT IMPLEMENT! **Replace Justine's full second audit with a ~20-min adversarial review** of the primary punchlist ("what surface did Holtz not look at?"). Justine cost 114.0 agent-min / 377k tok for 33 unique findings, of which **2 were ever resolved — ~57 agent-min per shipped finding.** | ~94 min, ~310k tok | med-high |
 | P4.4 REJECTED | REJECTED DO NOT IMPLEMENT! **Project-size-scaled lens selection.** All 13 lenses run unconditionally (`lens-registry.md:3`, `phase-audit.md:46-49`); **a keyword sweep of `SKILL.md` and all `references/` for project size / LOC / defect density returns only *context-token* budgets.** On a 5k-LOC progress bar this ran `idempotency`, `security`, `observability` — lenses about DBs, payments, correlation IDs. Add an `**Applies when:**` field per lens, filtered by Step 2 probes. tqdm would run 6–8. | ~30–45 min, ~150k tok | med |
 | P4.5 REJECTED | REJECTED DO NOT IMPLEMENT! **Cap recon; make predictions binding or cut them.** Recon artifacts are **write-only — zero tool calls read any `recon/step*` file after session 1**, and all 21 predictions still read `**Outcome:** UNCONFIRMED` though five `phase-audit.md` clauses order the update. Hit rate 8/21 strict — but predictions 2 and 8 alone foreshadowed ~35 of 63 fix commits. `phase-audit.md:37` says *"predictions change the order, not the scope"*, so recon buys an ordering for an audit that runs to completion anyway. | ~50 min, ~200k tok | med |
 | P4.6 REJECTED | REJECTED DO NOT IMPLEMENT! **"Confirmed-during-recon → fix now" fast path.** Three defects were CONFIRMED by live probe at 15:03Z; their fixes landed 17:34–18:05Z — **2.5–3 h later**. Let a recon-confirmed CRITICAL enter the fix loop immediately, in parallel with the audit. First fix at ~T+30 min instead of T+180. | time-to-first-fix 180 → ~30 min | med |
 | P4.7 REJECTED | REJECTED DO NOT IMPLEMENT! **Gate the quiz bank on a lens sweep actually being scheduled,** or generate it lazily. It is a hard gate on `recon_complete` (`phase-recon.md:134`: *"you cannot leave recon without a bank"*) — 108 `quiz_stage.py` calls, 85 questions, 14.5 agent-min — and there were **zero `quiz_challenge`/`quiz_answer` invocations in the entire run.** Perspectives: 0/13. | ~14.5 min, ~75k tok, 108 round-trips | high |
 | P4.8 | **Dedupe gate at `merge_complete`:** reject a merged punchlist where two OPEN findings share `file:±5 lines`. BH-003/BH-112 are the same defect at `std.py:736`; BH-028/BH-126 the same `--buf_size=0` defect. Each pair burned two full fix cycles. | ~2 fix cycles | med-high |
-| P4.9 | **Gate the three mandated artifacts nobody produced:** `MERGE-REPORT.md` (`merge-protocol.md:19,79-120`), `justine/SUMMARY.md` (`phase-audit.md:15` — Justine's own completion signal), and the archive step (`merge-protocol.md:130`). None exists; no gate checks any of them. `justine/impact-graph.json` (157 KB) is still on disk though `:146` says delete it. | correctness | high |
+| P4.9 **PARTIAL** | **Gate the three mandated artifacts nobody produced.** `MERGE-REPORT.md` is now gated at `merge_complete` (`4c88666`) — content-validated, not just `file_exists`. Still ungated: `justine/SUMMARY.md` (`phase-audit.md:15` — Justine's own completion signal) and the archive step (`merge-protocol.md:130`). `justine/impact-graph.json` (157 KB) is still on disk though `:146` says delete it. | correctness | high |
 
 ---
 
