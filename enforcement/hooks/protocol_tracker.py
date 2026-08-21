@@ -29,6 +29,7 @@ from _protocol_cache import (  # noqa: E402
     empty_cache,
     is_enforcement_fresh,
     is_git_commit,
+    is_read_only_cmd,
     is_sahjhan_cmd,
     parse_status_text,
     read_cache,
@@ -295,12 +296,16 @@ def main() -> None:
         _apply_sahjhan_cmd(cwd, cache, cmd)
         exit_ok()
 
-    # Test/lint/type-check commands are legitimate TDD activity — don't count as stalling
+    # Test/lint/type-check commands are legitimate TDD activity — don't count
+    # as stalling. Neither does reading the tree: an audit subagent's whole
+    # job is grep/sed -n/ls, none of which has a protocol event to emit, so
+    # counting it accrues a block the reader can only escape by running a
+    # protocol command for its side effect and discarding the output.
     with contextlib.suppress(RuntimeError):
         if _is_sleep_cmd(cmd):
             # Sleep to game timing gates gets double stall penalty
             update_cache(cwd, {"stall": cache.get("stall", 0) + 2})
-        elif not _is_tdd_cmd(cmd):
+        elif not _is_tdd_cmd(cmd) and not is_read_only_cmd(cmd):
             update_cache(cwd, {"stall": cache.get("stall", 0) + 1})
     exit_ok()
 

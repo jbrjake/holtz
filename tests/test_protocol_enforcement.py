@@ -528,7 +528,12 @@ class TestProtocolTracker:
         assert "abc1234" in updated["unregistered_commits"]
 
     def test_increments_stall_counter(self, tmp_path, mock_daemon):
-        """Non-git, non-sahjhan, non-TDD commands increment stall."""
+        """Commands that can change the tree increment stall.
+
+        Read-only inspection is exempt alongside TDD commands — see
+        ``TestReadOnlyCommandsDoNotStall`` in test_hook_chains.py — so the
+        example here has to be something that actually writes.
+        """
         from datetime import datetime, timezone  # noqa: UP017
 
         from _protocol_cache import empty_cache, read_cache, write_cache
@@ -540,8 +545,8 @@ class TestProtocolTracker:
 
         event = {
             "tool_name": "Bash",
-            "tool_input": {"command": "cat some_file.py"},
-            "tool_response": {"exit_code": 0, "output": "contents"},
+            "tool_input": {"command": "touch some_file.py"},
+            "tool_response": {"exit_code": 0, "output": ""},
             "cwd": str(tmp_path),
         }
         run_enforcement_hook("protocol_tracker.py", event)
@@ -665,7 +670,11 @@ class TestProtocolTracker:
         assert updated["last_sahjhan_cmd"] == "2026-01-01T00:00:00+00:00"
 
     def test_stale_enforcement_skips_stall(self, tmp_path, mock_daemon):
-        """When enforcement is stale, protocol_tracker does not increment stall."""
+        """When enforcement is stale, protocol_tracker does not increment stall.
+
+        The command has to be one that *would* tick, or staleness is not
+        what the assertion is measuring.
+        """
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
@@ -675,8 +684,8 @@ class TestProtocolTracker:
 
         event = {
             "tool_name": "Bash",
-            "tool_input": {"command": "cat some_file.py"},
-            "tool_response": {"exit_code": 0, "output": "contents"},
+            "tool_input": {"command": "touch some_file.py"},
+            "tool_response": {"exit_code": 0, "output": ""},
             "cwd": str(tmp_path),
         }
         run_enforcement_hook("protocol_tracker.py", event)

@@ -459,6 +459,88 @@ class TestChickenAndEggStallBlock:
             "Plain command should increment stall, not reset it"
 
 
+class TestReadOnlyCommandsDoNotStall:
+    """Reading the tree cannot stall the protocol, so it must not tick the counter.
+
+    The counter asks "how many commands have gone by without the protocol
+    moving?" — a question about work that could have produced an event. An
+    audit subagent's whole job is ``grep``/``sed -n``/``ls``, none of which
+    has a protocol event to emit, so under the old rule a reader accrued a
+    block it had no way to avoid except by running ``sahjhan status`` purely
+    to reset a number and discarding the output. That is the same reasoning
+    that already exempts test and lint commands.
+    """
+
+    def _stall_after(self, mock_daemon, tmp_path, command, start=5):
+        mock_daemon.state = _stalled_fix_loop_state(stall=start)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "tool_response": {"exit_code": 0, "output": ""},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(POST_TOOL_TRACKER, event)
+        assert _is_post_tool_ok(output)
+        return mock_daemon.state.get("stall")
+
+    @pytest.mark.parametrize("command", [
+        'grep -rn "def foo" src/',
+        "rg --files-with-matches pattern",
+        "sed -n '1,50p' src/module.py",
+        "ls -la docs/holtz/",
+        "cat pyproject.toml",
+        "head -50 README.md",
+        "find . -name '*.py'",
+        "git status --short",
+        "git log --oneline -20",
+        "git show HEAD --stat",
+        "git diff HEAD~1",
+        'grep -rn "x" . | sort | uniq -c | head -20',
+        "wc -l src/*.py",
+        "which sahjhan",
+    ])
+    def test_read_only_inspection_does_not_tick(self, mock_daemon, tmp_path, command):
+        assert self._stall_after(mock_daemon, tmp_path, command) == 5, \
+            f"Read-only inspection must not tick the stall counter: {command}"
+
+    def test_read_only_prefixed_by_cd_does_not_tick(self, mock_daemon, tmp_path):
+        """``cd repo && grep ...`` is the shape subagents actually emit."""
+        cmd = f"cd {tmp_path} && grep -rn TODO . | head -20"
+        assert self._stall_after(mock_daemon, tmp_path, cmd) == 5
+
+    @pytest.mark.parametrize("command", [
+        # A write redirect makes the line mutating whatever produced the bytes.
+        'grep -rn "x" src/ > /tmp/out.txt',
+        "cat a.txt >> b.txt",
+        # In-place edit wears a read-only command's name.
+        "sed -i 's/a/b/' src/module.py",
+        "sed -i.bak 's/a/b/' src/module.py",
+        # find can execute and delete.
+        "find . -name '*.pyc' -delete",
+        "find . -name '*.py' -exec rm {} ;",
+        # git subcommands that change the repository.
+        "git checkout -b feature",
+        "git config user.name x",
+        "git tag v1.0.0",
+        # Not an inspection command at all.
+        "echo hello",
+        "mkdir -p build",
+        "touch newfile.txt",
+        "cp a.txt b.txt",
+    ])
+    def test_mutating_commands_still_tick(self, mock_daemon, tmp_path, command):
+        assert self._stall_after(mock_daemon, tmp_path, command) == 6, \
+            f"Mutating command must still tick the stall counter: {command}"
+
+    def test_read_only_does_not_reset_the_counter_either(self, mock_daemon, tmp_path):
+        """Not ticking is not the same as clearing — only a protocol event clears.
+
+        A reader that has done nothing wrong should not be able to launder
+        away a stall accrued by real unregistered work.
+        """
+        assert self._stall_after(mock_daemon, tmp_path, "ls -la", start=12) == 12
+
+
 # ---------------------------------------------------------------------------
 # 2e: Stop chain
 # ---------------------------------------------------------------------------

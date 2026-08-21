@@ -8,6 +8,7 @@ import base64
 import json
 import os
 import re
+import shlex
 from datetime import datetime, timezone
 from typing import Any
 
@@ -317,6 +318,85 @@ def is_git_commit(cmd: str) -> bool:
         if not re.search(r"(?<!\w)--amend\b", stripped):
             return True
     return False
+
+
+# Commands that only inspect the tree. Deliberately narrow: this is a list
+# of ways to *look at the repository*, not a list of harmless programs. A
+# command earns a place here by being unable to change the tree — which is
+# why `echo`, `awk` and `xargs` are absent (they either aren't inspection or
+# can be steered into writing), and why the entries that CAN write under a
+# flag carry an explicit flag check below.
+_READ_ONLY_COMMANDS = frozenset({
+    "cat", "cd", "cmp", "column", "cut", "diff", "dirname", "basename",
+    "du", "file", "find", "git", "grep", "egrep", "fgrep", "head", "jq",
+    "ls", "nl", "od", "pwd", "readlink", "realpath", "rg", "ag", "sed",
+    "sort", "stat", "strings", "tail", "tr", "tree", "true", "type",
+    "uniq", "wc", "which", "xxd",
+})
+
+# Subcommands of `git` that read the repository without changing it.
+# Omissions are deliberate: `branch`, `tag`, `config`, `remote`, `stash`
+# and `checkout` all have writing forms that share the reading spelling.
+_READ_ONLY_GIT_SUBCOMMANDS = frozenset({
+    "blame", "cat-file", "describe", "diff", "grep", "log", "ls-files",
+    "ls-tree", "rev-list", "rev-parse", "shortlog", "show", "status",
+})
+
+# Flags that turn a read-only command into a writing one.
+_WRITING_FLAGS = {
+    "sed": ("-i",),           # also covers -i.bak / --in-place via prefix match
+    "find": (
+        "-delete", "-exec", "-execdir", "-ok", "-okdir",
+        "-fprint", "-fprintf", "-fls",
+    ),
+}
+
+# Redirections that produce no file: fd duplication (2>&1, >&2) and the
+# bit bucket. Everything else containing `>` is treated as a write.
+_HARMLESS_REDIRECT_RE = re.compile(r'\d*>&\d+|\d*>>?\s*/dev/null')
+
+
+def _segment_is_read_only(seg: str) -> bool:
+    """True if one shell segment only inspects the tree."""
+    try:
+        parts = shlex.split(seg)
+    except ValueError:
+        return False  # unbalanced quotes — can't reason, assume it writes
+    if not parts:
+        return False
+    head = os.path.basename(parts[0].lstrip("\\").strip("\"'"))
+    if head not in _READ_ONLY_COMMANDS:
+        return False
+    for flag in _WRITING_FLAGS.get(head, ()):
+        if any(p == flag or p.startswith(flag) for p in parts[1:]):
+            return False
+    if head == "git":
+        subcommands = [p for p in parts[1:] if not p.startswith("-")]
+        if not subcommands or subcommands[0] not in _READ_ONLY_GIT_SUBCOMMANDS:
+            return False
+    return True
+
+
+def is_read_only_cmd(cmd: str) -> bool:
+    """True if every segment of ``cmd`` only inspects the tree.
+
+    Used by the stall counter, which asks "how many commands have gone by
+    without the protocol moving?" Reading cannot move the protocol and has
+    no event to emit, so counting it produces a block the reader cannot
+    avoid except by running a protocol command purely to reset a number.
+    Same reasoning that already exempts test and lint commands.
+
+    Conservative by construction: an unrecognized command, an unparseable
+    segment, or any write redirect anywhere on the line disqualifies the
+    whole line. Misreading a write as a read would let real work escape the
+    counter; misreading a read as a write only costs a nudge.
+    """
+    if not cmd.strip():
+        return False
+    if ">" in _HARMLESS_REDIRECT_RE.sub("", cmd):
+        return False
+    segments = _split_shell_segments(cmd)
+    return bool(segments) and all(_segment_is_read_only(seg) for seg in segments)
 
 
 def _segment_is_sahjhan(seg: str) -> bool:
