@@ -86,8 +86,8 @@ Use extended thinking (ultrathink) for this step — cross-finding pattern disco
 
 There are two ways to run Step 11, and the difference is whether you enter the `pattern_analysis` state:
 
-- **Stay in `fix_loop`** (usual). Just do the work and record `pattern_analysis_complete` at step 4. That satisfies the `iteration_boundary` gate, which counts fix commits since the last pattern analysis.
-- **Enter `pattern_analysis`** (when `iteration_boundary` blocks you and its message says to run `pattern_check`). Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_check` — its gate needs 3+ findings resolved since the last pattern analysis, which is exactly the condition that blocked you. Then do steps 1-5 below, and leave with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_done`, whose gate needs the `pattern_analysis_complete` event from step 4. **`pattern_done` is the only exit from `pattern_analysis`** — nothing else leads out of that state.
+- **Stay in `fix_loop`** (usual). Just do the work and record the round at step 5. That satisfies the `iteration_boundary` gate, which counts fix commits since the last pattern analysis.
+- **Enter `pattern_analysis`** (when `iteration_boundary` blocks you and its message says to run `pattern_check`). Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_check` — its gate needs 3+ findings resolved since the last pattern analysis, which is exactly the condition that blocked you. Then do steps 1-5 below, and leave with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_done`, whose gate needs the `pattern_analysis_complete` event from step 5. **`pattern_done` is the only exit from `pattern_analysis`** — nothing else leads out of that state.
 
 1. **Read every finding, open and closed:**
    ```bash
@@ -96,8 +96,7 @@ There are two ways to run Step 11, and the difference is whether you enter the `
    Use `findings.py show BH-NNN` for a finding's full record.
 2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify the pattern, search for siblings, record each sibling with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding` IMMEDIATELY — one call per sibling, before the next group.
 3. **Update impact graph:** Add `shares_pattern` edges between all instances of the same pattern (e.g., if BH-003 and BH-007 are both PAT-001 instances, link the functions they involve with `shares_pattern` edges including the pattern ID in the note).
-4. **Record:** `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event pattern_analysis_complete --patterns_found N --siblings_found M`.
-5. **Update `docs/holtz/patterns-brief.md`:** Read it first (if it exists) to check for existing entries. For each newly identified pattern, append an entry. Use this format:
+4. **Update `docs/holtz/patterns-brief.md`:** Read it first (if it exists) to check for existing entries. For each newly identified pattern, append an entry. Use this format:
 
    ```markdown
    ## PAT-{NNN}: {name} (Run {R}, {date})
@@ -118,6 +117,12 @@ There are two ways to run Step 11, and the difference is whether you enter the `
    **Deduplication:** Before appending, check if the new pattern is a refinement of an existing entry (same bug class, similar detection heuristic). If so, update the existing entry with improved heuristics or examples rather than adding a duplicate.
 
    **Rolling policy:** The brief is capped at 20 active entries. When a new pattern would push the count past 20, move the 5 oldest entries (by discovery date) in a single batch to `docs/holtz/patterns-brief-archive.md`. The archive uses the same format but is not read by subagents by default. If the archive file does not exist, create it with the same header but titled `# Holtz Pattern Brief — Archive`.
+
+5. **Record the round**, after the brief is written and on its own Bash line:
+   ```bash
+   python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/pattern_round.py --record --siblings-found M
+   ```
+   `patterns_found` is read from the brief's `## PAT-NNN:` headings, so an entry appended after this command is not counted until the next round. Chaining anything before or after it (`&&`, `;`, `|`) records nothing.
 
 ### Step 11b: Stale Sweep [recurring: at each iteration boundary]
 

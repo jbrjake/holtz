@@ -26,14 +26,8 @@ Two modes, and the split is the whole design:
     and runs SQL; no socket anywhere), so a gate running inside a transition
     cannot re-enter the daemon that is evaluating it.
 
-Reading through ``sahjhan query`` rather than parsing ``ledger.jsonl`` here is
-deliberate. The engine resolves the active ledger through a chain — explicit
-``--ledger`` flag, then the ``active-ledger`` marker looked up in
-``ledgers.toml``, then the registry default, then ``data_dir/ledger.jsonl``.
-Reimplementing that chain in Python would be a mirror of engine logic, and a
-mirror that drifts points the gate at a different ledger than the one the
-transition evaluates. Delegating means block condition and evidence read the
-same file by construction.
+Both ledger reads go through ``_ledger_query``, so the gate's evidence and the
+baseline lookup can never resolve to different ledgers.
 
 **The agent cannot forge a ``suite_green``.** Three independent layers:
 
@@ -78,6 +72,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _ledger_query import query_ledger, sahjhan_target  # noqa: E402
 
 # The suite command, in one place. `-x --ff` is the fail-fast pair T1 settled
 # on: `--lf`/`--last-failed` is banned because it runs *only* the previously
@@ -325,13 +323,6 @@ def _run_number(cwd: str) -> str:
         return "0"
 
 
-def _hooks_dir() -> str:
-    """``enforcement/hooks``, which is a sibling of this script's directory."""
-    return os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hooks"
-    )
-
-
 def _record_command(scope: str) -> str:
     """The exact command that satisfies a failing ``--check``.
 
@@ -415,64 +406,6 @@ def _block(reason: str, tree_hash: str, accepted: tuple[str, ...], scope: str) -
     return 1
 
 
-# ── Ledger reads ─────────────────────────────────────────────────────────────
-
-
-def _sahjhan_target(cwd: str) -> tuple[str | None, str | None, str]:
-    """Locate the sahjhan binary and the enforcement config for ``cwd``.
-
-    Returns ``(binary, config_dir, "")`` or ``(None, None, problem)``.
-    """
-    sys.path.insert(0, _hooks_dir())
-    from _common import resolve_config_dir  # noqa: PLC0415
-    from _resolve import ensure_sahjhan  # noqa: PLC0415
-
-    binary = ensure_sahjhan()
-    config_dir, found = resolve_config_dir(cwd)
-    if binary is None or not found:
-        return None, None, (
-            f"sahjhan binary={'missing' if binary is None else binary}, "
-            f"config_dir={'not found' if not found else config_dir}"
-        )
-    return binary, config_dir, ""
-
-
-def _query_ledger(
-    binary: str, config_dir: str, cwd: str, sql: str
-) -> tuple[list[dict] | None, str]:
-    """Run SQL over the active ledger, returning ``(rows, problem)``.
-
-    Daemon-free by construction — see the module docstring. Both readers go
-    through here so the gate's evidence and the baseline lookup can never
-    resolve to different ledgers.
-    """
-    try:
-        proc = subprocess.run(
-            [binary, "--config-dir", config_dir, "query", sql, "--format", "json"],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return None, f"cannot query the ledger: {exc}"
-
-    if proc.returncode != 0:
-        # A ledger that has never been initialised surfaces here as an I/O
-        # error rather than a zero count. Either way there is no evidence.
-        return None, (
-            f"ledger query failed (exit {proc.returncode}): {proc.stderr.strip()}"
-        )
-
-    try:
-        rows = json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        return None, f"cannot read the ledger query result: {exc}"
-    if not isinstance(rows, list):
-        return None, f"ledger query returned {type(rows).__name__}, not a list"
-    return rows, ""
-
-
 # ── Affected-scope selection ─────────────────────────────────────────────────
 
 
@@ -487,11 +420,11 @@ def _baseline_commit(cwd: str) -> tuple[str | None, str]:
     the untested gap to one iteration: `iteration_boundary` demands a full
     run every few fixes, and that re-bases the window.
     """
-    binary, config_dir, problem = _sahjhan_target(cwd)
+    binary, config_dir, problem = sahjhan_target(cwd)
     if binary is None or config_dir is None:
         return None, f"cannot reach the ledger — {problem}"
 
-    rows, problem = _query_ledger(
+    rows, problem = query_ledger(
         binary,
         config_dir,
         cwd,
@@ -766,7 +699,7 @@ def mode_check(cwd: str, root: str, scope: str) -> int:
         f"AND tree_hash='{tree_hash}' AND scope IN ({scope_list})"
     )
 
-    binary, config_dir, problem = _sahjhan_target(cwd)
+    binary, config_dir, problem = sahjhan_target(cwd)
     # Fail closed, and *without* an escape line. An unevaluable suite gate that
     # allowed the transition would be a silent false green — the thing this
     # whole mechanism exists to prevent — so a broken toolchain blocks and says
@@ -777,7 +710,7 @@ def mode_check(cwd: str, root: str, scope: str) -> int:
         print(f"FAIL: cannot evaluate the suite gate — {problem}", file=sys.stderr)
         return 1
 
-    rows, problem = _query_ledger(binary, config_dir, cwd, sql)
+    rows, problem = query_ledger(binary, config_dir, cwd, sql)
     if rows is None:
         return _block(problem, tree_hash, accepted, scope)
 

@@ -161,9 +161,6 @@ sahjhan event blast_radius --field project=holtz --field run=N \
 sahjhan event hardening_complete --field project=holtz --field run=N \
   --field auditor=holtz --field phase=fix_loop --field step=10 \
   --field finding_id=BH-001 --field edge_cases_tested=3 --field tests_added=2
-sahjhan event pattern_analysis_complete --field project=holtz --field run=N \
-  --field auditor=holtz --field phase=fix_loop --field step=11 \
-  --field patterns_found=2 --field siblings_found=4
 sahjhan event iteration_complete --field project=holtz --field run=N \
   --field auditor=holtz --field phase=fix_loop --field step=10 \
   --field perspective=component --field items_resolved=3 --field items_remaining=2 \

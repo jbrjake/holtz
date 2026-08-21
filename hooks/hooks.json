@@ -74,6 +74,10 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/suite_courier.py\""
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/pattern_courier.py\""
           }
         ]
       }

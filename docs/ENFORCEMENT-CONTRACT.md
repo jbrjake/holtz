@@ -23,15 +23,15 @@ Every event gets exactly one, declared in `events.toml` and ordered by `[attesta
 
 ## Posture
 
-**22 of 30 gate-consumed events are the agent's own word.**
+**21 of 30 gate-consumed events are the agent's own word.**
 
 This is not a bug — self-attestation is fine for bookkeeping, and a protocol whose every step needed host evidence would not be usable. It is here because it should be a *deliberate, visible* posture rather than an accident nobody had counted. The defect is a **mismatch**: a gate whose purpose is to constrain the agent, fed by evidence the agent controls.
 
 | Class | Gate-consumed events |
 |---|---|
-| `agent` (22) | `audit_claim`, `baseline_updated`, `blast_radius`, `finding`, `finding_deferred`, `finding_resolved`, `fix_start`, `hardening_complete`, `iteration_complete`, `justine_dispatched`, `lens_sweep_started`, `living_punchlist_updated`, `merge_agent_dispatched`, `pattern_analysis_complete`, `pattern_contribution_complete`, `protocol_violation`, `recon_step`, `reference_read`, `set_member_complete`, `snapshot`, `source_edit`, `test_failed_before_fix` |
+| `agent` (21) | `audit_claim`, `baseline_updated`, `blast_radius`, `finding`, `finding_deferred`, `finding_resolved`, `fix_start`, `hardening_complete`, `iteration_complete`, `justine_dispatched`, `lens_sweep_started`, `living_punchlist_updated`, `merge_agent_dispatched`, `pattern_contribution_complete`, `protocol_violation`, `recon_step`, `reference_read`, `set_member_complete`, `snapshot`, `source_edit`, `test_failed_before_fix` |
 | `engine` (1) | `state_transition` |
-| `tool` (5) | `quiz_answered`, `quiz_bank_generated`, `quiz_exhausted`, `quiz_posed`, `suite_green` |
+| `tool` (6) | `pattern_analysis_complete`, `quiz_answered`, `quiz_bank_generated`, `quiz_exhausted`, `quiz_posed`, `suite_green` |
 | `host` (1) | `context_reset` |
 | `human` (1) | `quiz_exhausted_resolved` |
 
@@ -95,7 +95,7 @@ flowchart LR
     linkStyle 12 stroke:#b0b0b0,stroke-width:2px
     linkStyle 13 stroke:#b0b0b0,stroke-width:2px
     linkStyle 14 stroke:#d1495b,stroke-width:2px
-    linkStyle 15 stroke:#d1495b,stroke-width:2px
+    linkStyle 15 stroke:#2a9d8f,stroke-width:2px
     linkStyle 16 stroke:#d1495b,stroke-width:2px
     linkStyle 17 stroke:#d1495b,stroke-width:2px
     linkStyle 18 stroke:#d1495b,stroke-width:2px
@@ -109,7 +109,8 @@ flowchart LR
 | Colour | Class | Edges |
 |---|---|---|
 | `#b0b0b0` | `ungated` | `confirm_convergence` (final_sweep_clean→converged), `final_sweep_start` (all_perspectives_clean→final_sweep), `pause` (fix_loop→awaiting_human), `resume` (awaiting_human→fix_loop), `run_start` (idle→recon), `sweep_dirty` (final_sweep→fix_loop) |
-| `#d1495b` | `agent` | `all_perspectives` (perspective_clean→all_perspectives_clean), `audit_complete` (audit→merge_ready), `converge` (final_sweep→final_sweep_clean), `defer_cant_reproduce` (fix_loop→fix_loop), `defer_low` (fix_loop→fix_loop), `defer_medium` (fix_loop→fix_loop), `finalize` (converged→finalized), `fix_commit` (fix_loop→fix_loop), `fix_loop_start` (audit→awaiting_clear), `fix_loop_start` (merge_done→awaiting_clear), `iteration_boundary` (fix_loop→awaiting_clear), `lens_rotate` (perspective_clean→audit), `merge_complete` (merge_ready→merge_done), `pattern_check` (fix_loop→pattern_analysis), `pattern_done` (pattern_analysis→fix_loop), `recon_complete` (recon→audit), `set complete perspective` (fix_loop→perspective_clean) |
+| `#d1495b` | `agent` | `all_perspectives` (perspective_clean→all_perspectives_clean), `audit_complete` (audit→merge_ready), `converge` (final_sweep→final_sweep_clean), `defer_cant_reproduce` (fix_loop→fix_loop), `defer_low` (fix_loop→fix_loop), `defer_medium` (fix_loop→fix_loop), `finalize` (converged→finalized), `fix_commit` (fix_loop→fix_loop), `fix_loop_start` (audit→awaiting_clear), `fix_loop_start` (merge_done→awaiting_clear), `iteration_boundary` (fix_loop→awaiting_clear), `lens_rotate` (perspective_clean→audit), `merge_complete` (merge_ready→merge_done), `pattern_check` (fix_loop→pattern_analysis), `recon_complete` (recon→audit), `set complete perspective` (fix_loop→perspective_clean) |
+| `#2a9d8f` | `tool` | `pattern_done` (pattern_analysis→fix_loop) |
 | `#2f6fb0` | `host` | `resume` (awaiting_clear→fix_loop) |
 
 ## Gates
@@ -202,7 +203,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
 | pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `pattern_analysis_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | the full suite must pass on this tree before a context reset — this is what re-bases the affected scope | `suite_green` | `hook:enforcement/hooks/suite_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 
 ### `resume` — awaiting_clear → fix_loop
@@ -227,13 +228,13 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
 | pattern analysis needs 3+ findings resolved since the last pattern analysis | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `pattern_analysis_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 
 ### `pattern_done` — pattern_analysis → fix_loop
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| pattern analysis must be recorded before returning to fixes | `pattern_analysis_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| pattern analysis must be recorded before returning to fixes | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 
 ### `set complete perspective` — fix_loop → perspective_clean
 
@@ -243,7 +244,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
 | pattern analysis required after 3+ fixes — run pattern_check before completing the perspective | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `pattern_analysis_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | two clean iterations required for stability | `iteration_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | prevent rapid-fire gaming of iteration count | `iteration_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | tests must pass | `suite_green` | `hook:enforcement/hooks/suite_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
@@ -327,6 +328,7 @@ Every Python writer in the tree, with the registration and pin that decide wheth
 |---|---|---|---|
 | `enforcement/hooks/bash_guard.py` | `PostToolUse` | `bash_guard.py` | `protocol_violation` |
 | `enforcement/hooks/lens_quiz.py` | `PostToolUse`, `SubagentStop` | `lens_quiz.py`, `quiz_capture.py` | `quiz_answered`, `quiz_exhausted`, `quiz_failed`, `quiz_posed` |
+| `enforcement/hooks/pattern_courier.py` | `PostToolUse` | `pattern_courier.py` | `pattern_analysis_complete` |
 | `enforcement/hooks/post_tool_hook.py` | `PostToolUse` | `post_tool_hook.py` | `bash_command` |
 | `enforcement/hooks/quiz_vault.py` | `PostToolUse`, `SubagentStop` | `lens_quiz.py`, `quiz_capture.py` | `quiz_bank_generated` |
 | `enforcement/hooks/session_start.py` | `SessionStart` | `session_start.py` | `context_reset` |

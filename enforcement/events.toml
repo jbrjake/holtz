@@ -91,21 +91,41 @@ fields = [
 [[events.iteration_complete.producers]]
 id = "agent:cli"
 
+# A pattern round closed, and this is what it produced (P5.4).
+#
+# `patterns_found` was a number the agent typed, and on the one run it has been
+# measured against it was wrong in the rounds that would have mattered: 14 and
+# 15 recorded 5 and 2 while `patterns-brief.md` says in its own words that both
+# added none. It is derived now — `pattern_ids` are the `## PAT-NNN:` entries
+# this run has in the brief (and its archive) that no earlier round in this
+# ledger reported, and `patterns_found` is how many. Claiming a pattern means
+# writing one into the artifact the round exists to produce.
+#
+# `restricted` + hash-pinned writer is what makes that hold, and the writer is
+# a PostToolUse hook rather than the script the agent runs: that script
+# executes in the sandboxed shell and cannot reach the daemon. `siblings_found`
+# crosses from the run's own output — how many siblings a round filed is a fact
+# only the round has — and no gate reads it.
+#
+# `phase` and `step` are gone with the agent's write path. A courier would be
+# inventing them, and nothing read them.
 [events.pattern_analysis_complete]
 description = "Pattern analysis cycle completed"
-attestation = "agent"
+attestation = "tool"
+restricted = true
 fields = [
     { name = "project", type = "string" },
     { name = "run", type = "string", pattern = "^\\d+$" },
     { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
-    { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
-    { name = "step", type = "string", pattern = "^\\d+$" },
     { name = "patterns_found", type = "string", pattern = "^\\d+$" },
+    # Optional because most rounds add nothing, and an empty list has no
+    # spelling this pattern admits.
+    { name = "pattern_ids", type = "string", pattern = "^PAT-\\d+(,PAT-\\d+)*$", optional = true },
     { name = "siblings_found", type = "string", pattern = "^\\d+$" },
 ]
 
 [[events.pattern_analysis_complete.producers]]
-id = "agent:cli"
+id = "hook:enforcement/hooks/pattern_courier.py"
 
 [events.set_member_complete]
 description = "A completion set member passed clean"

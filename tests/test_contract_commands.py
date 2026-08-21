@@ -200,6 +200,18 @@ class TestVerifySuite(TestPhaseReconQuizStage):
             "phase-fix-loop.md step 10: orchestrator validates without re-running",
         )
 
+    def test_pattern_round_record(self):
+        """Same shape, same stakes: it is the only way to close a round.
+
+        `pattern_analysis_complete` is restricted, so a block here would leave
+        the round unrecordable and `iteration_boundary` permanently blocked.
+        """
+        self._assert_allowed_in_plugin(
+            "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/pattern_round.py "
+            "--record --siblings-found 4",
+            "phase-fix-loop.md step 11.5: close the pattern round",
+        )
+
 
 # ---------------------------------------------------------------------------
 # Contract commands: extracted from SKILL.md quick reference
@@ -330,14 +342,6 @@ class TestSkillMdQuickReference:
             "--field auditor=holtz --field phase=fix_loop --field step=10 "
             "--field finding_id=BH-001 --field edge_cases_tested=3 --field tests_added=2",
             "SKILL.md: event hardening_complete",
-        )
-
-    def test_event_pattern_analysis_complete(self):
-        _assert_allowed(
-            "sahjhan event pattern_analysis_complete --field project=holtz --field run=1 "
-            "--field auditor=holtz --field phase=fix_loop --field step=11 "
-            "--field patterns_found=2 --field siblings_found=4",
-            "SKILL.md: event pattern_analysis_complete",
         )
 
     def test_event_iteration_complete(self):
