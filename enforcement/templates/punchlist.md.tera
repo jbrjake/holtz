@@ -7,7 +7,11 @@
 **State:** {{ state.label }}
 **Ledger:** {{ ledger_len }} events
 
-{% set findings = events | where_eq(attribute="event_type", value="finding") -%}
+{# One row per finding id. A finding filed twice under one id — a correction
+   re-recorded without retracting the original — otherwise renders as two
+   rows, and every count taken off this file is wrong by the difference.
+   unique_by keeps the last, so the correction supersedes what it corrects. #}
+{% set findings = events | where_eq(attribute="event_type", value="finding") | unique_by(attribute="fields.id") -%}
 {% set resolved_ids = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
 {% set deferred_ids = events | where_eq(attribute="event_type", value="finding_deferred") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
 
@@ -20,7 +24,8 @@
 | ID | Category | Location | Perspective | Description | Status |
 |----|----------|----------|-------------|-------------|--------|
 {% for e in sev_findings -%}
-| {{ e.fields.id }} | {{ e.fields.category }} | {{ e.fields.location }} | {{ e.fields.perspective }} | {{ e.fields.description }} | {% if resolved_ids is containing(e.fields.id) %}RESOLVED{% elif deferred_ids is containing(e.fields.id) %}DEFERRED{% else %}OPEN{% endif %} |
+| {{ e.fields.id }} | {{ e.fields.category }} | {{ e.fields.location | replace(from="|", to="\|") }} | {{ e.fields.perspective }} | {{ e.fields.description | replace(from="|", to="\|") | replace(from="
+", to=" ") }} | {% if resolved_ids is containing(e.fields.id) %}RESOLVED{% elif deferred_ids is containing(e.fields.id) %}DEFERRED{% else %}OPEN{% endif %} |
 {% endfor -%}
 {% endif -%}
 {% endfor %}
