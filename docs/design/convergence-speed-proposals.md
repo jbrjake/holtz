@@ -54,7 +54,9 @@ terminating and not.** Confidence: **high** (data and transitions already exist)
 
 ### P0.2 Get pattern analysis out of the commit path, cap it, and swap it for the stale sweep — **PARTIAL**
 
-**Shipped** (`5b0c4f0`, `bb502ca`):
+Everything but the Step 16 resweep scoping, which belongs with P0.1.
+
+**Shipped** (`5b0c4f0`, `bb502ca`, `ceb7414`):
 
 - **The commit path is no longer a pattern gate.** The premise needed correcting first:
   nothing gates the `fix_commit` *transition* on pattern analysis, and `iteration_boundary`
@@ -73,14 +75,36 @@ terminating and not.** Confidence: **high** (data and transitions already exist)
   without them, every retirement it finds is rejected. The test asserts that order on the
   document's own lines.
 
-**Rejected — the yield conjunct.** "No round after two consecutive rounds that added no new
-PAT entry" is gated on `patterns_found`, which **P5.4 shows is unverified self-report and
-wrong in exactly the rounds this would use it**: rounds 14 and 15 recorded `patterns_found=5`
-and `=2` while `patterns-brief.md` states both added none. Building a gate on it violates
-the project's own rule that a gating event needs provenance that entails the fact. **P5.4 is
-a prerequisite**, not an independent item. The other half — "no round while >25
-pattern-filed findings are open" — has no field to read: the finding schema carries no
-marker for which round filed it.
+**Shipped — the yield conjunct**, once P5.4 (`ceb7414`) made the field real.
+`pattern_analysis_overdue` gains a second conjunct: the obligation lapses once the last two
+rounds both recorded `patterns_found = 0`. It withdraws a *demand*, not a capability —
+Step 11's usual path runs a round without entering `pattern_analysis` at all, so a run that
+wants another one still has it; what stops is `iteration_boundary` and `set complete
+perspective` refusing to proceed without one. A round with yield re-arms it, because the
+window is the last two rounds rather than a lifetime tally. `pattern_check`'s block message
+had to change with it: it can now be refused for a second reason, and the old text sent the
+agent to resolve three more findings, which would not have helped.
+
+Two things worth keeping from building it.
+
+*The natural SQL is wrong on this engine.* `ORDER BY seq DESC LIMIT 2` in a derived table,
+filtered by an outer `WHERE`, reads as "the last two rounds" and is not: sahjhan applies the
+outer predicate **before** the subquery's `LIMIT`, so that form counts every dry round the
+run ever had and stops the obligation the moment any two rounds anywhere were dry. It passes
+every consecutive-case test and fails only on a non-adjacent pair, which needs three rounds
+to observe. The shipped predicate expresses the window as a `seq` floor — the seq of the
+second-most-recent round — and a test pins the discriminating case.
+
+*The measure is a proxy, deliberately.* A round that files eight siblings of an existing
+PAT adds no new entry and reads as dry. That is accepted: the run this came from filed 2.43
+findings per fix and its cost per eventually-fixed finding rose to **108.9 min** by rounds
+14–15, so more sibling-filing is not what the loop is short of — and the round remains
+available, only unforced. Widening the measure to include `siblings_found` would be worse
+than the proxy: that field is agent-typed, and under-claiming it is the direction that buys
+less work.
+
+**Still rejected — the >25-open half.** "No round while >25 pattern-filed findings are open"
+has no field to read: the finding schema carries no marker for which round filed it.
 
 **Rejected — the ≤3-new-items cap.** It cannot be enforced: a gate on `pattern_done`
 counting findings filed since `pattern_check` would wedge the run permanently, because
@@ -365,10 +389,42 @@ of agent-time**. These are efficiency trims, not a rescue.
 | P5.1 | **`sahjhan report --timing`.** The ledger already records `fix_start`, `fix_commit`, `pattern_check`, `pattern_done`, `suite_green`, `finding`, `finding_resolved`, all timestamped. **It has never been queried for performance.** Surface cycle time, pattern-round cost, generation-vs-retirement ratio, severity mix. | Would have made this run's divergence visible **on day 1, at pattern round 1**, from data already being collected. |
 | P5.2 | **Hook denials leave no telemetry.** A hook calling `exit_block` writes **no attachment record**. All 2,419 `PreToolUse:Bash` attachments say `permissionDecision: "allow"` — the only trace of a denial is a `BLOCKED:` string in the result text. Any dashboard reading `hookSpecificOutput` reports **zero enforcement activity** on a run with 187 hard denials. | Fix before building monitoring on that field. |
 | P5.3 | **Stop crying BLOCKED.** `BLOCKED: N unregistered commits` appears 44 times, **every one with `permissionDecision: "allow"`**. Plus 142 injections of "N source edits since last state transition" (N up to 50) that were never acted on. Alarm-word inflation costs attention on every turn and changes nothing. | Reword advisory messages. |
-| P5.4 | **`patterns_found` is unverified self-report and it is wrong.** Rounds 14/15 recorded `patterns_found=5` and `=2` while `patterns-brief.md` states both added **no** new pattern — and this is the field gating `pattern_done`. Derive it by diffing PAT headings in the brief. | Violates the project's own rule: *gating events need real provenance*. |
+| P5.4 **DONE** | **`patterns_found` is unverified self-report and it is wrong.** Rounds 14/15 recorded `patterns_found=5` and `=2` while `patterns-brief.md` states both added **no** new pattern — and this is the field gating `pattern_done`. Derive it by diffing PAT headings in the brief. | Violates the project's own rule: *gating events need real provenance*. |
 | P5.5 | **Persist the pattern-round ordinal in the ledger and render it in STATUS.md.** Subagent labels show rounds 7, 8, 9, 10 **twice**; `c30f4d6b` restarted at "round 5". `round7-pat021-form-b.md` therefore names a different round than its sibling files. Nothing derives the number from the ledger. | Kills filename collisions and re-derivation across `/clear`. |
 | P5.6 | **Replace the 16-command heartbeat with a passive counter** and make `sahjhan status` default to a one-line summary (`--full` for the sets block). Of 250 sahjhan calls in 3 sessions, **65 (26%) are `status`/`query` re-reads** of state the caller already held; each returns 4.1–4.3 KB, most of it a `perspective: 0/13` set unchanged all run. | ~6 min, ~45k tok per 3 sessions |
 | P5.7 | **Trim the `event finding` payload.** Every call repeats 6 constant fields (`project/run/auditor/phase/step/predicted_by`) — a token tax on the highest-frequency command in the protocol (292 calls). Inherit them from the run context as `fix_commit` already does. | ~high-frequency |
+
+**P5.4, shipped** (`ceb7414`). Two corrections to the item. It does **not** gate
+`pattern_done` — that gate is `ledger_has_event_since pattern_analysis_complete`
+and reads the event's existence, never its value — so deriving the field changed
+no behaviour by itself; what it changed is that the field became gateable, which
+is what P0.2's yield conjunct needed. And the *taught order made the derivation
+impossible*: `phase-fix-loop.md` recorded at step 4 and updated the brief at step
+5, so a derivation would have reported the previous round's yield as this one's.
+The steps are swapped and a test asserts the document's own line order, which is
+the only place that defect is visible.
+
+Mechanism follows `suite_green`: `pattern_analysis_complete` is now `restricted`
+and `tool`-attested, written by `pattern_courier.py` (PostToolUse, outside the
+sandbox) rather than by the agent, because `pattern_round.py --record` runs in
+the agent's shell and cannot reach the daemon. The courier re-derives every
+field a gate could read; only `siblings_found` crosses from the run's output, and
+no gate reads it. `phase`/`step` went with the agent's write path.
+
+Three things the item did not name. **The archive counts** — the rolling policy
+moves entries out of the brief at twenty, so an entry this run added can leave
+the live file while still being this run's yield; the same shape as the
+open-only punchlist against recon's cold-file scan. **The run tag is the
+baseline** — the brief persists across runs, so without `(Run N, …)` round one on
+a mature project would claim the whole inherited brief; the run number comes from
+the ledger's own most recent event, not the `active-ledger` marker, which is
+frequently absent and defaults to `0`. **A second PAT parser was necessary** —
+`pattern_brief_compact.py` lives in `skills/holtz/scripts`, a path the agent can
+write, and the courier writes a restricted event.
+
+Known limit: Justine appends to the same shared brief with the same run tag, so
+her patterns count toward the first round's yield. Nothing in the brief
+distinguishes an auditor.
 
 ---
 

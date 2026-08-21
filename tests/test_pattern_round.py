@@ -407,6 +407,154 @@ class TestOtherToolsAreUntouched:
         assert _recorded(mock_daemon) is None
 
 
+# ── the yield stop, against a real daemon ────────────────────────────────────
+
+
+@pytest.mark.slow
+@pytest.mark.integration
+class TestTheYieldStop:
+    """Two consecutive rounds that added no pattern withdraw the obligation.
+
+    Driven through the real writer end to end, because that is the only way to
+    get a restricted `pattern_analysis_complete` onto a ledger — and because a
+    test that hand-wrote the events would be asserting against its own idea of
+    what a round records rather than against what one does.
+
+    The predicate comes out of `protocol.toml`, not restated here, so editing
+    the config re-tests the config.
+    """
+
+    @staticmethod
+    def _overdue_sql() -> str:
+        import tomllib
+        with open(os.path.join(CONFIG_DIR, "protocol.toml"), "rb") as fh:
+            return tomllib.load(fh)["queries"]["pattern_analysis_overdue"]["sql"]
+
+    @staticmethod
+    def _prepare(real_daemon) -> str:
+        root = real_daemon["project_root"]
+        subprocess.run(["git", "init", "-q", root], check=True, capture_output=True)
+        subprocess.run(
+            [real_daemon["binary"], "--config-dir", real_daemon["config_dir"],
+             "ledger", "create", "--from", "run", "1", "--activate"],
+            cwd=root, capture_output=True, text=True, check=True, timeout=30,
+        )
+        return root
+
+    @staticmethod
+    def _sah(real_daemon, root, *args):
+        result = subprocess.run(
+            [real_daemon["binary"], "--config-dir", real_daemon["config_dir"], *args],
+            cwd=root, capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, f"{args}\n{result.stdout}\n{result.stderr}"
+        return result
+
+    _COMMON = ["--field", "project=t", "--field", "run=1", "--field", "auditor=holtz",
+               "--field", "phase=fix_loop", "--field", "step=10"]
+
+    def _resolve(self, real_daemon, root, *ids):
+        for finding_id in ids:
+            self._sah(real_daemon, root, "event", "finding",
+                      "--field", f"id={finding_id}", "--field", "severity=HIGH",
+                      "--field", "category=bug", "--field", "location=a.py:1",
+                      "--field", "perspective=component", "--field", "predicted_by=none",
+                      "--field", "description=x", *self._COMMON)
+            self._sah(real_daemon, root, "event", "finding_resolved",
+                      "--field", f"id={finding_id}", "--field", "commit_hash=abc1234",
+                      *self._COMMON)
+
+    def _round(self, real_daemon, root, pat_ids: list[str]) -> None:
+        """Run a pattern round the way the skill file teaches it.
+
+        Brief first, then `--record`, then the courier the harness fires. Only
+        driving the courier would test the writer while leaving the sequence
+        that produces its input unexercised.
+        """
+        body = "# Brief\n\n" + "".join(_entry(pat_id, 1) for pat_id in pat_ids)
+        _write(root, BRIEF, body)
+
+        script = os.path.join(SCRIPTS_DIR, "pattern_round.py")
+        env = {**os.environ, "SAHJHAN_DAEMON_SOCKET": real_daemon["sock_path"]}
+        command = f"python3 {script} --record --siblings-found 0"
+        run = subprocess.run(
+            [sys.executable, script, "--record", "--siblings-found", "0"],
+            cwd=root, capture_output=True, text=True, env=env, timeout=60,
+        )
+        assert run.returncode == 0, f"{run.stdout}\n{run.stderr}"
+        courier = subprocess.run(
+            [sys.executable, os.path.join(HOOKS_DIR, "pattern_courier.py")],
+            input=json.dumps({
+                "tool_name": "Bash",
+                "tool_input": {"command": command},
+                "tool_response": {"output": run.stdout, "exit_code": 0},
+                "cwd": root,
+            }),
+            capture_output=True, text=True, env=env, timeout=60,
+        )
+        assert courier.returncode == 0, courier.stderr
+        assert "NOT recorded" not in courier.stdout, courier.stdout
+
+    def _overdue(self, real_daemon, root) -> str:
+        result = self._sah(real_daemon, root, "query", self._overdue_sql(), "--format", "json")
+        rows = json.loads(result.stdout)
+        return str(list(rows[0].values())[0])
+
+    def test_three_resolutions_still_owe_a_round(self, real_daemon):
+        root = self._prepare(real_daemon)
+        self._resolve(real_daemon, root, "BH-001", "BH-002", "BH-003")
+        assert self._overdue(real_daemon, root) == "true"
+
+    def test_one_dry_round_is_not_enough_to_stop(self, real_daemon):
+        """The rule is two *consecutive* rounds; one is a bad day."""
+        root = self._prepare(real_daemon)
+        self._resolve(real_daemon, root, "BH-001")
+        self._round(real_daemon, root, [])
+        self._resolve(real_daemon, root, "BH-002", "BH-003", "BH-004")
+        assert self._overdue(real_daemon, root) == "true"
+
+    def test_two_dry_rounds_withdraw_the_obligation(self, real_daemon):
+        root = self._prepare(real_daemon)
+        self._resolve(real_daemon, root, "BH-001")
+        self._round(real_daemon, root, [])
+        self._round(real_daemon, root, [])
+        self._resolve(real_daemon, root, "BH-002", "BH-003", "BH-004")
+        assert self._overdue(real_daemon, root) == "false"
+
+    def test_a_productive_round_re_arms_it(self, real_daemon):
+        """The window is the last two rounds, so a yield puts the demand back."""
+        root = self._prepare(real_daemon)
+        self._resolve(real_daemon, root, "BH-001")
+        self._round(real_daemon, root, [])
+        self._round(real_daemon, root, [])
+        self._round(real_daemon, root, ["PAT-001"])
+        self._resolve(real_daemon, root, "BH-002", "BH-003", "BH-004")
+        assert self._overdue(real_daemon, root) == "true"
+
+    def test_two_dry_rounds_that_are_not_consecutive_do_not_stop_it(self, real_daemon):
+        """The rule is a window, not a tally, and this is where they differ.
+
+        `ORDER BY seq DESC LIMIT 2` in a derived table expresses the window
+        naturally and is wrong here: the engine applies the outer WHERE before
+        the LIMIT, so it counts every dry round the run ever had. That form
+        passes the consecutive cases and fails only this one.
+        """
+        root = self._prepare(real_daemon)
+        self._resolve(real_daemon, root, "BH-001")
+        self._round(real_daemon, root, [])
+        self._round(real_daemon, root, ["PAT-001"])
+        self._round(real_daemon, root, ["PAT-001"])  # no new id — a dry round
+        self._resolve(real_daemon, root, "BH-002", "BH-003", "BH-004")
+        assert self._overdue(real_daemon, root) == "true"
+
+    def test_a_round_resets_the_resolution_count_either_way(self, real_daemon):
+        """The first conjunct is untouched: a fresh round is never overdue."""
+        root = self._prepare(real_daemon)
+        self._resolve(real_daemon, root, "BH-001", "BH-002", "BH-003")
+        self._round(real_daemon, root, ["PAT-001"])
+        assert self._overdue(real_daemon, root) == "false"
+
+
 # ── the taught sequence ──────────────────────────────────────────────────────
 
 
@@ -435,6 +583,20 @@ class TestTheDocTeachesTheOrderTheDerivationNeeds:
         assert brief_step < record_step, (
             "phase-fix-loop.md records the round before the brief is updated, so "
             "the derived patterns_found would describe the previous round"
+        )
+
+    def test_the_doc_names_the_state_the_pattern_check_block_sends_you_to(self):
+        """`pattern_check` can now be refused because the obligation lapsed.
+
+        Its block says to run Step 11 in `fix_loop` instead, which is only an
+        escape if the doc actually offers that path.
+        """
+        doc = os.path.join(REPO_ROOT, "skills", "holtz", "references", "phase-fix-loop.md")
+        with open(doc, encoding="utf-8") as f:
+            text = f.read()
+        assert "**Stay in `fix_loop`**" in text, (
+            "phase-fix-loop.md no longer offers a pattern round without "
+            "pattern_check, but the transition's block message sends you there"
         )
 
     def test_no_skill_file_teaches_the_retired_agent_write(self):

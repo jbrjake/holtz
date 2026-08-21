@@ -227,7 +227,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| pattern analysis needs 3+ findings resolved since the last pattern analysis | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| pattern analysis needs 3+ findings resolved since the last one, and is no longer owed once two consecutive rounds added no pattern — run Step 11 in fix_loop instead | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 
 ### `pattern_done` — pattern_analysis → fix_loop

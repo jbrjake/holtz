@@ -87,9 +87,34 @@ intent = "finding must not already be resolved or deferred"
 # which was itself blocked. Block condition and printed escape are now the same
 # expression by construction; `enforcement_lint.py` H7/H8 fail the build if a
 # fourth copy appears or a consumer stops referencing this name.
+#
+# The second conjunct is the yield stop (P0.2). A round costs a 17.9-min
+# median and 43% of in-loop time, and on the run this protocol was measured
+# against, rounds 12 through 15 added no new pattern between them for 268
+# agent-min. Two consecutive rounds that wrote nothing into the brief means the
+# obligation stops; it does not mean rounds stop. The fix loop's usual path
+# runs a round without entering `pattern_analysis` at all, so a run that wants
+# another one still has it — what is withdrawn is the *demand*, at
+# `iteration_boundary` and `set complete perspective`.
+#
+# Gating this on `patterns_found` is only honest because that field is now
+# derived: the courier reads the `## PAT-NNN:` headings out of the brief, so
+# reporting a dry round costs actually writing nothing. Typed by the agent, as
+# it was until P5.4, this conjunct would have been a gate the agent could open
+# by understating — and understating is the direction laziness points.
+#
+# A NULL `patterns_found` (a ledger written before P5.4) is not counted as a
+# zero, so an old ledger keeps the obligation rather than silently losing it.
+#
+# The "last two rounds" window is a seq floor — the seq of the second-most-
+# recent round — and not `ORDER BY seq DESC LIMIT 2` in a derived table. The
+# engine applies an outer WHERE *before* that LIMIT, so the LIMITed form counts
+# every zero-yield round the run ever had and stops the obligation the moment
+# any two rounds anywhere were dry. It answers a plausible question and the
+# wrong one; the difference is invisible until a run has three rounds.
 [queries.pattern_analysis_overdue]
-sql = "SELECT count(*) >= 3 FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)"
-intent = "3+ findings resolved since the last pattern analysis"
+sql = "SELECT (SELECT count(*) FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)) >= 3 AND (SELECT count(*) FROM events e WHERE e.type='pattern_analysis_complete' AND CAST(e.patterns_found AS INTEGER) = 0 AND e.seq >= COALESCE((SELECT MAX(p.seq) FROM events p WHERE p.type='pattern_analysis_complete' AND p.seq < (SELECT MAX(q.seq) FROM events q WHERE q.type='pattern_analysis_complete')), 0)) < 2"
+intent = "3+ findings resolved since the last pattern analysis, unless the last two rounds added no pattern"
 
 [queries.quiz_exhaustions_resolved]
 sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')"

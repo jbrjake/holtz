@@ -299,7 +299,12 @@ gates = [
     #
     # #82: the predicate itself now lives in protocol.toml [queries], shared
     # with iteration_boundary's block and the commit gate's. See that comment.
-    { type = "query", query = "pattern_analysis_overdue", expect = "true", intent = "pattern analysis needs 3+ findings resolved since the last pattern analysis" },
+    # Blocked either because fewer than 3 findings have been resolved since the
+    # last round, or because the last two rounds added no pattern and the
+    # obligation has lapsed. The second case has no escape to print and needs
+    # none: a round is still available without this transition — Step 11's
+    # usual path stays in `fix_loop` and records with `pattern_round.py`.
+    { type = "query", query = "pattern_analysis_overdue", expect = "true", intent = "pattern analysis needs 3+ findings resolved since the last one, and is no longer owed once two consecutive rounds added no pattern — run Step 11 in fix_loop instead" },
 ]
 
 [[transitions]]
