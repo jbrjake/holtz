@@ -119,6 +119,30 @@ There are two ways to run Step 11, and the difference is whether you enter the `
 
    **Rolling policy:** The brief is capped at 20 active entries. When a new pattern would push the count past 20, move the 5 oldest entries (by discovery date) in a single batch to `docs/holtz/patterns-brief-archive.md`. The archive uses the same format but is not read by subagents by default. If the archive file does not exist, create it with the same header but titled `# Holtz Pattern Brief — Archive`.
 
+### Step 11b: Stale Sweep [recurring: at each iteration boundary]
+
+Open findings in files the run has already changed may no longer describe the tree. Triage them in one pass before dispatching another fix.
+
+1. Take the files the run has changed since the last sweep — since the run base on the first sweep:
+   ```bash
+   git diff <last-sweep-commit>..HEAD --name-only
+   ```
+2. List open findings and keep those whose `location` names one of those files:
+   ```bash
+   python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list
+   ```
+3. Dispatch **one** subagent for the whole set. Give it the listing, the changed files, and `$CLAUDE_PLUGIN_ROOT`. It reads the code at each finding's location, runs the finding's recorded probe where it has one, and returns per finding either *still present* or *not reproducible* with the evidence. It writes no code and records no events.
+4. For each finding the sweep could not reproduce, one finding at a time:
+   ```bash
+   sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event fix_start --field finding_id=BH-NNN
+   ```
+   Write the sweep's evidence to `docs/holtz/investigations/BH-NNN.md` (format: [references/investigation-format.md](investigation-format.md)), then:
+   ```bash
+   sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer cant-reproduce BH-NNN
+   ```
+   The deferral is a transition and the `fix_start` gate is scoped to the last one, so record the next finding's `fix_start` after the previous deferral, not ahead of the batch.
+5. Findings the sweep confirms are still present stay open and keep their place in the worklist.
+
 ### Step 12: Per-Fix Hardening [recurring: after each fix in Step 10]
 
 After each fix: edge case variants (null, empty, boundary, concurrent), regression tests for similar code paths.

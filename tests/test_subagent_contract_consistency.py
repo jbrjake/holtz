@@ -227,3 +227,38 @@ def test_step_10_cross_references_resolution_event() -> None:
         "step-10-fix-loop.md must reference the finding_resolved ledger event so "
         "its triage paths don't imply commit alone resolves a finding."
     )
+
+
+def test_the_stale_sweep_records_fix_start_before_deferring() -> None:
+    """`defer cant-reproduce` gates on `fix_start` since the last transition.
+
+    In the per-item fix path the subagent records `fix_start` at step 1, long
+    before any deferral, so the gate is satisfied incidentally. The stale sweep
+    has no fix subagent and no fix_start of its own — teach the deferral without
+    it and every retirement the sweep finds is rejected by the gate. The step
+    order is the whole contract here, so it is asserted on the document's own
+    lines rather than by driving the gate.
+    """
+    lines = _fix_loop_lines()
+    starts = [i for i, line in enumerate(lines) if "### Step 11b" in line]
+    assert len(starts) == 1, f"expected one Step 11b heading, found {len(starts)}"
+    ends = [i for i, line in enumerate(lines) if line.startswith("### ") and i > starts[0]]
+    sweep = lines[starts[0]: ends[0] if ends else len(lines)]
+
+    fix_start = [i for i, line in enumerate(sweep) if "event fix_start" in line]
+    defer = [i for i, line in enumerate(sweep) if "defer cant-reproduce" in line]
+    assert fix_start, (
+        "Step 11b defers findings without recording `fix_start` — "
+        "`defer_cant_reproduce` gates on it, so every retirement is rejected"
+    )
+    assert defer, "Step 11b no longer records the retirements it finds"
+    assert min(fix_start) < min(defer), (
+        "Step 11b must record `fix_start` before the deferral, not after"
+    )
+
+    investigation = [i for i, line in enumerate(sweep)
+                     if "docs/holtz/investigations/" in line]
+    assert investigation and min(investigation) < min(defer), (
+        "`defer_cant_reproduce` also gates on a non-empty "
+        "docs/holtz/investigations/<id>.md — Step 11b must write it first"
+    )
