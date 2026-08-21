@@ -171,15 +171,41 @@ regardless of whether the prompt is read.
 `enforcement/protocol.toml` gains `[daemon] require_sandbox = true`. Last,
 because everything above has to work first.
 
-## Sequencing (one reviewed commit each)
+## Sequencing (one reviewed commit each) — shipped
 
-1. `feat(deps)` — pin 0.21.0
-2. `feat(enforcement)` — relocate the socket
-3. `feat(enforcement)` — `holtz-start` / `holtz-stop`
-4. `fix(enforcement)` — fail closed on a missing boundary (D2)
-5. `feat(enforcement)` — `suite_green` courier
-6. `feat(skills)` — guardrail + phase-recon / convergence / SKILL.md rewrites
-7. `feat(enforcement)` — arm the fuse, README + CHANGELOG
+| | Commit | Version |
+|---|---|---|
+| 1 | `feat(deps): pin sahjhan 0.21.0` | 0.142.0 |
+| 2 | `feat(enforcement): holtz-start and holtz-stop raise the audit boundary` (C1 + C2 + guardrail + phase-recon) | 0.143.0 |
+| 3 | `fix(enforcement): fail closed when the daemon reports the boundary is gone` (D2) | 0.143.1 |
+| 4 | `feat(enforcement): record suite_green through a courier hook` | 0.144.0 |
+| 5 | `feat(enforcement): arm the sandbox fuse` (+ finalize teardown, README) | 0.145.0 |
+
+The socket relocation merged into commit 2 rather than standing alone: on its
+own it would have left a window where the skill file still told the agent to
+bind the socket where no hook would look for it.
+
+## What running it corrected, that reading did not
+
+- **`sahjhan init` is not idempotent** — it exits with a usage error when the
+  ledger it would create exists. `phase-recon.md` had claimed the opposite for
+  as long as it had said it. `holtz-start` now asks the same question sahjhan
+  asks, of the same artifact, before calling it.
+- **Re-arming would have captured our own settings block as "theirs"**, after
+  which `holtz-stop` would have faithfully restored the sandbox instead of
+  removing it. The backup is written once and consumed by the restore.
+- **`daemon stop` needs no socket** — it SIGTERMs the PID from the PID file, so
+  `holtz-stop` still works with the CLI unable to authenticate under D3.
+- **`hooks.json` must invoke hooks by absolute path.** A relative path in a
+  peer's cmdline resolves against the *daemon's* cwd, so auth fails with
+  `pid_resolution_failed`. Found by a smoke run that used a relative path.
+- **The `suite_green` scope needed a third answer.** Taking the run's word for
+  it puts an agent-authored value where a gate reads; taking only the command's
+  word throws away a full green whenever `affected` could not narrow. The
+  courier re-derives the widening decision itself.
+- **A pre-existing order-dependent test** (`TestStallPenalty`) only exercised
+  the branch it is named after when no earlier file had imported
+  `_protocol_cache`. Surfaced by the new tests changing collection order.
 
 ## Known limits, stated not buried
 
