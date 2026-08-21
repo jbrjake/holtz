@@ -394,6 +394,29 @@ class TestArmDisarmAgainstALiveDaemon:
         again = _run_verb(env, "holtz-start")
         assert again.startswith("HOLTZ ARMED"), again
 
+    def test_a_live_daemon_keeps_the_boundary_up_when_it_cannot_be_stopped(
+        self, armed_project, monkeypatch,
+    ):
+        """No binary is not "nothing is running".
+
+        With the sahjhan binary unavailable there is no way to stop the daemon
+        — so the sandbox must stay up. Lowering it here would leave a live
+        daemon reachable from a shell that was just un-confined, which is the
+        exact combination the design exists to prevent, arrived at through the
+        tidiest-looking guard in the function.
+        """
+        env, _ = armed_project
+        settings = os.path.join(env["project"], ".claude", "settings.local.json")
+        # Called in-process, so the socket must resolve the way the armed hook
+        # resolved it — `boundary_dir` derives it from HOME.
+        monkeypatch.setenv("HOME", env["home"])
+        monkeypatch.setattr(sandbox_control, "ensure_sahjhan", lambda: None)
+
+        receipt = sandbox_control.disarm(env["project"])
+
+        assert receipt.startswith("HOLTZ-STOP FAILED"), receipt
+        assert os.path.isfile(settings), "the boundary was lowered around a live daemon"
+
     def test_the_fuse_is_actually_armed(self, armed_project):
         """Remove the boundary and the daemon must stop serving.
 

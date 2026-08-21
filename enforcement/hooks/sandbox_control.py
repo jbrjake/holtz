@@ -369,7 +369,10 @@ def arm(cwd: str) -> str:
         error = _start_daemon(binary, config_dir, cwd, sock_path)
         if error:
             return f"HOLTZ-START FAILED: {error}"
-        _record_init_pid(cwd)
+    # Unconditional, not only after a start: an arm that died between binding
+    # the socket and copying the PID would otherwise leave death detection with
+    # nothing to compare against, and re-typing the word would not repair it.
+    _record_init_pid(cwd)
 
     _apply_settings(cwd)
 
@@ -396,8 +399,12 @@ def disarm(cwd: str) -> str:
     config_dir, _ = resolve_config_dir(cwd)
     sock_path = _get_daemon_socket_path(cwd)
 
-    stopped = True
-    if binary is not None and _daemon_alive(sock_path):
+    # Liveness is asked of the socket, never inferred from having a binary to
+    # ask with. Treating "no binary" as "nothing is running" would lower the
+    # boundary around a daemon that is very much alive — the one combination
+    # this design exists to prevent, reached by the tidiest-looking guard.
+    stopped = not _daemon_alive(sock_path)
+    if not stopped and binary is not None:
         try:
             result = subprocess.run(  # noqa: S603
                 [binary, "--config-dir", config_dir, "daemon", "stop"],
