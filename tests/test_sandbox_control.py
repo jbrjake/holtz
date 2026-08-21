@@ -19,6 +19,7 @@ import importlib.util
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -61,6 +62,24 @@ def _run_verb(env: dict, prompt: str) -> str:
     )
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout)["reason"]
+
+
+def _refusal(sock_path: str) -> str:
+    """The daemon's `error` code for a privileged request from this process.
+
+    Sent raw rather than through `_daemon_request` so the wire fields are read
+    exactly as the daemon wrote them, with no helper interpreting them first.
+    """
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.settimeout(5)
+    try:
+        sock.connect(sock_path)
+        sock.sendall(b'{"op":"enforcement_read"}\n')
+        response = json.loads(sock.makefile().readline())
+    finally:
+        sock.close()
+    assert not response.get("ok"), f"pytest is not a trusted caller: {response}"
+    return str(response.get("error") or "")
 
 
 def _only_socket(run_root: str) -> str:
@@ -374,3 +393,31 @@ class TestArmDisarmAgainstALiveDaemon:
         env, _ = armed_project
         again = _run_verb(env, "holtz-start")
         assert again.startswith("HOLTZ ARMED"), again
+
+    def test_the_fuse_is_actually_armed(self, armed_project):
+        """Remove the boundary and the daemon must stop serving.
+
+        Everything else in this file would pass just as happily with
+        `require_sandbox` absent from protocol.toml — the arm would report
+        success, the tests would be green, and the daemon would be serving the
+        quiz answers to anyone who asked. This is the test that can tell.
+
+        Read from an *untrusted* process on purpose. pytest is not in
+        trusted-callers.toml, and the daemon checks its fuse before it checks
+        caller identity, so the refusal code says which of the two stopped the
+        request: `auth_failed` means the boundary was in place and only the
+        caller was rejected, `sandbox_required` means the boundary is gone.
+        """
+        env, _ = armed_project
+        socket_file = _only_socket(os.path.join(env["home"], ".holtz", "run"))
+
+        assert _refusal(socket_file) == "auth_failed", \
+            "with the boundary in place, only caller identity should stop this"
+
+        settings = os.path.join(env["project"], ".claude", "settings.local.json")
+        os.remove(settings)
+
+        assert _refusal(socket_file) == "sandbox_required", (
+            "the daemon kept serving with the boundary removed — "
+            "[daemon] require_sandbox is not armed in enforcement/protocol.toml"
+        )

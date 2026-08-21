@@ -137,6 +137,32 @@ must_traverse = { from = "merge_done", to = "fix_loop" }
 [attestation]
 levels = ["agent", "tool", "ambient", "host", "human"]
 
+# ── Daemon ──
+
+[daemon]
+# Arm sahjhan's sandbox fuse. The daemon refuses every privileged operation —
+# signing, the quiz vault, enforcement state, restricted events — unless this
+# project's Claude Code settings confirm the agent's shell is confined and the
+# daemon socket is unreachable from inside it.
+#
+# It is armed because the alternative was never true. `vault.toml` used to
+# describe its state-gating as defence in depth "on top of the trusted-caller
+# auth that already blocks the agent" — and that auth does not block the agent
+# and provably cannot: a same-user process can fork a connected socket into an
+# exec of a genuine hook, or load code into one. Peer identity is hardening.
+# The OS sandbox is the boundary, and this is what makes the daemon refuse to
+# serve without it rather than assume it.
+#
+# `holtz-start` raises the boundary; `enforcement/hooks/sandbox_control.py`
+# writes the settings the fuse reads. protocol.toml is sealed into the genesis
+# ledger, so a checkout cannot quietly disarm this.
+#
+# Known limit, stated rather than buried: the fuse reads configuration, not
+# kernel state. Requiring `failIfUnavailable` is what closes that gap on
+# macOS. On Linux the socket block additionally needs the optional
+# @anthropic-ai/sandbox-runtime seccomp filter, which nothing here can verify.
+require_sandbox = true
+
 # ── Lint (#82) ──
 
 [lint]

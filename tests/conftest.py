@@ -120,6 +120,7 @@ def make_item():
 
 
 import contextlib
+import json
 import os
 import shutil
 import signal
@@ -157,6 +158,23 @@ def mock_daemon(tmp_path, monkeypatch):
     shutil.rmtree(short_dir, ignore_errors=True)
 
 
+def _write_sandbox_settings(project_root: str) -> None:
+    """Declare a confining sandbox for a temp project, as `holtz-start` does.
+
+    The fuse reads *configuration*, not kernel state, so this is all it takes
+    to satisfy it — which is also the honest limit of the fuse, stated in
+    sahjhan's `daemon/fuse.rs`: nothing here actually confines the test
+    process, and nothing needs to.
+    """
+    sys.path.insert(0, str(Path(__file__).parent.parent / "enforcement" / "hooks"))
+    from sandbox_control import sandbox_settings
+
+    claude_dir = os.path.join(project_root, ".claude")
+    os.makedirs(claude_dir, exist_ok=True)
+    with open(os.path.join(claude_dir, "settings.local.json"), "w", encoding="utf-8") as fh:
+        json.dump({"sandbox": sandbox_settings(project_root)}, fh, indent=2)
+
+
 @pytest.fixture
 def real_daemon(monkeypatch):
     """Start a real sahjhan daemon for integration tests.
@@ -168,6 +186,15 @@ def real_daemon(monkeypatch):
     104-char AF_UNIX socket limit.  Runs ``sahjhan init`` and
     ``sahjhan daemon start`` with ``--config-dir`` pointing to this
     repo's enforcement/ directory.
+
+    Sets up the same boundary ``holtz-start`` does, because
+    ``protocol.toml`` arms sahjhan's sandbox fuse: the socket lives outside
+    the project root, and the project's settings declare a confining sandbox.
+    Without both, the daemon refuses every privileged operation and every
+    test here fails for a reason that has nothing to do with what it checks.
+    The settings body comes from ``sandbox_control.sandbox_settings`` rather
+    than a copy, so a change to what the fuse demands moves production and
+    this fixture together.
 
     Yields a dict with keys: binary, config_dir, project_root,
     sahjhan_dir, sock_path, pid.
@@ -182,11 +209,13 @@ def real_daemon(monkeypatch):
     config_dir = str(Path(__file__).parent.parent / "enforcement")
 
     # Force /tmp (not $TMPDIR which resolves to /private/var/folders/... on
-    # macOS) so the daemon socket at docs/holtz/.sahjhan/daemon.sock stays
-    # under the 104-char AF_UNIX path limit.
+    # macOS) so the socket path stays under the 104-char AF_UNIX limit.
     project_root = tempfile.mkdtemp(prefix="sh-", dir="/tmp")
     sahjhan_dir = os.path.join(project_root, "docs", "holtz", ".sahjhan")
-    sock_path = os.path.join(sahjhan_dir, "daemon.sock")
+    socket_dir = tempfile.mkdtemp(prefix="sk-", dir="/tmp")
+    sock_path = os.path.join(socket_dir, "daemon.sock")
+
+    _write_sandbox_settings(project_root)
 
     # Initialize
     subprocess.run(
@@ -195,10 +224,11 @@ def real_daemon(monkeypatch):
     )
 
     # Start daemon (foreground-only — must be backgrounded)
+    daemon_env = {**os.environ, "SAHJHAN_DAEMON_SOCKET": sock_path}
     daemon_proc = subprocess.Popen(
         [binary, "--config-dir", config_dir, "daemon", "start",
          "--idle-timeout", "30"],
-        cwd=project_root,
+        cwd=project_root, env=daemon_env,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
 
@@ -229,11 +259,11 @@ def real_daemon(monkeypatch):
         "proc": daemon_proc,
     }
 
-    # Cleanup: stop daemon, remove temp dir
+    # Cleanup: stop daemon, remove temp dirs
     with contextlib.suppress(subprocess.TimeoutExpired, OSError):
         subprocess.run(
             [binary, "--config-dir", config_dir, "daemon", "stop"],
-            cwd=project_root, timeout=5, capture_output=True,
+            cwd=project_root, timeout=5, capture_output=True, env=daemon_env,
         )
     # Ensure process is dead
     if daemon_proc.poll() is None:
@@ -243,3 +273,4 @@ def real_daemon(monkeypatch):
         except subprocess.TimeoutExpired:
             daemon_proc.kill()
     shutil.rmtree(project_root, ignore_errors=True)
+    shutil.rmtree(socket_dir, ignore_errors=True)

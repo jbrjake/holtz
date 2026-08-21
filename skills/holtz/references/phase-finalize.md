@@ -64,3 +64,9 @@ Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition finalize`
 ```
 
 After finalization, the daemon is stopped automatically by the `stop_hook.py` and `protocol_tracker.py` hooks when the state reaches `finalized`. No manual `daemon stop` command is needed.
+
+**Last thing you say to the user:** tell them to type `holtz-stop` to get their project back. Until they do, every session in it stays sandboxed — `git`, `docker` and some CLIs behave oddly inside the sandbox, and reaching convergence deliberately does not lift it on its own. Say it plainly and say it once:
+
+> Audit complete. Type `holtz-stop` to unsandbox this project.
+
+Do not run anything to remove the sandbox yourself. You can't, and that is the design: "turn the confinement off" is the single thing an agent under audit most wants, so it is a human action with no agent-reachable switch.
