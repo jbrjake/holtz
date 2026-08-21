@@ -143,7 +143,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| merged punchlist must exist | *direct check* | — | `direct` | n/a |
+| merge report must exist with all four sections non-empty | *direct check* | — | `direct` | n/a |
 | merge must be performed by a separate merge-agent subagent | `merge_agent_dispatched` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 
 ### `fix_loop_start` — merge_done → awaiting_clear

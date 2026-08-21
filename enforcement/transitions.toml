@@ -38,7 +38,14 @@ from = "merge_ready"
 to = "merge_done"
 command = "merge_complete"
 gates = [
-    { type = "file_exists", path = "docs/holtz/PUNCHLIST-MERGED.md", intent = "merged punchlist must exist" },
+    # The merge writes Justine's unmatched findings onto the ledger, so the
+    # unified worklist is the already-rendered PUNCHLIST.md and there is no
+    # merged file to check for. What is left to prove is that the merge ran to
+    # completion, and MERGE-REPORT.md is the one artifact only a completed
+    # merge can produce — blind-spot analysis has no other source. It is
+    # agent-authored and unmanaged, so this gate is satisfiable by its writer
+    # (the #60 wedge was a file_exists on a path nothing was allowed to write).
+    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/validate_merge_report.py" docs/holtz/MERGE-REPORT.md', intent = "merge report must exist with all four sections non-empty" },
     { type = "ledger_has_event", event = "merge_agent_dispatched", min_count = 1, intent = "merge must be performed by a separate merge-agent subagent" },
 ]
 

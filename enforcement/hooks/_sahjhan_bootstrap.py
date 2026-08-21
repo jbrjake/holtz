@@ -37,15 +37,15 @@ PROTECTED = [
 #
 #     a path belongs in MANAGED_DOCS  <=>  it has a render rule in renders.toml
 #
-# Do NOT add agent-authored artifacts here. `PUNCHLIST-MERGED.md` and
-# `MERGE-REPORT.md` were previously listed but are written by the merge-agent
-# subagent (judgment-based consolidation per merge-protocol.md — they are NOT
-# rendered from the ledger and have no render rule). Guarding them made the
-# `merge_complete` transition unsatisfiable: the gate requires the merged
-# punchlist to exist, but the only writer (the merge-agent) was blocked and
-# nothing renders it — so a full adversarial run wedged permanently at Step 9
-# (issue #60). Their integrity does not depend on this guard: convergence is
-# driven by `finding`/`finding_resolved` ledger events, not by these files.
+# Do NOT add agent-authored artifacts here. `MERGE-REPORT.md` is written by the
+# merge-agent subagent (judgment-based blind-spot analysis per
+# merge-protocol.md — it is NOT rendered from the ledger and has no render
+# rule), and `merge_complete` gates on it. Guarding it would make that
+# transition unsatisfiable: the only writer would be blocked and nothing
+# renders it — a full adversarial run wedged permanently at Step 9 that way
+# once (issue #60, then on the retired `PUNCHLIST-MERGED.md`). Its integrity
+# does not depend on this guard: convergence is driven by
+# `finding`/`finding_resolved` ledger events, not by this file.
 # `test_managed_docs_consistency.py` enforces the <=> invariant so this class
 # of wedge cannot be reintroduced.
 MANAGED_DOCS = [

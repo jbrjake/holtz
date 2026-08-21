@@ -14,10 +14,10 @@ If any classification is ambiguous, read `${CLAUDE_PLUGIN_ROOT}/skills/holtz/ref
 ## How you work
 
 1. Read the merge protocol.
-2. Read both input punchlists (paths provided in dispatch prompt).
-3. Sort both punchlists by file path, then category, then location.
+2. Read Holtz's findings with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list --all`, and Justine's punchlist (path in the dispatch prompt).
+3. Sort both by file path, then category, then location.
 4. Classify each item pair: Agreement, Holtz-only, Justine-only, Severity Disagreement, or Contradictory.
-5. Write `docs/holtz/PUNCHLIST-MERGED.md` — unified punchlist with fresh BH-NNN numbering.
+5. Record each Justine-only finding with `sahjhan event finding`, keeping her `BJ-NNN` id. Re-file Holtz's id where Justine's severity is higher.
 6. Write `docs/holtz/MERGE-REPORT.md` — statistics, blind spot analysis.
 7. Merge impact graphs: read `docs/holtz/justine/impact-graph.json` and merge into `docs/holtz/impact-graph.json` per protocol rules (higher risk_score wins, audit_count summed).
 8. Archive Justine's output: move `docs/holtz/justine/` to `docs/holtz/archive/justine-{ISO date}/`.
@@ -25,11 +25,11 @@ If any classification is ambiguous, read `${CLAUDE_PLUGIN_ROOT}/skills/holtz/ref
 
 ## Rules
 
-- Every item from both punchlists must appear in the merged output. No finding is silently dropped.
-- Contradictions are DEFERRED for human review. Do not resolve them.
+- Every finding from both auditors ends up on the ledger. None is silently dropped.
+- Contradictions are flagged in the report and left OPEN. Do not resolve them, do not defer them.
 - Higher severity always wins.
 - Use Holtz's description for Agreement items.
-- Re-number all items as BH-NNN starting from BH-001. Include cross-reference comments.
+- Never renumber. Holtz's ids stay `BH-`, Justine's stay `BJ-`.
 - The merge is deterministic. Given the same inputs, always produce the same output.
 
 Report exactly one status when done:

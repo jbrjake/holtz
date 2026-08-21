@@ -25,11 +25,10 @@ The same `awaiting_clear` boundary recurs mid-loop via `iteration_boundary` (Ste
 
 Read [references/impact-graph-operations.md](references/impact-graph-operations.md) for blast radius queries and risk score updates.
 
-**Re-read worklist** — If `docs/holtz/PUNCHLIST-MERGED.md` exists, use it. Otherwise, use `docs/holtz/PUNCHLIST.md`. **If the punchlist has more than 6 items**, use filtered reads to reduce context load:
+**Re-read worklist** — `docs/holtz/PUNCHLIST.md` is the worklist; it renders both auditors' findings from the ledger. Query it rather than reading the file:
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py <punchlist-path> --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list
 ```
-This shows all OPEN/IN PROGRESS items plus the 3 most recently resolved items (for cross-item pattern recognition). Items resolved earlier are on disk and available in Step 11.
 
 #### Per-Item Fix Procedure (MANDATORY — do not skip steps)
 
