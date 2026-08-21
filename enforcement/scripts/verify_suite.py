@@ -108,10 +108,19 @@ DEFAULT_PYTEST = "python3 -m pytest -x --ff --tb=short -q"
 # so a missing scope can only ever over-test.
 SCOPES: tuple[str, ...] = ("affected", "full")
 
-# STATUS.md and PUNCHLIST.md are rewritten on every fix, and the ledger itself
-# is appended to by `--record`. Neither can affect the target's tests, and
-# including them would invalidate the hash the instant it was recorded.
-EXCLUDED_PREFIXES = ("docs/holtz/",)
+# Paths holtz itself writes into the target during an audit. None of them can
+# affect the target's tests, and every one of them moves while the audit runs —
+# so a hash that saw them would be invalidated by holtz's own bookkeeping, and
+# a changed-file list that saw them would treat that bookkeeping as a source
+# change with no covering test and widen every `affected` run to the full suite.
+#
+# `docs/holtz/`: STATUS.md and PUNCHLIST.md are rewritten on every fix, and the
+# ledger is appended to by every event.
+# `.claude/`: `holtz-start` writes settings.local.json here to raise the audit
+# boundary, and `holtz-stop` removes it. Whether that file is visible to git at
+# all depends on the user's global excludes, which is exactly the kind of thing
+# that makes a green reproduce on one machine and not another.
+EXCLUDED_PREFIXES = ("docs/holtz/", ".claude/")
 
 # The only map holtz has from a changed source file to the tests that cover it.
 # It is agent-authored, which bounds what an `affected` green may claim — see

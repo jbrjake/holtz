@@ -49,6 +49,11 @@ def _init_repo(path):
     _git(path, "init", "-q")
     _git(path, "config", "user.email", "t@example.com")
     _git(path, "config", "user.name", "T")
+    # Ignore whatever the developer's global excludes say. `git ls-files
+    # --others --exclude-standard` honours ~/.config/git/ignore, so without
+    # this these tests answer a different question on every machine — which is
+    # how a real widening defect passed locally and failed on CI.
+    _git(path, "config", "core.excludesFile", os.devnull)
     with open(os.path.join(path, ".gitignore"), "w", encoding="utf-8") as fh:
         fh.write("ignored/\n")
     with open(os.path.join(path, "app.py"), "w", encoding="utf-8") as fh:
@@ -345,6 +350,30 @@ class TestTreeHash:
         before = verify_suite.compute_tree_hash(repo)
         _write(repo, "ignored/build.log", "noise\n")
         assert verify_suite.compute_tree_hash(repo) == before
+
+    def test_arming_the_boundary_is_not_a_source_change(self, repo):
+        """`holtz-start` writes .claude/settings.local.json into the target.
+
+        Two things break if the tree hash sees it: arming mid-audit
+        invalidates every green recorded before it, and the file counts as a
+        changed source with no covering test, so every `--scope affected` run
+        widens to the whole suite — silently undoing the reason the affected
+        scope exists.
+
+        `core.excludesFile` is neutered so the result does not depend on the
+        machine. This defect reached CI green on a laptop whose global
+        excludes happen to list `**/.claude/settings.local.json`, which hid it
+        from `git ls-files --others` there and nowhere else.
+        """
+        _git(repo, "config", "core.excludesFile", os.devnull)
+        head = _head(repo)
+        before = verify_suite.compute_tree_hash(repo)
+
+        _write(repo, ".claude/settings.local.json", '{"sandbox": {"enabled": true}}\n')
+
+        assert verify_suite.compute_tree_hash(repo) == before
+        changed, reason = verify_suite._changed_since(repo, head)
+        assert changed == [], f"arming looked like a source change: {changed} ({reason})"
 
     def test_repo_with_no_commits_still_hashes(self, tmp_path):
         path = str(tmp_path / "empty")

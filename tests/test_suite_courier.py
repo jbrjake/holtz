@@ -48,6 +48,12 @@ def _git_repo(root) -> str:
     env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
     subprocess.run(["git", "init", "-q", root], check=True, capture_output=True)
+    # The courier re-derives the affected selection, which reads
+    # `git ls-files --others --exclude-standard` — so without neutering the
+    # developer's global excludes these tests answer a different question on
+    # every machine.
+    subprocess.run(["git", "config", "core.excludesFile", os.devnull],
+                   cwd=root, check=True, capture_output=True)
     with open(os.path.join(root, "a.py"), "w", encoding="utf-8") as f:
         f.write("x = 1\n")
     subprocess.run(["git", "add", "."], cwd=root, check=True, capture_output=True)
