@@ -579,6 +579,73 @@ class TestBootstrapHook:
         assert_blocked(code, output, "unreadable out-of-tree script")
 
 
+class TestPluginRootScriptInvocation:
+    """Plugin scripts invoked through $CLAUDE_PLUGIN_ROOT must not be blocked.
+
+    Skill files teach ``python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/x.py``
+    verbatim. shlex does not expand variables, so an unexpanded path is neither
+    absolute nor meaningfully relative: it resolves nowhere inside the target
+    project and the fail-closed unreadable-script branch denies a command the
+    plugin itself prescribes.
+    """
+
+    # Commands copied from the skill files that teach them.
+    TAUGHT = [
+        # phase-fix-loop.md:49
+        "python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py"
+        " --graph docs/holtz/impact-graph.json blast_radius node --depth 2",
+        # phase-fix-loop.md:53
+        "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py"
+        " --record --scope affected",
+        # phase-recon.md:12 — the "$VAR/..." quoted form
+        'python3 "$CLAUDE_PLUGIN_ROOT/skills/holtz/scripts/boundary_check.py"',
+        # phase-recon.md:128
+        "python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/parse_lens_registry.py",
+        # phase-recon.md:139
+        "python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/quiz_stage.py --finalize",
+    ]
+
+    @pytest.mark.parametrize("command", TAUGHT)
+    def test_allows_taught_plugin_script_from_target_project(self, command, tmp_path):
+        """The taught form is allowed when cwd is the audited project."""
+        event = {"tool_input": {"command": command}, "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "_sahjhan_bootstrap.py", event, cwd=str(tmp_path),
+            env={**os.environ, "CLAUDE_PLUGIN_ROOT": REPO_ROOT},
+        )
+        assert_allowed(code, output)
+
+    @pytest.mark.parametrize("command", TAUGHT)
+    def test_allows_taught_plugin_script_without_env_var(self, command, tmp_path):
+        """Also allowed when the hook must fall back to its own resolved root.
+
+        The hook resolves the plugin root from its own file location when
+        CLAUDE_PLUGIN_ROOT is absent; the path expansion must use the same
+        fallback, or the guard is only correct in one of the two contexts.
+        """
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PLUGIN_ROOT"}
+        event = {"tool_input": {"command": command}, "cwd": str(tmp_path)}
+        code, output, _ = run_enforcement_hook(
+            "_sahjhan_bootstrap.py", event, cwd=str(tmp_path), env=env,
+        )
+        assert_allowed(code, output)
+
+    def test_still_blocks_out_of_tree_script_reached_through_a_variable(self, tmp_path):
+        """Expanding the path must not become a bypass.
+
+        Once ``$HOME/evil.sh`` resolves, the guard reads it and applies the
+        same protected-path scan it applies to any other out-of-tree script.
+        """
+        evil = tmp_path / "evil.sh"
+        evil.write_text("#!/usr/bin/env bash\necho hostile > enforcement/protocol.toml\n")
+        event = {"tool_input": {"command": "bash $EVIL_HOME/evil.sh"}, "cwd": REPO_ROOT}
+        code, output, _ = run_enforcement_hook(
+            "_sahjhan_bootstrap.py", event,
+            env={**os.environ, "EVIL_HOME": str(tmp_path)},
+        )
+        assert_blocked(code, output, "out-of-tree script")
+
+
 # --- bash_guard.py (PostToolUse) ---
 
 

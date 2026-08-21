@@ -168,6 +168,28 @@ def _script_path_from_command(seg_cmd: str) -> str | None:
     return None
 
 
+def _expand_script_path(path: str) -> str:
+    """Expand environment variables in a script path before resolving it.
+
+    ``shlex`` does not expand variables, so a path written the way the skill
+    files write it — ``${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/x.py`` —
+    arrives here as a literal. It is neither absolute nor meaningfully
+    relative, and resolving it against cwd produces a path that describes
+    nothing. That single defect points two ways: against a target project it
+    lands nowhere and the fail-closed branch denies a command the plugin
+    teaches verbatim; against the plugin's own tree it lands *under* the
+    plugin root and the guard waves the script through unread.
+
+    ``CLAUDE_PLUGIN_ROOT`` falls back to the module's own resolved root so
+    the expansion holds wherever the module's other plugin-root reasoning
+    holds.
+    """
+    expanded = os.path.expandvars(path)
+    for form in ("${CLAUDE_PLUGIN_ROOT}", "$CLAUDE_PLUGIN_ROOT"):
+        expanded = expanded.replace(form, _PLUGIN_ROOT)
+    return expanded
+
+
 def _out_of_tree_script_block(
     seg_cmd: str, cwd: str | None, protected: list[str],
 ) -> str | None:
@@ -189,6 +211,7 @@ def _out_of_tree_script_block(
     script_path = _script_path_from_command(seg_cmd)
     if not script_path:
         return None
+    script_path = _expand_script_path(script_path)
     # Resolve path relative to cwd if not absolute.
     resolved = script_path if os.path.isabs(script_path) else os.path.join(cwd, script_path)
     try:
