@@ -82,16 +82,20 @@ def ledger(tmp_path):
         )
 
     def punchlist_statuses():
+        """Both rendered tables: PUNCHLIST.md is the open half, the archive the
+        closed half, and together they are every finding on the ledger."""
         sah("render")
-        path = os.path.join(root, "docs", "holtz", "PUNCHLIST.md")
-        with open(path, encoding="utf-8") as fh:
-            lines = fh.read().splitlines()
         out = {}
-        for line in lines:
-            if not line.startswith("| B"):
-                continue
-            cells = [c.strip() for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
-            out[cells[0]] = cells[-1]
+        for basename in ("PUNCHLIST.md", "PUNCHLIST-ARCHIVE.md"):
+            path = os.path.join(root, "docs", "holtz", basename)
+            with open(path, encoding="utf-8") as fh:
+                lines = fh.read().splitlines()
+            for line in lines:
+                if not line.startswith("| B"):
+                    continue
+                cells = [c.strip()
+                         for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+                out[cells[0]] = cells[-1]
         return out
 
     return file_finding, resolve, defer, run, punchlist_statuses

@@ -89,7 +89,11 @@ There are two ways to run Step 11, and the difference is whether you enter the `
 - **Stay in `fix_loop`** (usual). Just do the work and record `pattern_analysis_complete` at step 4. That satisfies the `iteration_boundary` gate, which counts fix commits since the last pattern analysis.
 - **Enter `pattern_analysis`** (when `iteration_boundary` blocks you and its message says to run `pattern_check`). Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_check` — its gate needs 3+ findings resolved since the last pattern analysis, which is exactly the condition that blocked you. Then do steps 1-5 below, and leave with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_done`, whose gate needs the `pattern_analysis_complete` event from step 4. **`pattern_done` is the only exit from `pattern_analysis`** — nothing else leads out of that state.
 
-1. **Re-read `docs/holtz/PUNCHLIST.md`** — For pattern analysis, read the full punchlist (no filter). Pattern grouping requires seeing all resolved items to identify shared root causes across the complete history.
+1. **Read every finding, open and closed:**
+   ```bash
+   python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list --all
+   ```
+   Use `findings.py show BH-NNN` for a finding's full record.
 2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify the pattern, search for siblings, record each sibling with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding` IMMEDIATELY — one call per sibling, before the next group.
 3. **Update impact graph:** Add `shares_pattern` edges between all instances of the same pattern (e.g., if BH-003 and BH-007 are both PAT-001 instances, link the functions they involve with `shares_pattern` edges including the pattern ID in the note).
 4. **Record:** `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event pattern_analysis_complete --patterns_found N --siblings_found M`.
@@ -179,7 +183,7 @@ digraph {
   rankdir=TB
   node [shape=box]
 
-  recover [label="sahjhan status\n+ PUNCHLIST.md\n(filtered: OPEN + last 3 resolved)"]
+  recover [label="sahjhan status\n+ findings.py list"]
   fix_loop [label="Step 10 (next batch)\n→ Step 11 (every 3-5)\n→ suite green + linters"]
   breaker [label="Circuit breaker\ntriggered?" shape=diamond]
   stop [label="STOP\nReport to user"]

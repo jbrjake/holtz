@@ -51,6 +51,7 @@ PROTECTED = [
 MANAGED_DOCS = [
     "docs/holtz/STATUS.md",
     "docs/holtz/PUNCHLIST.md",
+    "docs/holtz/PUNCHLIST-ARCHIVE.md",
     "docs/holtz/SUMMARY.md",
 ]
 

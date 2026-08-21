@@ -12,6 +12,13 @@ event_types = ["finding", "finding_resolved", "finding_deferred"]
 ledger_template = "run"
 
 [[renders]]
+target = "PUNCHLIST-ARCHIVE.md"
+template = "templates/punchlist-archive.md.tera"
+trigger = "on_event"
+event_types = ["finding", "finding_resolved", "finding_deferred"]
+ledger_template = "run"
+
+[[renders]]
 target = "SUMMARY.md"
 template = "templates/summary.md.tera"
 trigger = "on_state"

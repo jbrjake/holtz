@@ -99,16 +99,25 @@ def _status_counts(root):
 
 
 def _punchlist_statuses(root):
-    """Status cell of every PUNCHLIST.md finding row, keyed by finding id."""
-    path = os.path.join(root, "docs", "holtz", "PUNCHLIST.md")
-    with open(path, encoding="utf-8") as fh:
-        lines = fh.read().splitlines()
+    """Status cell of every rendered finding row, keyed by finding id.
+
+    Both files, because they partition the findings: PUNCHLIST.md renders the
+    open work and PUNCHLIST-ARCHIVE.md the resolved and deferred rows. Reading
+    one of them would compare STATUS.md's totals against half a ledger.
+    """
     statuses = {}
-    for line in lines:
-        if not line.startswith("| B") or line.startswith("| ID "):
-            continue
-        cells = [c.strip() for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
-        statuses[cells[0]] = cells[-1]
+    for basename in ("PUNCHLIST.md", "PUNCHLIST-ARCHIVE.md"):
+        path = os.path.join(root, "docs", "holtz", basename)
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+        for line in lines:
+            if not line.startswith("| B") or line.startswith("| ID "):
+                continue
+            cells = [c.strip() for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+            assert cells[0] not in statuses, (
+                f"{cells[0]} renders in both PUNCHLIST.md and PUNCHLIST-ARCHIVE.md"
+            )
+            statuses[cells[0]] = cells[-1]
     return statuses
 
 

@@ -7,25 +7,39 @@
 **State:** {{ state.label }}
 **Ledger:** {{ ledger_len }} events
 
+Open findings only. Resolved and deferred rows are in `PUNCHLIST-ARCHIVE.md`.
+
 {# One row per finding id. A finding filed twice under one id — a correction
    re-recorded without retracting the original — otherwise renders as two
    rows, and every count taken off this file is wrong by the difference.
-   unique_by keeps the last, so the correction supersedes what it corrects. #}
+   unique_by keeps the last, so the correction supersedes what it corrects.
+
+   Closed rows go to the archive rather than being dropped: recon's cold-file
+   coverage scan reads archived punchlists to decide which files a prior run
+   ever looked at, and a converged run has no open findings at all. #}
 {% set findings = events | where_eq(attribute="event_type", value="finding") | unique_by(attribute="fields.id") -%}
 {% set resolved_ids = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
 {% set deferred_ids = events | where_eq(attribute="event_type", value="finding_deferred") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
 
 {% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
 {% set sev_findings = findings | where_eq(attribute="fields.severity", value=severity) -%}
-{% if sev_findings | length > 0 -%}
+{% set_global open_in_severity = 0 -%}
+{% for e in sev_findings -%}
+{% if resolved_ids is not containing(e.fields.id) and deferred_ids is not containing(e.fields.id) -%}
+{% set_global open_in_severity = open_in_severity + 1 -%}
+{% endif -%}
+{% endfor -%}
+{% if open_in_severity > 0 -%}
 
 ## {{ severity }}
 
 | ID | Category | Location | Perspective | Description | Status |
 |----|----------|----------|-------------|-------------|--------|
 {% for e in sev_findings -%}
+{% if resolved_ids is not containing(e.fields.id) and deferred_ids is not containing(e.fields.id) -%}
 | {{ e.fields.id }} | {{ e.fields.category }} | {{ e.fields.location | replace(from="|", to="\|") }} | {{ e.fields.perspective }} | {{ e.fields.description | replace(from="|", to="\|") | replace(from="
-", to=" ") }} | {% if resolved_ids is containing(e.fields.id) %}RESOLVED{% elif deferred_ids is containing(e.fields.id) %}DEFERRED{% else %}OPEN{% endif %} |
+", to=" ") }} | OPEN |
+{% endif -%}
 {% endfor -%}
 {% endif -%}
 {% endfor %}

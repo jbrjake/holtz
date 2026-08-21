@@ -1,0 +1,46 @@
+{# enforcement/templates/punchlist-archive.md.tera — closed half of the punchlist.
+
+   Same ledger, same dedupe and same status precedence as punchlist.md.tera and
+   status.md.tera: one row per finding id keeping the last filing, resolved
+   before deferred. The two rendered tables partition the findings, so anything
+   counting off either file adds up.
+
+   This file is what carries a run's history past convergence. Recon's
+   cold-file coverage scan reads archived punchlists to decide which files were
+   ever audited, and a converged run leaves no open findings — every archived
+   punchlist in this repo has zero OPEN rows. #}
+# Punchlist Archive
+
+**Protocol:** {{ protocol.name }} v{{ protocol.version }}
+**Run:** {{ template_instance_id | default(value="?") }}
+**State:** {{ state.label }}
+**Ledger:** {{ ledger_len }} events
+
+Resolved and deferred findings. Open work is in `PUNCHLIST.md`.
+
+{% set findings = events | where_eq(attribute="event_type", value="finding") | unique_by(attribute="fields.id") -%}
+{% set resolved_ids = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
+{% set deferred_ids = events | where_eq(attribute="event_type", value="finding_deferred") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
+
+{% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
+{% set sev_findings = findings | where_eq(attribute="fields.severity", value=severity) -%}
+{% set_global closed_in_severity = 0 -%}
+{% for e in sev_findings -%}
+{% if resolved_ids is containing(e.fields.id) or deferred_ids is containing(e.fields.id) -%}
+{% set_global closed_in_severity = closed_in_severity + 1 -%}
+{% endif -%}
+{% endfor -%}
+{% if closed_in_severity > 0 -%}
+
+## {{ severity }}
+
+| ID | Category | Location | Perspective | Description | Status |
+|----|----------|----------|-------------|-------------|--------|
+{% for e in sev_findings -%}
+{% if resolved_ids is containing(e.fields.id) or deferred_ids is containing(e.fields.id) -%}
+| {{ e.fields.id }} | {{ e.fields.category }} | {{ e.fields.location | replace(from="|", to="\|") }} | {{ e.fields.perspective }} | {{ e.fields.description | replace(from="|", to="\|") | replace(from="
+", to=" ") }} | {% if resolved_ids is containing(e.fields.id) %}RESOLVED{% else %}DEFERRED{% endif %} |
+{% endif -%}
+{% endfor -%}
+{% endif -%}
+{% endfor %}

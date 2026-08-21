@@ -10,7 +10,7 @@ Read this file at the start of Step 10. This file is shared by Holtz and Justine
 digraph {
   rankdir=TB
   node [shape=box]
-  read [label="Re-read worklist\n(MERGED if exists,\notherwise PUNCHLIST)"]
+  read [label="Re-read worklist\n(findings.py list)"]
   triage [label="Triage item\nby category"]
   fast [label="Fast Path\n(test→fix→commit)"]
   investigate [label="Investigation Path\n(layers→confidence→fix)"]
