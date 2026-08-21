@@ -164,9 +164,12 @@ Python hooks in two locations:
 | `post_tool_hook.py` | PostToolUse | Auto-records tool use events |
 | `bash_guard.py` | PostToolUse | Verifies managed files weren't modified outside Sahjhan |
 | `protocol_tracker.py` | PostToolUse | Tracks git commits and sahjhan commands |
+| `quiz_capture.py` | PostToolUse | Trusted courier: stages lens-quiz questions into the daemon vault (#73) |
+| `suite_courier.py` | PostToolUse | Trusted courier: records `suite_green` for a `verify_suite.py --record` the host reports succeeded. The suite runs inside the sandbox and cannot reach the daemon; this hook runs outside it and derives `tree_hash`, `commit_hash` and `scope` itself |
 | `subagent_findings_check.py` | SubagentStop | Validates subagent output files exist |
 | `lens_quiz.py` | SubagentStop | Three-phase lens validation (evidence → quiz → score) |
 | `stop_hook.py` | Stop | Blocks stop in non-terminal states |
+| `sandbox_control.py` | UserPromptSubmit | `holtz-start` / `holtz-stop`: starts the daemon with its socket outside the project tree, then raises or lowers the Claude Code sandbox that is the audit's actual boundary. Exact match on the whole prompt, so only a human can reach it |
 | `primer.py` | UserPromptSubmit | Injects resume context; probes daemon liveness and caller auth |
 | `session_start.py` | SessionStart | Records `context_reset` when `source` is `clear`, `compact`, or `startup` — the only writer of the event that gates `awaiting_clear -> fix_loop` (#79) |
 
@@ -175,17 +178,19 @@ Python hooks in two locations:
 | Module | Purpose |
 |--------|---------|
 | `_protocol_cache.py` | Enforcement state cache, `is_enforcement_fresh()`, shell segment parsing |
-| `_resolve.py` | Sahjhan binary download/verification (pinned to v0.13.1 with SHA256 checksums) |
+| `_resolve.py` | Sahjhan binary download/verification. `SAHJHAN_VERSION` is the single source of truth for the pin, with a SHA256 per platform; `scripts/check_sahjhan_pin.py` gates it |
 | `lens_evidence.py` | Validates subagent actually read files and found keywords |
 
 ---
 
 ## Scripts
 
-Seven Python scripts in `skills/holtz/scripts/`. stdlib only, no external dependencies.
+Python scripts in `skills/holtz/scripts/`. stdlib only, no external dependencies.
 
 | Script | Purpose | Tests |
 |--------|---------|-------|
+| `boundary_check.py` | Recon's first command: reports whether this shell can reach the daemon socket. Probes the fact rather than an env var — `CLAUDE_CODE_SANDBOXED` is an input Claude Code reads, not one it sets inside sandboxed commands. | `test_boundary_check.py` |
+| `quiz_stage.py` | Stages one lens-quiz question during recon by printing a marker `quiz_capture.py` collects; never touches the vault itself. | `test_quiz_stage.py` |
 | `validate_punchlist.py` | Validates punchlist format, fields, severity. Supports `--filter-status`, `--resolved-before`, `--render` for filtered reads during convergence. | `test_validate_punchlist.py` |
 | `impact_graph.py` | Knowledge graph for code entity relationships. 10 operations: add/prune nodes+edges, blast_radius (bidirectional BFS), risk_hotspots, drift_check. | `test_impact_graph.py` (81 tests) |
 | `convergence_check.py` | Parses punchlist status counts, detects test runner output, tracks convergence. | `test_convergence_check.py` |
