@@ -78,6 +78,36 @@ intent = "all findings must be resolved or deferred"
 sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'"
 intent = "finding must not already be resolved or deferred"
 
+# A finding's severity is its *latest* filing. The ledger holds every filing,
+# `punchlist.md.tera` and `findings.py` both render the last one, and the
+# deferral gates used to match any row ever filed under the id — so a finding
+# corrected LOW -> HIGH still satisfied `defer_low`, and a run could close a
+# HIGH by deferring the severity it no longer has. Same shape as P3.6's
+# duplicate-id count, one field further in: the correction is supposed to
+# supersede what it corrects.
+#
+# `f.id` is pinned by the argument, so the seq of the last filing is a plain
+# scalar subquery here; the run-wide counts below need the correlated form.
+
+[queries.item_is_low]
+sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='LOW' AND seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id='{{item_id}}')"
+intent = "finding must exist and its latest filing must be LOW"
+
+[queries.item_is_medium]
+sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='MEDIUM' AND seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id='{{item_id}}')"
+intent = "finding must exist and its latest filing must be MEDIUM"
+
+# count(DISTINCT id), not count(*): this is a policy on findings, and the
+# ledger holds rows. A MEDIUM re-filed under its own id is a correction, not a
+# second finding — counting rows inflated the denominator and let a deferral
+# past the cap that exists to stop it. The numerator has the same shape from
+# the other side: `event finding_deferred` is on the bootstrap allowlist, so a
+# deferral recorded twice would spend budget once too often. And a finding
+# corrected MEDIUM -> HIGH is not a MEDIUM at all, so it funds no budget.
+[queries.medium_deferral_budget]
+sql = "SELECT (SELECT count(DISTINCT id) FROM events WHERE type='finding_deferred' AND reason='medium_budget') < (SELECT count(DISTINCT f.id) FROM events f WHERE f.type='finding' AND f.severity='MEDIUM' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id)) / 2"
+intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings"
+
 # The predicate #77 deadlocked on, now a single object with three consumers:
 # the `pattern_check` gate (ready when true), the `iteration_boundary` gate
 # (blocked when true), and `protocol_tracker.py`, which resolves this name at

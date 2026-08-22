@@ -184,7 +184,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| finding must exist and be LOW severity | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| finding must exist and its latest filing must be LOW | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
 
@@ -192,7 +192,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| finding must exist and be MEDIUM severity | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| finding must exist and its latest filing must be MEDIUM | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
 | MEDIUM deferrals must not exceed 50% of total MEDIUM findings | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |

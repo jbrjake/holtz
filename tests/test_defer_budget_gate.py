@@ -38,17 +38,36 @@ _COMMON = [
 ]
 
 
-def _budget_sql() -> str:
-    """The live SQL of `defer_medium`'s budget gate."""
+def _named_query(name: str) -> str:
+    """The live SQL behind a `[queries.<name>]` predicate."""
+    with open(os.path.join(CONFIG_DIR, "protocol.toml"), "rb") as fh:
+        cfg = tomllib.load(fh)
+    try:
+        return cfg["queries"][name]["sql"]
+    except KeyError:
+        raise AssertionError(f"protocol.toml has no [queries.{name}]") from None
+
+
+def _gate_query(command: str, fragment: str) -> str:
+    """The SQL of the gate on `command` whose named query's intent says
+    `fragment` — resolved through the name, the way the engine resolves it."""
     with open(os.path.join(CONFIG_DIR, "transitions.toml"), "rb") as fh:
         cfg = tomllib.load(fh)
+    with open(os.path.join(CONFIG_DIR, "protocol.toml"), "rb") as fh:
+        queries = tomllib.load(fh)["queries"]
     for transition in cfg["transitions"]:
-        if transition.get("command") != "defer_medium":
+        if transition.get("command") != command:
             continue
         for gate in transition.get("gates", []):
-            if "50%" in gate.get("intent", ""):
-                return gate["sql"]
-    raise AssertionError("defer_medium has no MEDIUM-budget gate")
+            name = gate.get("query")
+            if name and fragment in queries.get(name, {}).get("intent", ""):
+                return queries[name]["sql"]
+    raise AssertionError(f"{command} has no gate whose intent mentions {fragment!r}")
+
+
+def _budget_sql() -> str:
+    """The live SQL of `defer_medium`'s budget gate."""
+    return _gate_query("defer_medium", "50%")
 
 
 def _binary():
