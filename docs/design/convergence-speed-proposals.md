@@ -1,16 +1,8 @@
 # Convergence-speed proposals
 
 **Source:** [tqdm run-1 process post-mortem](../case-studies/2026-08-18-tqdm-process-postmortem.md)
-**Date:** 2026-08-18 · **implementation started 2026-08-21**
-
-**Status legend.** Each item id carries its own status. Absent marker = not started.
-
-| Marker | Meaning |
-|---|---|
-| `DONE` | shipped; the commit is named in the item |
-| `PARTIAL` | some of the item shipped; what remains is stated in the item |
-| `REJECTED` | considered and deliberately not implemented; the reason is stated in the item |
-| `N/A` | not actionable in this repo (e.g. a defect in the audited project) |
+**Status:** frozen spec — read-only to implementers. Implementation status lives in [convergence-speed-status.md](convergence-speed-status.md), never in this file.
+**Date:** 2026-08-18
 
 Every item below is derived from measured telemetry of one halted run (holtz v0.141.3 on
 tqdm): 22.5 h agent-active, 6.68M output tokens, 762M cache-read, 353 findings, 81 fixed,
@@ -26,94 +18,7 @@ stated per item.
 
 Ranked by measured impact on time-to-convergence.
 
-### P0.1 Amplification circuit-breaker + mandatory batch deferral — **PARTIAL**
-
-The circuit-breaker and the batch deferral shipped. **The convergence redefinition is
-still owed, and it is blocked on P0.5, not rejected** — see the split below. This item is
-numbered ahead of P0.5 but depends on it; whoever takes P0.5 must close this out.
-
-**Shipped** (`fe2ef56`, `6b12186`, `f17aaec`):
-
-- **`defer_batch.py`** — one command defers every open LOW, and the MEDIUM budget with
-  `--severity low,medium`. A loop over the transitions the agent would otherwise run
-  one at a time, over the listing `findings.py` builds; `collect()` is now shared rather
-  than copied, so the batch and the punchlist cannot disagree about which findings are
-  open or what severity they are. The MEDIUM pass stops at the cap and exits **zero** —
-  the listing has already satisfied that transition's other two gates, so a refusal
-  there is the policy working. A LOW refusal is a real failure and exits non-zero.
-  Rejected: `sahjhan defer batch` as an engine feature. The composition (which
-  severities, in what order, stopping where) is holtz policy over a generic primitive,
-  which is the same seam `_ledger_query` uses.
-
-- **`low_findings_carried` gates `iteration_boundary`.** Fires when open LOW findings
-  exist **and** the run has more findings open than closed.
-
-  *The first conjunct is what makes the block escapable by construction.* `defer_low`'s
-  gates are exactly `item_is_low` and `item_open`, both of which the predicate has
-  already asserted — so the command the block names can always close every finding it
-  counts, and closing them empties the first conjunct and lowers the second. MEDIUM is
-  budget-capped and HIGH is not priority-deferrable, so neither could carry that
-  guarantee. #77 was a block whose printed escape was itself blocked; a test drives the
-  named command against the real transitions and asserts the predicate goes false.
-
-  *The second conjunct is a stock, not the proposal's per-round rate.* A rate has to
-  decide what a round is, and rounds are irregular and self-reported. "More work ahead
-  than behind" needs no window, is true from fix-loop entry — which is where the triage
-  belongs, ahead of the first fix subagent (P6.2's ask) — and goes false once the run
-  has retired more than half of what it filed, after which a newly filed LOW no longer
-  forces a batch. Gated at `iteration_boundary` only: `converge` reaches the same place
-  through `all_findings_closed`, but that is one wall at the end, and the run this comes
-  from never got there.
-
-- **Step 16's resweep is scoped** (P0.2's remaining half) to the files the run changed,
-  widened through the impact graph to what depends on them. A run that changed no source
-  still gets the full Steps 6-8. The same edit removed a mandated convergence-loop read
-  that always fails — see P0.2 below.
-
-**A defect found while verifying the premise.** `defer_low` asked `count(*) >= 1 …
-severity='LOW'`, matching *any* row ever filed under the id, while the board renders the
-last one. A finding corrected LOW → HIGH could still be closed as a LOW; `defer_medium`'s
-budget denominator had it from the other side, a MEDIUM corrected to HIGH still funding
-budget. That is the **third** counting site of P3.6's shape — `count(DISTINCT id)` fixed
-re-filing under one severity but not a change of severity. All three predicates are named
-queries now (`item_is_low`, `item_is_medium`, `medium_deferral_budget`), which also
-retired five `sahjhan lint` L6 pairs. Shipped first, as its own `fix:`.
-
-**The convergence redefinition, clause by clause.** *"all CRITICAL resolved AND all
-user_reachable HIGH resolved-or-deferred AND A < 1.0 over last 3 rounds AND DEFERRED.md
-written"* does not have one status; it has three.
-
-- **`user_reachable HIGH` — OWED, blocked on P0.5.** The field does not exist yet. This
-  is a sequencing artifact of working P0.1 before P0.5, nothing more. Do not implement a
-  stand-in; the whole point of P0.5 is that reachability is *derived* rather than typed,
-  and a placeholder graded by the agent would be the unverified self-report P5.4 removed.
-
-- **The severity carve-out — DECIDE AT P0.5, do not assume.** Dropping MEDIUM and LOW
-  from the convergence gate is not free. Today `all_findings_closed` forces every finding
-  to be resolved **or deferred**, and `defer_medium`'s budget caps deferral at 50% of the
-  MEDIUMs — so a run must currently *fix* at least half its MEDIUMs. Under the proposed
-  wording it need fix none, and that cap becomes decoration. The proposal does not
-  mention the cap and nothing in the post-mortem asks for it to go. Deferral also keeps
-  the record — a deferred finding renders into `PUNCHLIST-ARCHIVE.md`, an excluded one
-  just stops counting. If the carve-out lands, the MEDIUM budget has to be re-justified
-  or removed deliberately, in the same commit.
-
-- **`A < 1.0 over the last 3 rounds` — REJECTED.** As a `converge` conjunct it blocks a
-  run that has legitimately closed every finding, on the strength of its own history.
-  Amplification is a signal about what to do *next*, which is why it gates
-  `iteration_boundary`; at the end of the run there is nothing left for it to redirect.
-
-- **`DEFERRED.md written` — REJECTED.** A third view of data `PUNCHLIST-ARCHIVE.md`
-  already renders. Adding it to `MANAGED_DOCS` needs a render rule
-  (`test_managed_docs_consistency.py` enforces the ⟺); without one it is an unguarded
-  hand-written file duplicating the punchlist, which is exactly what P0.4 deleted.
-
-Worth keeping in view while deciding the carve-out: the run was non-terminating because
-deferral was never used, and that is now fixed independently. The convergence gate is no
-longer the thing standing between this protocol and a terminating run, so the carve-out
-should be argued on its own merits rather than as a rescue.
-
-**Original proposal below.**
+### P0.1 Amplification circuit-breaker + mandatory batch deferral
 
 **Problem.** The loop filed **2.43 new findings per fix**. Open count rose monotonically
 124 → 273 and fell exactly once (−2). `converge` requires `all_findings_closed == 0`
@@ -139,77 +44,7 @@ terminating and not.** Confidence: **high** (data and transitions already exist)
 
 ---
 
-### P0.2 Get pattern analysis out of the commit path, cap it, and swap it for the stale sweep — **DONE**
-
-**Shipped** (`5b0c4f0`, `bb502ca`, `ceb7414`, `f17aaec`):
-
-- **Step 16's resweep is scoped** (`f17aaec`) — the last piece, landed with P0.1 since
-  both rewrite the same convergence document. `phase-convergence.md` also mandated
-  `validate_punchlist.py <path> --filter-status OPEN … --render` as the convergence
-  loop's worklist read. That parser wants `### BH-NNN:` prose; the render emits a
-  six-column table, so the command exits `ERROR: No punchlist items found` — confirmed
-  against a rendered punchlist. It is P0.4's defect at a site P0.4 missed, and it
-  survived because the invocation named `<path>`, a placeholder no filename-matching
-  check could see. `test_worklist_lookup.py` derives "Holtz's procedure has exactly one
-  worklist lookup" over every phase document instead. Justine keeps the parser: her tree
-  is unrendered and her punchlist really is the prose format it wants.
-
-- **The commit path is no longer a pattern gate.** The premise needed correcting first:
-  nothing gates the `fix_commit` *transition* on pattern analysis, and `iteration_boundary`
-  already carried the requirement. The block was in `commit_gate.py`, on the `git commit`
-  Bash command — which fires between a fix that is written, verified and green and the
-  ledger entry naming it. It is gone. `set complete perspective` gains the same gate in the
-  same commit: without it, dropping the block would let a run close a whole perspective
-  without a context reset and skip every round, which the commit block had been covering by
-  accident. A test derives "every exit from the fix batch carries the gate" rather than
-  listing transitions. This retires the block P3.4 made correct — a commit denied on a stale
-  snapshot cannot happen on a path that no longer denies.
-- **The stale sweep is Step 11b**, scoped to open findings in files the run has already
-  changed. It uses only existing transitions; the load-bearing detail is that
-  `defer_cant_reproduce` gates on `fix_start` since the last transition and on a non-empty
-  investigation file, and a sweep has no fix subagent to have recorded either. Taught
-  without them, every retirement it finds is rejected. The test asserts that order on the
-  document's own lines.
-
-**Shipped — the yield conjunct**, once P5.4 (`ceb7414`) made the field real.
-`pattern_analysis_overdue` gains a second conjunct: the obligation lapses once the last two
-rounds both recorded `patterns_found = 0`. It withdraws a *demand*, not a capability —
-Step 11's usual path runs a round without entering `pattern_analysis` at all, so a run that
-wants another one still has it; what stops is `iteration_boundary` and `set complete
-perspective` refusing to proceed without one. A round with yield re-arms it, because the
-window is the last two rounds rather than a lifetime tally. `pattern_check`'s block message
-had to change with it: it can now be refused for a second reason, and the old text sent the
-agent to resolve three more findings, which would not have helped.
-
-Two things worth keeping from building it.
-
-*The natural SQL is wrong on this engine.* `ORDER BY seq DESC LIMIT 2` in a derived table,
-filtered by an outer `WHERE`, reads as "the last two rounds" and is not: sahjhan applies the
-outer predicate **before** the subquery's `LIMIT`, so that form counts every dry round the
-run ever had and stops the obligation the moment any two rounds anywhere were dry. It passes
-every consecutive-case test and fails only on a non-adjacent pair, which needs three rounds
-to observe. The shipped predicate expresses the window as a `seq` floor — the seq of the
-second-most-recent round — and a test pins the discriminating case.
-
-*The measure is a proxy, deliberately.* A round that files eight siblings of an existing
-PAT adds no new entry and reads as dry. That is accepted: the run this came from filed 2.43
-findings per fix and its cost per eventually-fixed finding rose to **108.9 min** by rounds
-14–15, so more sibling-filing is not what the loop is short of — and the round remains
-available, only unforced. Widening the measure to include `siblings_found` would be worse
-than the proxy: that field is agent-typed, and under-claiming it is the direction that buys
-less work.
-
-**Still rejected — the >25-open half.** "No round while >25 pattern-filed findings are open"
-has no field to read: the finding schema carries no marker for which round filed it.
-
-**Rejected — the ≤3-new-items cap.** It cannot be enforced: a gate on `pattern_done`
-counting findings filed since `pattern_check` would wedge the run permanently, because
-`pattern_done` is the only exit from `pattern_analysis` and filing a fourth finding is not
-undoable. As prose it suppresses discovery of real defects — a pattern round's job is
-finding siblings of a known class, and the measured 2.43-filed-per-fix is a *retirement*
-problem, not a discovery problem. The lever is batch deferral (P0.1).
-
-**Original proposal below.**
+### P0.2 Get pattern analysis out of the commit path, cap it, and swap it for the stale sweep
 
 **Problem.** 24 rounds × 17.9 min median = **1.85× a fix cycle, 43% of in-loop time**,
 plus 474 subagent-min and **31% of the run's cache-read**. It is mechanically unskippable:
@@ -263,51 +98,7 @@ subagent-parity rule.
 
 ---
 
-### P0.4 One canonical, machine-queried worklist — **DONE**
-
-**Shipped** (`ac2407e`, `ea89716`, `4c88666`, `6d78c7f`):
-
-- **Merge writes to the ledger.** Justine's unmatched findings are recorded as `finding`
-  events keeping her `BJ-NNN` ids (`^B[HJ]-\d{3}$` already admitted them), so the rendered
-  `PUNCHLIST.md` is the unified worklist and re-renders on every resolution.
-  `PUNCHLIST-MERGED.md` is retired; `merge_complete` now runs `validate_merge_report.py`
-  against `MERGE-REPORT.md` — a script written for that gate and never wired to it.
-  Renumbering deleted with the file (that is P4.2, done here).
-- **`findings.py list|show`** shipped. This was not a convenience wrapper: the mandated
-  `validate_punchlist.py --filter-status OPEN` exits `ERROR: No punchlist items found` on
-  the rendered punchlist, because that parser wants `### BH-NNN:` prose and the render
-  emits a six-column table. Two formats under one filename — which is why the run wrote a
-  replacement three times. A test pins that the script and the template never disagree
-  about a finding's status.
-- **The blocked write steps are gone**, and more than the two line pairs named: eleven
-  lines across five skill files. `status-file-format.md` was the source of most of them —
-  it described a hand-written `docs/holtz/STATUS.md` with Current Position / Next Action /
-  Strategy / Last Insight sections that the render does not produce and the agent cannot
-  write. Reframed as what it actually is, the live format for Justine's own status file.
-  `tests/test_skill_files_respect_managed_docs.py` derives the invariant from `MANAGED_DOCS`.
-
-- **The punchlist is open work only** (`6d78c7f`). Resolved and deferred rows render to
-  `PUNCHLIST-ARCHIVE.md`, added to `MANAGED_DOCS` in the same commit. Both templates
-  partition the findings by the rules `status.md.tera` and `findings.py` already
-  share, so the tables and the headline counts cannot disagree; the two cross-view
-  tests read both files. Step 11.1 read the full punchlist for resolved items and now
-  runs `findings.py list --all`; a test pins that no skill file expects closed findings
-  in `PUNCHLIST.md`. `step-10-fix-loop.md`'s flowchart still named the retired
-  `PUNCHLIST-MERGED.md`.
-
-  **The archive is load-bearing, and the report did not say why.** `phase-recon.md:104`
-  decides which source files a prior run ever audited by scanning
-  `docs/holtz/archive/*/PUNCHLIST.md` for finding locations. A converged run has no
-  open findings — every archived punchlist in this repo has **zero** OPEN rows (19, 17,
-  23, 12 and 1 findings, none open). Open-only rendering without the archive would have
-  made every file read as cold on every subsequent run, silently, and the cold-file
-  ratio drives recon's scope. The scan reads both files.
-
-  **Not done: the ≤12-word summary.** The item also asked for truncated descriptions.
-  Post-`4c88666` the fix loop queries `findings.py`, not the file, so the punchlist's
-  size is no longer a per-run cost; the remaining readers are humans and the cold-file
-  scan, which reads locations. Truncating would re-introduce the lossiness P3.7 fixed
-  in exchange for nothing measurable.
+### P0.4 One canonical, machine-queried worklist
 
 **Problem.** `phase-fix-loop.md:28` tells the fix loop to prefer `PUNCHLIST-MERGED.md` —
 574 KB, written **once** on 08-11 17:53, re-rendered by nothing, still marking **all 178
@@ -337,24 +128,6 @@ had pattern analysis reasoning from week-old data.** Confidence: **high**.
 ---
 
 ### P0.5 Grade findings by reachability, and route by it
-
-**Carries an unfinished half of P0.1.** P0.1's convergence redefinition needs
-`user_reachable`, so it could not land ahead of this item despite being numbered before
-it. Two things come here with it, and P0.1 is not closable until both are settled:
-
-1. Add the `user_reachable HIGH` conjunct to the `converge` gate (`protocol.toml`,
-   `[queries.all_findings_closed]` and the two transitions that reference it).
-2. **Decide the severity carve-out explicitly.** Excusing MEDIUM and LOW from
-   convergence makes `defer_medium`'s 50%-of-MEDIUMs budget meaningless — that cap is
-   currently the only thing forcing a run to *fix* half its MEDIUMs rather than defer
-   them. Either re-justify the cap under the new gate or remove it in the same commit;
-   do not let it become decoration by accident.
-
-Also worth checking before implementing the *"reopen, don't refile"* clause:
-`item_is_low` / `item_is_medium` (`fe2ef56`) already establish that a finding's grade is
-its **latest filing**, and `punchlist.md.tera` already treats a re-filing as a
-correction that supersedes. That may be most of what `--supersedes BH-NNN` was asking
-for; confirm what is actually missing before adding a flag.
 
 **Problem.** **~22 of 62 commits are fault-injection-only** — reachable only by making
 some other call raise. BH-258's own text concedes *"reachability on CPython 3.12 is
@@ -386,11 +159,11 @@ crashes mid-stream).
 | # | Proposal | Savings | Conf. |
 |---|---|---|---|
 | P1.1 | **Family batching.** When a pattern round names N instances of one PAT, dispatch **one** fix subagent for the family. The 27-commit lock/monitor family collapses to ~8. Amend `phase-fix-loop.md:68`. | ~200 agent-min, ~700k tok | med |
-| P1.2 **DONE** (`d4e5f8b`) | **Model routing in `phase-fix-loop.md`.** **97 of 107 subagents ran Opus**; `phase-audit.md:55` already routes but the fix-loop doc has no routing line, so all 59 fix agents and 23 pattern agents ran on the largest model. Route "vacuous test" and single-file fixes to Sonnet (~30 of 59 qualify). | ~600k out, ~150M cache; wall-neutral | high |
+| P1.2 | **Model routing in `phase-fix-loop.md`.** **97 of 107 subagents ran Opus**; `phase-audit.md:55` already routes but the fix-loop doc has no routing line, so all 59 fix agents and 23 pattern agents ran on the largest model. Route "vacuous test" and single-file fixes to Sonnet (~30 of 59 qualify). | ~600k out, ~150M cache; wall-neutral | high |
 | P1.3 | **Emit the fix brief from the ledger:** `sahjhan render fix-brief BH-NNN`. Replaces 8–11 KB of hand-drafted prompt (33–58 s of orchestrator drafting per fix) with one call. `phase-fix-loop.md:43` enumerates the payload but ships no emitter. | ~17 min, ~57k tok per 3 sessions | high |
 | P1.4 | **One await-the-batch idiom.** Round 15's four launches were spread over 2m08s, then their completions **sat queued 2h02m**. Each session invents its own wait (`sleep 240`, bare `until`, `TaskList`, `Monitor`). Define: launch the whole batch in a single turn, then one blocking `Monitor`. | ~30–130 agent-min | med |
 | P1.5 | **Warm-context pack per fix dispatch.** 29% of every fix subagent's tool calls precede its first edit. `tqdm/std.py` was `Read` 88× across 59 fix agents; `git show <hash>` replayed up to 9×. Write `docs/holtz/fix-context.md` once per window and reference it. | ~90 min, ~120M cache | med |
-| P1.6 **DONE** (`d4e5f8b`) | **Drop one of two mandated tail suite runs.** `step-10-fix-loop.md` Per-Fix Hardening #3 and `phase-fix-loop.md` Step A.9 both fire at the end of every fix. **45 back-to-back full-suite runs had an identical pass count within 5 min = 17.1 min of literally duplicate verification.** | ~17 min + 62 round-trips | high |
+| P1.6 | **Drop one of two mandated tail suite runs.** `step-10-fix-loop.md` Per-Fix Hardening #3 and `phase-fix-loop.md` Step A.9 both fire at the end of every fix. **45 back-to-back full-suite runs had an identical pass count within 5 min = 17.1 min of literally duplicate verification.** | ~17 min + 62 round-trips | high |
 | P1.7 | **Skip the repro test when the finding carries a verified probe.** `phase-fix-loop.md:46` mandates re-deriving it; BH-183's entry literally contains `seq 1 400000 \| python -m tqdm --nosuchopt=1 \| head`. Promote the recorded probe to the RED test. Repro is **40.2% of subagent time**. | 1–2 min/fix on fast-path items | med |
 | P1.8 | **Resume path for interrupted fix subagents.** Two interrupted agents wasted 37.6 min and were relaunched from scratch. | ~38 min (observed) | med |
 | P1.9 | **Ceiling the analysis fan-out.** Max 2 concurrent analysis subagents, second only if its file-set is disjoint; each report ≤8 KB. Round 15 produced 168 KB the orchestrator then re-read and merged. | ~45 min, ~45M cache | med |
@@ -402,7 +175,7 @@ crashes mid-stream).
 | # | Proposal | Savings | Conf. |
 |---|---|---|---|
 | P2.1 | **Cap `patterns-brief.md` by BYTES, not entries.** `phase-fix-loop.md:116` caps 20 *entries*; the file sat at 20 entries and **181 KB — 8.5 KB/entry against a ~400 B spec, 21× over**. By round 14 one subagent needed **5 paginated reads totalling 159 KB in 90 s**. Change to "20 entries **and 40 KB**; entries >2 KB compress to the 4-line spec, overflow to `pattern-round-NN.md`." | ~250k input tok, ~15 min | high |
-| P2.2 **DONE** (`d4e5f8b`) | **Make `pattern_brief_compact.py` the default read.** It renders 179 KB → **6,748 chars (26×)** and was invoked **once** in the whole run, because `phase-fix-loop.md` — the doc governing every pattern round — **never mentions it** (it is buried as clause (a) of a seven-clause sentence in `phase-audit.md:59`). Promote to its own numbered step: "never `Read` the brief whole." | ~15M cache | high |
+| P2.2 | **Make `pattern_brief_compact.py` the default read.** It renders 179 KB → **6,748 chars (26×)** and was invoked **once** in the whole run, because `phase-fix-loop.md` — the doc governing every pattern round — **never mentions it** (it is buried as clause (a) of a seven-clause sentence in `phase-audit.md:59`). Promote to its own numbered step: "never `Read` the brief whole." | ~15M cache | high |
 | P2.3 | **Digest instead of full punchlist.** `phase-fix-loop.md:91` mandates *"read the **full** punchlist (no filter)"* — 325 KB / 81k tok. Add `validate_punchlist.py --digest` (one line per finding ≈ 9k tok). | ~1M tok/run | med-high |
 | P2.4 | **Bound subagent context.** `SKILL.md:231`'s ~300K ceiling binds the **orchestrator only**. **129 subagent API calls exceeded 300K**; the merge agent peaked at **446K / 35.4M cache-read in 35 min** — 4.6% of the entire run. Add: a subagent passing ~150K writes its findings and returns `NEEDS_CONTEXT` for re-dispatch with a narrower brief. | ~150–250M cache, 40–70 min | med-high |
 | P2.5 | **Replace `SKILL.md:238` "re-read before every step; assume prior context is gone" with a slice rule.** **Context never compacted once** in 117 transcripts — the protocol is insurance on a fire that never started, and its remedy is the second-largest cost driver: **28% of all Read tokens re-read a path already read in the same transcript** (`std.py` 133 redundant times). Read the `file:line` range in the finding record; whole-file reads of >1,500-line files need a stated reason. | ~20–25M cache | med |
@@ -417,59 +190,14 @@ orchestrator time, so these are not speed levers — but they are near-free and 
 
 | # | Defect | Evidence | Fix |
 |---|---|---|---|
-| P3.1 **DONE** | **Out-of-tree gate blocks `${CLAUDE_PLUGIN_ROOT}/…`** — `_sahjhan_bootstrap.py:214` never calls `expandvars`, so `isabs("$CLAUDE_PLUGIN_ROOT/…")` is False, it joins against the target repo and blocks. | 58 denials / 7.5 min; **13 are commands taught verbatim** in `phase-fix-loop.md:49,53`, `phase-recon.md:142,149`, `impact-graph-operations.md:11`. Same shape blocked across 9 sessions. | `_expand_script_path` + `TestPluginRootScriptInvocation`. The same defect also pointed the other way: an unexpanded `$VAR/evil.sh` joined *under* the plugin root, so the guard read it as in-tree and waved it through unread. Both directions are now pinned. |
-| P3.2 **PARTIAL** | **Stall gate punishes read-only subagents.** Audit subagents running `grep`/`sed -n`/`ls` tick a counter they have no protocol event to clear. | 114 denials / 20.4 min; **108 in subagents, 54 distinct actors, 112 at exactly `stall=16`**. Escape is 115 `sahjhan status` calls whose output is never read. | **Shipped:** `is_read_only_cmd` in `_protocol_cache.py`; the tracker no longer ticks on tree inspection, on the same reasoning that already exempts TDD commands. Conservative by construction — any write redirect, `sed -i`, `find -exec/-delete`, writing `git` subcommand, or unrecognized command still ticks. `TestReadOnlyCommandsDoNotStall`. **Rejected: keying the counter on `agent_id`** — see below. |
-| P3.3 **PARTIAL** | **`sahjhan` is unresolvable, so the agent invents indirection the detector cannot see.** `_segment_is_sahjhan` (`_protocol_cache.py:312-317`) matches a literal token, so `"$SAH" … event` and `eval "…sahjhan… status"` **increment** the stall instead of clearing it. `SKILL.md:103-138` teaches bare `sahjhan …` while `bin/` is never on PATH. | **70 of 498 invocations (14%)** invisible. Worst case `288e9c63` 17:59:49: command blocked, documented escape blocked by the same gate, third form worked. | **Shipped:** `enforcement/hooks/_shell_norm.py` — one `resolve_indirection` both detectors call, substituting same-line `VAR=` assignments and unwrapping `eval`/`sh -c`. Wired into `_split_shell_segments` (so every predicate built on it sees through indirection) and into `_bash_references_blocked_sahjhan`. `test_shell_indirection.py`. **Rejected: the PATH export** — see below. |
-| P3.4 **DONE** | **`pattern_analysis_overdue` goes stale.** `_protocol_cache.py:400` reads a cached flag that `protocol_tracker._refresh_from_status` re-derives only on an *observed* sahjhan command — so the transition satisfying the gate never clears it atomically. | 11 denials / 35 min. **7 of 11 fired within 6.6 min of a completed round** (`9b6b5384` transitioned at 20:24:20, blocked at 20:24:32/25:09/25:16/25:19). Blocked commits held **12–25 min** each. | **Not** by clearing inside the transition — see below. The commit gate re-derives the named query from the ledger as the last conjunct of the block, so the decision is made against the ledger at the moment it is made. Unanswerable ⇒ still blocked. `test_pattern_overdue_freshness.py`. |
-**Why P3.4 was not fixed the way it was written.** "Clear inside the
-`pattern_done` transition" adds a second writer to a value that already has an
-authoritative source, which is the mirror pattern #77 was. It would also be
-wrong on its own terms: what discharges the obligation is the
-`pattern_analysis_complete` *event*, not the transition, so a clear attached to
-the transition would fire at the wrong moment and could go the other way — a
-run that resolves three more findings after the analysis is legitimately overdue
-again. The cached flag is a snapshot and that is fine; the defect was that the
-gate *decided* on the snapshot. It now confirms against the ledger before
-blocking — the same named query, evaluated at the moment of the block — which is
-the project's own rule that block condition and evidence must be one object.
-Cost is one subprocess on the block path only, since the confirmation is the
-last conjunct and everything cheap short-circuits ahead of it. Also collapsed
-the query runner into a single shared `query_named_predicate`, since it now has
-two callers.
-
-**Why the PATH export was rejected (P3.3), and what the item was actually
-hiding.** The premise does not hold. In Claude Code 2.1.238 the plugin loader
-maps every enabled non-builtin plugin to `<plugin path>/bin` and appends those
-to `PATH` before running a Bash tool call — verified by reading the shipped
-binary, and visible in this machine's own `PATH`, which carries the bin
-directory of a plugin that does not even have one. `bin/sahjhan` is a symlink
-created at bootstrap and was present in the installed `0.141.3` during the run.
-Nor would the proposed remedy work: a `SessionStart` hook cannot alter the
-environment of later Bash calls.
-
-The half of the item that *was* real is worth more than the framing suggested.
-The post-mortem read the detector blindness as a stall-counter nuisance. The
-same blindness sits in front of `_bash_references_blocked_sahjhan`, which is
-what makes `event quiz_exhausted_resolved` a human-only channel — the event that
-clears a lens whose re-read quiz the agent failed. `sahjhan event
-quiz_exhausted_resolved` was denied while `"$SAH" event quiz_exhausted_resolved`
-was allowed, so the agent could sign off on its own failed quiz. That is a
-security defect, not a friction cost, and it is what the fix is really for.
-
-**Why `agent_id` keying was rejected (P3.2).** It would give each actor its own
-counter, so 54 readers could each spend 15 unregistered commands and none would
-trip — the fleet's aggregate work becomes invisible precisely when there is most
-of it. It also reintroduces the shape the project has ruled against twice: a
-per-actor mirror of state the ledger already implies, and a gate that reads
-`agent_id` rather than evidence. Once read-only inspection stops ticking, the
-commands that remain are ones that *can* change the tree, and 16 of those with
-no protocol event is the condition the counter exists to notice. Revisit only if
-a run shows readers still tripping the gate.
-
-| P3.5 **DONE** | **The manifest-anchoring bug (holtz #85 / sahjhan 0.20.1) terminated the run.** All **81 violations sit at seq 8276–8390, 07:46:06–08:10:42Z** — the last 24 minutes. The preceding 8,275 events are clean. Trigger: a `cd` into `docs/holtz` at 07:19:45 to shorten paths while reading 34–52 KB artifacts. | Records carry `project: "holtz", run: "0"` while the run is `tqdm`/run 1 — not even attributable to the run they killed. | already fixed by `d92d468`; **also** cap artifact size so nobody needs to `cd` (see P2.1) |
-| P3.6 **DONE** | **Duplicate finding id.** BH-248 appears twice as two different findings; the "ID CORRECTION" row BH-258 was added but the bad row never deleted. 354 rows, **353 unique ids**. | headline count off by one | `unique_by(attribute="fields.id")` in `punchlist.md.tera`. It keeps the *last* filing, so a correction supersedes what it corrects — pinned by a test, since the whole fix turns on which one survives. **The first pass missed two of three counting sites** (`c480775`): `status.md.tera` deduped Resolved and Deferred but not Total, so STATUS.md and PUNCHLIST.md gave different answers for one ledger — and STATUS.md is where the headline count is read. Its Open was also `total - resolved - deferred`, which underflows to a rendered `-1` when a finding is deferred and later fixed anyway (`fix_commit` has no `item_open` gate). Both counts now come from the same per-id bucketing the punchlist renders by. Third site: `defer_medium`'s budget gate counted rows, so a re-filed MEDIUM bought a deferral past the 50% cap. |
-| P3.7 **DONE** | **`PUNCHLIST.md`'s table format is lossy.** 22 of 354 rows fail to parse into 6 columns because descriptions contain unescaped `\|` (e.g. `` `prog \| head` ``). Any tool counting statuses off this file gets a wrong answer. | 22 rows | Escape `\|` in `description` and `location` at the render, and collapse newlines in `description` — a newline splits the row in two, which is the same defect with a worse failure mode and was not in the report. `test_punchlist_render.py` asserts every row parses into exactly 6 columns. |
-| P3.8 **N/A** | **Open regression the run introduced and never fixed.** BH-248 (`tqdm/utils.py:240`): `32bd5cb` widened `except OSError`, so `tqdm(file=open(p,'rb'))` now silently never draws instead of raising. Probe-confirmed, filed, **still OPEN at pause**. | — | A defect in the audited project, not in the plugin. Out of scope for this punchlist. |
+| P3.1 | **Out-of-tree gate blocks `${CLAUDE_PLUGIN_ROOT}/…`** — `_sahjhan_bootstrap.py:214` never calls `expandvars`, so `isabs("$CLAUDE_PLUGIN_ROOT/…")` is False, it joins against the target repo and blocks. | 58 denials / 7.5 min; **13 are commands taught verbatim** in `phase-fix-loop.md:49,53`, `phase-recon.md:142,149`, `impact-graph-operations.md:11`. Same shape blocked across 9 sessions. | `os.path.expandvars` at `:189` + unconditional allow under `_PLUGIN_ROOT` |
+| P3.2 | **Stall gate punishes read-only subagents.** Audit subagents running `grep`/`sed -n`/`ls` tick a counter they have no protocol event to clear. | 114 denials / 20.4 min; **108 in subagents, 54 distinct actors, 112 at exactly `stall=16`**. Escape is 115 `sahjhan status` calls whose output is never read. | key counter on `agent_id`; don't tick on read-only commands, as `_is_tdd_cmd` already exempts tests. **Needs a `hook_e2e` test** (narrows an agent-agnostic gate) |
+| P3.3 | **`sahjhan` is unresolvable, so the agent invents indirection the detector cannot see.** `_segment_is_sahjhan` (`_protocol_cache.py:312-317`) matches a literal token, so `"$SAH" … event` and `eval "…sahjhan… status"` **increment** the stall instead of clearing it. `SKILL.md:103-138` teaches bare `sahjhan …` while `bin/` is never on PATH. | **70 of 498 invocations (14%)** invisible. Worst case `288e9c63` 17:59:49: command blocked, documented escape blocked by the same gate, third form worked. | export `$CLAUDE_PLUGIN_ROOT/bin` onto PATH in `session_start.py`; have the detector substitute earlier `VAR=` assignments and unwrap `eval` |
+| P3.4 | **`pattern_analysis_overdue` goes stale.** `_protocol_cache.py:400` reads a cached flag that `protocol_tracker._refresh_from_status` re-derives only on an *observed* sahjhan command — so the transition satisfying the gate never clears it atomically. | 11 denials / 35 min. **7 of 11 fired within 6.6 min of a completed round** (`9b6b5384` transitioned at 20:24:20, blocked at 20:24:32/25:09/25:16/25:19). Blocked commits held **12–25 min** each. | clear inside the `pattern_done` transition |
+| P3.5 | **The manifest-anchoring bug (holtz #85 / sahjhan 0.20.1) terminated the run.** All **81 violations sit at seq 8276–8390, 07:46:06–08:10:42Z** — the last 24 minutes. The preceding 8,275 events are clean. Trigger: a `cd` into `docs/holtz` at 07:19:45 to shorten paths while reading 34–52 KB artifacts. | Records carry `project: "holtz", run: "0"` while the run is `tqdm`/run 1 — not even attributable to the run they killed. | already fixed by `d92d468`; **also** cap artifact size so nobody needs to `cd` (see P2.1) |
+| P3.6 | **Duplicate finding id.** BH-248 appears twice as two different findings; the "ID CORRECTION" row BH-258 was added but the bad row never deleted. 354 rows, **353 unique ids**. | headline count off by one | dedupe at render |
+| P3.7 | **`PUNCHLIST.md`'s table format is lossy.** 22 of 354 rows fail to parse into 6 columns because descriptions contain unescaped `\|` (e.g. `` `prog \| head` ``). Any tool counting statuses off this file gets a wrong answer. | 22 rows | escape `\|` in the render |
+| P3.8 | **Open regression the run introduced and never fixed.** BH-248 (`tqdm/utils.py:240`): `32bd5cb` widened `except OSError`, so `tqdm(file=open(p,'rb'))` now silently never draws instead of raising. Probe-confirmed, filed, **still OPEN at pause**. | — | fix in tqdm |
 
 ---
 
@@ -482,14 +210,14 @@ of agent-time**. These are efficiency trims, not a rescue.
 | # | Proposal | Savings | Conf. |
 |---|---|---|---|
 | P4.1 | **Script the merge.** `merge-protocol.md:11` calls it *"mechanical… without judgment calls"* and `:165` *"deterministic"* — yet it ran 36.7 min as a subagent hand-writing throwaway `python3 -c` scripts. **This is a script running as an LLM.** Ship `scripts/merge_punchlists.py`; the agent reviews only contradiction candidates. | ~35 min, ~160k tok | high |
-| P4.2 **DONE** | **Delete the renumbering rule** (`merge-protocol.md:76,163`). Landed with P0.4 in `4c88666` — the rule went with the file it served. Both namespaces are now first-class on the ledger and the prefix is the provenance. | ~11 min | high |
-| P4.3 REJECTED | REJECTED DO NOT IMPLEMENT! **Replace Justine's full second audit with a ~20-min adversarial review** of the primary punchlist ("what surface did Holtz not look at?"). Justine cost 114.0 agent-min / 377k tok for 33 unique findings, of which **2 were ever resolved — ~57 agent-min per shipped finding.** | ~94 min, ~310k tok | med-high |
-| P4.4 REJECTED | REJECTED DO NOT IMPLEMENT! **Project-size-scaled lens selection.** All 13 lenses run unconditionally (`lens-registry.md:3`, `phase-audit.md:46-49`); **a keyword sweep of `SKILL.md` and all `references/` for project size / LOC / defect density returns only *context-token* budgets.** On a 5k-LOC progress bar this ran `idempotency`, `security`, `observability` — lenses about DBs, payments, correlation IDs. Add an `**Applies when:**` field per lens, filtered by Step 2 probes. tqdm would run 6–8. | ~30–45 min, ~150k tok | med |
-| P4.5 REJECTED | REJECTED DO NOT IMPLEMENT! **Cap recon; make predictions binding or cut them.** Recon artifacts are **write-only — zero tool calls read any `recon/step*` file after session 1**, and all 21 predictions still read `**Outcome:** UNCONFIRMED` though five `phase-audit.md` clauses order the update. Hit rate 8/21 strict — but predictions 2 and 8 alone foreshadowed ~35 of 63 fix commits. `phase-audit.md:37` says *"predictions change the order, not the scope"*, so recon buys an ordering for an audit that runs to completion anyway. | ~50 min, ~200k tok | med |
-| P4.6 REJECTED | REJECTED DO NOT IMPLEMENT! **"Confirmed-during-recon → fix now" fast path.** Three defects were CONFIRMED by live probe at 15:03Z; their fixes landed 17:34–18:05Z — **2.5–3 h later**. Let a recon-confirmed CRITICAL enter the fix loop immediately, in parallel with the audit. First fix at ~T+30 min instead of T+180. | time-to-first-fix 180 → ~30 min | med |
-| P4.7 REJECTED | REJECTED DO NOT IMPLEMENT! **Gate the quiz bank on a lens sweep actually being scheduled,** or generate it lazily. It is a hard gate on `recon_complete` (`phase-recon.md:134`: *"you cannot leave recon without a bank"*) — 108 `quiz_stage.py` calls, 85 questions, 14.5 agent-min — and there were **zero `quiz_challenge`/`quiz_answer` invocations in the entire run.** Perspectives: 0/13. | ~14.5 min, ~75k tok, 108 round-trips | high |
+| P4.2 | **Delete the renumbering rule** (`merge-protocol.md:76,163`). The ledger already owned 124 ids, so per `PUNCHLIST-MERGED.md:7` "the two namespaces **disagreed on 121 of 124 items**"; reconciliation ran 17:19–17:30. Merged items keep ledger ids. | ~11 min | high |
+| P4.3 | REJECTED DO NOT IMPLEMENT! **Replace Justine's full second audit with a ~20-min adversarial review** of the primary punchlist ("what surface did Holtz not look at?"). Justine cost 114.0 agent-min / 377k tok for 33 unique findings, of which **2 were ever resolved — ~57 agent-min per shipped finding.** | ~94 min, ~310k tok | med-high |
+| P4.4 | REJECTED DO NOT IMPLEMENT! **Project-size-scaled lens selection.** All 13 lenses run unconditionally (`lens-registry.md:3`, `phase-audit.md:46-49`); **a keyword sweep of `SKILL.md` and all `references/` for project size / LOC / defect density returns only *context-token* budgets.** On a 5k-LOC progress bar this ran `idempotency`, `security`, `observability` — lenses about DBs, payments, correlation IDs. Add an `**Applies when:**` field per lens, filtered by Step 2 probes. tqdm would run 6–8. | ~30–45 min, ~150k tok | med |
+| P4.5 | REJECTED DO NOT IMPLEMENT! **Cap recon; make predictions binding or cut them.** Recon artifacts are **write-only — zero tool calls read any `recon/step*` file after session 1**, and all 21 predictions still read `**Outcome:** UNCONFIRMED` though five `phase-audit.md` clauses order the update. Hit rate 8/21 strict — but predictions 2 and 8 alone foreshadowed ~35 of 63 fix commits. `phase-audit.md:37` says *"predictions change the order, not the scope"*, so recon buys an ordering for an audit that runs to completion anyway. | ~50 min, ~200k tok | med |
+| P4.6 | REJECTED DO NOT IMPLEMENT! **"Confirmed-during-recon → fix now" fast path.** Three defects were CONFIRMED by live probe at 15:03Z; their fixes landed 17:34–18:05Z — **2.5–3 h later**. Let a recon-confirmed CRITICAL enter the fix loop immediately, in parallel with the audit. First fix at ~T+30 min instead of T+180. | time-to-first-fix 180 → ~30 min | med |
+| P4.7 | REJECTED DO NOT IMPLEMENT! **Gate the quiz bank on a lens sweep actually being scheduled,** or generate it lazily. It is a hard gate on `recon_complete` (`phase-recon.md:134`: *"you cannot leave recon without a bank"*) — 108 `quiz_stage.py` calls, 85 questions, 14.5 agent-min — and there were **zero `quiz_challenge`/`quiz_answer` invocations in the entire run.** Perspectives: 0/13. | ~14.5 min, ~75k tok, 108 round-trips | high |
 | P4.8 | **Dedupe gate at `merge_complete`:** reject a merged punchlist where two OPEN findings share `file:±5 lines`. BH-003/BH-112 are the same defect at `std.py:736`; BH-028/BH-126 the same `--buf_size=0` defect. Each pair burned two full fix cycles. | ~2 fix cycles | med-high |
-| P4.9 **PARTIAL** | **Gate the three mandated artifacts nobody produced.** `MERGE-REPORT.md` is now gated at `merge_complete` (`4c88666`) — content-validated, not just `file_exists`. Still ungated: `justine/SUMMARY.md` (`phase-audit.md:15` — Justine's own completion signal) and the archive step (`merge-protocol.md:130`). `justine/impact-graph.json` (157 KB) is still on disk though `:146` says delete it. | correctness | high |
+| P4.9 | **Gate the three mandated artifacts nobody produced:** `MERGE-REPORT.md` (`merge-protocol.md:19,79-120`), `justine/SUMMARY.md` (`phase-audit.md:15` — Justine's own completion signal), and the archive step (`merge-protocol.md:130`). None exists; no gate checks any of them. `justine/impact-graph.json` (157 KB) is still on disk though `:146` says delete it. | correctness | high |
 
 ---
 
@@ -500,42 +228,10 @@ of agent-time**. These are efficiency trims, not a rescue.
 | P5.1 | **`sahjhan report --timing`.** The ledger already records `fix_start`, `fix_commit`, `pattern_check`, `pattern_done`, `suite_green`, `finding`, `finding_resolved`, all timestamped. **It has never been queried for performance.** Surface cycle time, pattern-round cost, generation-vs-retirement ratio, severity mix. | Would have made this run's divergence visible **on day 1, at pattern round 1**, from data already being collected. |
 | P5.2 | **Hook denials leave no telemetry.** A hook calling `exit_block` writes **no attachment record**. All 2,419 `PreToolUse:Bash` attachments say `permissionDecision: "allow"` — the only trace of a denial is a `BLOCKED:` string in the result text. Any dashboard reading `hookSpecificOutput` reports **zero enforcement activity** on a run with 187 hard denials. | Fix before building monitoring on that field. |
 | P5.3 | **Stop crying BLOCKED.** `BLOCKED: N unregistered commits` appears 44 times, **every one with `permissionDecision: "allow"`**. Plus 142 injections of "N source edits since last state transition" (N up to 50) that were never acted on. Alarm-word inflation costs attention on every turn and changes nothing. | Reword advisory messages. |
-| P5.4 **DONE** | **`patterns_found` is unverified self-report and it is wrong.** Rounds 14/15 recorded `patterns_found=5` and `=2` while `patterns-brief.md` states both added **no** new pattern — and this is the field gating `pattern_done`. Derive it by diffing PAT headings in the brief. | Violates the project's own rule: *gating events need real provenance*. |
+| P5.4 | **`patterns_found` is unverified self-report and it is wrong.** Rounds 14/15 recorded `patterns_found=5` and `=2` while `patterns-brief.md` states both added **no** new pattern — and this is the field gating `pattern_done`. Derive it by diffing PAT headings in the brief. | Violates the project's own rule: *gating events need real provenance*. |
 | P5.5 | **Persist the pattern-round ordinal in the ledger and render it in STATUS.md.** Subagent labels show rounds 7, 8, 9, 10 **twice**; `c30f4d6b` restarted at "round 5". `round7-pat021-form-b.md` therefore names a different round than its sibling files. Nothing derives the number from the ledger. | Kills filename collisions and re-derivation across `/clear`. |
 | P5.6 | **Replace the 16-command heartbeat with a passive counter** and make `sahjhan status` default to a one-line summary (`--full` for the sets block). Of 250 sahjhan calls in 3 sessions, **65 (26%) are `status`/`query` re-reads** of state the caller already held; each returns 4.1–4.3 KB, most of it a `perspective: 0/13` set unchanged all run. | ~6 min, ~45k tok per 3 sessions |
 | P5.7 | **Trim the `event finding` payload.** Every call repeats 6 constant fields (`project/run/auditor/phase/step/predicted_by`) — a token tax on the highest-frequency command in the protocol (292 calls). Inherit them from the run context as `fix_commit` already does. | ~high-frequency |
-
-**P5.4, shipped** (`ceb7414`). Two corrections to the item. It does **not** gate
-`pattern_done` — that gate is `ledger_has_event_since pattern_analysis_complete`
-and reads the event's existence, never its value — so deriving the field changed
-no behaviour by itself; what it changed is that the field became gateable, which
-is what P0.2's yield conjunct needed. And the *taught order made the derivation
-impossible*: `phase-fix-loop.md` recorded at step 4 and updated the brief at step
-5, so a derivation would have reported the previous round's yield as this one's.
-The steps are swapped and a test asserts the document's own line order, which is
-the only place that defect is visible.
-
-Mechanism follows `suite_green`: `pattern_analysis_complete` is now `restricted`
-and `tool`-attested, written by `pattern_courier.py` (PostToolUse, outside the
-sandbox) rather than by the agent, because `pattern_round.py --record` runs in
-the agent's shell and cannot reach the daemon. The courier re-derives every
-field a gate could read; only `siblings_found` crosses from the run's output, and
-no gate reads it. `phase`/`step` went with the agent's write path.
-
-Three things the item did not name. **The archive counts** — the rolling policy
-moves entries out of the brief at twenty, so an entry this run added can leave
-the live file while still being this run's yield; the same shape as the
-open-only punchlist against recon's cold-file scan. **The run tag is the
-baseline** — the brief persists across runs, so without `(Run N, …)` round one on
-a mature project would claim the whole inherited brief; the run number comes from
-the ledger's own most recent event, not the `active-ledger` marker, which is
-frequently absent and defaults to `0`. **A second PAT parser was necessary** —
-`pattern_brief_compact.py` lives in `skills/holtz/scripts`, a path the agent can
-write, and the courier writes a restricted event.
-
-Known limit: Justine appends to the same shared brief with the same run tag, so
-her patterns count toward the first round's yield. Nothing in the brief
-distinguishes an auditor.
 
 ---
 
