@@ -28,6 +28,22 @@ def _load_module_from_path(name: str, path: Path) -> ModuleType:
     return mod
 
 
+def _load_protocol_cache() -> ModuleType:
+    """Load the real cache module, with enforcement freshness forced on.
+
+    This used to be a stub carrying a hand-maintained list of the names the
+    tracker imports, every one of them None. Two things were wrong with that:
+    the list rotted the moment the tracker imported a new name (running this
+    file alone then died at collection), and the stall arithmetic these tests
+    assert on lives in this module — against a stub they would have been
+    asserting on None. Only ``is_enforcement_fresh`` is overridden, so a
+    fixture cache with no ``last_sahjhan_cmd`` still reaches the stall branch.
+    """
+    mod = _load_module_from_path("_protocol_cache", ENFORCEMENT_HOOKS / "_protocol_cache.py")
+    mod.is_enforcement_fresh = lambda _cache, **_kw: True  # type: ignore[attr-defined]
+    return mod
+
+
 def _load_tracker_module() -> ModuleType:
     """Load protocol_tracker with correct sibling imports; returns the module."""
     saved: dict[str, object] = {}
@@ -39,11 +55,12 @@ def _load_tracker_module() -> ModuleType:
     )
     sys.modules["_common"] = enforcement_common
 
+    if "_protocol_cache" not in sys.modules:
+        sys.modules["_protocol_cache"] = _load_protocol_cache()
+        saved["_protocol_cache"] = None  # mark as not previously present
+
     # Stub out other sibling modules if not already present
     stubs: dict[str, list[str]] = {
-        "_protocol_cache": ["empty_cache", "is_git_commit", "is_sahjhan_cmd",
-                            "contains_sahjhan_cmd", "parse_status_text", "read_cache",
-                            "update_cache", "write_cache"],
         "_resolve": ["sahjhan_binary", "ensure_sahjhan"],
     }
     for mod_name, attrs in stubs.items():
@@ -51,9 +68,6 @@ def _load_tracker_module() -> ModuleType:
             stub = ModuleType(mod_name)
             for attr in attrs:
                 setattr(stub, attr, None)
-            # is_enforcement_fresh must be callable (returns True = active enforcement)
-            if mod_name == "_protocol_cache":
-                stub.is_enforcement_fresh = lambda _cache, **_kw: True  # type: ignore[attr-defined]
             sys.modules[mod_name] = stub
             saved[mod_name] = None  # mark as not previously present
 
@@ -73,6 +87,9 @@ def _load_tracker_module() -> ModuleType:
 
 _tracker = _load_tracker_module()
 _is_sleep_cmd = _tracker._is_sleep_cmd
+# The stall counter is keyed by actor (P3.2); these events carry no agent_id,
+# so every charge below lands in the orchestrator's bucket.
+_stall_count = _load_protocol_cache().stall_count
 _parse_commit_hash = _tracker._parse_commit_hash
 
 
@@ -194,22 +211,22 @@ class TestStallPenalty:
         """sleep 30 bumps stall by 2 from baseline."""
         initial = {"stall": 0, "active": True}
         result = self._run_main_with_event("sleep 30", initial)
-        assert result["stall"] == 2
+        assert _stall_count(result) == 2
 
     def test_sleep_increments_stall_by_two_from_nonzero(self):
         """stall penalty accumulates correctly from a non-zero baseline."""
         initial = {"stall": 3, "active": True}
         result = self._run_main_with_event("sleep 30", initial)
-        assert result["stall"] == 5
+        assert _stall_count(result) == 5
 
     def test_chained_sleep_increments_stall_by_two(self):
         """echo done && sleep 30 is detected and gets the double stall penalty."""
         initial = {"stall": 0, "active": True}
         result = self._run_main_with_event("echo done && sleep 30", initial)
-        assert result["stall"] == 2
+        assert _stall_count(result) == 2
 
     def test_normal_command_increments_stall_by_one(self):
         """Non-sleep, non-TDD commands increment stall by 1, not 2."""
         initial = {"stall": 0, "active": True}
         result = self._run_main_with_event("echo hello", initial)
-        assert result["stall"] == 1
+        assert _stall_count(result) == 1

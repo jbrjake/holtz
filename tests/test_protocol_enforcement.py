@@ -453,6 +453,106 @@ class TestRunsTransition:
         assert not _runs_transition("sahjhan transition", "fix_commit")
 
 
+class TestStallCounterIsPerActor:
+    """P3.2: the stall counter is a charge against one actor's own commands.
+
+    Run-global, it made 54 distinct actors drive one number — 112 of 114
+    denials fired at exactly stall=16, and a subagent could be blocked by
+    traffic it never generated or freed by a sibling it never spoke to.
+    Claude Code stamps `agent_id` on a hook event fired inside a subagent and
+    omits it on the main thread, so the orchestrator is the empty-string
+    actor. These run the hooks as subprocesses because that is the interface
+    Claude Code actually uses (CLAUDE.md's subagent-parity rule).
+    """
+
+    def _fix_loop_cache(self, tmp_path, stall=None):
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        if stall is not None:
+            cache["stall"] = stall
+        write_cache(str(tmp_path), cache)
+        return cache
+
+    def _run(self, tmp_path, command, agent_id=None, hook="protocol_tracker.py"):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "tool_response": {"exit_code": 0, "output": ""},
+            "cwd": str(tmp_path),
+        }
+        if agent_id is not None:
+            event["agent_id"] = agent_id
+        return run_enforcement_hook(hook, event)
+
+    def test_a_subagents_command_does_not_charge_the_orchestrator(self, tmp_path, mock_daemon):
+        from _protocol_cache import ORCHESTRATOR, read_cache, stall_count
+        self._fix_loop_cache(tmp_path)
+
+        self._run(tmp_path, "echo hello", agent_id="sub_abc123")
+
+        cache = read_cache(str(tmp_path))
+        assert stall_count(cache, "sub_abc123") == 1
+        assert stall_count(cache, ORCHESTRATOR) == 0
+
+    def test_two_subagents_do_not_share_a_count(self, tmp_path, mock_daemon):
+        """The 54-actors bug: one number charged for everybody's work."""
+        from _protocol_cache import read_cache, stall_count
+        self._fix_loop_cache(tmp_path)
+
+        for _ in range(3):
+            self._run(tmp_path, "echo a", agent_id="sub_a")
+        self._run(tmp_path, "echo b", agent_id="sub_b")
+
+        cache = read_cache(str(tmp_path))
+        assert stall_count(cache, "sub_a") == 3
+        assert stall_count(cache, "sub_b") == 1
+
+    def test_a_siblings_resync_does_not_clear_another_actors_stall(self, tmp_path, mock_daemon):
+        """A protocol event is evidence about its emitter and nobody else."""
+        from _protocol_cache import read_cache, stall_count
+        self._fix_loop_cache(tmp_path, stall={"sub_a": 12, "sub_b": 2})
+        _force_no_binary(tmp_path)
+
+        self._run(tmp_path, "sahjhan status", agent_id="sub_b")
+
+        cache = read_cache(str(tmp_path))
+        assert stall_count(cache, "sub_a") == 12
+        assert stall_count(cache, "sub_b") == 0
+
+    def test_the_gate_blocks_the_stalled_actor_and_not_its_sibling(self, tmp_path, mock_daemon):
+        self._fix_loop_cache(tmp_path, stall={"sub_a": 20})
+
+        _, blocked, _ = self._run(
+            tmp_path, "echo work", agent_id="sub_a", hook="commit_gate.py",
+        )
+        _, allowed, _ = self._run(
+            tmp_path, "echo work", agent_id="sub_b", hook="commit_gate.py",
+        )
+
+        assert blocked.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
+        assert allowed.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+
+    def test_the_orchestrator_is_an_actor_not_a_wildcard(self, tmp_path, mock_daemon):
+        """A main-thread call carries no agent_id and must not read a subagent's count."""
+        self._fix_loop_cache(tmp_path, stall={"sub_a": 20})
+
+        _, out, _ = self._run(tmp_path, "echo work", hook="commit_gate.py")
+
+        assert out.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+
+    def test_a_cache_written_before_keying_counts_as_the_orchestrators(self, tmp_path, mock_daemon):
+        """Upgrading mid-run must not hand a stalled orchestrator a free reset."""
+        self._fix_loop_cache(tmp_path, stall=20)
+
+        _, out, _ = self._run(tmp_path, "echo work", hook="commit_gate.py")
+
+        assert out.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
+
+
 class TestPatternDoneClearsOverdue:
     """P3.4: the cached `pattern_analysis_overdue` flag must not survive the
     transition that discharges it.
@@ -593,7 +693,7 @@ class TestProtocolTracker:
         """
         from datetime import datetime, timezone  # noqa: UP017
 
-        from _protocol_cache import empty_cache, read_cache, write_cache
+        from _protocol_cache import empty_cache, read_cache, stall_count, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["stall"] = 5
@@ -609,7 +709,7 @@ class TestProtocolTracker:
         run_enforcement_hook("protocol_tracker.py", event)
 
         updated = read_cache(str(tmp_path))
-        assert updated["stall"] == 6
+        assert stall_count(updated) == 6
 
     def test_tdd_commands_skip_stall(self, tmp_path, mock_daemon):
         """Test/lint/type-check commands do not increment stall (BH-012)."""

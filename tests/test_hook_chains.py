@@ -441,7 +441,8 @@ class TestChickenAndEggStallBlock:
         }
         output = _run_hook(POST_TOOL_TRACKER, event)
         assert _is_post_tool_ok(output)
-        assert mock_daemon.state.get("stall") == 0, \
+        from _protocol_cache import stall_count
+        assert stall_count(mock_daemon.state) == 0, \
             "Wrapped sahjhan re-sync must reset the stall counter"
 
     def test_plain_command_increments_stall(self, mock_daemon, tmp_path):
@@ -455,12 +456,19 @@ class TestChickenAndEggStallBlock:
         }
         output = _run_hook(POST_TOOL_TRACKER, event)
         assert _is_post_tool_ok(output)
-        assert mock_daemon.state.get("stall") == 6, \
+        from _protocol_cache import stall_count
+        assert stall_count(mock_daemon.state) == 6, \
             "Plain command should increment stall, not reset it"
 
 
+@pytest.mark.hook_e2e
 class TestReadOnlyCommandsDoNotStall:
     """Reading the tree cannot stall the protocol, so it must not tick the counter.
+
+    P3.2 states this narrowing "needs a `hook_e2e` test" — it narrows a gate
+    that is otherwise agent-agnostic, which is the case CLAUDE.md requires be
+    proven at the interface Claude Code actually uses. These drive the hook as
+    a subprocess, so the marker is the accurate one.
 
     The counter asks "how many commands have gone by without the protocol
     moving?" — a question about work that could have produced an event. An
@@ -481,7 +489,9 @@ class TestReadOnlyCommandsDoNotStall:
         }
         output = _run_hook(POST_TOOL_TRACKER, event)
         assert _is_post_tool_ok(output)
-        return mock_daemon.state.get("stall")
+        # No agent_id on these events, so the charge is the orchestrator's.
+        from _protocol_cache import stall_count
+        return stall_count(mock_daemon.state)
 
     @pytest.mark.parametrize("command", [
         'grep -rn "def foo" src/',

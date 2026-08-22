@@ -25,6 +25,7 @@ from _common import (  # noqa: E402
 from _protocol_cache import (  # noqa: E402
     contains_sahjhan_cmd,
     empty_cache,
+    event_actor,
     is_enforcement_fresh,
     is_git_commit,
     is_read_only_cmd,
@@ -32,6 +33,8 @@ from _protocol_cache import (  # noqa: E402
     parse_status_text,
     query_named_predicate,
     read_cache,
+    stall_bumped,
+    stall_cleared,
     update_cache,
     write_cache,
 )
@@ -154,7 +157,6 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     perspective = status.get("sets", {}).get("perspective", {})
     cache["perspectives_done"] = perspective.get("complete", 0)
     cache["perspectives_total"] = perspective.get("total", 0) or cache.get("perspectives_total", 13)
-    cache["stall"] = 0
     cache["active"] = cache.get("state", "") not in ("", "idle", "finalized")
 
     # Derive the pattern-analysis backlog from the ledger, but only in the
@@ -183,21 +185,24 @@ def _stop_daemon(cwd: str) -> None:
         )
 
 
-def _apply_sahjhan_cmd(cwd: str, cache: dict | None, cmd: str) -> dict:
+def _apply_sahjhan_cmd(cwd: str, cache: dict | None, cmd: str, actor: str) -> dict:
     """Record the effects of a sahjhan enforcement command on the cache.
 
     Runs for pure sahjhan lines and for wrapped re-sync lines like
     ``cd repo && sahjhan status | head``: refresh state from the daemon,
-    clear the stall counter, stamp last_sahjhan_cmd, tear the daemon down on
-    finalization, and apply fix_commit / pattern-check bookkeeping. #70 item 1.
+    clear the caller's stall counter, stamp last_sahjhan_cmd, tear the daemon
+    down on finalization, and apply fix_commit / pattern-check bookkeeping.
+    #70 item 1.
     """
     if cache is None:
         cache = empty_cache()
     cache = _refresh_from_sahjhan(cwd, cache)
     # Running any sahjhan enforcement subcommand IS the protocol event the
     # stall counter waits for — clear it deterministically, even when the
-    # status refresh above could not reach the daemon.
-    cache["stall"] = 0
+    # status refresh above could not reach the daemon. Only for this actor:
+    # the command is evidence that *it* re-synced, and a sibling's re-sync
+    # used to launder away a stall accrued by real unregistered work.
+    cache["stall"] = stall_cleared(cache, actor)
     cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
     # Stop daemon after finalization (teardown safety net)
     if cache.get("state") == "finalized":
@@ -239,11 +244,12 @@ def main() -> None:
     # git-commit registration below doesn't silently die on 2.x (#75).
     exit_code = bash_exit_code(event)
     output = bash_output(event)
+    actor = event_actor(event)
 
     cache = read_cache(cwd)
 
     if is_sahjhan_cmd(cmd):
-        _apply_sahjhan_cmd(cwd, cache, cmd)
+        _apply_sahjhan_cmd(cwd, cache, cmd, actor)
         exit_ok()
 
     if cache is None:
@@ -258,7 +264,10 @@ def main() -> None:
         commits = list(cache.get("unregistered_commits", []))
         commits.append(commit_hash)
         with contextlib.suppress(RuntimeError):
-            update_cache(cwd, {"unregistered_commits": commits, "stall": 0})
+            update_cache(cwd, {
+                "unregistered_commits": commits,
+                "stall": stall_cleared(cache, actor),
+            })
         exit_ok()
 
     # A sahjhan enforcement subcommand ran inside a larger shell line
@@ -267,7 +276,7 @@ def main() -> None:
     # the stall counter. Checked after the git-commit branch so a
     # ``git commit && sahjhan status`` line still registers its commit. #70 item 1.
     if contains_sahjhan_cmd(cmd):
-        _apply_sahjhan_cmd(cwd, cache, cmd)
+        _apply_sahjhan_cmd(cwd, cache, cmd, actor)
         exit_ok()
 
     # Test/lint/type-check commands are legitimate TDD activity — don't count
@@ -278,9 +287,9 @@ def main() -> None:
     with contextlib.suppress(RuntimeError):
         if _is_sleep_cmd(cmd):
             # Sleep to game timing gates gets double stall penalty
-            update_cache(cwd, {"stall": cache.get("stall", 0) + 2})
+            update_cache(cwd, {"stall": stall_bumped(cache, actor, 2)})
         elif not _is_tdd_cmd(cmd) and not is_read_only_cmd(cmd):
-            update_cache(cwd, {"stall": cache.get("stall", 0) + 1})
+            update_cache(cwd, {"stall": stall_bumped(cache, actor, 1)})
     exit_ok()
 
 

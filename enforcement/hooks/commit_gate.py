@@ -25,6 +25,7 @@ from _common import (  # noqa: E402
 from _protocol_cache import (  # noqa: E402
     compute_obligations,
     contains_sahjhan_cmd,
+    event_actor,
     format_injection,
     is_enforcement_fresh,
     is_fix_loop_state,
@@ -82,7 +83,11 @@ def main() -> None:
                 f"Run sahjhan --config-dir {config_dir} transition fix_commit before committing again."
             )
 
-    obligations = compute_obligations(cache, config_dir=config_dir)
+    # Same actor the tracker charged, so what this reads is this caller's own
+    # command history and not the run's aggregate traffic (P3.2).
+    obligations = compute_obligations(
+        cache, config_dir=config_dir, actor=event_actor(event),
+    )
 
     if not obligations:
         exit_ok("PreToolUse")

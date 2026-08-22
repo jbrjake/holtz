@@ -51,7 +51,8 @@ def empty_cache() -> dict[str, Any]:
         "perspective": "",
         "perspectives_done": 0,
         "perspectives_total": _read_perspectives_total(),
-        "stall": 0,
+        # Keyed by actor — see ORCHESTRATOR and stall_counts below.
+        "stall": {},
         "last_refresh": "",
         "last_sahjhan_cmd": "",
     }
@@ -528,6 +529,74 @@ def contains_sahjhan_cmd(cmd: str) -> bool:
     return any(_segment_is_sahjhan(seg) for seg in _split_shell_segments(cmd))
 
 
+# ── The stall counter's actor (P3.2) ──
+#
+# The counter asks one actor "how many commands have you run without the
+# protocol moving?", and until now it asked the whole run at once. On the
+# audited run that meant 54 distinct actors driving one number: 112 of 114
+# denials fired at exactly stall=16, and a subagent that had done nothing but
+# read was blocked by traffic it never generated. It cut the other way too —
+# any sibling running `sahjhan status` for its own reasons wiped the count,
+# so the number a gate read was neither a fair charge nor a reliable one.
+#
+# Claude Code puts `agent_id` on a hook event fired from inside a subagent and
+# omits it on the main thread, so the orchestrator is the empty-string actor:
+# a real bucket like every other, never a wildcard that could swallow a
+# subagent's count. Verified against the shipped binary, whose own hook-input
+# documentation states `agent_type` is "present when the hook fires from
+# within a subagent (alongside agent_id)".
+ORCHESTRATOR = ""
+
+
+def event_actor(event: dict[str, Any]) -> str:
+    """Which actor made this tool call — a subagent, or the orchestrator."""
+    return str(event.get("agent_id") or ORCHESTRATOR)
+
+
+def stall_counts(cache: dict[str, Any] | None) -> dict[str, int]:
+    """Per-actor stall counts, tolerating a cache written before keying.
+
+    A run that upgrades mid-flight has an int stored here. That int was the
+    whole run's count, which is the orchestrator's as far as anything can now
+    tell, so it lands in that bucket rather than being discarded — losing it
+    would hand a stalled run a free reset at exactly the wrong moment.
+    """
+    raw = (cache or {}).get("stall", {})
+    if isinstance(raw, bool):
+        return {}
+    if isinstance(raw, int):
+        return {ORCHESTRATOR: raw} if raw else {}
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        str(k): int(v) for k, v in raw.items()
+        if isinstance(v, int) and not isinstance(v, bool)
+    }
+
+
+def stall_count(cache: dict[str, Any] | None, actor: str = ORCHESTRATOR) -> int:
+    """How many commands this actor has run without a protocol event."""
+    return stall_counts(cache).get(actor, 0)
+
+
+def stall_bumped(cache: dict[str, Any] | None, actor: str, delta: int) -> dict[str, int]:
+    """The counts with ``actor`` charged ``delta`` more commands."""
+    counts = stall_counts(cache)
+    counts[actor] = counts.get(actor, 0) + delta
+    return counts
+
+
+def stall_cleared(cache: dict[str, Any] | None, actor: str) -> dict[str, int]:
+    """The counts with ``actor`` re-synced — every other actor untouched.
+
+    Clearing is per-actor for the same reason charging is: a protocol event is
+    evidence about the actor that emitted it and about nobody else.
+    """
+    counts = stall_counts(cache)
+    counts.pop(actor, None)
+    return counts
+
+
 def is_fix_loop_state(cache: dict[str, Any] | None) -> bool:
     """Check if the current protocol state is fix_loop."""
     if cache is None:
@@ -538,6 +607,7 @@ def is_fix_loop_state(cache: dict[str, Any] | None) -> bool:
 def compute_obligations(
     cache: dict[str, Any] | None,
     config_dir: str = "",
+    actor: str = ORCHESTRATOR,
 ) -> list[dict[str, Any]]:
     """Compute current protocol obligations from cache state.
 
@@ -545,6 +615,10 @@ def compute_obligations(
     hints in obligation messages include ``--config-dir <config_dir>`` so
     Claude can execute them directly in the plugin-installed layout.
     Without it (legacy callers / tests), hints stay bare.
+
+    ``actor`` selects whose stall count is read. The commit obligation and the
+    pattern nudge are facts about the run and read the same for everyone; the
+    stall is a charge against one actor's own commands.
     """
     if cache is None or not cache.get("active"):
         return []
@@ -555,7 +629,7 @@ def compute_obligations(
 
     obligations: list[dict[str, Any]] = []
     commits = cache.get("unregistered_commits", [])
-    stall = cache.get("stall", 0)
+    stall = stall_count(cache, actor)
     overdue = cache.get("pattern_analysis_overdue", False)
     perspective = cache.get("perspective", "?")
     p_done = cache.get("perspectives_done", 0)
