@@ -53,12 +53,32 @@ def _rendered_basenames() -> set[str]:
 
 
 def _file_exists_gate_paths() -> list[str]:
+    """Every path a `file_exists` gate requires, at any nesting depth.
+
+    `not`, `all_of`, `any_of` and `k_of_n` carry child gates, and a positive
+    `file_exists` buried in one wedges a run exactly as hard as a top-level
+    one. Walking only the top level would have declared the config clean while
+    the unsatisfiable requirement sat one level down.
+    """
     cfg = tomllib.loads((ENFORCEMENT / "transitions.toml").read_text())
     paths: list[str] = []
-    for t in cfg.get("transitions", []):
-        for gate in t.get("gates", []):
-            if gate.get("type") == "file_exists" and "path" in gate:
+
+    def walk(gates: list[dict], negated: bool) -> None:
+        for gate in gates:
+            children = gate.get("gates", [])
+            if gate.get("type") == "not":
+                walk(children, not negated)
+                continue
+            if children:
+                walk(children, negated)
+            # Only a *positive* requirement can be unsatisfiable. Under `not`
+            # the gate asks for the file to be absent, which deleting it
+            # satisfies — and delete is what MANAGED_DOCS does not block.
+            if not negated and gate.get("type") == "file_exists" and "path" in gate:
                 paths.append(gate["path"])
+
+    for t in cfg.get("transitions", []):
+        walk(t.get("gates", []), negated=False)
     return paths
 
 

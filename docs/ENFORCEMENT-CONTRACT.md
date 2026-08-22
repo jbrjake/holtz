@@ -152,6 +152,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
 | must read fix loop procedure before starting | `reference_read` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| delete docs/holtz/PUNCHLIST-MERGED.md — the ledger is the merged worklist and PUNCHLIST.md renders it | *direct check* | — | `direct` | n/a |
 
 ### `fix_loop_start` — audit → awaiting_clear
 

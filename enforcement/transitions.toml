@@ -64,6 +64,24 @@ to = "awaiting_clear"
 command = "fix_loop_start"
 gates = [
     { type = "ledger_has_event", event = "reference_read", filter = { path = "step-10-fix-loop.md" }, min_count = 1, intent = "must read fix loop procedure before starting" },
+    # P0.4 deleted PUNCHLIST-MERGED.md as a concept: the merge writes findings
+    # onto the ledger and PUNCHLIST.md is the rendered worklist. A leftover
+    # copy is not a stale file, it is a second worklist — one written once,
+    # re-rendered by nothing, and still marking every finding OPEN. A run read
+    # it exclusively for four pattern rounds, blind to 176 findings and 25
+    # committed fixes, and 111 subagent-minutes went to reconciling the
+    # bookkeeping against reality afterwards. The fix loop must not start while
+    # it is on disk.
+    #
+    # Inverted from the shape that wedged issue #60, deliberately. That gate
+    # required this same file to *exist* while the PreToolUse guard forbade
+    # writing it, so the only satisfying act was blocked and the run stopped
+    # for good. This one is satisfied by deleting the file, and the file is
+    # absent from MANAGED_DOCS precisely so that delete is allowed — the
+    # escape is achievable by construction, not by permission.
+    { type = "not", intent = "delete docs/holtz/PUNCHLIST-MERGED.md — the ledger is the merged worklist and PUNCHLIST.md renders it", gates = [
+        { type = "file_exists", path = "docs/holtz/PUNCHLIST-MERGED.md" },
+    ] },
 ]
 
 # Lens rotations (no merge on subsequent passes) also clear before fixing:
