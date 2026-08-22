@@ -4,9 +4,11 @@
 implementers; no status marker appears there except the five rows Jon struck himself.
 **This file is the only status record.** Status attaches to the **clause**, not the item —
 an item id is not a unit of work.
-**D-numbers** refer to open decisions in
-`docs/superpowers/plans/2026-08-22-convergence-decisions.md` (untracked), awaiting Jon's
-ruling. A row carrying a D-number is not settled, whatever else it says.
+**D-numbers** refer to decisions in
+`docs/superpowers/plans/2026-08-22-convergence-decisions.md` (untracked). **All 27 were
+ruled by Jon on 2026-08-22**; that file records each ruling and the derived work queue.
+Rows below describe the tree as committed — ruled-but-unimplemented work appears there,
+not here, until it lands.
 
 ## Provenance
 
@@ -79,13 +81,13 @@ reverted in `334cddf`.
 
 | Clause | Status | Where | Decisions |
 |---|---|---|---|
-| P3.1 expandvars + unconditional allow under `_PLUGIN_ROOT` | SHIPPED — `_expand_script_path` + the pre-existing in-tree allow; expansion is what routes the taught commands to it, and the unexpanded-`$VAR`-under-plugin-root direction is pinned too | `ded5767` | D26 (confirm wording intent) |
+| P3.1 expandvars + unconditional allow under `_PLUGIN_ROOT` | SHIPPED — `_expand_script_path` + the pre-existing in-tree allow; expansion is what routes the taught commands to it, and the unexpanded-`$VAR`-under-plugin-root direction is pinned too | `ded5767` | D26: confirmed closed |
 | P3.2 don't tick the stall counter on read-only commands | SHIPPED | `d1583e9` | — |
 | P3.2 key the counter on `agent_id` | **OWED** (declined, unruled) | — | D10 |
 | P3.2 "Needs a `hook_e2e` test" | **OWED** — the test exists but is `integration`-marked; standing CLAUDE.md violation independent of any ruling | — | D10 |
 | P3.3 detector substitutes `VAR=` and unwraps `eval` | SHIPPED+ — wired into `_split_shell_segments` (all segment predicates) and `_bash_references_blocked_sahjhan`, plus quote-stripping; closed a real quiz-sign-off bypass | `627e99b` | D17 |
 | P3.3 export `bin/` onto PATH in `session_start.py` | rejected on a **falsified premise** — the plugin loader already puts `bin/` on PATH (verified against the shipped binary); a SessionStart hook also cannot alter later Bash env | — | — |
-| P3.4 clear `pattern_analysis_overdue` inside the `pattern_done` transition | MOOT? — `5c23656` shipped a different mechanism, then `5b0c4f0` deleted both it and the commit-path block it protected | `5c23656`, `5b0c4f0` | D27 |
+| P3.4 clear `pattern_analysis_overdue` inside the `pattern_done` transition | **OWED** — D27 ruled the block's deletion does not discharge it; the cached flag must not go stale even where it only feeds advisory output | `5c23656`, `5b0c4f0` | D27: still owed |
 | P3.5 manifest anchoring | already fixed pre-effort (`d92d468`) | — | — |
 | P3.5 cap artifact size | **OWED**, BLOCKED(P2.1) | — | D11 |
 | P3.6 dedupe at render | SHIPPED; expanded to two more counting sites with semantic changes (`defer_medium` budget → distinct ids; STATUS Open recomputed; severity = latest filing) | `03603a9`, `375b19f`, `fe2ef56` | D18, D25 |
