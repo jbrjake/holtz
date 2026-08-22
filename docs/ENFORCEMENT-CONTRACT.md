@@ -205,6 +205,9 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | the full suite must pass on this tree before a context reset — this is what re-bases the affected scope | `suite_green` | `hook:enforcement/hooks/suite_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| open LOW findings while more findings are open than the run has closed — fix them, or run skills/holtz/scripts/defer_batch.py --severity low | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
 
 ### `resume` — awaiting_clear → fix_loop
 

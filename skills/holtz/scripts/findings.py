@@ -62,7 +62,7 @@ def _field(event: dict, name: str, default: str = "") -> str:
     return default
 
 
-def _collect(binary: str, config_dir: str, cwd: str) -> list[dict]:
+def collect(binary: str, config_dir: str, cwd: str) -> list[dict]:
     """Findings, deduped by id (last filing wins), each with a status.
 
     Last-filing-wins and resolved-before-deferred are the same rules
@@ -106,6 +106,23 @@ def _collect(binary: str, config_dir: str, cwd: str) -> list[dict]:
     return sorted(findings, key=sort_key)
 
 
+def target(cwd: str) -> tuple[str, str]:
+    """The sahjhan binary and the enforcement config governing ``cwd``.
+
+    Exits rather than returning a sentinel: every caller needs both, and a
+    half-resolved target reads the wrong ledger.
+    """
+    binary = ensure_sahjhan()
+    if binary is None:
+        print("ERROR: sahjhan binary unavailable", file=sys.stderr)
+        sys.exit(1)
+    config_dir, found = resolve_config_dir(cwd)
+    if not found:
+        print("ERROR: enforcement config not found", file=sys.stderr)
+        sys.exit(1)
+    return binary, config_dir
+
+
 def _one_line(finding: dict, width: int = 90) -> str:
     summary = " ".join(finding["description"].split())
     if len(summary) > width:
@@ -130,17 +147,9 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    binary = ensure_sahjhan()
-    if binary is None:
-        print("ERROR: sahjhan binary unavailable", file=sys.stderr)
-        sys.exit(1)
     cwd = os.getcwd()
-    config_dir, found = resolve_config_dir(cwd)
-    if not found:
-        print("ERROR: enforcement config not found", file=sys.stderr)
-        sys.exit(1)
-
-    findings = _collect(binary, config_dir, cwd)
+    binary, config_dir = target(cwd)
+    findings = collect(binary, config_dir, cwd)
 
     if args.command == "show":
         for finding in findings:
