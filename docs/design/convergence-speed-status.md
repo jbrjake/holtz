@@ -47,8 +47,8 @@ reverted in `334cddf`.
 | P0.2 · cap each round at ≤3 new items, with an obligation to close or merge at least as many as it opens | **OWED** (neither half built) | — | D7 |
 | P0.2 · promote the stale sweep to Step 11b **and run it instead of pattern analysis past ~round 8** | Step 11b SHIPPED with a narrowed population (changed files only, vs the cited mechanism's all-open-HIGHs); the *instead-of* swap **OWED** | `bb502ca` | D8, D21 |
 | P0.3 · finding-scoped TDD gate, worktree isolation, serialize commits not findings | — (gate change must land before any batching) | — | — |
-| P0.4 · delete `PUNCHLIST-MERGED.md` as a concept; merge writes the ledger | SHIPPED — except *"gate its deletion at the `merge → fix_loop` transition"*, which was replaced by a `validate_merge_report.py` gate on agent-authored `MERGE-REPORT.md`; also carried P4.2 and a DEFERRED→OPEN contradictions change, both unruled | `57a4c02` | D14, D15, D16 |
-| P0.4 · render `PUNCHLIST.md` open-only, one line each, ≤12-word summary; archive resolved rows | open-only + archive SHIPPED (adds a recon dependency on the archive); one-line ≤12-word summary **OWED** (`findings.py list` emits one-line output, realizing part of the saving off the render path) | `6d78c7f` | D9, D20 |
+| P0.4 · delete `PUNCHLIST-MERGED.md` as a concept; merge writes the ledger | SHIPPED — the written deletion gate is a `not(file_exists)` on `merge_done → awaiting_clear` (`d716f3e`); the `MERGE-REPORT.md` validation from `57a4c02` stays as an accidental P4.9 slice, per D14. P4.2 and the DEFERRED→OPEN contradictions change ratified by D15/D16 | `57a4c02`, `d716f3e` | D14, D15, D16 |
+| P0.4 · render `PUNCHLIST.md` open-only, one line each, ≤12-word summary; archive resolved rows | SHIPPED — open-only + archive in `6d78c7f`; the one-line four-field row with render-side 12-word truncation in `2741fce` (`category`, `perspective` and the full prose are ledger-only now). Still adds a recon dependency on the archive, per D20 | `6d78c7f`, `2741fce` | D9, D20 |
 | P0.4 · ship `open_findings.py` / `show_findings.py` as the mandated lookup path | SHIPPED as a single `findings.py` with `list`/`show` (trivial merge); `f17aaec` applied the mandated path at a site the first sweep missed | `57a4c02`, `f17aaec` | — |
 | P0.4 · delete the two `step-10-fix-loop.md` update steps | SHIPPED+ (11 lines across 5 skill files; also **added** mandates — per-sibling `event finding`, `event blast_radius` — and re-scoped `status-file-format.md` to Justine's file) | `fa058cd` | D19 |
 | P0.5 · reachability grading, derive severity, reopen-don't-refile | — (next up; carries P0.1's convergence conjunct and the carve-out decision) | — | D4, D5 |
@@ -58,7 +58,7 @@ reverted in `334cddf`.
 | Clause | Status | Where | Decisions |
 |---|---|---|---|
 | P1.1 family batching | — | — | — |
-| P1.2 route "vacuous test" and single-file fixes to Sonnet | DEVIATED — routes by triage path (Fast Path → Sonnet), a different rule over a different population | `d4e5f8b` | D12 |
+| P1.2 route "vacuous test" and single-file fixes to Sonnet | SHIPPED — both written criteria; the Fast Path proxy is gone, and the test that had been written against it now asserts the proxy is *not* what routing keys on | `ce3c5a9` | D12 |
 | P1.3 fix-brief emitter | — | — | — |
 | P1.4 one await-the-batch idiom | — | — | — |
 | P1.5 warm-context pack | — | — | — |
@@ -72,7 +72,7 @@ reverted in `334cddf`.
 | Clause | Status | Where | Decisions |
 |---|---|---|---|
 | P2.1 cap `patterns-brief.md` by bytes | — (P3.5's artifact cap is blocked on this) | — | D11 |
-| P2.2 make the compact read its own numbered step | DEVIATED — folded into existing step 4 | `d4e5f8b` | D13 |
+| P2.2 make the compact read its own numbered step | SHIPPED — Step 11's step 4, ahead of the update step; the doc's own line order is the test | `6b95aea` | D13 |
 | P2.3 digest instead of full punchlist | — | — | — |
 | P2.4 bound subagent context | — | — | — |
 | P2.5 slice rule replacing re-read-everything | — | — | — |
@@ -83,11 +83,11 @@ reverted in `334cddf`.
 |---|---|---|---|
 | P3.1 expandvars + unconditional allow under `_PLUGIN_ROOT` | SHIPPED — `_expand_script_path` + the pre-existing in-tree allow; expansion is what routes the taught commands to it, and the unexpanded-`$VAR`-under-plugin-root direction is pinned too | `ded5767` | D26: confirmed closed |
 | P3.2 don't tick the stall counter on read-only commands | SHIPPED | `d1583e9` | — |
-| P3.2 key the counter on `agent_id` | **OWED** (declined, unruled) | — | D10 |
-| P3.2 "Needs a `hook_e2e` test" | **OWED** — the test exists but is `integration`-marked; standing CLAUDE.md violation independent of any ruling | — | D10 |
+| P3.2 key the counter on `agent_id` | SHIPPED — `stall` is a map from actor to count; charging and clearing are both per-actor, and the orchestrator (no `agent_id`) is a bucket like any other rather than a wildcard | `04a4d78` | D10 |
+| P3.2 "Needs a `hook_e2e` test" | SHIPPED — six subprocess-driven `hook_e2e` tests for the keying, and `TestReadOnlyCommandsDoNotStall` carries the marker its clause demanded | `04a4d78` | D10 |
 | P3.3 detector substitutes `VAR=` and unwraps `eval` | SHIPPED+ — wired into `_split_shell_segments` (all segment predicates) and `_bash_references_blocked_sahjhan`, plus quote-stripping; closed a real quiz-sign-off bypass | `627e99b` | D17 |
 | P3.3 export `bin/` onto PATH in `session_start.py` | rejected on a **falsified premise** — the plugin loader already puts `bin/` on PATH (verified against the shipped binary); a SessionStart hook also cannot alter later Bash env | — | — |
-| P3.4 clear `pattern_analysis_overdue` inside the `pattern_done` transition | **OWED** — D27 ruled the block's deletion does not discharge it; the cached flag must not go stale even where it only feeds advisory output | `5c23656`, `5b0c4f0` | D27: still owed |
+| P3.4 clear `pattern_analysis_overdue` inside the `pattern_done` transition | SHIPPED — the transition clears the cached flag directly, so a derivation that could not reach the ledger no longer holds a discharged obligation True; clear-only, after the refresh, so nothing that *raises* the flag is bypassed | `9f04bff` | D27 |
 | P3.5 manifest anchoring | already fixed pre-effort (`d92d468`) | — | — |
 | P3.5 cap artifact size | **OWED**, BLOCKED(P2.1) | — | D11 |
 | P3.6 dedupe at render | SHIPPED; expanded to two more counting sites with semantic changes (`defer_medium` budget → distinct ids; STATUS Open recomputed; severity = latest filing) | `03603a9`, `375b19f`, `fe2ef56` | D18, D25 |
