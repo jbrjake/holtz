@@ -21,25 +21,25 @@ Open findings only. Resolved and deferred rows are in `PUNCHLIST-ARCHIVE.md`.
 {% set resolved_ids = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
 {% set deferred_ids = events | where_eq(attribute="event_type", value="finding_deferred") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
 
+{# One line per open finding: id, severity, file:line, and a summary capped at
+   12 words. The six-column form carried `category` and `perspective` on every
+   row — neither is branched on in the fix loop — and the whole description,
+   which is what made this file 81k tokens against ~10-12k for the four fields
+   below. 23% of every load was already-resolved rows before the archive split.
+
+   The summary is the description truncated here, not a second field the agent
+   writes: two texts for one fact drift, and the ledger keeps the full prose
+   for `findings.py show`. Splitting on a single space means runs of
+   whitespace produce empty tokens, so the cap is at most 12 words and
+   sometimes fewer — never more, which is the direction that matters. #}
+| ID | Severity | Location | Summary |
+|----|----------|----------|---------|
 {% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
 {% set sev_findings = findings | where_eq(attribute="fields.severity", value=severity) -%}
-{% set_global open_in_severity = 0 -%}
 {% for e in sev_findings -%}
 {% if resolved_ids is not containing(e.fields.id) and deferred_ids is not containing(e.fields.id) -%}
-{% set_global open_in_severity = open_in_severity + 1 -%}
+| {{ e.fields.id }} | {{ severity }} | {{ e.fields.location | replace(from="|", to="\|") }} | {{ e.fields.description | replace(from="|", to="\|") | replace(from="
+", to=" ") | split(pat=" ") | slice(end=12) | join(sep=" ") }} |
 {% endif -%}
 {% endfor -%}
-{% if open_in_severity > 0 -%}
-
-## {{ severity }}
-
-| ID | Category | Location | Perspective | Description | Status |
-|----|----------|----------|-------------|-------------|--------|
-{% for e in sev_findings -%}
-{% if resolved_ids is not containing(e.fields.id) and deferred_ids is not containing(e.fields.id) -%}
-| {{ e.fields.id }} | {{ e.fields.category }} | {{ e.fields.location | replace(from="|", to="\|") }} | {{ e.fields.perspective }} | {{ e.fields.description | replace(from="|", to="\|") | replace(from="
-", to=" ") }} | OPEN |
-{% endif -%}
-{% endfor -%}
-{% endif -%}
 {% endfor %}

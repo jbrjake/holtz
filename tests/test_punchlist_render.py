@@ -26,7 +26,11 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_DIR = os.path.join(REPO_ROOT, "enforcement")
 sys.path.insert(0, os.path.join(REPO_ROOT, "enforcement", "hooks"))
 
-EXPECTED_COLUMNS = 6
+# P0.4 trimmed the open worklist to id, severity, `file:line` and a 12-word
+# summary. The archive keeps the six-column form: it is read once, by recon's
+# cold-file scan, not reloaded on every fix.
+OPEN_COLUMNS = 4
+ARCHIVE_COLUMNS = 6
 
 
 def _binary():
@@ -95,8 +99,18 @@ def _archive_rows(project_root):
 
 
 def _statuses(rows):
-    """id -> Status cell, for a list of rendered rows."""
+    """id -> Status cell, for a list of rendered archive rows."""
     return {_cells(row)[0]: _cells(row)[-1] for row in rows}
+
+
+def _open_statuses(rows):
+    """id -> OPEN, for rows of PUNCHLIST.md.
+
+    The open worklist carries no Status column since P0.4 — appearing in it
+    *is* the status, and a column whose every cell reads OPEN is four bytes
+    per finding spent saying so twice.
+    """
+    return {_cells(row)[0]: "OPEN" for row in rows}
 
 
 def _cells(row):
@@ -124,8 +138,8 @@ class TestPunchlistRenderIsParseable:
 
         rows = _data_rows(root)
         assert len(rows) == 1
-        assert len(_cells(rows[0])) == EXPECTED_COLUMNS, (
-            f"Row did not parse into {EXPECTED_COLUMNS} columns: {rows[0]}"
+        assert len(_cells(rows[0])) == OPEN_COLUMNS, (
+            f"Row did not parse into {OPEN_COLUMNS} columns: {rows[0]}"
         )
         assert "prog \\| head" in rows[0], "The pipe must be escaped, not dropped"
 
@@ -136,7 +150,7 @@ class TestPunchlistRenderIsParseable:
             location="src/x.py:10 | src/y.py:2",
         )
         rows = _data_rows(root)
-        assert len(_cells(rows[0])) == EXPECTED_COLUMNS
+        assert len(_cells(rows[0])) == OPEN_COLUMNS
 
     def test_newline_in_description_does_not_split_the_row(self, rendered_punchlist):
         binary, root = rendered_punchlist
@@ -144,7 +158,7 @@ class TestPunchlistRenderIsParseable:
 
         rows = _data_rows(root)
         assert len(rows) == 1, f"A newline broke one finding into {len(rows)} rows"
-        assert len(_cells(rows[0])) == EXPECTED_COLUMNS
+        assert len(_cells(rows[0])) == OPEN_COLUMNS
 
     def test_one_row_per_finding_id(self, rendered_punchlist):
         """A finding re-filed under an existing id renders once, not twice."""
@@ -177,7 +191,7 @@ class TestPunchlistRenderIsParseable:
         rows = _data_rows(root)
         assert len(rows) == 3
         for row in rows:
-            assert len(_cells(row)) == EXPECTED_COLUMNS, f"Ragged row: {row}"
+            assert len(_cells(row)) == OPEN_COLUMNS, f"Ragged row: {row}"
 
 
 class TestPunchlistIsOpenWorkOnly:
@@ -191,7 +205,7 @@ class TestPunchlistIsOpenWorkOnly:
         _resolve_finding(binary, root, "BH-001")
         _defer_finding(binary, root, "BH-002")
 
-        statuses = _statuses(_data_rows(root))
+        statuses = _open_statuses(_data_rows(root))
         assert statuses == {"BH-003": "OPEN"}, (
             f"PUNCHLIST.md carries closed work: {statuses}"
         )
@@ -217,7 +231,7 @@ class TestPunchlistIsOpenWorkOnly:
         _resolve_finding(binary, root, "BH-001")
         _defer_finding(binary, root, "BH-002")
 
-        open_ids = set(_statuses(_data_rows(root)))
+        open_ids = set(_open_statuses(_data_rows(root)))
         archived_ids = set(_statuses(_archive_rows(root)))
         assert not open_ids & archived_ids, (
             f"Findings render in both files: {sorted(open_ids & archived_ids)}"
@@ -270,7 +284,7 @@ class TestPunchlistIsOpenWorkOnly:
         rows = _archive_rows(root)
         assert len(rows) == 2, f"A hazard split an archived row: {rows}"
         for row in rows:
-            assert len(_cells(row)) == EXPECTED_COLUMNS, f"Ragged row: {row}"
+            assert len(_cells(row)) == ARCHIVE_COLUMNS, f"Ragged row: {row}"
 
 
 class TestSkillFilesMatchWhatThePunchlistCarries:

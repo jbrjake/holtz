@@ -104,9 +104,13 @@ def _punchlist_statuses(root):
     Both files, because they partition the findings: PUNCHLIST.md renders the
     open work and PUNCHLIST-ARCHIVE.md the resolved and deferred rows. Reading
     one of them would compare STATUS.md's totals against half a ledger.
+
+    Since P0.4 the open worklist carries no Status column — appearing in it is
+    the status — so an open row's status comes from which file it was read
+    out of. The archive still names the status it closed with.
     """
     statuses = {}
-    for basename in ("PUNCHLIST.md", "PUNCHLIST-ARCHIVE.md"):
+    for basename, open_only in (("PUNCHLIST.md", True), ("PUNCHLIST-ARCHIVE.md", False)):
         path = os.path.join(root, "docs", "holtz", basename)
         with open(path, encoding="utf-8") as fh:
             lines = fh.read().splitlines()
@@ -117,7 +121,7 @@ def _punchlist_statuses(root):
             assert cells[0] not in statuses, (
                 f"{cells[0]} renders in both PUNCHLIST.md and PUNCHLIST-ARCHIVE.md"
             )
-            statuses[cells[0]] = cells[-1]
+            statuses[cells[0]] = "OPEN" if open_only else cells[-1]
     return statuses
 
 

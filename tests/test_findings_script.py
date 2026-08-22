@@ -83,10 +83,15 @@ def ledger(tmp_path):
 
     def punchlist_statuses():
         """Both rendered tables: PUNCHLIST.md is the open half, the archive the
-        closed half, and together they are every finding on the ledger."""
+        closed half, and together they are every finding on the ledger.
+
+        PUNCHLIST.md carries no Status column since P0.4 — appearing in it *is*
+        the status, so a row read out of it is OPEN by construction. The
+        archive still names the status it closed with, in its last cell.
+        """
         sah("render")
         out = {}
-        for basename in ("PUNCHLIST.md", "PUNCHLIST-ARCHIVE.md"):
+        for basename, status in (("PUNCHLIST.md", "OPEN"), ("PUNCHLIST-ARCHIVE.md", None)):
             path = os.path.join(root, "docs", "holtz", basename)
             with open(path, encoding="utf-8") as fh:
                 lines = fh.read().splitlines()
@@ -95,7 +100,7 @@ def ledger(tmp_path):
                     continue
                 cells = [c.strip()
                          for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
-                out[cells[0]] = cells[-1]
+                out[cells[0]] = status if status else cells[-1]
         return out
 
     return file_finding, resolve, defer, run, punchlist_statuses
@@ -103,6 +108,59 @@ def ledger(tmp_path):
 
 def _ids(stdout: str) -> list[str]:
     return re.findall(r"^(B[HJ]-\d{3})\b", stdout, re.MULTILINE)
+
+
+class TestThePunchlistRendersOneLinePerFinding:
+    """P0.4: 81k tokens of punchlist, reloaded on every fix.
+
+    The render carried `category` and `perspective` on every row — neither is
+    branched on in the fix loop — and the whole description. The clause is one
+    line each: id, severity, `file:line`, and a summary capped at 12 words.
+    Truncation happens here, in the template, against the description the
+    agent already wrote; a second agent-written summary field would be two
+    texts for one fact.
+    """
+
+    def _rows(self, root):
+        path = os.path.join(root, "docs", "holtz", "PUNCHLIST.md")
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+        return [
+            [c.strip() for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+            for line in lines if line.startswith("| B")
+        ]
+
+    def test_the_summary_is_capped_at_twelve_words(self, ledger, tmp_path):
+        file_finding, _, _, _, punchlist_statuses = ledger
+        long_description = " ".join(f"word{n}" for n in range(1, 41))
+        file_finding("BH-001", long_description)
+        punchlist_statuses()  # renders
+
+        rows = self._rows(str(tmp_path))
+        assert len(rows) == 1, f"expected one row, got {rows}"
+        summary = rows[0][-1]
+        assert len(summary.split()) <= 12, f"summary is {len(summary.split())} words: {summary}"
+        assert summary.startswith("word1 "), "the summary is not the description's own opening"
+        assert "word13" not in summary, "truncation did not happen"
+
+    def test_a_short_description_is_not_padded_or_mangled(self, ledger, tmp_path):
+        file_finding, _, _, _, punchlist_statuses = ledger
+        file_finding("BH-002", "off-by-one in the retry backoff")
+        punchlist_statuses()
+
+        rows = self._rows(str(tmp_path))
+        assert rows[0][-1] == "off-by-one in the retry backoff"
+
+    def test_the_row_carries_the_four_fields_and_no_others(self, ledger, tmp_path):
+        file_finding, _, _, _, punchlist_statuses = ledger
+        file_finding("BH-003", "a finding", severity="CRITICAL", location="src/y.py:42")
+        punchlist_statuses()
+
+        rows = self._rows(str(tmp_path))
+        assert rows[0] == ["BH-003", "CRITICAL", "src/y.py:42", "a finding"], (
+            "the row is not (id, severity, file:line, summary) — category and "
+            "perspective are the columns the fix loop never reads"
+        )
 
 
 class TestFindingsList:

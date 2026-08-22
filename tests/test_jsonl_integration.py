@@ -727,7 +727,9 @@ class TestTemplateRendering:
                 content = punchlist.read_text()
                 assert "BH-001" in content
                 assert "HIGH" in content
-                assert "doc/drift" in content
+                # P0.4: the open worklist renders id, severity, `file:line`
+                # and a 12-word summary. Category is ledger-only now.
+                assert "README.md:108" in content
         else:
             # Known limitation: render may fail if ledger path resolution
             # doesn't match protocol.toml path_template expectations.
