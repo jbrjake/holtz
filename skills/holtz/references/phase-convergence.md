@@ -34,12 +34,23 @@ Stop and hand it to the user. Tell them which lens is exhausted, point at its ar
 
 The alternative, if they would rather not accept it, is starting a fresh run so recon rebuilds the bank against current source.
 
-**Filtered reads in convergence loop:** Each iteration re-reads the punchlist. If the punchlist has more than 6 items, use:
+**Re-reading the worklist each iteration:** query it, do not read `docs/holtz/PUNCHLIST.md`.
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py <path> --filter-status OPEN "IN PROGRESS" RESOLVED --resolved-before 3 --render
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list
 ```
-This keeps recently-resolved items visible for pattern recognition while filtering out stable old resolutions. Step 11 (pattern analysis, every 3-5 fixes) reads the full punchlist.
 
 ### Step 16: Resweep
 
-Full re-run of Steps 6-8 to confirm convergence. This is NOT optional — it catches errors introduced by prior fixes. The resweep must complete before SUMMARY.md is rendered.
+Re-run Steps 6-8 over the code this run changed. This is NOT optional — it catches errors introduced by prior fixes — and it must complete before SUMMARY.md is rendered.
+
+1. The files the run changed:
+   ```bash
+   git diff <run-base>..HEAD --name-only
+   ```
+2. Widen to what depends on them — for each changed node:
+   ```bash
+   python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json blast_radius <node> --depth 2
+   ```
+3. Dispatch the Step 7-8 subagents over that file set, every lens applied.
+
+If the run changed no source files, the resweep is the full Steps 6-8.
