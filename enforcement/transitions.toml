@@ -232,12 +232,6 @@ gates = [
     # fixes), so the untested gap is bounded by one iteration. Cheap for the
     # same reason: one full run per boundary, not one per fix.
     { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope full', timeout = 60, evidence = "suite_green", intent = "the full suite must pass on this tree before a context reset — this is what re-bases the affected scope" },
-    # Triage is a batch step at the boundary, not a per-finding decision taken
-    # after a fix subagent has already run. This is the only gate on the
-    # predicate: `converge` reaches the same place through
-    # `all_findings_closed`, but that is one wall at the end of the run, and
-    # the run this comes from never got there.
-    { type = "query", query = "low_findings_carried", expect = "false" },
 ]
 
 # The filter is what makes this gate mean what it says. `context_reset` used to

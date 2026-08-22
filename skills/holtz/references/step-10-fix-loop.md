@@ -118,14 +118,6 @@ sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer medium {item_id}
 
 HIGH and CRITICAL findings are never deferrable via priority (only via can't-reproduce with evidence).
 
-**Whole severities at once**, instead of one command per finding:
-
-```
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/defer_batch.py --severity low,medium
-```
-
-The MEDIUM pass stops at the cap and reports how many stay open.
-
 ## Per-Fix Hardening
 
 After the fix passes its reproduction test:

@@ -30,12 +30,6 @@ Read [references/impact-graph-operations.md](references/impact-graph-operations.
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list
 ```
 
-**Triage before dispatching.** Defer the open LOW findings in one pass, ahead of any fix subagent:
-```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/defer_batch.py --severity low
-```
-Add `,medium` to spend the MEDIUM budget as well. `iteration_boundary` blocks while any LOW is open and the run has more findings open than closed.
-
 #### Per-Item Fix Procedure (MANDATORY — do not skip steps)
 
 Fixes are **delegated to subagents; the orchestrator validates and commits.** You (the orchestrator) do not read a finding's code or author its test and fix in your own context — that is the subagent's job, and it is what keeps the main context under the ~300K budget (see SKILL.md → Context Survival Protocol). The subagent does the **whole TDD cycle in the enforced working tree** — writing the failing test, recording it, writing the fix, running the suite. You keep only the **git commits and the protocol-state transitions**; those stay linear in one place so subagents never race on the branch or the state machine.

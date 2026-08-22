@@ -146,36 +146,6 @@ intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings"
 sql = "SELECT (SELECT count(*) FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)) >= 3 AND (SELECT count(*) FROM events e WHERE e.type='pattern_analysis_complete' AND CAST(e.patterns_found AS INTEGER) = 0 AND e.seq >= COALESCE((SELECT MAX(p.seq) FROM events p WHERE p.type='pattern_analysis_complete' AND p.seq < (SELECT MAX(q.seq) FROM events q WHERE q.type='pattern_analysis_complete')), 0)) < 2"
 intent = "3+ findings resolved since the last pattern analysis, unless the last two rounds added no pattern"
 
-# P0.1's circuit-breaker, in the one shape that cannot wedge a run.
-#
-# The measured run filed 2.43 findings per fix, its open count rose 124 -> 273
-# and fell exactly once, and `converge` needs every finding resolved or
-# deferred — so it was non-terminating from pattern round 1. Meanwhile 133 of
-# those 273 were legally batch-closable by transitions the run used zero times.
-# The lever is not a cap on filing; it is retirement.
-#
-# Both conjuncts are load-bearing, and the first is what makes the block
-# escapable by construction. `defer_low` gates on exactly `item_is_low` and
-# `item_open`, both of which this predicate has already asserted — so every
-# finding it counts can be closed by the transition the block names, and
-# closing them empties the first conjunct and lowers the second. MEDIUM is
-# budget-capped and HIGH is not priority-deferrable, so neither could carry
-# that guarantee.
-#
-# The second conjunct is a stock, not the proposal's per-round rate. A run is
-# in trouble when it has more work ahead than behind, and that reading needs no
-# window: a rate over "the last three rounds" also has to decide what a round
-# is, and rounds are irregular and self-reported. This measure is true from
-# fix-loop entry, which is exactly when the triage should happen, and goes
-# false once the run has retired more than half of what it ever filed — after
-# which a newly filed LOW no longer forces a batch.
-#
-# Severity is the latest filing, so this and `defer_low` cannot disagree about
-# which findings the escape covers.
-[queries.low_findings_carried]
-sql = "SELECT (SELECT count(DISTINCT f.id) FROM events f WHERE f.type='finding' AND f.severity='LOW' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT c.id FROM events c WHERE c.type IN ('finding_resolved', 'finding_deferred'))) > 0 AND (SELECT count(DISTINCT f.id) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT c.id FROM events c WHERE c.type IN ('finding_resolved', 'finding_deferred'))) > (SELECT count(DISTINCT c.id) FROM events c WHERE c.type IN ('finding_resolved', 'finding_deferred'))"
-intent = "open LOW findings while more findings are open than the run has closed — fix them, or run skills/holtz/scripts/defer_batch.py --severity low"
-
 [queries.quiz_exhaustions_resolved]
 sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')"
 intent = "no unresolved quiz exhaustions"
