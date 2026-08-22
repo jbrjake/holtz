@@ -1340,6 +1340,20 @@ class TestCurrentDev:
         errors = [f for f in el.run_checks(model, [check]) if f.level == "error"]
         assert errors == [], "\n".join(f.render() for f in errors)
 
+    def test_h6_is_silent(self, model: el.Model) -> None:
+        """Every transition must be reachable from a documented command.
+
+        H6 warns rather than errors, and neither CI nor pre-commit runs
+        `--strict`, so it can only fail a build through here. It is worth
+        wiring up: trimming the word count of `phase-fix-loop.md` shortened
+        `sahjhan --config-dir … transition pattern_done` to `transition
+        pattern_done`, and the only signal was a warning in a wall of
+        pre-existing L6 noise. A transition whose invocation no file spells out
+        is a state the run can enter and not leave.
+        """
+        findings = el.run_checks(model, ["H6"])
+        assert findings == [], "\n".join(f.render() for f in findings)
+
     def test_context_reset_is_host_attested_and_unforgeable(
         self, model: el.Model
     ) -> None:

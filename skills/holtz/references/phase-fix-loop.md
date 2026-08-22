@@ -91,7 +91,7 @@ Use extended thinking (ultrathink) for this step — cross-finding pattern disco
 Two ways to run it:
 
 - **Stay in `fix_loop`** (usual). Do steps 1-5. Step 5 satisfies the `iteration_boundary` gate.
-- **Enter `pattern_analysis`**, when `iteration_boundary` blocks you and names `pattern_check`. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_check`, do steps 1-5, then `transition pattern_done` — the only exit from that state, gated on step 5.
+- **Enter `pattern_analysis`**, when `iteration_boundary` blocks you and names `pattern_check`. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_check`, do steps 1-5, then `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition pattern_done` — the only exit from that state, gated on step 5.
 
 1. **Read every finding, open and closed:**
    ```bash
