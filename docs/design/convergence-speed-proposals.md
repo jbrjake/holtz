@@ -26,7 +26,71 @@ stated per item.
 
 Ranked by measured impact on time-to-convergence.
 
-### P0.1 Amplification circuit-breaker + mandatory batch deferral
+### P0.1 Amplification circuit-breaker + mandatory batch deferral — **DONE**
+
+**Shipped** (`fe2ef56`, `6b12186`, `f17aaec`):
+
+- **`defer_batch.py`** — one command defers every open LOW, and the MEDIUM budget with
+  `--severity low,medium`. A loop over the transitions the agent would otherwise run
+  one at a time, over the listing `findings.py` builds; `collect()` is now shared rather
+  than copied, so the batch and the punchlist cannot disagree about which findings are
+  open or what severity they are. The MEDIUM pass stops at the cap and exits **zero** —
+  the listing has already satisfied that transition's other two gates, so a refusal
+  there is the policy working. A LOW refusal is a real failure and exits non-zero.
+  Rejected: `sahjhan defer batch` as an engine feature. The composition (which
+  severities, in what order, stopping where) is holtz policy over a generic primitive,
+  which is the same seam `_ledger_query` uses.
+
+- **`low_findings_carried` gates `iteration_boundary`.** Fires when open LOW findings
+  exist **and** the run has more findings open than closed.
+
+  *The first conjunct is what makes the block escapable by construction.* `defer_low`'s
+  gates are exactly `item_is_low` and `item_open`, both of which the predicate has
+  already asserted — so the command the block names can always close every finding it
+  counts, and closing them empties the first conjunct and lowers the second. MEDIUM is
+  budget-capped and HIGH is not priority-deferrable, so neither could carry that
+  guarantee. #77 was a block whose printed escape was itself blocked; a test drives the
+  named command against the real transitions and asserts the predicate goes false.
+
+  *The second conjunct is a stock, not the proposal's per-round rate.* A rate has to
+  decide what a round is, and rounds are irregular and self-reported. "More work ahead
+  than behind" needs no window, is true from fix-loop entry — which is where the triage
+  belongs, ahead of the first fix subagent (P6.2's ask) — and goes false once the run
+  has retired more than half of what it filed, after which a newly filed LOW no longer
+  forces a batch. Gated at `iteration_boundary` only: `converge` reaches the same place
+  through `all_findings_closed`, but that is one wall at the end, and the run this comes
+  from never got there.
+
+- **Step 16's resweep is scoped** (P0.2's remaining half) to the files the run changed,
+  widened through the impact graph to what depends on them. A run that changed no source
+  still gets the full Steps 6-8. The same edit removed a mandated convergence-loop read
+  that always fails — see P0.2 below.
+
+**A defect found while verifying the premise.** `defer_low` asked `count(*) >= 1 …
+severity='LOW'`, matching *any* row ever filed under the id, while the board renders the
+last one. A finding corrected LOW → HIGH could still be closed as a LOW; `defer_medium`'s
+budget denominator had it from the other side, a MEDIUM corrected to HIGH still funding
+budget. That is the **third** counting site of P3.6's shape — `count(DISTINCT id)` fixed
+re-filing under one severity but not a change of severity. All three predicates are named
+queries now (`item_is_low`, `item_is_medium`, `medium_deferral_budget`), which also
+retired five `sahjhan lint` L6 pairs. Shipped first, as its own `fix:`.
+
+**Rejected — the convergence redefinition.** *"all CRITICAL resolved AND all
+user_reachable HIGH resolved-or-deferred AND A < 1.0 over last 3 rounds AND DEFERRED.md
+written"* fails on all four clauses. `user_reachable` is P0.5's field and does not exist.
+The severity carve-out is *weaker* than what `all_findings_closed` already gives once
+deferral is used, and it loses the record: a deferred finding keeps its row in
+`PUNCHLIST-ARCHIVE.md`, an excluded one just stops counting. `A < 1.0 over the last 3
+rounds` would block a run that has legitimately closed every finding on the strength of
+its own history. And `DEFERRED.md` is a third view of data the archive already renders —
+adding it to `MANAGED_DOCS` would need a render rule (`test_managed_docs_consistency.py`
+enforces the ⟺), and without one it is an unguarded hand-written file duplicating the
+punchlist, which is exactly what P0.4 deleted.
+
+The run was non-terminating because deferral was never used, not because convergence was
+defined wrong. Fix the first and the second stops mattering.
+
+**Original proposal below.**
 
 **Problem.** The loop filed **2.43 new findings per fix**. Open count rose monotonically
 124 → 273 and fell exactly once (−2). `converge` requires `all_findings_closed == 0`
@@ -52,11 +116,20 @@ terminating and not.** Confidence: **high** (data and transitions already exist)
 
 ---
 
-### P0.2 Get pattern analysis out of the commit path, cap it, and swap it for the stale sweep — **PARTIAL**
+### P0.2 Get pattern analysis out of the commit path, cap it, and swap it for the stale sweep — **DONE**
 
-Everything but the Step 16 resweep scoping, which belongs with P0.1.
+**Shipped** (`5b0c4f0`, `bb502ca`, `ceb7414`, `f17aaec`):
 
-**Shipped** (`5b0c4f0`, `bb502ca`, `ceb7414`):
+- **Step 16's resweep is scoped** (`f17aaec`) — the last piece, landed with P0.1 since
+  both rewrite the same convergence document. `phase-convergence.md` also mandated
+  `validate_punchlist.py <path> --filter-status OPEN … --render` as the convergence
+  loop's worklist read. That parser wants `### BH-NNN:` prose; the render emits a
+  six-column table, so the command exits `ERROR: No punchlist items found` — confirmed
+  against a rendered punchlist. It is P0.4's defect at a site P0.4 missed, and it
+  survived because the invocation named `<path>`, a placeholder no filename-matching
+  check could see. `test_worklist_lookup.py` derives "Holtz's procedure has exactly one
+  worklist lookup" over every phase document instead. Justine keeps the parser: her tree
+  is unrendered and her punchlist really is the prose format it wants.
 
 - **The commit path is no longer a pattern gate.** The premise needed correcting first:
   nothing gates the `fix_commit` *transition* on pattern analysis, and `iteration_boundary`
@@ -112,9 +185,6 @@ counting findings filed since `pattern_check` would wedge the run permanently, b
 undoable. As prose it suppresses discovery of real defects — a pattern round's job is
 finding siblings of a known class, and the measured 2.43-filed-per-fix is a *retirement*
 problem, not a discovery problem. The lever is batch deferral (P0.1).
-
-**Not done: scoping Step 16's resweep.** Belongs with P0.1's convergence redefinition,
-which rewrites the same `protocol.toml:74` line.
 
 **Original proposal below.**
 
