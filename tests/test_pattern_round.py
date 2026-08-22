@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -583,6 +584,39 @@ class TestTheDocTeachesTheOrderTheDerivationNeeds:
         assert brief_step < record_step, (
             "phase-fix-loop.md records the round before the brief is updated, so "
             "the derived patterns_found would describe the previous round"
+        )
+
+    def test_the_compact_read_is_its_own_numbered_step(self):
+        """P2.2: buried in a clause, it was invoked once in a 24-round run.
+
+        A step the reader has to notice inside another step's body is a step
+        the reader skips. The compact render is 26x smaller than the brief,
+        so the whole saving depends on it being the thing that gets read —
+        which means it has to be numbered like everything else that gets done.
+        """
+        doc = os.path.join(REPO_ROOT, "skills", "holtz", "references", "phase-fix-loop.md")
+        with open(doc, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+
+        compact_step = next(
+            (i for i, line in enumerate(lines)
+             if re.match(r"^\d+\.\s", line) and "pattern brief compact" in line.lower()),
+            None,
+        )
+        assert compact_step is not None, (
+            "phase-fix-loop.md no longer gives the compact brief read its own "
+            "numbered step — folded back into another step's body, it is the "
+            "clause nobody ran"
+        )
+
+        brief_step = next(
+            (i for i, line in enumerate(lines)
+             if "**Update `docs/holtz/patterns-brief.md`" in line), None
+        )
+        assert brief_step is not None, "phase-fix-loop.md no longer has a brief-update step"
+        assert compact_step < brief_step, (
+            "the brief is updated before it is read, so the round appends "
+            "against a library it never looked at"
         )
 
     def test_the_doc_names_the_state_the_pattern_check_block_sends_you_to(self):

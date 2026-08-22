@@ -100,11 +100,12 @@ Two ways to run it:
    Use `findings.py show BH-NNN` for a finding's full record.
 2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify the pattern, search for siblings, record each sibling with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding` IMMEDIATELY — one call per sibling, before the next group.
 3. **Update impact graph:** Add `shares_pattern` edges between all instances of the same pattern (e.g., if BH-003 and BH-007 are both PAT-001 instances, link the functions they involve with `shares_pattern` edges including the pattern ID in the note).
-4. **Update `docs/holtz/patterns-brief.md`.** Never read it whole:
+4. **Read the pattern brief compact. Never `Read` it whole:**
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md
    ```
-   Read one `PAT-NNN`'s full entry only when updating that entry. Append each new pattern in this format:
+   Read one `PAT-NNN`'s full entry from `docs/holtz/patterns-brief.md` only when updating that entry.
+5. **Update `docs/holtz/patterns-brief.md`.** Append each new pattern in this format:
 
    ```markdown
    ## PAT-{NNN}: {name} (Run {R}, {date})
@@ -126,7 +127,7 @@ Two ways to run it:
 
    **Rolling policy:** The brief is capped at 20 active entries. When a new pattern would push the count past 20, move the 5 oldest entries (by discovery date) in a single batch to `docs/holtz/patterns-brief-archive.md`. The archive uses the same format but is not read by subagents by default. If the archive file does not exist, create it with the same header but titled `# Holtz Pattern Brief — Archive`.
 
-5. **Record the round.** After step 4, alone on its own Bash line — chaining records nothing:
+6. **Record the round.** After step 5, alone on its own Bash line — chaining records nothing:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/pattern_round.py --record --siblings-found M
    ```
