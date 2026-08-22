@@ -41,7 +41,7 @@ For EACH punchlist item, in order:
 **Step A — Dispatch the fix subagent (investigate + author + verify, in-tree).**
 Launch **one** Agent subagent for the finding. Give it: the finding (ID, description, location, category, Discovery Chain), which triage path it falls under (see [references/step-10-fix-loop.md](references/step-10-fix-loop.md)), the instruction to work **only** this finding, and `$CLAUDE_PLUGIN_ROOT` so it can invoke Sahjhan.
 
-**Model routing:** Fast Path → `model: "sonnet"`. Investigation and Can't-Reproduce Path → Opus.
+**Model routing:** `model: "sonnet"` for a test that can't fail, or a fix confined to one file. Everything else → `model: "opus"`.
 
 The subagent runs the enforced TDD sequence itself, in the real tree:
 

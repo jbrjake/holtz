@@ -241,18 +241,34 @@ def test_step_10_does_not_mandate_a_second_suite_run() -> None:
     )
 
 
-def test_the_fix_loop_routes_fast_path_findings_off_opus() -> None:
+def test_the_fix_loop_routes_by_the_measured_criteria_not_by_triage_path() -> None:
     """`phase-audit.md` routes its subagents by task; the fix loop routed none.
 
     97 of 107 subagents in the measured run were Opus, including every fix
-    agent. The triage paths already separate the mechanical work from the work
-    that needs extended thinking, so the routing line has a rule to follow.
+    agent, so the line has to exist. It also has to be the line that was asked
+    for: P1.2 names two criteria — a test that can't fail, and a fix confined
+    to one file, together about 30 of 59 fix agents. Routing by triage path
+    instead is a different rule over a different population; a deterministic
+    bug spanning four files is Fast Path and is not a single-file fix.
     """
-    text = "\n".join(_fix_loop_lines())
-    assert 'model: "sonnet"' in text, "phase-fix-loop.md has no model routing line"
-    assert "Fast Path" in text, (
-        "the routing line must name the triage path it applies to, or the "
-        "orchestrator has no rule to apply it by"
+    routing = next(
+        (line for line in _fix_loop_lines() if line.startswith("**Model routing:**")),
+        None,
+    )
+    assert routing is not None, "phase-fix-loop.md has no model routing line"
+    assert 'model: "sonnet"' in routing, "the routing line names no cheaper model"
+    assert "can't fail" in routing, (
+        "the routing line must name the vacuous-test criterion — it is half "
+        "the qualifying population"
+    )
+    assert "one file" in routing, (
+        "the routing line must name the single-file criterion — it is the "
+        "other half"
+    )
+    assert "Fast Path" not in routing, (
+        "routing by triage path is the proxy P1.2 was rebuilt away from: it "
+        "sends multi-file deterministic bug fixes to the cheaper model and "
+        "keeps single-file investigations on the expensive one"
     )
 
 
