@@ -453,6 +453,63 @@ class TestRunsTransition:
         assert not _runs_transition("sahjhan transition", "fix_commit")
 
 
+class TestPatternDoneClearsOverdue:
+    """P3.4: the cached `pattern_analysis_overdue` flag must not survive the
+    transition that discharges it.
+
+    The flag is derived from the ledger, never mirrored — but the derivation
+    runs behind a 5s subprocess that returns None on failure, and None means
+    "keep the last value". So a query that cannot run preserves a stale True
+    and the run is told a round is due immediately after finishing one. The
+    clear below is the only write that moves this flag without asking the
+    ledger, and it moves it in the releasing direction only: nothing that
+    raises the flag is bypassed, so the two can never disagree in the
+    direction that blocks.
+    """
+
+    def test_pattern_done_clears_the_flag_without_the_ledger(self, tmp_path, mock_daemon):
+        """The clear survives a derivation that could not run."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["pattern_analysis_overdue"] = True
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        run_enforcement_hook("protocol_tracker.py", {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan transition pattern_done"},
+            "tool_response": {"exit_code": 0, "output": "Transition: pattern_analysis -> fix_loop"},
+            "cwd": str(tmp_path),
+        })
+
+        assert read_cache(str(tmp_path))["pattern_analysis_overdue"] is False
+
+    def test_diagnostic_naming_pattern_done_does_not_clear(self, tmp_path, mock_daemon):
+        """Reading about the transition is not running it."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["pattern_analysis_overdue"] = True
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        run_enforcement_hook("protocol_tracker.py", {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan gate check pattern_done"},
+            "tool_response": {"exit_code": 0, "output": "not ready"},
+            "cwd": str(tmp_path),
+        })
+
+        assert read_cache(str(tmp_path))["pattern_analysis_overdue"] is True
+
+
 class TestProtocolTracker:
     """Tests for protocol_tracker.py PostToolUse hook."""
 

@@ -210,6 +210,17 @@ def _apply_sahjhan_cmd(cwd: str, cache: dict | None, cmd: str) -> dict:
     # verb, so a diagnostic can't silently clear a real pending commit either.
     if _runs_transition(cmd, "fix_commit"):
         cache["unregistered_commits"] = []
+    # P3.4: the round is over, so the obligation is discharged — say so here
+    # rather than hoping the derivation above could reach the ledger. It
+    # returns None on timeout or a missing binary, and None keeps the previous
+    # value, so a failed query used to hold the flag True through the very
+    # transition that satisfies it. This write is clear-only and runs after the
+    # refresh: it can release the obligation but never raise one, so it cannot
+    # drift into the blocking disagreement #77 deadlocked on. The ledger stays
+    # the sole authority for owing a round; the next refresh re-raises the flag
+    # if three more findings close.
+    if _runs_transition(cmd, "pattern_done"):
+        cache[PATTERN_OVERDUE_QUERY] = False
     with contextlib.suppress(RuntimeError):
         write_cache(cwd, cache)
     return cache
