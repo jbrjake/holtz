@@ -26,7 +26,11 @@ stated per item.
 
 Ranked by measured impact on time-to-convergence.
 
-### P0.1 Amplification circuit-breaker + mandatory batch deferral — **DONE**
+### P0.1 Amplification circuit-breaker + mandatory batch deferral — **PARTIAL**
+
+The circuit-breaker and the batch deferral shipped. **The convergence redefinition is
+still owed, and it is blocked on P0.5, not rejected** — see the split below. This item is
+numbered ahead of P0.5 but depends on it; whoever takes P0.5 must close this out.
 
 **Shipped** (`fe2ef56`, `6b12186`, `f17aaec`):
 
@@ -75,20 +79,39 @@ re-filing under one severity but not a change of severity. All three predicates 
 queries now (`item_is_low`, `item_is_medium`, `medium_deferral_budget`), which also
 retired five `sahjhan lint` L6 pairs. Shipped first, as its own `fix:`.
 
-**Rejected — the convergence redefinition.** *"all CRITICAL resolved AND all
+**The convergence redefinition, clause by clause.** *"all CRITICAL resolved AND all
 user_reachable HIGH resolved-or-deferred AND A < 1.0 over last 3 rounds AND DEFERRED.md
-written"* fails on all four clauses. `user_reachable` is P0.5's field and does not exist.
-The severity carve-out is *weaker* than what `all_findings_closed` already gives once
-deferral is used, and it loses the record: a deferred finding keeps its row in
-`PUNCHLIST-ARCHIVE.md`, an excluded one just stops counting. `A < 1.0 over the last 3
-rounds` would block a run that has legitimately closed every finding on the strength of
-its own history. And `DEFERRED.md` is a third view of data the archive already renders —
-adding it to `MANAGED_DOCS` would need a render rule (`test_managed_docs_consistency.py`
-enforces the ⟺), and without one it is an unguarded hand-written file duplicating the
-punchlist, which is exactly what P0.4 deleted.
+written"* does not have one status; it has three.
 
-The run was non-terminating because deferral was never used, not because convergence was
-defined wrong. Fix the first and the second stops mattering.
+- **`user_reachable HIGH` — OWED, blocked on P0.5.** The field does not exist yet. This
+  is a sequencing artifact of working P0.1 before P0.5, nothing more. Do not implement a
+  stand-in; the whole point of P0.5 is that reachability is *derived* rather than typed,
+  and a placeholder graded by the agent would be the unverified self-report P5.4 removed.
+
+- **The severity carve-out — DECIDE AT P0.5, do not assume.** Dropping MEDIUM and LOW
+  from the convergence gate is not free. Today `all_findings_closed` forces every finding
+  to be resolved **or deferred**, and `defer_medium`'s budget caps deferral at 50% of the
+  MEDIUMs — so a run must currently *fix* at least half its MEDIUMs. Under the proposed
+  wording it need fix none, and that cap becomes decoration. The proposal does not
+  mention the cap and nothing in the post-mortem asks for it to go. Deferral also keeps
+  the record — a deferred finding renders into `PUNCHLIST-ARCHIVE.md`, an excluded one
+  just stops counting. If the carve-out lands, the MEDIUM budget has to be re-justified
+  or removed deliberately, in the same commit.
+
+- **`A < 1.0 over the last 3 rounds` — REJECTED.** As a `converge` conjunct it blocks a
+  run that has legitimately closed every finding, on the strength of its own history.
+  Amplification is a signal about what to do *next*, which is why it gates
+  `iteration_boundary`; at the end of the run there is nothing left for it to redirect.
+
+- **`DEFERRED.md written` — REJECTED.** A third view of data `PUNCHLIST-ARCHIVE.md`
+  already renders. Adding it to `MANAGED_DOCS` needs a render rule
+  (`test_managed_docs_consistency.py` enforces the ⟺); without one it is an unguarded
+  hand-written file duplicating the punchlist, which is exactly what P0.4 deleted.
+
+Worth keeping in view while deciding the carve-out: the run was non-terminating because
+deferral was never used, and that is now fixed independently. The convergence gate is no
+longer the thing standing between this protocol and a terminating run, so the carve-out
+should be argued on its own merits rather than as a rescue.
 
 **Original proposal below.**
 
@@ -314,6 +337,24 @@ had pattern analysis reasoning from week-old data.** Confidence: **high**.
 ---
 
 ### P0.5 Grade findings by reachability, and route by it
+
+**Carries an unfinished half of P0.1.** P0.1's convergence redefinition needs
+`user_reachable`, so it could not land ahead of this item despite being numbered before
+it. Two things come here with it, and P0.1 is not closable until both are settled:
+
+1. Add the `user_reachable HIGH` conjunct to the `converge` gate (`protocol.toml`,
+   `[queries.all_findings_closed]` and the two transitions that reference it).
+2. **Decide the severity carve-out explicitly.** Excusing MEDIUM and LOW from
+   convergence makes `defer_medium`'s 50%-of-MEDIUMs budget meaningless — that cap is
+   currently the only thing forcing a run to *fix* half its MEDIUMs rather than defer
+   them. Either re-justify the cap under the new gate or remove it in the same commit;
+   do not let it become decoration by accident.
+
+Also worth checking before implementing the *"reopen, don't refile"* clause:
+`item_is_low` / `item_is_medium` (`fe2ef56`) already establish that a finding's grade is
+its **latest filing**, and `punchlist.md.tera` already treats a re-filing as a
+correction that supersedes. That may be most of what `--supersedes BH-NNN` was asking
+for; confirm what is actually missing before adding a flag.
 
 **Problem.** **~22 of 62 commits are fault-injection-only** — reachable only by making
 some other call raise. BH-258's own text concedes *"reachability on CPython 3.12 is
