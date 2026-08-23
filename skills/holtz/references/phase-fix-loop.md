@@ -135,18 +135,14 @@ Two ways to run it:
 
 ### Step 11b: Stale Sweep [recurring: at each iteration boundary]
 
-Triage open findings in files the run has already changed, in one pass, before dispatching another fix.
+Triage every open finding, at every severity, in one pass, before dispatching another fix.
 
-1. Take the files the run has changed since the last sweep — since the run base on the first sweep:
-   ```bash
-   git diff <last-sweep-commit>..HEAD --name-only
-   ```
-2. List open findings and keep those whose `location` names one of those files:
+1. List every open finding:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list
    ```
-3. Dispatch **one** subagent for the whole set, with the listing, the changed files, and `$CLAUDE_PLUGIN_ROOT`. It reads the code at each location, runs the finding's recorded probe where there is one, and returns *still present* or *not reproducible* with evidence. It writes no code and records no events.
-4. For each finding it could not reproduce, one at a time:
+2. Dispatch **one** subagent for the whole set, with the listing and `$CLAUDE_PLUGIN_ROOT`. It reads the code at each location, runs the finding's recorded probe where there is one, and returns *still present* or *not reproducible* with evidence. It writes no code and records no events.
+3. For each finding it could not reproduce, one at a time:
    ```bash
    sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event fix_start --field finding_id=BH-NNN
    ```

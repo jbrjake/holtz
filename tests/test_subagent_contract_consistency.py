@@ -116,6 +116,15 @@ def _fix_loop_lines() -> list[str]:
     )
 
 
+def _step_11b_lines() -> list[str]:
+    """Step 11b's own lines: its heading through the line before the next one."""
+    lines = _fix_loop_lines()
+    starts = [i for i, line in enumerate(lines) if "### Step 11b" in line]
+    assert len(starts) == 1, f"expected one Step 11b heading, found {len(starts)}"
+    ends = [i for i, line in enumerate(lines) if line.startswith("### ") and i > starts[0]]
+    return lines[starts[0]: ends[0] if ends else len(lines)]
+
+
 def test_subagent_proves_the_suite_instead_of_asserting_it() -> None:
     """The subagent's suite step must produce evidence, not a claim.
 
@@ -337,11 +346,7 @@ def test_the_stale_sweep_records_fix_start_before_deferring() -> None:
     order is the whole contract here, so it is asserted on the document's own
     lines rather than by driving the gate.
     """
-    lines = _fix_loop_lines()
-    starts = [i for i, line in enumerate(lines) if "### Step 11b" in line]
-    assert len(starts) == 1, f"expected one Step 11b heading, found {len(starts)}"
-    ends = [i for i, line in enumerate(lines) if line.startswith("### ") and i > starts[0]]
-    sweep = lines[starts[0]: ends[0] if ends else len(lines)]
+    sweep = _step_11b_lines()
 
     fix_start = [i for i, line in enumerate(sweep) if "event fix_start" in line]
     defer = [i for i, line in enumerate(sweep) if "defer cant-reproduce" in line]
@@ -360,3 +365,31 @@ def test_the_stale_sweep_records_fix_start_before_deferring() -> None:
         "`defer_cant_reproduce` also gates on a non-empty "
         "docs/holtz/investigations/<id>.md — Step 11b must write it first"
     )
+
+
+def test_the_stale_sweep_triages_every_open_finding() -> None:
+    """The sweep's population is every open finding, at every severity.
+
+    The mechanism P0.2 promoted to Step 11b triaged all 68 open HIGHs in one
+    14-minute pass and retired four of them — a finding goes stale because the
+    code moved under it, and the run's own diff is not the only thing that
+    moves it. Step 11b first shipped scoped to `git diff --name-only`, which
+    can only ever re-triage findings the run had already looked at, and that
+    narrowing is what this asserts is gone: the sweep is the only late-run
+    round, so anything it does not cover is covered by nothing.
+    """
+    sweep = _step_11b_lines()
+    text = "\n".join(sweep)
+
+    assert "findings.py list" in text, (
+        "Step 11b must take its population from the mandated ledger lookup"
+    )
+    assert any(phrase in text for phrase in ("every open finding", "all open findings")), (
+        "Step 11b must state that it triages every open finding — a reader who "
+        "cannot tell the population from the step will re-scope it"
+    )
+    for narrowing in ("git diff", "--name-only", "names one of", "--severity"):
+        assert narrowing not in text, (
+            f"Step 11b narrows its population with {narrowing!r}. Every open "
+            f"finding is re-triaged at each sweep, all severities."
+        )
