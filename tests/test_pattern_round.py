@@ -241,6 +241,36 @@ class TestCommandRecognition:
     def test_rejects_everything_else(self, command):
         assert pattern_round.siblings_of(command) is None
 
+    def test_the_stamp_names_the_step_that_teaches_the_round(self):
+        """A constant naming a step in a document is checked against it.
+
+        The courier cannot read the doc at hook time — `$CLAUDE_PLUGIN_ROOT`
+        is a path the agent can write, and the round's whole point is that
+        nothing a reader gates on passes through the agent. So the step number
+        is a constant here and the correspondence is pinned in CI instead.
+        """
+        doc = os.path.join(REPO_ROOT, "skills", "holtz", "references", "phase-fix-loop.md")
+        with open(doc, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+
+        taught = [i for i, line in enumerate(lines)
+                  if "pattern_round.py" in line and "--record" in line]
+        assert taught, "phase-fix-loop.md no longer teaches a --record command"
+
+        headings = [(i, re.match(r"^### Step (\d+)", line)) for i, line in enumerate(lines)]
+        owning = [m.group(1) for i, m in headings if m and i < taught[0]]
+        assert owning, "the taught command sits under no numbered step"
+        assert owning[-1] == pattern_round.ROUND_STEP, (
+            f"the round is taught under Step {owning[-1]} but the courier "
+            f"stamps step={pattern_round.ROUND_STEP} on every event it writes"
+        )
+        assert os.path.basename(doc) == (
+            f"phase-{pattern_round.ROUND_PHASE.replace('_', '-')}.md"
+        ), (
+            f"the round is taught in {os.path.basename(doc)} but the courier "
+            f"stamps phase={pattern_round.ROUND_PHASE}"
+        )
+
     def test_rejects_a_redirected_cwd(self, tmp_path):
         """`--cwd` would attach another project's brief to this ledger."""
         assert pattern_round.siblings_of(
@@ -352,6 +382,20 @@ class TestProvenance:
         _write(project, BRIEF, "# Brief\n\n" + _entry("PAT-001", 1))
         run_enforcement_hook("pattern_courier.py", _event(project), cwd=project)
         assert _recorded(mock_daemon)["siblings_found"] == "4"
+
+    def test_the_round_is_stamped_with_where_it_ran(self, project, mock_daemon):
+        """Every other protocol event says which phase and step produced it.
+
+        The round dropped both when its writer moved from the agent to the
+        courier. They are not gate inputs; they are how a reader of the ledger
+        alone can place an event in the protocol, and the round is the one
+        event that also drives a state machine of its own.
+        """
+        _write(project, BRIEF, "# Brief\n\n" + _entry("PAT-001", 1))
+        run_enforcement_hook("pattern_courier.py", _event(project), cwd=project)
+        fields = _recorded(mock_daemon)
+        assert fields["phase"] == pattern_round.ROUND_PHASE == "fix_loop"
+        assert fields["step"] == pattern_round.ROUND_STEP == "11"
 
 
 @pytest.mark.hook_e2e

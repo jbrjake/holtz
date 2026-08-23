@@ -11,6 +11,9 @@ nothing a gate reads passes through the agent.
   patterns_found / pattern_ids  — re-derived here from `patterns-brief.md` and
                                   the ledger, never read from the run's report
   project / run                 — from the tree and the ledger
+  phase / step                  — constants: a round is Step 11 of the fix
+                                  loop, and the doc that teaches it is pinned
+                                  against them in the suite
   siblings_found                — from the marker; how many siblings the round
                                   filed is a fact only the round knows, and no
                                   gate reads it
@@ -36,6 +39,8 @@ sys.path.insert(
 
 from pattern_round import (  # noqa: E402
     RECORD_MARKER,
+    ROUND_PHASE,
+    ROUND_STEP,
     round_yield,
     siblings_of,
 )
@@ -136,6 +141,8 @@ def main() -> None:
         "project": os.path.basename(root),
         "run": result.run,
         "auditor": "holtz",
+        "phase": ROUND_PHASE,
+        "step": ROUND_STEP,
         "patterns_found": str(len(result.new_ids)),
         "siblings_found": siblings,
     }

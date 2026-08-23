@@ -58,6 +58,16 @@ ARCHIVE_PATH = os.path.join("docs", "holtz", "patterns-brief-archive.md")
 # fail silently if they ever disagreed about the word.
 RECORD_MARKER = "PATTERN-ROUND:"
 
+# Where a round happens: `phase-fix-loop.md`, Step 11. Every other protocol
+# event carries these, and the courier writes an event the agent no longer can,
+# so it stamps them on the round's behalf. Constants rather than a read of the
+# doc: the courier resolves `$CLAUDE_PLUGIN_ROOT` in a tree the agent can write,
+# and a writer of restricted events reads nothing from there. The
+# correspondence to the document is pinned by
+# `tests/test_pattern_round.py::test_the_stamp_names_the_step_that_teaches_the_round`.
+ROUND_PHASE = "fix_loop"
+ROUND_STEP = "11"
+
 # `## PAT-007: name (Run 3, 2026-08-11)`. The run tag is what separates this
 # run's entries from the ones a prior audit of the same project left behind —
 # without it, the first round of every run would report the whole inherited

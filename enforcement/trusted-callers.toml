@@ -24,4 +24,4 @@
 "hooks/protocol_tracker.py" = "sha256:45a2f4966aeaed7e559ab936423e2fc7d18c3b82ea7ce4bfefb43ffd52f196b6"
 "hooks/quiz_capture.py" = "sha256:3d1697849e6a9a313f29bb9745c1181ba69a31258eec27f4bb84b65afe0484aa"
 "hooks/suite_courier.py" = "sha256:d5b3335c29d9bcafaab6bf4111370ac56a9bed388175ca9f20c142dc39607d3b"
-"hooks/pattern_courier.py" = "sha256:984fde4cdc01983d3cc9e28020f1ba13b9754d39dec17d2387d0ffe6d64867fa"
+"hooks/pattern_courier.py" = "sha256:c7a42c64eada2d9cfb2eab985230fa544dbf3bd36f5dbec56816f944d0ec2586"

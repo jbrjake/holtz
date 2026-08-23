@@ -107,8 +107,11 @@ id = "agent:cli"
 # crosses from the run's own output — how many siblings a round filed is a fact
 # only the round has — and no gate reads it.
 #
-# `phase` and `step` are gone with the agent's write path. A courier would be
-# inventing them, and nothing read them.
+# `phase` and `step` are stamped by the courier from constants in
+# `pattern_round.py`: a round is Step 11 of the fix loop wherever it runs, and
+# the suite pins those constants against the document that teaches it. They are
+# what lets a reader of the ledger alone place the event in the protocol, which
+# is why every other event carries them.
 [events.pattern_analysis_complete]
 description = "Pattern analysis cycle completed"
 attestation = "tool"
@@ -117,6 +120,8 @@ fields = [
     { name = "project", type = "string" },
     { name = "run", type = "string", pattern = "^\\d+$" },
     { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
+    { name = "step", type = "string", pattern = "^\\d+$" },
     { name = "patterns_found", type = "string", pattern = "^\\d+$" },
     # Optional because most rounds add nothing, and an empty list has no
     # spelling this pattern admits.
