@@ -39,7 +39,7 @@ reverted in `334cddf`.
 
 | Clause | Status | Where | Decisions |
 |---|---|---|---|
-| P0.1 · amplification circuit-breaker (`A > 1.0` for 3 rounds, gate on `pattern_done`, block `fix_commit`, escape = every open LOW **and** the MEDIUM budget, `sahjhan defer batch`, writes `DEFERRED.md`) | **OWED** — the shipped gate was reverted in `334cddf`: it was a standing condition (open LOWs while open > closed), not a divergence trip, with a LOW-only escape, a plugin script, and no `DEFERRED.md` | — | D2, D3 |
+| P0.1 · amplification circuit-breaker (`A > 1.0` for 3 rounds, gate on `pattern_done`, block the next dispatch, escape = every open LOW **and** the MEDIUM budget, `sahjhan defer batch`, writes `DEFERRED.md`) | **OWED in this tree** — the shipped gate was reverted in `334cddf`: it was a standing condition (open LOWs while open > closed), not a divergence trip, with a LOW-only escape, a plugin script, and no `DEFERRED.md`. The engine half of its escape now exists: sahjhan 0.22.0 adds a generic `batch` command and multi-word alias keys, so `defer batch --severity low,medium` is spellable. Nothing here consumes it yet — the pin is still 0.21.0 | — | D2, D3 |
 | P0.1 · redefine convergence (4 conjuncts, as a package) | **OWED**, BLOCKED(P0.5 `user_reachable`) | — | D4, D5 |
 | P0.1 · scope Step 16's resweep to files changed by fixes | SHIPPED+ (adds blast-radius depth 2 and a full-resweep fallback) | `f17aaec` | D23 |
 | P0.2 · move pattern requirement from `fix_commit` to `iteration_boundary` | SHIPPED+ (the boundary already carried the gate; the change is the commit-path deletion; adds an unasked pattern gate on `set complete perspective`) | `5b0c4f0` | D24 |
