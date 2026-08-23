@@ -71,7 +71,7 @@ reverted in `334cddf`.
 
 | Clause | Status | Where | Decisions |
 |---|---|---|---|
-| P2.1 cap `patterns-brief.md` by bytes | — (P3.5's artifact cap is blocked on this) | — | D11 |
+| P2.1 cap `patterns-brief.md` by bytes | SHIPPED — 20 entries **and** 40 KB, entries over 2 KB compressed to the four-line format with their detail moved to `pattern-round-NN.md`; `pattern_brief_compact.py` reports on stderr what is over, since step 4 forbids reading the brief whole | `2270506` | D11 |
 | P2.2 make the compact read its own numbered step | SHIPPED — Step 11's step 4 in `phase-fix-loop.md` (`6b95aea`); Jon ruled on 2026-08-23 to unbury the other site the clause names, so `phase-audit.md`'s two subagent briefs and `justine-skill.md`'s are numbered lists with the compact read as step 1 (`a0e0ef5`) | `6b95aea`, `a0e0ef5` | D13 |
 | P2.3 digest instead of full punchlist | — | — | — |
 | P2.4 bound subagent context | — | — | — |
@@ -89,7 +89,7 @@ reverted in `334cddf`.
 | P3.3 export `bin/` onto PATH in `session_start.py` | rejected on a **falsified premise** — the plugin loader already puts `bin/` on PATH (verified against the shipped binary); a SessionStart hook also cannot alter later Bash env | — | — |
 | P3.4 clear `pattern_analysis_overdue` inside the `pattern_done` transition | SHIPPED — the transition clears the cached flag directly, so a derivation that could not reach the ledger no longer holds a discharged obligation True; clear-only, after the refresh, so nothing that *raises* the flag is bypassed | `9f04bff` | D27 |
 | P3.5 manifest anchoring | already fixed pre-effort (`d92d468`) | — | — |
-| P3.5 cap artifact size | **OWED**, BLOCKED(P2.1) | — | D11 |
+| P3.5 cap artifact size | SHIPPED — SKILL.md caps an artifact at 40 KB, continuing into a numbered sibling at a section boundary rather than truncating | `2270506` | D11 |
 | P3.6 dedupe at render | SHIPPED; expanded to two more counting sites with semantic changes (`defer_medium` budget → distinct ids; STATUS Open recomputed; severity = latest filing) | `03603a9`, `375b19f`, `fe2ef56` | D18, D25 |
 | P3.7 escape `\|` in the render | SHIPPED+ (newline collapse added — same defect, worse failure mode) | `03603a9` | — |
 | P3.8 fix in tqdm | N/A | — | — |
