@@ -56,7 +56,20 @@ Use **Agent subagents** for this step when possible — each subagent audits a b
 
 1. Read `docs/holtz/recon/step3-recon-summary.md` for test file locations and `docs/holtz/recon/step4-predictions.md` for predicted areas
 2. Partition test files into batches (3-5 files each). **Prioritize predicted areas first.**
-3. **Subagent brief:** Instruct each subagent to: (a) read the compact pattern brief by running `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md` — if a finding matches a pattern ID, reference it in the punchlist item; if a pattern match seems likely but uncertain, read the full entry from `docs/holtz/patterns-brief.md` for that specific pattern ID, (b) check known patterns against the code being reviewed, (c) **apply per-file lens checklist** — for each test file, also check concerns from all `per-file` scoped lenses (run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/parse_lens_registry.py --scope per-file` for the checklist; focus on each lens's audit priorities as they apply to the file), (d) tag all findings with `**Lens:**` field identifying which lens discovered them, (e) write findings to disk before returning, (f) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT, (g) choose the most conservative default for ambiguities — report NEEDS_CONTEXT only if genuinely impossible without human input. **When reviewing subagent output:** verify findings by reading actual code. Subagents may have missed context or misidentified patterns. Confirm each finding before it enters the punchlist.
+3. **Subagent brief.** Instruct each subagent to:
+   1. **Read the pattern brief compact. Never `Read` it whole:**
+      ```bash
+      python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md
+      ```
+      Read one `PAT-NNN`'s full entry from `docs/holtz/patterns-brief.md` only when a pattern match seems likely but uncertain. If a finding matches a pattern ID, reference it in the punchlist item.
+   2. Check known patterns against the code being reviewed.
+   3. **Apply the per-file lens checklist** — for each test file, also check concerns from all `per-file` scoped lenses (run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/parse_lens_registry.py --scope per-file` for the checklist; focus on each lens's audit priorities as they apply to the file).
+   4. Tag all findings with a `**Lens:**` field identifying which lens discovered them.
+   5. Write findings to disk before returning.
+   6. Report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT.
+   7. Choose the most conservative default for ambiguities — report NEEDS_CONTEXT only if genuinely impossible without human input.
+
+   **When reviewing subagent output:** verify findings by reading actual code. Subagents may have missed context or misidentified patterns. Confirm each finding before it enters the punchlist.
 4. For each batch: audit per [references/anti-patterns.md](references/anti-patterns.md), record findings via `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding` IMMEDIATELY after each batch. Tag findings matching predictions with `predicted_by` field and mark CONFIRMED in `step4-predictions.md`. When mutation data is available from Step 2 (mutation scan), use it as concrete evidence when scoring Rubber Stamp (#11) and Permissive Validator (#12) — a test that passes but doesn't kill mutations for the function it covers is a prime candidate for these anti-patterns.
 5. **Add semantic edges** (`tests`, `assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). Run `stats` after the step to verify edges were added.
 6. Mark unconfirmed predictions for this step as UNCONFIRMED.
@@ -70,7 +83,20 @@ Same subagent strategy. Partition source modules into batches.
 **Model routing:** Dispatch source module audit subagents with `model: "sonnet"`. File-level code review against known patterns is a Sonnet-grade task. The main session's adversarial reasoning (testing predictions, confirming bugs) stays on Opus.
 
 1. Read `docs/holtz/recon/step3-recon-summary.md`, `docs/holtz/recon/step2-code-signals.md`, and `docs/holtz/recon/step4-predictions.md`. **Prioritize predicted areas first**, then high-churn files.
-2. **Subagent brief:** Instruct each subagent to: (a) read the compact pattern brief by running `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md` — if a finding matches a pattern ID, reference it in the punchlist item; if a pattern match seems likely but uncertain, read the full entry from `docs/holtz/patterns-brief.md` for that specific pattern ID, (b) check known patterns against the code being reviewed, (c) **apply per-file lens checklist** — for each source module, also check concerns from all `per-file` scoped lenses (run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/parse_lens_registry.py --scope per-file` for the checklist; focus on each lens's audit priorities as they apply to the file), (d) tag all findings with `**Lens:**` field identifying which lens discovered them, (e) write findings to disk before returning, (f) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT, (g) choose the most conservative default for ambiguities. **When reviewing subagent output:** verify findings by reading actual code. Confirm each finding before it enters the punchlist.
+2. **Subagent brief.** Instruct each subagent to:
+   1. **Read the pattern brief compact. Never `Read` it whole:**
+      ```bash
+      python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md
+      ```
+      Read one `PAT-NNN`'s full entry from `docs/holtz/patterns-brief.md` only when a pattern match seems likely but uncertain. If a finding matches a pattern ID, reference it in the punchlist item.
+   2. Check known patterns against the code being reviewed.
+   3. **Apply the per-file lens checklist** — for each source module, also check concerns from all `per-file` scoped lenses (run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/parse_lens_registry.py --scope per-file` for the checklist; focus on each lens's audit priorities as they apply to the file).
+   4. Tag all findings with a `**Lens:**` field identifying which lens discovered them.
+   5. Write findings to disk before returning.
+   6. Report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT.
+   7. Choose the most conservative default for ambiguities.
+
+   **When reviewing subagent output:** verify findings by reading actual code. Confirm each finding before it enters the punchlist.
 3. For each module batch: review for bugs, write punchlist items IMMEDIATELY. Tag findings matching predictions with `**Predicted:**` field and mark CONFIRMED in `step4-predictions.md`. Tag findings with `**Lens:**` field identifying which analytical lens discovered them.
 4. **For `bug/*` items:** assess determinism and record in the punchlist item's `**Determinism:**` field. Is this bug deterministic (specific trigger), intermittent (timing/load/ordering dependent), or theoretical (identified from code analysis, not yet observed)? This determines the reproduction strategy in Step 10.
 5. **Add semantic edges** (`calls`, `assumes`, `diverges_from`) per [references/impact-graph-operations.md](references/impact-graph-operations.md). Run `stats` after the step to verify edges were added.

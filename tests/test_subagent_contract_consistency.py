@@ -16,6 +16,7 @@ silently diverge again.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -269,6 +270,38 @@ def test_the_fix_loop_routes_by_the_measured_criteria_not_by_triage_path() -> No
         "routing by triage path is the proxy P1.2 was rebuilt away from: it "
         "sends multi-file deterministic bug fixes to the cheaper model and "
         "keeps single-file investigations on the expensive one"
+    )
+
+
+@pytest.mark.parametrize("doc", ["phase-audit.md", "justine-skill.md"])
+def test_every_subagent_brief_numbers_the_compact_read(doc: str) -> None:
+    """P2.2: the compactor was invoked once in a 24-round run.
+
+    Where it appeared at all, it was clause (a) of a seven-clause sentence —
+    the shape a reader skims past. Every subagent brief that mentions the
+    brief must give the compact read its own numbered step, the same as the
+    fix loop's pattern round does, and the count has to match the number of
+    briefs so adding a third brief cannot quietly re-bury it.
+    """
+    text = (SKILL_DIR / "references" / doc).read_text(encoding="utf-8")
+    lines = text.splitlines()
+
+    briefs = sum(1 for line in lines if "**Subagent brief" in line)
+    assert briefs, f"{doc} no longer briefs a subagent — update this test"
+
+    numbered_reads = sum(
+        1 for line in lines
+        if re.match(r"^\s*\d+\.\s", line) and "pattern brief compact" in line.lower()
+    )
+    assert numbered_reads == briefs, (
+        f"{doc} has {briefs} subagent brief(s) but {numbered_reads} numbered "
+        f"compact-read step(s) — a brief that buries it in prose is the one "
+        f"whose subagents read the whole 181 KB file"
+    )
+
+    assert "read the compact pattern brief by running" not in text, (
+        f"{doc} still carries the compact read as a lettered clause inside a "
+        f"run-on sentence"
     )
 
 
