@@ -108,7 +108,7 @@ reverted in `334cddf`.
 
 | Clause | Status | Where | Decisions |
 |---|---|---|---|
-| P5.4 derive `patterns_found` by diffing PAT headings | SHIPPED+ — derivation as written, plus: event became `restricted` + `tool`-attested, `phase`/`step` fields deleted, new `pattern_ids`, new `pattern_courier.py` trusted hook, taught step order swapped | `ceb7414` | D22 |
+| P5.4 derive `patterns_found` by diffing PAT headings | SHIPPED+ — derivation as written, plus: event became `restricted` + `tool`-attested, new `pattern_ids`, new `pattern_courier.py` trusted hook, taught step order swapped. The `phase`/`step` deletion is reversed per D22: `b184b05` has the courier stamp both from constants pinned against the doc that teaches the round | `ceb7414`, `b184b05` | D22 |
 | P5.1–P5.3, P5.5–P5.7 | — | — | — |
 
 ## Tier 6
