@@ -5,15 +5,21 @@
     findings.py list --all       every finding, with status
     findings.py list --severity CRITICAL HIGH
     findings.py show BH-001      one finding's full record
+    findings.py audited-files    every file any run's findings have named
 
 The punchlist is a rendered *view*; this reads the thing it is a view of, so
 the answer is current and no markdown is parsed on the way.
+
+`audited-files` reads every run's ledger rather than the active one, because
+what it answers — has this file ever been audited — is a question about the
+project, not about this run.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -28,6 +34,17 @@ from _common import resolve_config_dir  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
 
 SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+
+# Every ledger this project has: the active run's, the ones earlier runs left
+# behind, and the copies inside `docs/holtz/archive/`. All three layouts sit
+# under `docs/holtz`, and `sahjhan query --glob` reads a set of them as one.
+LEDGER_GLOB = "docs/holtz/**/ledger.jsonl"
+
+# `location` is free text. Runs write `file.py:88`, two paths separated by a
+# comma, and `a.py:1 | b.py:2` — all three appear in this repo's own archived
+# ledgers, so all three are split here rather than argued about.
+_LOCATION_SPLIT = re.compile(r"[,|]")
+_LINE_SUFFIX = re.compile(r":\d+(?:-\d+)?$")
 
 
 def _query(binary: str, config_dir: str, cwd: str, event_type: str) -> list[dict]:
@@ -106,6 +123,50 @@ def _collect(binary: str, config_dir: str, cwd: str) -> list[dict]:
     return sorted(findings, key=sort_key)
 
 
+def _paths_in(location: str) -> list[str]:
+    """The file paths one `location` names, without their line numbers."""
+    paths = []
+    for piece in _LOCATION_SPLIT.split(location):
+        path = _LINE_SUFFIX.sub("", piece.strip().strip("`").rstrip(":"))
+        if path:
+            paths.append(path)
+    return paths
+
+
+def _audited_files(binary: str, config_dir: str, cwd: str) -> list[str]:
+    """Every file path any finding, in any run of this project, has named.
+
+    Status is deliberately not consulted: a resolved finding is proof the file
+    was audited just as much as an open one, and it is the *converged* run —
+    every finding closed — whose files the punchlist read used to lose.
+    """
+    result = subprocess.run(
+        [binary, "--config-dir", config_dir, "query", "--glob", LEDGER_GLOB,
+         "SELECT DISTINCT location FROM events WHERE type='finding'",
+         "--format", "jsonl"],
+        capture_output=True, text=True, cwd=cwd, timeout=120,
+    )
+    if result.returncode != 0:
+        if "no files matched pattern" in result.stderr:
+            # A project with no ledger has audited nothing. That is the answer,
+            # not an error: it is the first run, and every file is cold.
+            return []
+        print(f"ERROR: sahjhan query failed: {result.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+
+    paths: set[str] = set()
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        paths.update(_paths_in(str(row.get("location", ""))))
+    return sorted(paths)
+
+
 def _one_line(finding: dict, width: int = 90) -> str:
     summary = " ".join(finding["description"].split())
     if len(summary) > width:
@@ -128,6 +189,9 @@ def main() -> None:
     show = sub.add_parser("show", help="one finding's full record")
     show.add_argument("finding_id")
 
+    sub.add_parser("audited-files",
+                   help="every file any run's findings have named, one per line")
+
     args = parser.parse_args()
 
     binary = ensure_sahjhan()
@@ -139,6 +203,11 @@ def main() -> None:
     if not found:
         print("ERROR: enforcement config not found", file=sys.stderr)
         sys.exit(1)
+
+    if args.command == "audited-files":
+        for path in _audited_files(binary, config_dir, cwd):
+            print(path)
+        return
 
     findings = _collect(binary, config_dir, cwd)
 

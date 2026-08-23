@@ -256,10 +256,12 @@ class TestPunchlistIsOpenWorkOnly:
     def test_a_converged_run_still_archives_every_finding_with_its_location(
         self, rendered_punchlist
     ):
-        """Recon's cold-file coverage scan reads archived punchlists to decide
-        which files were ever audited. A converged run resolves everything, so
-        an open-only PUNCHLIST.md archives empty — every one already on disk in
-        this repo has zero OPEN rows. The locations have to survive somewhere."""
+        """The archive is the only rendered record a converged run leaves: it
+        resolves everything, so the open-only PUNCHLIST.md renders empty —
+        every one already on disk in this repo has zero OPEN rows. Recon no
+        longer depends on this (it queries the ledger since D20), but a reader
+        opening an archived run still gets nothing from a row that dropped the
+        one field saying where the finding was."""
         binary, root = rendered_punchlist
         _record_finding(binary, root, "BH-001", "one", location="src/parser.py:88")
         _record_finding(binary, root, "BH-002", "two", location="src/writer.py:12")
@@ -290,22 +292,32 @@ class TestPunchlistIsOpenWorkOnly:
 class TestSkillFilesMatchWhatThePunchlistCarries:
     """A trimmed render silently breaks any step that reads what it trimmed."""
 
-    def test_the_cold_file_scan_reads_the_archive(self):
-        """`phase-recon.md`'s coverage scan classifies a file as audited if a
-        prior punchlist names it. Prior punchlists are converged, so their
-        findings are all in the archive."""
-        text = os.path.join(
+    def test_the_cold_file_scan_reads_the_ledger(self):
+        """`phase-recon.md`'s coverage scan asks whether a file was ever
+        audited — a question about the project, answered by every run's
+        ledger. It used to read rendered punchlists, which put a cross-run
+        question at the mercy of what one run's render happened to keep: the
+        open-only PUNCHLIST.md is empty exactly when a run converged, and the
+        archive it fell back to is a second view of the same events."""
+        path = os.path.join(
             REPO_ROOT, "skills", "holtz", "references", "phase-recon.md")
-        with open(text, encoding="utf-8") as fh:
-            scan_lines = [ln for ln in fh.read().splitlines()
-                          if "Cold file coverage scan" in ln]
-        assert scan_lines, "phase-recon.md no longer has a cold file coverage scan"
-        for line in scan_lines:
-            assert "PUNCHLIST-ARCHIVE.md" in line, (
-                "The cold file coverage scan reads archived PUNCHLIST.md only. "
-                "Those render open findings, and a converged run has none — so "
-                "every file reads as cold on every later run:\n  " + line
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+
+        starts = [i for i, ln in enumerate(lines) if "Cold file coverage scan" in ln]
+        assert starts, "phase-recon.md no longer has a cold file coverage scan"
+        for start in starts:
+            scan = "\n".join(lines[start:start + 8])
+            assert "findings.py audited-files" in scan, (
+                "the cold file coverage scan must take its audited set from "
+                f"the ledger:\n  {scan}"
             )
+            for rendered in ("PUNCHLIST.md", "PUNCHLIST-ARCHIVE.md",
+                             "LIVING-PUNCHLIST.md"):
+                assert rendered not in scan, (
+                    f"the scan is back to reading {rendered}, a render of the "
+                    f"events it should be querying:\n  {scan}"
+                )
 
     def test_no_skill_file_reads_the_punchlist_for_resolved_findings(self):
         """Grouping resolved items by root cause is the pattern round's job and

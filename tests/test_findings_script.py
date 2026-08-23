@@ -287,3 +287,77 @@ class TestFindingsShow:
         result = run("show", "BH-999")
         assert result.returncode != 0
         assert "BH-999" in result.stderr
+
+
+class TestAuditedFiles:
+    """Recon decides which files are cold from the ledger, not from a render.
+
+    The coverage scan classified a file as audited if a prior punchlist named
+    it. Since P0.4 the punchlist renders open findings only, and a converged
+    run has none — so the scan was reading a file that is empty exactly when
+    the run it describes went well, and the archive it fell back to is a
+    second rendered view of data the ledger already holds. Every run's ledger
+    is still on disk; this reads all of them.
+    """
+
+    def _paths(self, stdout: str) -> set[str]:
+        return {line.strip() for line in stdout.splitlines() if line.strip()}
+
+    def test_a_closed_finding_still_marks_its_file_audited(self, ledger):
+        """The case the archive read existed for: a converged run's files."""
+        file_finding, resolve, defer, run, _ = ledger
+        file_finding("BH-001", "open", location="src/parser.py:88")
+        file_finding("BH-002", "resolved", location="src/writer.py:12")
+        resolve("BH-002")
+        file_finding("BH-003", "deferred", location="src/reader.py:3")
+        defer("BH-003")
+
+        result = run("audited-files")
+        assert result.returncode == 0, result.stderr
+        assert self._paths(result.stdout) == {
+            "src/parser.py", "src/writer.py", "src/reader.py",
+        }
+
+    def test_every_file_in_a_multi_file_location_counts(self, ledger):
+        """`location` is free text and runs write several paths into it."""
+        file_finding, _, _, run, _ = ledger
+        file_finding("BH-001", "two files", location="src/a.py:1,src/b.py:2")
+        file_finding("BH-002", "two more", location="src/c.py:1 | src/d.py")
+
+        result = run("audited-files")
+        assert result.returncode == 0, result.stderr
+        assert self._paths(result.stdout) == {
+            "src/a.py", "src/b.py", "src/c.py", "src/d.py",
+        }
+
+    def test_prior_runs_count_even_though_they_are_other_ledgers(self, ledger, tmp_path):
+        """Each run gets its own ledger, so coverage that stopped at the active
+        one would call every file cold on the first round of every run."""
+        file_finding, _, _, run, _ = ledger
+        binary = _binary()
+        file_finding("BH-001", "last run's finding", location="src/old.py:1")
+        subprocess.run(
+            [binary, "--config-dir", CONFIG_DIR, "ledger", "create",
+             "--from", "run", "2", "--activate"],
+            capture_output=True, text=True, cwd=str(tmp_path), timeout=30, check=True,
+        )
+        file_finding("BH-002", "this run's finding", location="src/new.py:1")
+
+        listed = run("list")
+        assert _ids(listed.stdout) == ["BH-002"], (
+            "the active ledger should carry only this run's finding"
+        )
+        result = run("audited-files")
+        assert result.returncode == 0, result.stderr
+        assert self._paths(result.stdout) == {"src/old.py", "src/new.py"}
+
+    def test_a_project_with_no_ledger_reports_nothing(self, tmp_path):
+        """First run: no ledger anywhere, so every file is cold. An empty
+        listing says that; an error would stop recon on the run that needs
+        the inventory most."""
+        result = subprocess.run(
+            [sys.executable, SCRIPT, "audited-files"],
+            capture_output=True, text=True, cwd=str(tmp_path), timeout=60,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == ""
