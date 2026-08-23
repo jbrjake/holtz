@@ -449,3 +449,31 @@ def test_no_backslash_s_in_source_regex():
         "Replace \\s with [ \\t] to prevent newline leaks:\n  "
         + "\n  ".join(violations)
     )
+
+
+def test_the_skill_caps_the_size_of_an_artifact():
+    """P3.5: reading 34–52 KB artifacts is what ended the audited run.
+
+    Not directly — the agent `cd`-ed into `docs/holtz` to shorten the paths it
+    was typing, and the manifest-anchoring bug (#85) then attributed 81
+    violations to `run 0` of the wrong project and killed the run. The
+    anchoring bug is fixed (`d92d468`); the artifacts that made a `cd` worth
+    doing are the other half, capped the same way P2.1 caps the brief.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    skill = (root / "skills" / "holtz" / "SKILL.md").read_text(encoding="utf-8")
+
+    capped = [ln for ln in skill.splitlines()
+              if "40 KB" in ln and "artifact" in ln.lower()]
+    assert capped, (
+        "SKILL.md states no size cap for the artifacts a run writes, so the "
+        "34–52 KB files that made shortening paths worth doing are still "
+        "allowed to exist"
+    )
+    line = capped[0]
+    assert "continue" in line.lower() or "continues" in line.lower(), (
+        f"the cap must say where the overflow goes — a cap that truncates "
+        f"loses audit evidence:\n  {line}"
+    )

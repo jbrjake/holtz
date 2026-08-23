@@ -125,7 +125,7 @@ Two ways to run it:
 
    **Deduplication:** Before appending, check if the new pattern is a refinement of an existing entry (same bug class, similar detection heuristic). If so, update the existing entry with improved heuristics or examples rather than adding a duplicate.
 
-   **Rolling policy:** The brief is capped at 20 active entries. When a new pattern would push the count past 20, move the 5 oldest entries (by discovery date) in a single batch to `docs/holtz/patterns-brief-archive.md`. The archive uses the same format but is not read by subagents by default. If the archive file does not exist, create it with the same header but titled `# Holtz Pattern Brief — Archive`.
+   **Rolling policy:** The brief is capped at 20 active entries and 40 KB. When a new pattern would push the count past 20, move the 5 oldest entries (by discovery date) in a single batch to `docs/holtz/patterns-brief-archive.md`. The archive uses the same format but is not read by subagents by default. If the archive file does not exist, create it with the same header but titled `# Holtz Pattern Brief — Archive`. Compress every entry over 2 KB to the four lines above and move what does not fit to `docs/holtz/pattern-round-NN.md`, NN being this round's number, linked from the entry's **Example:** line. Step 4's compact read names the entries and briefs that are over.
 
 6. **Record the round.** After step 5, alone on its own Bash line — chaining records nothing:
    ```bash
