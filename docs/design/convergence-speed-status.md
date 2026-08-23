@@ -72,7 +72,7 @@ reverted in `334cddf`.
 | Clause | Status | Where | Decisions |
 |---|---|---|---|
 | P2.1 cap `patterns-brief.md` by bytes | — (P3.5's artifact cap is blocked on this) | — | D11 |
-| P2.2 make the compact read its own numbered step | SHIPPED — Step 11's step 4, ahead of the update step; the doc's own line order is the test | `6b95aea` | D13 |
+| P2.2 make the compact read its own numbered step | SHIPPED — Step 11's step 4 in `phase-fix-loop.md` (`6b95aea`); Jon ruled on 2026-08-23 to unbury the other site the clause names, so `phase-audit.md`'s two subagent briefs and `justine-skill.md`'s are numbered lists with the compact read as step 1 (`a0e0ef5`) | `6b95aea`, `a0e0ef5` | D13 |
 | P2.3 digest instead of full punchlist | — | — | — |
 | P2.4 bound subagent context | — | — | — |
 | P2.5 slice rule replacing re-read-everything | — | — | — |
