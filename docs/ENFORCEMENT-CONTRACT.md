@@ -63,6 +63,8 @@ flowchart LR
     merge_done -->|fix_loop_start| awaiting_clear
     audit -->|fix_loop_start| awaiting_clear
     fix_loop -->|fix_commit| fix_loop
+    fix_loop -->|merge_finding| fix_loop
+    pattern_analysis -->|merge_finding| pattern_analysis
     fix_loop -->|defer_cant_reproduce| fix_loop
     fix_loop -->|defer_low| fix_loop
     fix_loop -->|defer_medium| fix_loop
@@ -93,28 +95,29 @@ flowchart LR
     linkStyle 8 stroke:#d1495b,stroke-width:2px
     linkStyle 9 stroke:#d1495b,stroke-width:2px
     linkStyle 10 stroke:#d1495b,stroke-width:2px
-    linkStyle 11 stroke:#2f6fb0,stroke-width:2px
-    linkStyle 12 stroke:#b0b0b0,stroke-width:2px
-    linkStyle 13 stroke:#b0b0b0,stroke-width:2px
-    linkStyle 14 stroke:#d1495b,stroke-width:2px
-    linkStyle 15 stroke:#e08a2e,stroke-width:2px
+    linkStyle 11 stroke:#d1495b,stroke-width:2px
+    linkStyle 12 stroke:#d1495b,stroke-width:2px
+    linkStyle 13 stroke:#2f6fb0,stroke-width:2px
+    linkStyle 14 stroke:#b0b0b0,stroke-width:2px
+    linkStyle 15 stroke:#b0b0b0,stroke-width:2px
     linkStyle 16 stroke:#d1495b,stroke-width:2px
     linkStyle 17 stroke:#d1495b,stroke-width:2px
     linkStyle 18 stroke:#d1495b,stroke-width:2px
     linkStyle 19 stroke:#d1495b,stroke-width:2px
     linkStyle 20 stroke:#d1495b,stroke-width:2px
-    linkStyle 21 stroke:#b0b0b0,stroke-width:2px
+    linkStyle 21 stroke:#d1495b,stroke-width:2px
     linkStyle 22 stroke:#d1495b,stroke-width:2px
     linkStyle 23 stroke:#b0b0b0,stroke-width:2px
-    linkStyle 24 stroke:#b0b0b0,stroke-width:2px
-    linkStyle 25 stroke:#d1495b,stroke-width:2px
+    linkStyle 24 stroke:#d1495b,stroke-width:2px
+    linkStyle 25 stroke:#b0b0b0,stroke-width:2px
+    linkStyle 26 stroke:#b0b0b0,stroke-width:2px
+    linkStyle 27 stroke:#d1495b,stroke-width:2px
 ```
 
 | Colour | Class | Edges |
 |---|---|---|
 | `#b0b0b0` | `ungated` | `confirm_convergence` (final_sweep_clean→converged), `final_sweep_start` (all_perspectives_clean→final_sweep), `pause` (fix_loop→awaiting_human), `resume` (awaiting_human→fix_loop), `run_start` (idle→recon), `sweep_dirty` (final_sweep→fix_loop) |
-| `#d1495b` | `agent` | `all_perspectives` (perspective_clean→all_perspectives_clean), `audit_complete` (audit→merge_ready), `converge` (final_sweep→final_sweep_clean), `defer_cant_reproduce` (fix_loop→fix_loop), `defer_low` (fix_loop→fix_loop), `defer_low` (pattern_analysis→pattern_analysis), `defer_medium` (fix_loop→fix_loop), `defer_medium` (pattern_analysis→pattern_analysis), `finalize` (converged→finalized), `fix_commit` (fix_loop→fix_loop), `fix_loop_start` (audit→awaiting_clear), `fix_loop_start` (merge_done→awaiting_clear), `iteration_boundary` (fix_loop→awaiting_clear), `lens_rotate` (perspective_clean→audit), `merge_complete` (merge_ready→merge_done), `pattern_check` (fix_loop→pattern_analysis), `recon_complete` (recon→audit), `set complete perspective` (fix_loop→perspective_clean) |
-| `#e08a2e` | `direct` | `pattern_done` (pattern_analysis→fix_loop) |
+| `#d1495b` | `agent` | `all_perspectives` (perspective_clean→all_perspectives_clean), `audit_complete` (audit→merge_ready), `converge` (final_sweep→final_sweep_clean), `defer_cant_reproduce` (fix_loop→fix_loop), `defer_low` (fix_loop→fix_loop), `defer_low` (pattern_analysis→pattern_analysis), `defer_medium` (fix_loop→fix_loop), `defer_medium` (pattern_analysis→pattern_analysis), `finalize` (converged→finalized), `fix_commit` (fix_loop→fix_loop), `fix_loop_start` (audit→awaiting_clear), `fix_loop_start` (merge_done→awaiting_clear), `iteration_boundary` (fix_loop→awaiting_clear), `lens_rotate` (perspective_clean→audit), `merge_complete` (merge_ready→merge_done), `merge_finding` (fix_loop→fix_loop), `merge_finding` (pattern_analysis→pattern_analysis), `pattern_check` (fix_loop→pattern_analysis), `pattern_done` (pattern_analysis→fix_loop), `recon_complete` (recon→audit), `set complete perspective` (fix_loop→perspective_clean) |
 | `#2f6fb0` | `host` | `resume` (awaiting_clear→fix_loop) |
 
 ## Gates
@@ -175,13 +178,29 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | edge cases must be hardened after each fix | `hardening_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | circuit breaker: max 15 fixes per iteration (scoped since the last iteration_boundary /clear, so the cap resets each context reset instead of capping the whole run) | `state_transition` | `engine:sahjhan` | `engine` | no — written by the engine, only by passing the gate |
 
+### `merge_finding` — fix_loop → fix_loop
+
+| Fact required | Evidence | Writer | Attests | Forgeable |
+|---|---|---|---|---|
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
+| the finding merged into must exist and must not be the finding being merged | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+
+### `merge_finding` — pattern_analysis → pattern_analysis
+
+| Fact required | Evidence | Writer | Attests | Forgeable |
+|---|---|---|---|---|
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
+| the finding merged into must exist and must not be the finding being merged | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+
 ### `defer_cant_reproduce` — fix_loop → fix_loop
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
 | finding must exist | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | must have started working on this item | `fix_start` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | reproduction attempts must be documented in investigation file | *direct check* | — | `direct` | n/a |
 
@@ -191,7 +210,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | finding must exist and its latest filing must be LOW | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 
 ### `defer_medium` — fix_loop → fix_loop
 
@@ -199,7 +218,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | finding must exist and its latest filing must be MEDIUM | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | MEDIUM deferrals must not exceed 50% of total MEDIUM findings | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 
@@ -209,9 +228,16 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | the full suite must pass on this tree before a context reset — this is what re-bases the affected scope | `suite_green` | `hook:enforcement/hooks/suite_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| the last round left more than 3 findings open — fix them, or merge a duplicate into the finding it repeats with `sahjhan transition merge_finding BH-NNN BH-MMM` | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| the last round opened more findings than the run has closed since — resolve one with `fix_commit`, or merge a duplicate with `sahjhan transition merge_finding BH-NNN BH-MMM` | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 
 ### `resume` — awaiting_clear → fix_loop
 
@@ -236,7 +262,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | pattern analysis needs 3+ findings resolved since the last one, and is no longer owed once two consecutive rounds added no pattern — run Step 11 in fix_loop instead | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 
 ### `pattern_done` — pattern_analysis → fix_loop
@@ -245,6 +271,10 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | pattern analysis must be recorded before returning to fixes | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | amplification: more findings filed than resolved for 3 consecutive rounds — run `sahjhan defer batch --severity low,medium` to clear every open LOW and spend the MEDIUM budget | *direct check* | — | `direct` | n/a |
+| this round left more than 3 findings open — merge a duplicate into the finding it repeats with `sahjhan transition merge_finding BH-NNN BH-MMM` | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 
 ### `defer_low` — pattern_analysis → pattern_analysis
 
@@ -252,7 +282,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | finding must exist and its latest filing must be LOW | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 
 ### `defer_medium` — pattern_analysis → pattern_analysis
 
@@ -260,7 +290,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | finding must exist and its latest filing must be MEDIUM | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | MEDIUM deferrals must not exceed 50% of total MEDIUM findings | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 
@@ -270,10 +300,10 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | all findings must be resolved or deferred | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | pattern analysis required after 3+ fixes — run pattern_check before completing the perspective | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | two clean iterations required for stability | `iteration_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | prevent rapid-fire gaming of iteration count | `iteration_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
@@ -309,7 +339,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | no lint violations | *direct check* | — | `direct` | n/a |
 | all findings must be resolved or deferred | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | no unresolved protocol violations | `protocol_violation` | `hook:enforcement/hooks/bash_guard.py` | `agent` | **yes** — `sahjhan event` |
 | no unresolved quiz exhaustions | `quiz_exhausted` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
 | ↳ | `quiz_exhausted_resolved` | `human:skills/holtz/references/phase-convergence.md` | `human` | no — bootstrap denies `sahjhan event` |

@@ -56,6 +56,14 @@ fields = [
     { name = "id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
     { name = "commit_hash", type = "string", pattern = "^[0-9a-f]{7,40}$" },
     { name = "evidence_path", type = "string", optional = true },
+    # Set only by `merge_finding` (P0.2, D7): this id was a duplicate of
+    # `merged_into`, so the work is tracked there and this one is closed.
+    # A merge is a close — `all_findings_closed`, the punchlist counts and the
+    # amplification measure all read it as one, which is what makes the
+    # obligation "close **or merge** at least as many as it opens" one count
+    # rather than two. `merged_into IS NOT NULL` is the only thing that tells
+    # the two apart, and nothing needs to yet.
+    { name = "merged_into", type = "string", pattern = "^B[HJ]-\\d{3}$", optional = true },
 ]
 
 [[events.finding_resolved.producers]]
@@ -63,6 +71,9 @@ id = "agent:cli"
 
 [[events.finding_resolved.producers]]
 id = "engine:emits:fix_commit"
+
+[[events.finding_resolved.producers]]
+id = "engine:emits:merge_finding"
 
 [events.blast_radius]
 description = "Blast radius query after a fix"

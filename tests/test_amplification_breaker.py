@@ -62,6 +62,13 @@ class _Run:
         self.d = real_daemon
         self.root = real_daemon["project_root"]
         subprocess.run(["git", "init", "-q", self.root], check=True, capture_output=True)
+        # A real run always has a HEAD: `fix_commit` and `merge_finding` both
+        # stamp `commit_hash` from `git rev-parse --short=7 HEAD`, which exits
+        # non-zero on a repo with no commits and blocks the whole transition.
+        for args in (["config", "user.email", "t@example.com"],
+                     ["config", "user.name", "t"],
+                     ["commit", "-q", "--allow-empty", "-m", "root"]):
+            subprocess.run(["git", "-C", self.root, *args], check=True, capture_output=True)
         self.sah("ledger", "create", "--from", "run", "1", "--activate")
         self.sah("event", "state_transition", "--field", "from=merge_done",
                  "--field", "to=fix_loop", "--field", "command=fix_loop_start")
@@ -134,8 +141,11 @@ class _Run:
         self.sah("event", "state_transition", "--field", "from=fix_loop",
                  "--field", "to=pattern_analysis", "--field", "command=pattern_check")
 
-    def gate_check(self):
-        return self.sah("gate", "check", "pattern_done", check=False).stdout
+    def merge(self, finding_id, into, check=True):
+        return self.sah("transition", "merge_finding", finding_id, into, check=check)
+
+    def gate_check(self, command="pattern_done"):
+        return self.sah("gate", "check", command, check=False).stdout
 
     def blocked_on_amplification(self):
         out = self.gate_check()

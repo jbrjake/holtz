@@ -1010,6 +1010,86 @@ class TestH8EscapeIdentity:
         )
         assert findings_for(tree, "H8") == []
 
+    ARGUMENT_SCOPED = """
+        [protocol]
+        name = "fixture"
+        version = "1.0.0"
+
+        [queries.item_open]
+        sql = "SELECT count(*) = 0 FROM events WHERE type='finding_resolved' AND id='{{item_id}}'"
+        intent = "finding must not already be resolved"
+
+        [queries.round_item_cap_exceeded]
+        sql = "SELECT count(*) > 3 FROM events WHERE type='finding'"
+        intent = "a round may leave at most 3 findings open"
+        """
+
+    CAPPED = """
+        [[transitions]]
+        from = "pattern_analysis"
+        to = "fix_loop"
+        command = "pattern_done"
+        gates = [
+            { type = "query", query = "round_item_cap_exceeded", expect = "false", intent = "this round left more than 3 findings open — run `sahjhan transition merge_finding BH-NNN BH-MMM`" },
+        ]
+
+        [[transitions]]
+        from = "pattern_analysis"
+        to = "pattern_analysis"
+        command = "merge_finding"
+        args = ["item_id", "merged_into"]
+        gates = [
+            { type = "query", query = "item_open", expect = "true" },
+        ]
+        """
+
+    def test_an_argument_scoped_escape_is_not_this_check_s_business(
+        self, tmp_path: Path
+    ) -> None:
+        """`merge_finding`'s gate decides the *pair the agent picks*.
+
+        `item_open`'s SQL reads `id='{{item_id}}'`. A run-wide block has no
+        argument to bind, so "decide this block with query = item_open" names
+        a gate that cannot be instantiated there — the check would be printing
+        a remedy that does not run. Whether the block's condition entails the
+        escape's readiness is real, and an end-to-end test that drives the
+        named command from the blocked state is what settles it.
+        """
+        tree = build_tree(
+            tmp_path,
+            events="",
+            protocol=self.ARGUMENT_SCOPED,
+            transitions=self.CAPPED,
+        )
+        assert findings_for(tree, "H8") == []
+
+    def test_a_run_wide_query_on_the_same_escape_is_still_judged(
+        self, tmp_path: Path
+    ) -> None:
+        """The exemption is per-query, not per-escape.
+
+        `defer_medium` carries `medium_deferral_budget` beside two
+        parameterised gates, and D2's block is required to reference it. An
+        escape that gains one run-wide predicate must not be excused by the
+        parameterised ones standing next to it.
+        """
+        protocol = self.ARGUMENT_SCOPED + (
+            '\n[queries.merge_budget]\n'
+            'sql = "SELECT count(*) < 5 FROM events WHERE type=\'finding_resolved\'"\n'
+            'intent = "merges are capped"\n'
+        )
+        transitions = self.CAPPED.replace(
+            '{ type = "query", query = "item_open", expect = "true" },',
+            '{ type = "query", query = "item_open", expect = "true" },\n'
+            '            { type = "query", query = "merge_budget", expect = "true" },',
+        )
+        tree = build_tree(
+            tmp_path, events="", protocol=protocol, transitions=transitions
+        )
+        findings = findings_for(tree, "H8")
+        assert [f.level for f in findings] == ["error"], findings
+        assert "merge_budget" in findings[0].message
+
 
 # ── H9: a transition that does not record the state it implies ───────────────
 

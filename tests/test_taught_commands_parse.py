@@ -57,6 +57,11 @@ _PROSE_MENTIONS = frozenset({
 # the specific spellings resolve before the catch-all brace/angle forms.
 _PLACEHOLDERS = (
     (re.compile(r"\s+#.*$"), ""),                       # trailing comment
+    # `merge_finding BH-NNN BH-MMM` names two findings, so the second
+    # placeholder has to fill to a *different* id — the transition refuses a
+    # finding merged into itself, and filling both to BH-001 would exercise
+    # that refusal instead of the command the doc teaches.
+    (re.compile(r"B[HJ]-MMM"), "BH-002"),
     (re.compile(r"B[HJ]-NNN"), "BH-001"),
     (re.compile(r"\{item_id\}"), "BH-001"),
     (re.compile(r"\{project\}|<project>"), "holtz"),

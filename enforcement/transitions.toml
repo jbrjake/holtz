@@ -156,6 +156,55 @@ emits = [
     { event = "finding_resolved", commands = { commit_hash = "git rev-parse --short=7 HEAD" }, fields = { id = "{{item_id}}", commit_hash = "{{commit_hash}}", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
 ]
 
+# ── Merge: this finding is a duplicate of that one ──
+#
+# P0.2's round cap (D7) needs an escape, and its clause names one: "close **or
+# merge** at least as many as it opens". Closing needs a fix; merging is what
+# a sibling search actually produces when the sibling turns out to be a
+# finding the board already carries. Until now the run had no way to say that
+# — finding-level merge existed only in the one-time Step 9 Holtz/Justine
+# phase — so the cap would have been a block naming a command that does not
+# exist.
+#
+# Declared from `fix_loop` **and** from `pattern_analysis`, because the two
+# D7 gates sit in different states and each block must name something
+# reachable from its own side. This is the same reason `defer_low`/
+# `defer_medium` gained their `pattern_analysis` edges for D2.
+#
+# A merge emits `finding_resolved`, so it closes the item everywhere at once
+# and the obligation stays one count rather than two. `commit_hash` is stamped
+# from HEAD exactly as `fix_commit` stamps it: it names the tree the merge was
+# decided against, and leaving the field optional instead would weaken the
+# schema for the fix path, which is the path that actually needs it.
+
+[[transitions]]
+from = "fix_loop"
+to = "fix_loop"
+command = "merge_finding"
+args = ["item_id", "merged_into"]
+gates = [
+    { type = "query", query = "item_open", expect = "true" },
+    { type = "query", query = "merge_target_exists", expect = "true" },
+]
+emits = [
+    { event = "finding_resolved", commands = { commit_hash = "git rev-parse --short=7 HEAD" }, fields = { id = "{{item_id}}", merged_into = "{{merged_into}}", commit_hash = "{{commit_hash}}", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
+]
+
+# The same edge from inside a round. `step` is 11 rather than 10 for the same
+# reason the deferral pair uses it — that is where a round runs.
+[[transitions]]
+from = "pattern_analysis"
+to = "pattern_analysis"
+command = "merge_finding"
+args = ["item_id", "merged_into"]
+gates = [
+    { type = "query", query = "item_open", expect = "true" },
+    { type = "query", query = "merge_target_exists", expect = "true" },
+]
+emits = [
+    { event = "finding_resolved", commands = { commit_hash = "git rev-parse --short=7 HEAD" }, fields = { id = "{{item_id}}", merged_into = "{{merged_into}}", commit_hash = "{{commit_hash}}", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "11" } },
+]
+
 # ── Deferral: can't reproduce ──
 
 [[transitions]]
@@ -250,6 +299,18 @@ gates = [
     # fixes), so the untested gap is bounded by one iteration. Cheap for the
     # same reason: one full run per boundary, not one per fix.
     { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope full', timeout = 60, evidence = "suite_green", intent = "the full suite must pass on this tree before a context reset — this is what re-bases the affected scope" },
+    # P0.2's round cap and its obligation (D7), at the boundary every fix
+    # batch passes. The cap is checked here as well as on `pattern_done`
+    # because Step 11's *usual* path never enters `pattern_analysis` at all —
+    # it stays in `fix_loop` and cashes the round in here, so a cap that only
+    # gated `pattern_done` would cap the rare path and leave the common one
+    # uncapped. One named query, two consumers, so they cannot drift.
+    #
+    # The obligation is here and nowhere else: `fix_commit` and
+    # `merge_finding` are both reachable from `fix_loop`, so the block always
+    # names a command the run can run.
+    { type = "query", query = "round_item_cap_exceeded", expect = "false", intent = "the last round left more than 3 findings open — fix them, or merge a duplicate into the finding it repeats with `sahjhan transition merge_finding BH-NNN BH-MMM`" },
+    { type = "query", query = "round_opens_exceed_closes", expect = "false", intent = "the last round opened more findings than the run has closed since — resolve one with `fix_commit`, or merge a duplicate with `sahjhan transition merge_finding BH-NNN BH-MMM`" },
 ]
 
 # The filter is what makes this gate mean what it says. `context_reset` used to
@@ -347,6 +408,9 @@ gates = [
             { type = "query", query = "medium_deferral_budget", expect = "false" },
         ] },
     ] },
+    # P0.2's round cap (D7). The escape is `merge_finding`, which is declared
+    # from this state for that reason; `fix_commit` is not reachable here.
+    { type = "query", query = "round_item_cap_exceeded", expect = "false", intent = "this round left more than 3 findings open — merge a duplicate into the finding it repeats with `sahjhan transition merge_finding BH-NNN BH-MMM`" },
 ]
 
 # ── Deferral from a pattern round ──

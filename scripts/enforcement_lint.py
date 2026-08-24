@@ -1329,6 +1329,9 @@ def check_h8_escape_identity(model: Model) -> list[Finding]:
     care. They agree when they are one object: a named query both sides
     reference. So the rule is nominal, not textual — the block must name the
     query its escape is gated on.
+
+    Only an escape whose readiness is a fact about the *run* can be judged this
+    way; see `_run_wide` for the escapes that are not.
     """
     findings: list[Finding] = []
     commands = {
@@ -1343,6 +1346,25 @@ def check_h8_escape_identity(model: Model) -> list[Finding]:
         for gate in transition.get("gates", []) or []:
             escape_queries.setdefault(command, set()).update(_gate_query_names(gate))
 
+    def _run_wide(names: set[str]) -> set[str]:
+        """Drop the escape's argument-validation queries.
+
+        `item_open`'s SQL is `… id='{{item_id}}'` — a fact about the pair the
+        agent picks, not about the run. A blocking gate has no arguments to
+        bind, so naming it there would leave `{{item_id}}` unresolved and the
+        gate uninstantiable: the remedy this check prints would not run. That
+        makes the parameterised half exactly as undecidable here as an inline
+        predicate, and it is dropped for the same reason.
+
+        An escape that keeps any run-wide named query is still judged on it —
+        `defer_medium` carries `medium_deferral_budget` alongside two
+        parameterised gates, and D2's block is required to reference it.
+        """
+        return {
+            name for name in names
+            if "{{" not in model.queries.get(name, {}).get("sql", "")
+        }
+
     def _judge(
         where: str,
         text: str,
@@ -1351,7 +1373,18 @@ def check_h8_escape_identity(model: Model) -> list[Finding]:
         unnamed_is_finding: bool = True,
     ) -> None:
         for escape in _named_escapes(text, commands, own):
-            available = escape_queries.get(escape) or set()
+            named = escape_queries.get(escape) or set()
+            available = _run_wide(named)
+            if named and not available:
+                # Every predicate the escape is gated on is argument-scoped, so
+                # its readiness is a fact about the pair the agent picks and
+                # not about the run. There is nothing for a nominal check to
+                # compare, and the warning below would print a hint that is
+                # already satisfied — the predicates *are* named. Whether the
+                # block's condition entails the escape's readiness is a real
+                # question, and an end-to-end test that drives the named
+                # command from the blocked state is what answers it.
+                continue
             if not available and not unnamed_is_finding:
                 # A block whose escape is gated on inline predicates may be a
                 # perfectly good block: `fix_commit`'s gates are *more work*

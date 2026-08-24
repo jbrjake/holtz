@@ -79,6 +79,23 @@ intent = "all findings must be resolved or deferred"
 sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'"
 intent = "finding must not already be resolved or deferred"
 
+# `merge_finding`'s other end (P0.2, D7). The target has to be a finding this
+# run actually filed, or a merge would close an item into a typo and the work
+# would be tracked nowhere.
+#
+# `id <> '{{item_id}}'` is the load-bearing half: without it a finding merges
+# into itself, which satisfies every gate, emits a `finding_resolved`, and
+# closes the item for free. That is the whole cap defeated by one command, so
+# the exclusion belongs in the predicate rather than in the skill file's prose.
+#
+# The target is *not* required to be open. Merging a duplicate into a finding
+# that has already been fixed is the common case — the fix is why the
+# duplicate is not reproducible — and requiring openness there would refuse
+# the escape exactly when the round most needs it.
+[queries.merge_target_exists]
+sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{merged_into}}' AND id <> '{{item_id}}'"
+intent = "the finding merged into must exist and must not be the finding being merged"
+
 # A finding's severity is its *latest* filing. The ledger holds every filing,
 # `punchlist.md.tera` and `findings.py` both render the last one, and the
 # deferral gates used to match any row ever filed under the id — so a finding
@@ -225,6 +242,51 @@ intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings"
 [queries.pattern_analysis_overdue]
 sql = "SELECT (SELECT count(*) FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)) >= 3 AND (SELECT count(*) FROM events e WHERE e.type='pattern_analysis_complete' AND CAST(e.patterns_found AS INTEGER) = 0 AND e.seq >= COALESCE((SELECT MAX(p.seq) FROM events p WHERE p.type='pattern_analysis_complete' AND p.seq < (SELECT MAX(q.seq) FROM events q WHERE q.type='pattern_analysis_complete')), 0)) < 2 AND (SELECT count(*) FROM (SELECT DISTINCT f.id FROM events f JOIN events p2 ON p2.type='pattern_analysis_complete' AND strpos(','||p2.pattern_ids||',', ','||f.pattern_id||',') > 0 WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))) <= 25"
 intent = "3+ findings resolved since the last pattern analysis, unless the last two rounds added no pattern or more than 25 pattern-filed findings are open"
+
+# P0.2's round cap and its obligation (D7). A round's job is to find siblings;
+# the audited run's rounds filed 2.43 findings per fix and the board rose
+# 124 -> 273, so an uncapped round is how a run stops being able to terminate.
+#
+# Both windows start at the *previous* round, not the most recent one. A round
+# files its siblings at Step 11.2 and records itself at Step 11.6, so by the
+# time either gate is evaluated the round's own `pattern_analysis_complete` is
+# already the MAX — "since the last round" is the empty set there, and a cap
+# over it would be a gate that always passes. The floor is therefore the
+# second-most-recent round, found with the nested non-correlated subqueries
+# `pattern_analysis_overdue` uses, and COALESCE(…, 0) makes the first round's
+# window the whole run.
+#
+# The population is D6's: a finding whose `pattern_id` appears in some round's
+# courier-derived `pattern_ids`. That is the only set the *round* opened —
+# blast-radius and lens findings filed in the same window carry no
+# `pattern_id`, and capping those would charge the round for work it did not
+# do.
+#
+# The cap counts findings still **open**, which is what makes its escape
+# reachable: a filing cannot be withdrawn from an append-only ledger, so a cap
+# over filings is unclearable the moment a fourth sibling lands (#77's shape,
+# from a new direction). Closing or merging one is what brings the count back
+# under, and `merge_finding` is declared from both states either gate sits in.
+[queries.round_item_cap_exceeded]
+sql = "SELECT count(*) > 3 FROM (SELECT DISTINCT f.id FROM events f JOIN events p ON p.type='pattern_analysis_complete' AND strpos(','||p.pattern_ids||',', ','||f.pattern_id||',') > 0 WHERE f.type='finding' AND f.seq > COALESCE((SELECT MAX(a.seq) FROM events a WHERE a.type='pattern_analysis_complete' AND a.seq < (SELECT MAX(b.seq) FROM events b WHERE b.type='pattern_analysis_complete')), 0) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"
+intent = "a pattern round may leave at most 3 of the findings it opened still open"
+
+# The obligation half: close or merge at least as many as the round opens.
+#
+# It is gated at `iteration_boundary` and not at `pattern_done`. Closing needs
+# `fix_commit`, which is declared `fix_loop -> fix_loop`; from
+# `pattern_analysis` the only close available is `merge_finding`, so a round
+# blocked at its own exit could discharge the obligation only by merging away
+# the very siblings it had just found. That is not an escape, it is the search
+# undoing itself. At the boundary both `fix_commit` and `merge_finding` are in
+# reach, so the block always names something the run can do.
+#
+# The comparison is `>` rather than `>=`: opening three and closing three is
+# the obligation met, not broken. Merges count on the right-hand side because
+# `merge_finding` emits `finding_resolved` — "close **or** merge" is one count.
+[queries.round_opens_exceed_closes]
+sql = "SELECT (SELECT count(DISTINCT f.id) FROM events f JOIN events p ON p.type='pattern_analysis_complete' AND strpos(','||p.pattern_ids||',', ','||f.pattern_id||',') > 0 WHERE f.type='finding' AND f.seq > COALESCE((SELECT MAX(a.seq) FROM events a WHERE a.type='pattern_analysis_complete' AND a.seq < (SELECT MAX(b.seq) FROM events b WHERE b.type='pattern_analysis_complete')), 0)) > (SELECT count(DISTINCT r.id) FROM events r WHERE r.type='finding_resolved' AND r.seq > COALESCE((SELECT MAX(a.seq) FROM events a WHERE a.type='pattern_analysis_complete' AND a.seq < (SELECT MAX(b.seq) FROM events b WHERE b.type='pattern_analysis_complete')), 0))"
+intent = "a pattern round must close or merge at least as many findings as it opens"
 
 [queries.quiz_exhaustions_resolved]
 sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')"
