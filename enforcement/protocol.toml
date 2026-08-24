@@ -127,6 +127,44 @@ intent = "open findings whose latest filing is LOW"
 sql = "SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='MEDIUM' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
 intent = "open findings whose latest filing is MEDIUM"
 
+# The escape's first conjunct. `open_low_findings` returns the ids the batch
+# transitions; a gate needs a scalar, and named queries cannot reference one
+# another. `test_amplification_breaker.py` runs both and asserts the count
+# equals the number of ids, so editing one without the other fails.
+[queries.open_low_count]
+sql = "SELECT count(*) FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='LOW' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"
+intent = "no open LOW findings remain"
+
+# P0.1's amplification circuit-breaker: A = findings filed since fix_loop_start
+# / findings resolved since fix_loop_start, evaluated at each round, true when
+# A > 1.0 for the last three rounds. The audited run filed 2.43 findings per
+# fix and its open count rose 124 -> 273, falling exactly once; it was
+# non-terminating from pattern round 1 and nothing measured that.
+#
+# `A > 1.0` is written as `filed > resolved` rather than as a division: it is
+# exact wherever A is defined, and it gives the right answer where A is not —
+# resolved=0 with findings filed is infinite amplification (true), and a round
+# with no activity either way is not amplification (false).
+#
+# The window is a seq floor — the seq of the *third*-most-recent round — not
+# `ORDER BY seq DESC LIMIT 3`. Dropping the floor entirely answers "any three
+# diverging rounds ever", which on a run that diverged twice, recovered, and
+# relapsed once reads `true` where the clause says `false`. Three *consecutive*
+# rounds is the condition; three rounds is not.
+#
+# Correlated scalar subqueries are rejected by the query planner in this
+# position ("Physical plan does not support logical expression
+# ScalarSubquery"), so the per-round counts come from a self-join with
+# GROUP BY/HAVING. A round that joins no events at all drops out, which is the
+# wanted answer: filed=0 and resolved=0 is not divergence.
+#
+# `fix_loop_start` is the run's *first* `state_transition` into fix_loop —
+# MIN(seq), not MAX — so the measurement spans the whole loop rather than
+# resetting at every lens rotation back into it.
+[queries.amplification_diverging]
+sql = "SELECT count(*) >= 3 FROM (SELECT r.seq FROM events r JOIN events f ON f.seq <= r.seq AND f.seq > COALESCE((SELECT MIN(s.seq) FROM events s WHERE s.type='state_transition' AND s.to='fix_loop'), 0) WHERE r.type='pattern_analysis_complete' AND r.seq >= COALESCE((SELECT MAX(a.seq) FROM events a WHERE a.type='pattern_analysis_complete' AND a.seq < (SELECT MAX(b.seq) FROM events b WHERE b.type='pattern_analysis_complete' AND b.seq < (SELECT MAX(c.seq) FROM events c WHERE c.type='pattern_analysis_complete'))), 0) GROUP BY r.seq HAVING count(DISTINCT CASE WHEN f.type='finding' THEN f.id END) > count(DISTINCT CASE WHEN f.type='finding_resolved' THEN f.id END))"
+intent = "more findings filed than resolved since fix_loop_start, for three consecutive rounds"
+
 [queries.medium_deferral_budget]
 sql = "SELECT (SELECT count(DISTINCT id) FROM events WHERE type='finding_deferred' AND reason='medium_budget') < (SELECT count(DISTINCT f.id) FROM events f WHERE f.type='finding' AND f.severity='MEDIUM' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id)) / 2"
 intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings"
