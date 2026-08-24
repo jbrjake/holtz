@@ -15,7 +15,7 @@ INHERITED RECON: Holtz's recon data is at docs/holtz/recon/ (step0-project-overv
 Write all output to docs/holtz/justine/ and use docs/holtz/justine/impact-graph.json for your impact graph. Leave docs/holtz/architecture-baseline.md and docs/holtz/LIVING-PUNCHLIST.md untouched. Run through convergence, then stop. Report completion by writing docs/holtz/justine/SUMMARY.md. Holtz handles the merge and fix loop. This is an autonomous execution context — choose the most conservative default for ambiguities and proceed. Report NEEDS_CONTEXT only if the task is genuinely impossible without human input.")
 ```
 
-After dispatching, record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event justine_dispatched --mode full` (or `--mode skipped` for targeted audits).
+After dispatching, record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event justine_dispatched --field mode=full` (or `--field mode=skipped` for targeted audits).
 
 Continue immediately with Step 6. Justine runs in parallel — that is the point. Check for her results before entering Step 9.
 

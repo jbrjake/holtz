@@ -188,7 +188,7 @@ For each lens sweep, record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcem
 4. Dispatch a subagent with the focused path list and lens audit priorities
 5. Write findings to `docs/holtz/audit/lens-{name}.md` (append or replace)
 
-After completing a lens sweep (any type), return to Step 10 (fix loop) for any new findings. When a perspective passes clean, run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" set complete perspective`. Then run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition lens_rotate` to switch to the next perspective.
+After completing a lens sweep (any type), return to Step 10 (fix loop) for any new findings. When a perspective passes clean, run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" set complete perspective <name>`. Then run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition lens_rotate` to switch to the next perspective.
 
 **Three transitions need a `full` green first** — `iteration_boundary`, `set complete perspective`, `converge`. Run `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record --scope full` before each. This is the periodic whole-suite run that re-bases what `--scope affected` measures against; per-fix greens never satisfy it.
 
