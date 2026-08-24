@@ -29,6 +29,16 @@ fields = [
     { name = "perspective", type = "string" },
     { name = "description", type = "string" },
     { name = "predicted_by", type = "string" },
+    # Which pattern a sibling was filed under (P0.2's backpressure conjunct).
+    # `predicted_by` cannot carry this: across every archived run it holds a
+    # prediction index (0-7) and never a PAT id, and the two facts answer
+    # different questions. Optional because only Step 11.2's sibling search
+    # attributes a finding to a pattern; audit and lens findings have none.
+    #
+    # `pattern_analysis_overdue` counts these only when the id appears in some
+    # round's `pattern_ids`, which the courier derives from the brief's own
+    # headings — so a PAT the brief never got cannot inflate the population.
+    { name = "pattern_id", type = "string", pattern = "^PAT-\\d+$", optional = true },
 ]
 
 [[events.finding.producers]]

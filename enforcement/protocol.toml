@@ -203,9 +203,28 @@ intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings"
 # every zero-yield round the run ever had and stops the obligation the moment
 # any two rounds anywhere were dry. It answers a plausible question and the
 # wrong one; the difference is invisible until a run has three rounds.
+# The third conjunct is the backpressure stop (P0.2, D6). A round's job is to
+# find siblings, so running one while the siblings from earlier rounds are
+# still open buys more board rather than less. Past 25 open, the obligation
+# lapses — the same way it lapses after two dry rounds — and the run is
+# expected to fix what it already filed.
+#
+# The population is the findings a round attributed to a pattern, and it is
+# joined to the rounds rather than trusted on its own: a `pattern_id` counts
+# only when that PAT appears in some round's `pattern_ids`, which the courier
+# derives from the brief's `## PAT-NNN:` headings and the agent cannot type.
+# So the population cannot be inflated past what the brief actually contains.
+# It can still be *under*-reported by leaving the field off, which is the
+# direction that forfeits the relief this conjunct grants, not the direction
+# that dodges a block.
+#
+# The membership test is `strpos` over a comma-fenced list rather than LIKE:
+# `pattern_ids` is a joined string, and fencing both sides with commas is what
+# stops PAT-1 matching PAT-10. A NULL on either side yields NULL and drops out,
+# which is right for a dry round and for an unattributed finding.
 [queries.pattern_analysis_overdue]
-sql = "SELECT (SELECT count(*) FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)) >= 3 AND (SELECT count(*) FROM events e WHERE e.type='pattern_analysis_complete' AND CAST(e.patterns_found AS INTEGER) = 0 AND e.seq >= COALESCE((SELECT MAX(p.seq) FROM events p WHERE p.type='pattern_analysis_complete' AND p.seq < (SELECT MAX(q.seq) FROM events q WHERE q.type='pattern_analysis_complete')), 0)) < 2"
-intent = "3+ findings resolved since the last pattern analysis, unless the last two rounds added no pattern"
+sql = "SELECT (SELECT count(*) FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)) >= 3 AND (SELECT count(*) FROM events e WHERE e.type='pattern_analysis_complete' AND CAST(e.patterns_found AS INTEGER) = 0 AND e.seq >= COALESCE((SELECT MAX(p.seq) FROM events p WHERE p.type='pattern_analysis_complete' AND p.seq < (SELECT MAX(q.seq) FROM events q WHERE q.type='pattern_analysis_complete')), 0)) < 2 AND (SELECT count(*) FROM (SELECT DISTINCT f.id FROM events f JOIN events p2 ON p2.type='pattern_analysis_complete' AND strpos(','||p2.pattern_ids||',', ','||f.pattern_id||',') > 0 WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))) <= 25"
+intent = "3+ findings resolved since the last pattern analysis, unless the last two rounds added no pattern or more than 25 pattern-filed findings are open"
 
 [queries.quiz_exhaustions_resolved]
 sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')"

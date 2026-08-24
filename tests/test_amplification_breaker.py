@@ -76,26 +76,31 @@ class _Run:
             assert result.returncode == 0, f"{args}\n{result.stdout}\n{result.stderr}"
         return result
 
-    def file(self, finding_id, severity="HIGH"):
+    def file(self, finding_id, severity="HIGH", pattern_id=None):
+        attribution = ["--field", f"pattern_id={pattern_id}"] if pattern_id else []
         self.sah("event", "finding", "--field", f"id={finding_id}",
                  "--field", f"severity={severity}", "--field", "category=bug",
                  "--field", "location=a.py:1", "--field", "perspective=component",
-                 "--field", "predicted_by=none", "--field", "description=x", *_COMMON)
+                 "--field", "predicted_by=none", "--field", "description=x",
+                 *attribution, *_COMMON)
 
     def resolve(self, finding_id):
         self.sah("event", "finding_resolved", "--field", f"id={finding_id}",
                  "--field", "commit_hash=abc1234", *_COMMON)
 
-    def round(self):
+    def round(self, pat_ids=None):
         """One pattern round, through `pattern_round.py --record` + the courier.
 
-        Each round writes a fresh PAT entry so the yield stop never withdraws
-        the obligation mid-test — that is a different clause, and a dry round
-        here would confound the two.
+        By default each round writes a fresh PAT entry so the yield stop never
+        withdraws the obligation mid-test — that is a different clause, and a
+        dry round here would confound the two. `pat_ids` overrides the brief's
+        whole contents when a test needs specific ids.
         """
-        self._pat += 1
+        if pat_ids is None:
+            self._pat += 1
+            pat_ids = [f"PAT-{n:03d}" for n in range(1, self._pat + 1)]
         _write(self.root, BRIEF, "# Brief\n\n" + "".join(
-            _entry(f"PAT-{n:03d}", 1) for n in range(1, self._pat + 1)))
+            _entry(pat_id, 1) for pat_id in pat_ids))
 
         script = os.path.join(SCRIPTS_DIR, "pattern_round.py")
         command = f"python3 {script} --record --siblings-found 0"

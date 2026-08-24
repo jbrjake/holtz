@@ -104,7 +104,7 @@ sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer batch --severity lo
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list --all
    ```
    Use `findings.py show BH-NNN` for a finding's full record.
-2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify the pattern, search for siblings, record each sibling with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding` IMMEDIATELY — one call per sibling, before the next group.
+2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify the pattern, search for siblings, record each sibling with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding --field pattern_id=PAT-NNN` IMMEDIATELY — one call per sibling, before the next group. Past 25 open findings carrying a `pattern_id`, no round is owed until they are closed.
 3. **Update impact graph:** Add `shares_pattern` edges between all instances of the same pattern (e.g., if BH-003 and BH-007 are both PAT-001 instances, link the functions they involve with `shares_pattern` edges including the pattern ID in the note).
 4. **Read the pattern brief compact. Never `Read` it whole:**
    ```bash
