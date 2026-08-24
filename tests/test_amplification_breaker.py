@@ -10,13 +10,13 @@ nothing in the protocol measured that. This is the thing that notices:
 evaluated at each pattern round, tripping when `A > 1.0` for three
 *consecutive* rounds.
 
-**The gate that consumes it is not here yet.** The clause puts the block on
-`pattern_done` with `sahjhan defer batch --severity low,medium` as its escape,
-and `pattern_analysis` has exactly one exit — `pattern_done` — while
-`defer_low`/`defer_medium` exist only from `fix_loop`. A run blocked there
-cannot reach its own escape. That is a design question for the author of the
-clause, not one to settle here; the measurement lands first because it is
-correct independently of where the block ends up.
+The block lands on `pattern_done` — the edge that returns to `fix_loop` — so a
+tripped breaker stops the next fix being dispatched rather than firing between
+a verified fix and its own commit. Its escape is one
+`sahjhan defer batch --severity low,medium`, and the escape only works because
+`defer_low`/`defer_medium` are also declared from `pattern_analysis`: that
+state has no other exit, so without those edges the block would be a dead end
+that names a command the run cannot reach.
 
 Driven through the real writer end to end, because a restricted
 `pattern_analysis_complete` only reaches a ledger that way, and because a test
@@ -125,6 +125,18 @@ class _Run:
     def diverging(self):
         return self.answer("amplification_diverging") == "true"
 
+    def enter_pattern_analysis(self):
+        self.sah("event", "state_transition", "--field", "from=fix_loop",
+                 "--field", "to=pattern_analysis", "--field", "command=pattern_check")
+
+    def gate_check(self):
+        return self.sah("gate", "check", "pattern_done", check=False).stdout
+
+    def blocked_on_amplification(self):
+        out = self.gate_check()
+        assert out.strip(), "gate check produced nothing — is the run in pattern_analysis?"
+        return "✗" in out and "amplification" in out
+
     def defer_batch(self):
         return self.sah("defer", "batch", "--severity", "low,medium", check=False)
 
@@ -229,42 +241,141 @@ class TestTheMeasurement:
         )
 
 
-class TestWhyTheGateIsNotOnPatternDoneYet:
-    """The escape is unreachable from the state a `pattern_done` block holds.
+class TestTheBlock:
+    """A tripped breaker closes `pattern_done`, so no next fix is dispatched."""
 
-    P0.1 says: gate `pattern_done`, and clear it with one
-    `sahjhan defer batch --severity low,medium`. Both halves are fine on their
-    own; together they wedge. `pattern_analysis` has exactly one outgoing edge,
-    and `defer_low`/`defer_medium` are declared `fix_loop -> fix_loop`, so a
-    run stopped at `pattern_done` cannot run the command the block names —
-    #77's deadlock reached from a new direction.
+    def _trip(self, run, lows=2, mediums=2):
+        for n in (1, 2, 3):
+            run.file(f"BH-{n}01")
+            run.file(f"BH-{n}02")
+            run.resolve(f"BH-{n}01")
+            run.round()
+        for n in range(1, lows + 1):
+            run.file(f"BH-4{n:02d}", "LOW")
+        for n in range(1, mediums + 1):
+            run.file(f"BH-5{n:02d}", "MEDIUM")
+        assert run.diverging()
+        run.enter_pattern_analysis()
 
-    These pin the two facts a fix has to change, so the naive gate cannot be
-    added back without one of them failing first.
+    def test_pattern_done_is_blocked_while_the_breaker_is_tripped(self, run):
+        self._trip(run)
+        assert run.blocked_on_amplification(), run.gate_check()
+
+    def test_the_block_names_the_command_that_clears_it(self, run):
+        """An escape the agent cannot read is a deadlock with extra steps."""
+        self._trip(run)
+        assert "defer batch --severity low,medium" in run.gate_check()
+
+    def test_an_untripped_run_is_not_blocked_by_the_breaker(self, run):
+        """Non-vacuity: the gate is not simply always shut."""
+        run.file("BH-001")
+        run.resolve("BH-001")
+        run.round()
+        run.enter_pattern_analysis()
+        assert not run.blocked_on_amplification(), run.gate_check()
+
+
+class TestTheEscapeIsReachableFromTheBlockedState:
+    """`pattern_analysis` has no exit but `pattern_done`.
+
+    So the deferral transitions have to exist from there too, or the block is a
+    dead end that names a command the run cannot reach — #77 from a new
+    direction. `sahjhan defer batch` does not merely refuse each item in that
+    case; it exits non-zero on the first and defers nothing at all.
     """
 
-    def test_pattern_analysis_has_exactly_one_exit(self):
+    def test_the_deferral_transitions_exist_from_pattern_analysis(self):
         with open(os.path.join(CONFIG_DIR, "transitions.toml"), "rb") as fh:
             transitions = tomllib.load(fh)["transitions"]
-        exits = [t["command"] for t in transitions if t.get("from") == "pattern_analysis"]
-        assert exits == ["pattern_done"], (
-            f"pattern_analysis now has other exits ({exits}) — a block on "
-            f"pattern_done may no longer be a dead end, and the deadlock this "
-            f"file documents may be resolvable"
+        from_pattern = {t["command"] for t in transitions
+                        if t.get("from") == "pattern_analysis"}
+        assert {"defer_low", "defer_medium"} <= from_pattern, (
+            f"pattern_analysis can only reach {sorted(from_pattern)} — the "
+            f"pattern_done block names an escape the run cannot run"
         )
 
-    def test_the_batch_cannot_run_from_pattern_analysis(self, run):
-        """And it fails fatally, not per item — nothing is deferred at all."""
+    def test_the_batch_runs_from_pattern_analysis(self, run):
         run.file("BH-001", "LOW")
-        run.sah("event", "state_transition", "--field", "from=fix_loop",
-                "--field", "to=pattern_analysis", "--field", "command=pattern_check")
+        run.enter_pattern_analysis()
 
         result = run.defer_batch()
-        assert result.returncode != 0, (
-            f"the batch now runs from pattern_analysis:\n{result.stdout}"
+        assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+        assert "defer_low: 1 applied" in result.stdout, result.stdout
+
+    def test_the_medium_cap_is_not_weaker_inside_a_round(self, run):
+        """The escape must not become a way around D5's 50% rule."""
+        for n in range(1, 5):
+            run.file(f"BH-5{n:02d}", "MEDIUM")
+        run.enter_pattern_analysis()
+
+        result = run.defer_batch()
+        assert "defer_medium: 2 applied, 2 refused" in result.stdout, result.stdout
+
+
+class TestTheEscapeClearsTheBlock:
+    """The named command always reaches the post-state the predicate asserts.
+
+    This is the property the whole design turns on. Asserting the SQL alone
+    proves the block; only driving the escape proves the way out.
+    """
+
+    def _trip(self, run, lows, mediums):
+        for n in (1, 2, 3):
+            run.file(f"BH-{n}01")
+            run.file(f"BH-{n}02")
+            run.resolve(f"BH-{n}01")
+            run.round()
+        for n in range(1, lows + 1):
+            run.file(f"BH-4{n:02d}", "LOW")
+        for n in range(1, mediums + 1):
+            run.file(f"BH-5{n:02d}", "MEDIUM")
+        run.enter_pattern_analysis()
+
+    def test_one_batch_clears_the_amplification_block(self, run):
+        self._trip(run, lows=3, mediums=4)
+        assert run.blocked_on_amplification(), run.gate_check()
+
+        result = run.defer_batch()
+        assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+
+        assert not run.blocked_on_amplification(), (
+            f"the named escape ran and the block did not clear:\n"
+            f"{result.stdout}\n{run.gate_check()}"
         )
-        assert "no transition 'defer_low' available from state 'pattern_analysis'" \
-            in result.stderr, result.stderr
+        assert run.diverging(), (
+            "the escape must clear the block without erasing the measurement — "
+            "the amplification happened and is still true"
+        )
+
+    def test_it_clears_even_though_mediums_remain_open(self, run):
+        """Why the predicate says "budget spent" and not "no open MEDIUM".
+
+        Eight MEDIUMs, four deferrable. Phrased as an empty set this would
+        still be blocked with no command left to run.
+        """
+        self._trip(run, lows=0, mediums=8)
+        assert run.blocked_on_amplification()
+
+        run.defer_batch()
+        assert not run.blocked_on_amplification(), run.gate_check()
+
+        still_open = json.loads(run.sah(
+            "query", _named_query("open_medium_findings"), "--format", "json").stdout)
+        assert len(still_open) == 4, (
+            f"the cap did not hold — expected half the MEDIUMs still open, "
+            f"got {still_open}"
+        )
+
+    def test_a_low_filed_after_the_escape_blocks_again(self, run):
+        """The gate reads the ledger at check time, not a latched flag."""
+        self._trip(run, lows=1, mediums=0)
+        run.defer_batch()
+        assert not run.blocked_on_amplification()
+
+        run.file("BH-402", "LOW")
+        assert run.blocked_on_amplification(), (
+            "a LOW filed after the batch left the block open"
+        )
 
 
 class TestTheTwoLowQueriesAgree:

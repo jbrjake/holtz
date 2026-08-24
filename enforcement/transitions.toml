@@ -325,6 +325,69 @@ to = "fix_loop"
 command = "pattern_done"
 gates = [
     { type = "ledger_has_event_since", event = "pattern_analysis_complete", since = "last_transition", intent = "pattern analysis must be recorded before returning to fixes" },
+    # P0.1's amplification circuit-breaker. The block lands here rather than on
+    # `fix_commit`: this edge is the *return* to fix_loop, so a tripped breaker
+    # stops the next fix being dispatched instead of firing between a verified
+    # fix and its own commit.
+    #
+    # `any_of` is what makes the escape one object with the block. The first
+    # branch is the breaker untripped; the second is the post-state a single
+    # `sahjhan defer batch --severity low,medium` produces.
+    #
+    # The second branch says "budget spent", not "no open MEDIUM", and that is
+    # load-bearing rather than a weakening: `defer_medium` caps deferrals at
+    # 50% of the MEDIUMs, so no command can empty that set, and a block whose
+    # escape cannot clear it is #77's deadlock. Spending a budget cannot be
+    # refused. `medium_deferral_budget` is reused with the opposite expectation
+    # rather than restated, so the cap and this cannot disagree.
+    { type = "any_of", intent = "amplification: more findings filed than resolved for 3 consecutive rounds — run `sahjhan defer batch --severity low,medium` to clear every open LOW and spend the MEDIUM budget", gates = [
+        { type = "query", query = "amplification_diverging", expect = "false" },
+        { type = "all_of", gates = [
+            { type = "query", query = "open_low_count", expect = "0" },
+            { type = "query", query = "medium_deferral_budget", expect = "false" },
+        ] },
+    ] },
+]
+
+# ── Deferral from a pattern round ──
+#
+# The same two deferrals, reachable from `pattern_analysis`. Without these the
+# breaker above is a dead end by construction: `pattern_analysis` has exactly
+# one exit, and `defer_low`/`defer_medium` are declared `fix_loop → fix_loop`,
+# so a run stopped at `pattern_done` cannot run the command that block names.
+# `sahjhan defer batch` does not merely refuse each item there — it exits
+# non-zero on the first one and defers nothing at all.
+#
+# Gates and emits are identical to the `fix_loop` pair on purpose, including
+# `medium_deferral_budget`: the 50% cap must not become weaker inside a pattern
+# round than outside one. `step` is 11 rather than 10 because that is where a
+# round runs, matching `ROUND_STEP` in `pattern_round.py`.
+
+[[transitions]]
+from = "pattern_analysis"
+to = "pattern_analysis"
+command = "defer_low"
+args = ["item_id"]
+gates = [
+    { type = "query", query = "item_is_low", expect = "true" },
+    { type = "query", query = "item_open", expect = "true" },
+]
+emits = [
+    { event = "finding_deferred", fields = { id = "{{item_id}}", reason = "low_priority", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "11" } },
+]
+
+[[transitions]]
+from = "pattern_analysis"
+to = "pattern_analysis"
+command = "defer_medium"
+args = ["item_id"]
+gates = [
+    { type = "query", query = "item_is_medium", expect = "true" },
+    { type = "query", query = "item_open", expect = "true" },
+    { type = "query", query = "medium_deferral_budget", expect = "true" },
+]
+emits = [
+    { event = "finding_deferred", fields = { id = "{{item_id}}", reason = "medium_budget", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "11" } },
 ]
 
 # ── Perspective (Lens) Completion ──

@@ -72,6 +72,8 @@ flowchart LR
     awaiting_human -->|resume| fix_loop
     fix_loop -->|pattern_check| pattern_analysis
     pattern_analysis -->|pattern_done| fix_loop
+    pattern_analysis -->|defer_low| pattern_analysis
+    pattern_analysis -->|defer_medium| pattern_analysis
     fix_loop -->|set complete perspective| perspective_clean
     perspective_clean -->|lens_rotate| audit
     perspective_clean -->|all_perspectives| all_perspectives_clean
@@ -95,22 +97,24 @@ flowchart LR
     linkStyle 12 stroke:#b0b0b0,stroke-width:2px
     linkStyle 13 stroke:#b0b0b0,stroke-width:2px
     linkStyle 14 stroke:#d1495b,stroke-width:2px
-    linkStyle 15 stroke:#2a9d8f,stroke-width:2px
+    linkStyle 15 stroke:#e08a2e,stroke-width:2px
     linkStyle 16 stroke:#d1495b,stroke-width:2px
     linkStyle 17 stroke:#d1495b,stroke-width:2px
     linkStyle 18 stroke:#d1495b,stroke-width:2px
-    linkStyle 19 stroke:#b0b0b0,stroke-width:2px
+    linkStyle 19 stroke:#d1495b,stroke-width:2px
     linkStyle 20 stroke:#d1495b,stroke-width:2px
     linkStyle 21 stroke:#b0b0b0,stroke-width:2px
-    linkStyle 22 stroke:#b0b0b0,stroke-width:2px
-    linkStyle 23 stroke:#d1495b,stroke-width:2px
+    linkStyle 22 stroke:#d1495b,stroke-width:2px
+    linkStyle 23 stroke:#b0b0b0,stroke-width:2px
+    linkStyle 24 stroke:#b0b0b0,stroke-width:2px
+    linkStyle 25 stroke:#d1495b,stroke-width:2px
 ```
 
 | Colour | Class | Edges |
 |---|---|---|
 | `#b0b0b0` | `ungated` | `confirm_convergence` (final_sweep_clean→converged), `final_sweep_start` (all_perspectives_clean→final_sweep), `pause` (fix_loop→awaiting_human), `resume` (awaiting_human→fix_loop), `run_start` (idle→recon), `sweep_dirty` (final_sweep→fix_loop) |
-| `#d1495b` | `agent` | `all_perspectives` (perspective_clean→all_perspectives_clean), `audit_complete` (audit→merge_ready), `converge` (final_sweep→final_sweep_clean), `defer_cant_reproduce` (fix_loop→fix_loop), `defer_low` (fix_loop→fix_loop), `defer_medium` (fix_loop→fix_loop), `finalize` (converged→finalized), `fix_commit` (fix_loop→fix_loop), `fix_loop_start` (audit→awaiting_clear), `fix_loop_start` (merge_done→awaiting_clear), `iteration_boundary` (fix_loop→awaiting_clear), `lens_rotate` (perspective_clean→audit), `merge_complete` (merge_ready→merge_done), `pattern_check` (fix_loop→pattern_analysis), `recon_complete` (recon→audit), `set complete perspective` (fix_loop→perspective_clean) |
-| `#2a9d8f` | `tool` | `pattern_done` (pattern_analysis→fix_loop) |
+| `#d1495b` | `agent` | `all_perspectives` (perspective_clean→all_perspectives_clean), `audit_complete` (audit→merge_ready), `converge` (final_sweep→final_sweep_clean), `defer_cant_reproduce` (fix_loop→fix_loop), `defer_low` (fix_loop→fix_loop), `defer_low` (pattern_analysis→pattern_analysis), `defer_medium` (fix_loop→fix_loop), `defer_medium` (pattern_analysis→pattern_analysis), `finalize` (converged→finalized), `fix_commit` (fix_loop→fix_loop), `fix_loop_start` (audit→awaiting_clear), `fix_loop_start` (merge_done→awaiting_clear), `iteration_boundary` (fix_loop→awaiting_clear), `lens_rotate` (perspective_clean→audit), `merge_complete` (merge_ready→merge_done), `pattern_check` (fix_loop→pattern_analysis), `recon_complete` (recon→audit), `set complete perspective` (fix_loop→perspective_clean) |
+| `#e08a2e` | `direct` | `pattern_done` (pattern_analysis→fix_loop) |
 | `#2f6fb0` | `host` | `resume` (awaiting_clear→fix_loop) |
 
 ## Gates
@@ -236,6 +240,25 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
 | pattern analysis must be recorded before returning to fixes | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| amplification: more findings filed than resolved for 3 consecutive rounds — run `sahjhan defer batch --severity low,medium` to clear every open LOW and spend the MEDIUM budget | *direct check* | — | `direct` | n/a |
+
+### `defer_low` — pattern_analysis → pattern_analysis
+
+| Fact required | Evidence | Writer | Attests | Forgeable |
+|---|---|---|---|---|
+| finding must exist and its latest filing must be LOW | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+
+### `defer_medium` — pattern_analysis → pattern_analysis
+
+| Fact required | Evidence | Writer | Attests | Forgeable |
+|---|---|---|---|---|
+| finding must exist and its latest filing must be MEDIUM | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| MEDIUM deferrals must not exceed 50% of total MEDIUM findings | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 
 ### `set complete perspective` — fix_loop → perspective_clean
 
