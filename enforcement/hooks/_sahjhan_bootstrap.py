@@ -52,6 +52,7 @@ MANAGED_DOCS = [
     "docs/holtz/STATUS.md",
     "docs/holtz/PUNCHLIST.md",
     "docs/holtz/PUNCHLIST-ARCHIVE.md",
+    "docs/holtz/DEFERRED.md",
     "docs/holtz/SUMMARY.md",
 ]
 

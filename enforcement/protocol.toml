@@ -60,6 +60,7 @@ path = "docs/holtz/project.jsonl"
 "defer cant-reproduce" = "transition defer_cant_reproduce"
 "defer low" = "transition defer_low"
 "defer medium" = "transition defer_medium"
+"defer batch" = "batch defer"
 
 # ── Named queries (#82) ──
 #
@@ -104,6 +105,28 @@ intent = "finding must exist and its latest filing must be MEDIUM"
 # the other side: `event finding_deferred` is on the bootstrap allowlist, so a
 # deferral recorded twice would spend budget once too often. And a finding
 # corrected MEDIUM -> HIGH is not a MEDIUM at all, so it funds no budget.
+# The two batch populations. `item_is_low` answers "is *this* id LOW" with the
+# id pinned by the argument; these answer "which ids are LOW" run-wide, so the
+# max-seq subquery has to correlate on `f.id` the way
+# `medium_deferral_budget`'s denominator does. Severity is the latest filing
+# (D25): a finding corrected LOW -> HIGH must not be swept into a LOW batch,
+# which is the same defect `fe2ef56` fixed one field in.
+#
+# Openness is spelled as the two NOT INs rather than by calling `item_open`,
+# because a named query cannot reference another one — `all_findings_closed`
+# carries the identical pair for the same reason.
+#
+# The batch re-runs these per step, after earlier steps have appended, so the
+# MEDIUM population is read with the LOW deferrals already on the ledger.
+
+[queries.open_low_findings]
+sql = "SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='LOW' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
+intent = "open findings whose latest filing is LOW"
+
+[queries.open_medium_findings]
+sql = "SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='MEDIUM' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
+intent = "open findings whose latest filing is MEDIUM"
+
 [queries.medium_deferral_budget]
 sql = "SELECT (SELECT count(DISTINCT id) FROM events WHERE type='finding_deferred' AND reason='medium_budget') < (SELECT count(DISTINCT f.id) FROM events f WHERE f.type='finding' AND f.severity='MEDIUM' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id)) / 2"
 intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings"
@@ -149,6 +172,27 @@ intent = "3+ findings resolved since the last pattern analysis, unless the last 
 [queries.quiz_exhaustions_resolved]
 sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')"
 intent = "no unresolved quiz exhaustions"
+
+# ── Batches ──
+#
+# The circuit-breaker's escape, in one command. The engine knows nothing about
+# severity or findings: `param` names the flag, each step's `value` selects it,
+# `items` is a query returning an `id` column, and `transition` is applied to
+# each id *with that transition's own gates*. So `defer_medium`'s 50% budget
+# still holds inside the batch — the MEDIUM step refuses the moment the cap is
+# reached, per item, and refusals are reported rather than fatal.
+#
+# That is why the breaker's predicate has to be phrased as the budget being
+# *spent*, not the MEDIUM set being empty: one run of this command always
+# reaches the cap, and can never clear the whole set.
+
+[batches.defer]
+description = "Defer open findings in bulk, by severity"
+param = "severity"
+steps = [
+    { value = "low", items = "open_low_findings", transition = "defer_low" },
+    { value = "medium", items = "open_medium_findings", transition = "defer_medium" },
+]
 
 # ── Boundaries (#82) ──
 #
