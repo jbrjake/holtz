@@ -39,18 +39,6 @@ For each item in either punchlist, classify it into exactly one of the five cate
 | **Severity disagreement** | Same bug found by both, different severity | If Justine's is higher, re-file Holtz's id at her severity. List in the report. |
 | **Contradictory** | One auditor says X is a bug, the other explicitly verified X as correct | Record per its class, and flag: `**Contradictory:** Holtz says {X}, Justine says {Y}`. Do not auto-resolve. |
 
-**Recording a Justine-only finding:**
-
-```
-sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding \
-  --field project={project} --field run={N} --field auditor=justine \
-  --field phase=merge --field step=9 \
-  --field id=BJ-NNN --field severity={hers} --field category={hers} \
-  --field location={hers} --field perspective={her Lens field, or "unspecified"} \
-  --field reachability=user_reachable|fault_injected|theoretical \
-  --field predicted_by=none --field description={her Problem, Evidence and Discovery Chain}
-```
-
 Keep ids as filed. Re-filing an existing id supersedes it: the punchlist keeps the last filing per id.
 
 **Note:** Severity disagreement is a sub-case of Agreement — both auditors found the same bug, they just disagree on severity. In the merge report, severity disagreements are counted in the Agreement section total (e.g., "5 items found by both auditors, including 2 with severity disagreements") and listed individually in the Severity Disagreements section for visibility. They are NOT double-counted in the merged total.
@@ -79,6 +67,19 @@ If conditions 1 and 2 match but condition 3 does not, the items are **not** the 
 5. Unmatched Holtz items are classified as Holtz-only.
 6. Unmatched Justine items are classified as Justine-only.
 7. Check for contradictions: scan Justine's notes/evidence for explicit statements that a Holtz finding is "not a bug" or "correct behavior" (and vice versa). These override the Holtz-only/Justine-only classification.
+
+## Running the Merge
+
+Steps 1–6 above, the recording, the report and the impact-graph merge are one command:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/merge_punchlists.py" \
+  --justine docs/holtz/justine/PUNCHLIST.md
+```
+
+Add `--dry-run` to classify and write the report without touching the ledger.
+
+It prints the contradiction candidates step 7 asks for — a finding whose text calls a defect the other auditor filed correct behavior — to stderr. Each is already recorded under its own class. Read both findings, decide, and rewrite the report's `## Contradictions` section with the ones that hold.
 
 ## Output File
 
@@ -141,7 +142,7 @@ Post-merge sequence:
 
 ## Impact Graph Merge
 
-After both auditors complete, merge Justine's impact graph (`docs/holtz/justine/impact-graph.json`) into the canonical graph (`docs/holtz/impact-graph.json`). Conflict resolution rules:
+`merge_punchlists.py` folds Justine's impact graph (`docs/holtz/justine/impact-graph.json`) into the canonical graph (`docs/holtz/impact-graph.json`) by these rules:
 
 | Conflict | Resolution |
 |----------|-----------|

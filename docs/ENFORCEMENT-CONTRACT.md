@@ -137,7 +137,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | each recon step must be recorded | `recon_step` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | Justine must be dispatched for parallel audit | `justine_dispatched` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | pre-audit edge count snapshot needed for comparison | `snapshot` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| no audit-phase findings should exist before recon is complete | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| no audit-phase findings should exist before recon is complete | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | lens quiz bank must be generated from the graph during recon (#73) — the vault key is writable only in recon, so it cannot be built later | `quiz_bank_generated` | `hook:enforcement/hooks/quiz_vault.py` | `tool` | no — daemon refuses unauthenticated callers |
 
 ### `audit_complete` — audit → merge_ready
@@ -184,7 +184,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
-| the finding merged into must exist and must not be the finding being merged | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| the finding merged into must exist and must not be the finding being merged | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 
 ### `merge_finding` — pattern_analysis → pattern_analysis
 
@@ -192,13 +192,13 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
-| the finding merged into must exist and must not be the finding being merged | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| the finding merged into must exist and must not be the finding being merged | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 
 ### `defer_cant_reproduce` — fix_loop → fix_loop
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| finding must exist | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| finding must exist | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | must have started working on this item | `fix_start` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
@@ -208,7 +208,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| finding must exist and its latest filing must be LOW | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| finding must exist and its latest filing must be LOW | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 
@@ -216,27 +216,27 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| finding must exist and its latest filing must be MEDIUM | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| finding must exist and its latest filing must be MEDIUM | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
-| MEDIUM deferrals must not exceed 50% of total MEDIUM findings | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| MEDIUM deferrals must not exceed 50% of total MEDIUM findings | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 
 ### `iteration_boundary` — fix_loop → awaiting_clear
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | ↳ | `stale_sweep_complete` | `hook:enforcement/hooks/stale_sweep_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | the full suite must pass on this tree before a context reset — this is what re-bases the affected scope | `suite_green` | `hook:enforcement/hooks/suite_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
-| the last round left more than 3 findings open — fix them, or merge a duplicate into the finding it repeats with `sahjhan transition merge_finding BH-NNN BH-MMM` | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| the last round left more than 3 findings open — fix them, or merge a duplicate into the finding it repeats with `sahjhan transition merge_finding BH-NNN BH-MMM` | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
-| the last round opened more findings than the run has closed since — resolve one with `fix_commit`, or merge a duplicate with `sahjhan transition merge_finding BH-NNN BH-MMM` | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| the last round opened more findings than the run has closed since — resolve one with `fix_commit`, or merge a duplicate with `sahjhan transition merge_finding BH-NNN BH-MMM` | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 
@@ -261,7 +261,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| pattern analysis needs 3+ findings resolved since the last one, and is no longer owed once two consecutive rounds added no pattern — run Step 11 in fix_loop instead | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| pattern analysis needs 3+ findings resolved since the last one, and is no longer owed once two consecutive rounds added no pattern — run Step 11 in fix_loop instead | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
@@ -273,7 +273,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | pattern analysis must be recorded before returning to fixes | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | amplification: more findings filed than resolved for 3 consecutive rounds — run `sahjhan defer batch --severity low,medium` to clear every open LOW and spend the MEDIUM budget | *direct check* | — | `direct` | n/a |
-| this round left more than 3 findings open — merge a duplicate into the finding it repeats with `sahjhan transition merge_finding BH-NNN BH-MMM` | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| this round left more than 3 findings open — merge a duplicate into the finding it repeats with `sahjhan transition merge_finding BH-NNN BH-MMM` | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
@@ -282,7 +282,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| finding must exist and its latest filing must be LOW | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| finding must exist and its latest filing must be LOW | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 
@@ -290,20 +290,20 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| finding must exist and its latest filing must be MEDIUM | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| finding must exist and its latest filing must be MEDIUM | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
-| MEDIUM deferrals must not exceed 50% of total MEDIUM findings | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| MEDIUM deferrals must not exceed 50% of total MEDIUM findings | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 
 ### `set complete perspective` — fix_loop → perspective_clean
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| all findings must be resolved or deferred | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| all findings must be resolved or deferred | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
-| pattern analysis required after 3+ fixes — run pattern_check before completing the perspective | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| pattern analysis required after 3+ fixes — run pattern_check before completing the perspective | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
@@ -340,17 +340,17 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | all lenses must be complete | `set_member_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | tests must pass | `suite_green` | `hook:enforcement/hooks/suite_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | no lint violations | *direct check* | — | `direct` | n/a |
-| every CRITICAL finding must be resolved — run `sweep_dirty` and fix them | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| every CRITICAL finding must be resolved — run `sweep_dirty` and fix them | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
-| every user-reachable HIGH must be resolved or deferred — run `sweep_dirty` and work them | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| every user-reachable HIGH must be resolved or deferred — run `sweep_dirty` and work them | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
-| the run is still filing faster than it retires over the last 3 rounds | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| the run is still filing faster than it retires over the last 3 rounds | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | ↳ | `state_transition` | `engine:sahjhan` | `engine` | no — written by the engine, only by passing the gate |
 | docs/holtz/DEFERRED.md must exist | *direct check* | — | `direct` | n/a |
-| the MEDIUM deferral budget must be spent — half the MEDIUMs get fixed, not deferred | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| the MEDIUM deferral budget must be spent — half the MEDIUMs get fixed, not deferred | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | no unresolved protocol violations | `protocol_violation` | `hook:enforcement/hooks/bash_guard.py` | `agent` | **yes** — `sahjhan event` |
 | no unresolved quiz exhaustions | `quiz_exhausted` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |

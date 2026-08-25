@@ -57,6 +57,14 @@ fields = [
 [[events.finding.producers]]
 id = "agent:cli"
 
+# P4.1's merge script: Justine keeps no ledger, so every finding of hers that
+# Holtz did not also find reaches the board through here. Attestation is
+# unchanged — the script runs `sahjhan event finding` in the agent's own shell,
+# so these are agent-attested like any other filing, and the trust posture the
+# generated contract reports does not move.
+[[events.finding.producers]]
+id = "tool:enforcement/scripts/merge_punchlists.py"
+
 [events.finding_resolved]
 description = "A finding was resolved"
 attestation = "agent"

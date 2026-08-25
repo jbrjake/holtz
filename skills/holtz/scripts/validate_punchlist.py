@@ -45,6 +45,13 @@ class PunchlistItem:
     determinism: str = ""
     investigation: str = ""
     root_cause_confidence: str = ""
+    reachability: str = ""
+    # The prose the merge re-files as an event's `description`. Extracted here
+    # already for the `has_*` checks below; kept rather than discarded so
+    # `merge_punchlists.py` does not need a second parser for the same file.
+    problem: str = ""
+    evidence: str = ""
+    discovery_chain: str = ""
     has_problem: bool = False
     has_evidence: bool = False
     has_discovery_chain: bool = False
@@ -160,6 +167,10 @@ def parse_punchlist(content: str, *, _masked: tuple[str, str] | None = None) -> 
         if rcc:
             item.root_cause_confidence = rcc.group(1).strip()
 
+        reach = re.search(r'\*\*Reachability:\*\*[ \t]*(\w+)', masked_block)
+        if reach:
+            item.reachability = reach.group(1).strip()
+
         # Section content uses a three-step approach:
         # 1. Find the field header in masked_block (ensures it's not inside a code fence)
         # 2. Map the header's line position to original_block (same line number)
@@ -221,9 +232,12 @@ def parse_punchlist(content: str, *, _masked: tuple[str, str] | None = None) -> 
             return '\n'.join(parts)
 
         problem_content = _section_from_original('Problem')
+        item.problem = (problem_content or "").strip()
         item.has_problem = bool(problem_content and len(problem_content.strip()) > 10)
         evidence_content = _section_from_original('Evidence')
+        item.evidence = (evidence_content or "").strip()
         item.has_evidence = bool(evidence_content and len(evidence_content.strip()) > 10)
+        item.discovery_chain = (_section_from_original('Discovery Chain') or "").strip()
 
         # Discovery Chain: presence check — must be at start of line (field header position),
         # not mid-line in prose (e.g., "missing a **Discovery Chain:** section").
