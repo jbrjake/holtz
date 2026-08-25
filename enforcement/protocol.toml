@@ -305,6 +305,42 @@ intent = "a pattern round may leave at most 3 of the findings it opened still op
 sql = "SELECT (SELECT count(DISTINCT f.id) FROM events f JOIN events p ON p.type='pattern_analysis_complete' AND strpos(','||p.pattern_ids||',', ','||f.pattern_id||',') > 0 WHERE f.type='finding' AND f.seq > COALESCE((SELECT MAX(a.seq) FROM events a WHERE a.type='pattern_analysis_complete' AND a.seq < (SELECT MAX(b.seq) FROM events b WHERE b.type='pattern_analysis_complete')), 0)) > (SELECT count(DISTINCT r.id) FROM events r WHERE r.type='finding_resolved' AND r.seq > COALESCE((SELECT MAX(a.seq) FROM events a WHERE a.type='pattern_analysis_complete' AND a.seq < (SELECT MAX(b.seq) FROM events b WHERE b.type='pattern_analysis_complete')), 0))"
 intent = "a pattern round must close or merge at least as many findings as it opens"
 
+# P0.1's convergence redefinition (D4), pre-committed and built as written:
+# `all CRITICAL resolved AND all user_reachable HIGH resolved-or-deferred AND
+# A < 1.0 over last 3 rounds AND DEFERRED.md written`, under D5's constraint
+# that converging still requires the MEDIUM budget spent.
+#
+# It replaces `all_findings_closed == 0`, which is why the 08-21 session's
+# objection to the `A < 1.0` conjunct was invalid: under the *old* gate nothing
+# is open at converge by definition, so measuring amplification there looks
+# pointless. Under the replacement, open MEDIUM and LOW findings legitimately
+# persist — and that conjunct is exactly what stops a run converging while it
+# is still generating faster than it retires.
+#
+# The third conjunct is `amplification_diverging` read with the opposite
+# expectation, not a second expression of it. The fourth is a `file_exists`
+# gate on the transition, and the MEDIUM budget is `medium_deferral_budget`
+# with `expect = "false"` — the established spelling for "spent", shared with
+# `pattern_done`'s escape.
+#
+# Both predicates below grade a finding by its *latest* filing (D25): a
+# CRITICAL downgraded to LOW is not a CRITICAL, and a finding re-filed as
+# `user_reachable` after a probe joins the population that has to be closed.
+# The correlated max-seq subquery sits in the inner WHERE and the aggregate
+# outside it — the `open_low_count` shape, which the query planner accepts;
+# the same correlation inside a comparison is rejected.
+#
+# Every conjunct's escape is `sweep_dirty`, the ungated `final_sweep ->
+# fix_loop` edge. A blocked converge can always go back and do the work.
+
+[queries.all_critical_resolved]
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved'))"
+intent = "every CRITICAL finding must be resolved — deferring one does not converge"
+
+[queries.all_user_reachable_high_closed]
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='HIGH' AND f.reachability='user_reachable' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"
+intent = "every user-reachable HIGH finding must be resolved or deferred"
+
 [queries.quiz_exhaustions_resolved]
 sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')"
 intent = "no unresolved quiz exhaustions"

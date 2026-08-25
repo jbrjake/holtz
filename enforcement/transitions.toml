@@ -515,7 +515,27 @@ gates = [
     { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member", intent = "all lenses must be complete" },
     { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope full', timeout = 60, evidence = "suite_green", intent = "tests must pass" },
     { type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", timeout = 30, intent = "no lint violations" },
-    { type = "query", query = "all_findings_closed", expect = "0" },
+    # P0.1's convergence redefinition (D4), replacing `all_findings_closed`.
+    # The audited run's open count rose 124 -> 273 and fell exactly once, so
+    # "every finding closed" was unreachable and the run could not terminate;
+    # what it could not do either was say which findings actually had to be
+    # closed. These four conjuncts say it. MEDIUM and LOW may now legitimately
+    # remain open at convergence — which is precisely why the amplification
+    # conjunct has to be here, and why it reads as pointless against the gate
+    # it replaces rather than the one it joins.
+    #
+    # D5 keeps the 50% cap load-bearing: the MEDIUM budget must be spent, so
+    # the carve-out above cannot become a way of deferring MEDIUMs instead of
+    # fixing half of them. Same query as `pattern_done`'s escape, same
+    # spelling for "spent".
+    #
+    # Every one of these is escapable by `sweep_dirty`, the ungated
+    # `final_sweep -> fix_loop` edge: a blocked converge goes back and works.
+    { type = "query", query = "all_critical_resolved", expect = "true", intent = "every CRITICAL finding must be resolved — run `sweep_dirty` and fix them" },
+    { type = "query", query = "all_user_reachable_high_closed", expect = "true", intent = "every user-reachable HIGH must be resolved or deferred — run `sweep_dirty` and work them" },
+    { type = "query", query = "amplification_diverging", expect = "false", intent = "the run is still filing faster than it retires over the last 3 rounds" },
+    { type = "file_exists", path = "docs/holtz/DEFERRED.md", intent = "docs/holtz/DEFERRED.md must exist" },
+    { type = "query", query = "medium_deferral_budget", expect = "false", intent = "the MEDIUM deferral budget must be spent — half the MEDIUMs get fixed, not deferred" },
     { type = "no_violations", intent = "no unresolved protocol violations" },
     { type = "query", query = "quiz_exhaustions_resolved", expect = "true" },
 ]

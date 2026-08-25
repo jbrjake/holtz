@@ -340,9 +340,18 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | all lenses must be complete | `set_member_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | tests must pass | `suite_green` | `hook:enforcement/hooks/suite_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | no lint violations | *direct check* | — | `direct` | n/a |
-| all findings must be resolved or deferred | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| every CRITICAL finding must be resolved — run `sweep_dirty` and fix them | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
+| every user-reachable HIGH must be resolved or deferred — run `sweep_dirty` and work them | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
+| the run is still filing faster than it retires over the last 3 rounds | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| ↳ | `state_transition` | `engine:sahjhan` | `engine` | no — written by the engine, only by passing the gate |
+| docs/holtz/DEFERRED.md must exist | *direct check* | — | `direct` | n/a |
+| the MEDIUM deferral budget must be spent — half the MEDIUMs get fixed, not deferred | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
 | no unresolved protocol violations | `protocol_violation` | `hook:enforcement/hooks/bash_guard.py` | `agent` | **yes** — `sahjhan event` |
 | no unresolved quiz exhaustions | `quiz_exhausted` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
 | ↳ | `quiz_exhausted_resolved` | `human:skills/holtz/references/phase-convergence.md` | `human` | no — bootstrap denies `sahjhan event` |
