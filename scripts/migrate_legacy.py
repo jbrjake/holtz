@@ -233,6 +233,12 @@ def _parse_table_punchlist(
             "perspective": perspective,
             "description": description,
             "predicted_by": "",
+            # P0.5 made reachability a required field. A legacy punchlist
+            # states none, and inventing `user_reachable` would grade an
+            # archive as fix-loop eligible on no evidence. `theoretical` is
+            # the value's own definition — no path found, reachability
+            # unestablished — which is exactly the archive's situation.
+            "reachability": "theoretical",
         }, run=run, auditor=auditor, project=project, source=source)
         events.append(finding)
 
@@ -282,6 +288,12 @@ def _parse_block_punchlist(
             "perspective": perspective,
             "description": description,
             "predicted_by": "",
+            # P0.5 made reachability a required field. A legacy punchlist
+            # states none, and inventing `user_reachable` would grade an
+            # archive as fix-loop eligible on no evidence. `theoretical` is
+            # the value's own definition — no path found, reachability
+            # unestablished — which is exactly the archive's situation.
+            "reachability": "theoretical",
         }, run=run, auditor=auditor, project=project, source=source)
         events.append(finding)
 

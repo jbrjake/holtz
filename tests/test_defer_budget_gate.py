@@ -102,6 +102,7 @@ def ledger(tmp_path):
             "--field", f"id={finding_id}", "--field", "severity=MEDIUM",
             "--field", "category=correctness", "--field", "location=src/x.py:10",
             "--field", "perspective=integration", "--field", "predicted_by=none",
+             "--field", "reachability=user_reachable",
             "--field", f"description={description}", *_COMMON,
         )
 

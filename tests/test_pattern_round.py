@@ -306,7 +306,8 @@ def project(tmp_path):
          "--field", "phase=fix_loop", "--field", "step=10", "--field", "id=BH-001",
          "--field", "severity=HIGH", "--field", "category=bug",
          "--field", "location=a.py:1", "--field", "description=x",
-         "--field", "perspective=component", "--field", "predicted_by=none"],
+         "--field", "perspective=component", "--field", "predicted_by=none",
+         "--field", "reachability=user_reachable"],
         cwd=root, capture_output=True, text=True, timeout=60,
     )
     assert result.returncode == 0, result.stderr
@@ -504,6 +505,7 @@ class TestTheYieldStop:
                       "--field", f"id={finding_id}", "--field", "severity=HIGH",
                       "--field", "category=bug", "--field", "location=a.py:1",
                       "--field", "perspective=component", "--field", "predicted_by=none",
+                      "--field", "reachability=user_reachable",
                       "--field", "description=x", *self._COMMON)
             self._sah(real_daemon, root, "event", "finding_resolved",
                       "--field", f"id={finding_id}", "--field", "commit_hash=abc1234",

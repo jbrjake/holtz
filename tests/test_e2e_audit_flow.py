@@ -895,6 +895,7 @@ def _record_finding(real_daemon, finding_id="BH-001", severity="HIGH"):
         "--field", f"severity={severity}", "--field", "category=bug/logic",
         "--field", "location=x.py:1", "--field", "perspective=component",
         "--field", "description=d", "--field", "predicted_by=1",
+        "--field", "reachability=user_reachable",
     )
 
 

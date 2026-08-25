@@ -114,6 +114,7 @@ sahjhan event finding --field project=holtz --field run=N \
   --field auditor=holtz --field phase=audit --field step=7 \
   --field id=BH-001 --field severity=HIGH --field category=doc/drift \
   --field location="README.md:108" --field perspective=public-contract \
+  --field reachability=user_reachable \
   --field description="Pattern count stale" --field predicted_by=1
 # (auto-emitted by `transition fix_commit BH-001`):
 # sahjhan event finding_resolved --field project=holtz --field run=N \

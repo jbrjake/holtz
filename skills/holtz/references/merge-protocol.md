@@ -47,6 +47,7 @@ sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding \
   --field phase=merge --field step=9 \
   --field id=BJ-NNN --field severity={hers} --field category={hers} \
   --field location={hers} --field perspective={her Lens field, or "unspecified"} \
+  --field reachability=user_reachable|fault_injected|theoretical \
   --field predicted_by=none --field description={her Problem, Evidence and Discovery Chain}
 ```
 

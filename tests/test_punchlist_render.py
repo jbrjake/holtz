@@ -53,7 +53,8 @@ def _record_finding(binary, project_root, finding_id, description, location="src
          "--field", f"id={finding_id}",
          "--field", "severity=HIGH", "--field", "category=correctness",
          "--field", f"location={location}", "--field", "perspective=integration",
-         "--field", "predicted_by=none", "--field", f"description={description}",
+         "--field", "predicted_by=none", "--field", "reachability=user_reachable",
+         "--field", f"description={description}",
          *_COMMON],
         capture_output=True, text=True, cwd=project_root, timeout=30,
     )

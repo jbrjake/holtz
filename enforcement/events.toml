@@ -39,6 +39,19 @@ fields = [
     # round's `pattern_ids`, which the courier derives from the brief's own
     # headings — so a PAT the brief never got cannot inflate the population.
     { name = "pattern_id", type = "string", pattern = "^PAT-\\d+$", optional = true },
+    # How the defect is reached (P0.5). ~22 of the audited run's 62 commits
+    # were fault-injection-only — reachable only by making some other call
+    # raise — and BH-258 conceded in its own text that "reachability on CPython
+    # 3.12 is uncertain… needs a reachability probe before any fix" and got a
+    # full fix cycle anyway. Meanwhile 51 of the 75 open HIGHs predated the
+    # first commit and were never worked, including an HTML-injection bug.
+    #
+    # Required, not optional: a grading nobody has to state is a grading the
+    # board will not carry, and this is the field D4's convergence conjunct
+    # ("all user_reachable HIGH resolved-or-deferred") is defined over. An
+    # optional field would make that conjunct silently weaker on every finding
+    # that omitted it.
+    { name = "reachability", type = "string", pattern = "^(user_reachable|fault_injected|theoretical)$" },
 ]
 
 [[events.finding.producers]]

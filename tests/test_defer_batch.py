@@ -101,6 +101,7 @@ def loop(tmp_path):
             "--field", f"id={finding_id}", "--field", f"severity={severity}",
             "--field", "category=correctness", "--field", "location=src/x.py:1",
             "--field", "perspective=integration", "--field", "predicted_by=none",
+             "--field", "reachability=user_reachable",
             "--field", f"description={description}", *_COMMON)
 
     def ids_from(query_name):

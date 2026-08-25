@@ -122,7 +122,8 @@ class _Board:
         self.sah("event", "finding", "--field", f"id={finding_id}",
                  "--field", f"severity={severity}", "--field", "category=bug",
                  "--field", "location=a.py:1", "--field", "perspective=component",
-                 "--field", "predicted_by=none", "--field", "description=x", *_COMMON)
+                 "--field", "predicted_by=none", "--field", "reachability=user_reachable",
+                 "--field", "description=x", *_COMMON)
 
     def resolve(self, finding_id):
         self.sah("event", "finding_resolved", "--field", f"id={finding_id}",

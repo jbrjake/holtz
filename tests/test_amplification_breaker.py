@@ -83,13 +83,19 @@ class _Run:
             assert result.returncode == 0, f"{args}\n{result.stdout}\n{result.stderr}"
         return result
 
-    def file(self, finding_id, severity="HIGH", pattern_id=None):
+    def file(self, finding_id, severity="HIGH", pattern_id=None,
+             reachability="user_reachable"):
         attribution = ["--field", f"pattern_id={pattern_id}"] if pattern_id else []
         self.sah("event", "finding", "--field", f"id={finding_id}",
                  "--field", f"severity={severity}", "--field", "category=bug",
                  "--field", "location=a.py:1", "--field", "perspective=component",
-                 "--field", "predicted_by=none", "--field", "description=x",
+                 "--field", "predicted_by=none", "--field", f"reachability={reachability}",
+                 "--field", "description=x",
                  *attribution, *_COMMON)
+
+    def defer(self, finding_id, reason="low_priority"):
+        self.sah("event", "finding_deferred", "--field", f"id={finding_id}",
+                 "--field", f"reason={reason}", *_COMMON)
 
     def resolve(self, finding_id):
         self.sah("event", "finding_resolved", "--field", f"id={finding_id}",

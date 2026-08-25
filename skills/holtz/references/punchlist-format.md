@@ -5,6 +5,7 @@
 ````markdown
 ### BH-{NNN}: {title}
 **Severity:** CRITICAL | HIGH | MEDIUM | LOW
+**Reachability:** user_reachable | fault_injected | theoretical
 **Category:** {from taxonomy below}
 **Location:** `path/to/file.py:NN`
 **Status:** OPEN | IN PROGRESS | RESOLVED | DEFERRED
@@ -38,6 +39,15 @@
 - **HIGH:** Incorrect documented behavior, test hiding bugs. This cycle.
 - **MEDIUM:** Edge case failures, missing tests, doc drift. Next cycle.
 - **LOW:** Code quality, minor inconsistencies. As time permits.
+
+## Reachability
+
+Assess for every finding. `sahjhan event finding` requires
+`--field reachability=<value>`.
+
+- **user_reachable** — some input, call, or document a user controls reaches it
+- **fault_injected** — reachable only by making another call raise
+- **theoretical** — no path found; reachability itself is unestablished
 
 ## Categories
 `bug/logic` `bug/state` `bug/error-handling` `bug/security` `bug/type`

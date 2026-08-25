@@ -64,7 +64,8 @@ def ledger(tmp_path):
         sah("event", "finding", "--field", f"id={finding_id}",
             "--field", f"severity={severity}", "--field", "category=correctness",
             "--field", f"location={location}", "--field", "perspective=integration",
-            "--field", "predicted_by=none", "--field", f"description={description}",
+            "--field", "predicted_by=none", "--field", "reachability=user_reachable",
+            "--field", f"description={description}",
             *_COMMON)
 
     def resolve(finding_id):

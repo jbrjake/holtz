@@ -235,6 +235,7 @@ class TestSkillMdQuickReference:
             "--field auditor=holtz --field phase=audit --field step=7 "
             "--field id=BH-001 --field severity=HIGH --field category=doc/drift "
             '--field location="README.md:108" --field perspective=public-contract '
+            "--field reachability=user_reachable "
             '--field description="Pattern count stale" --field predicted_by=1',
             "SKILL.md: event finding",
         )

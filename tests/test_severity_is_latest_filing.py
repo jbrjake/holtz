@@ -82,7 +82,8 @@ def ledger(tmp_path):
         sah("event", "finding", "--field", f"id={finding_id}",
             "--field", f"severity={severity}", "--field", "category=correctness",
             "--field", "location=src/x.py:10", "--field", "perspective=integration",
-            "--field", "predicted_by=none", "--field", "description=a finding",
+            "--field", "predicted_by=none", "--field", "reachability=user_reachable",
+            "--field", "description=a finding",
             *_COMMON)
 
     def defer(finding_id, reason="medium_budget"):
