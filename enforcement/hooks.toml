@@ -3,9 +3,24 @@
 # Sealed at init time alongside the other 5 config files.
 
 # ── TDD Gate ──
-# Block source file edits in fix_loop without a prior failing test.
-# Makes TDD mechanically unavoidable. Filter excludes test files.
-# Every fix_commit self-loop is a state transition, so the gate resets.
+# Block source file edits in fix_loop without a prior failing test *by the
+# agent doing the editing*. Makes TDD mechanically unavoidable. Filter excludes
+# test files. Every fix_commit self-loop is a state transition, so the gate
+# resets.
+#
+# Scoped to the caller, not the run (P0.3, D32/D33). The gate used to read
+# `test_failed_before_fix` — an agent-written event naming no actor — so it
+# could only ask whether *anyone* had recorded a failing test since the last
+# transition. With two fix agents working, each one's source edit was
+# authorised by the other's failing test, which is why the fix loop had to run
+# one-at-a-time and spent 89% of subagent wall-clock at concurrency 1.
+#
+# `tdd_evidence` is the same fact with the actor attached, written by
+# `tdd_courier.py` from the hook payload rather than from anything the agent
+# typed. `{{agent_id}}` binds to the caller `pre_tool_hook.py` passes through
+# to `hook eval`; the orchestrator is the empty string, a real actor and never
+# a wildcard. Needs sahjhan >= 0.23.0, which resolves templates in gate
+# filters — before that a filter value was compared literally.
 
 [[hooks]]
 event = "PreToolUse"
@@ -16,8 +31,9 @@ message = "TDD violation: write and run a failing test before editing source fil
 
 [hooks.gate]
 type = "ledger_has_event_since"
-event = "test_failed_before_fix"
+event = "tdd_evidence"
 since = "last_transition"
+filter = { agent_id = "{{agent_id}}" }
 
 [hooks.filter]
 path_not_matches = "tests/**"

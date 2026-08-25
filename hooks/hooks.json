@@ -82,6 +82,10 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/stale_sweep_courier.py\""
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/tdd_courier.py\""
           }
         ]
       }

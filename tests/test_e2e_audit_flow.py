@@ -347,12 +347,21 @@ class TestTddGateBlocksWriteInFixLoop:
             f"Got: {reason!r}"
         )
 
-    def test_write_allowed_after_test_failed_before_fix_event(self, real_daemon):
-        """After recording test_failed_before_fix, the same Write should pass."""
-        _fast_forward_to_fix_loop(real_daemon)
-        _freshen_enforcement_cache(real_daemon)
+    # The command as an agent types it; the courier is triggered by the Bash
+    # line, so the test has to present the same text the host would report.
+    TDD_RECORD_COMMAND = (
+        "sahjhan event test_failed_before_fix "
+        "--field finding_id=BH-001 --field test_name=test_something "
+        "--field run=1 --field auditor=holtz --field project=holtz"
+    )
 
-        # Record the required event to release the gate.
+    def _record_failing_test(self, real_daemon, actor=None):
+        """The taught sequence: the agent records, then the courier attests.
+
+        `test_failed_before_fix` names no actor, so it cannot release an
+        actor-scoped gate on its own. `tdd_courier.py` runs outside the sandbox
+        and stamps the `agent_id` the host put on the hook event.
+        """
         _run_sahjhan(
             real_daemon, "event", "test_failed_before_fix",
             "--field", "finding_id=BH-001",
@@ -361,7 +370,24 @@ class TestTddGateBlocksWriteInFixLoop:
             "--field", "auditor=holtz",
             "--field", "project=holtz",
         )
+        courier_event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": self.TDD_RECORD_COMMAND},
+            "tool_response": {"exit_code": 0, "stdout": "", "stderr": ""},
+            "cwd": real_daemon["project_root"],
+        }
+        if actor is not None:
+            courier_event["agent_id"] = actor
+        out = _invoke_hook("tdd_courier.py", courier_event, real_daemon)
+        # The courier warns rather than failing when it cannot attest. Surface
+        # that here: otherwise the gate assertion below fails with no hint that
+        # the evidence was never written.
+        assert "NOT recorded" not in json.dumps(out), (
+            f"the courier refused to attest the failing test: {out}"
+        )
+        return out
 
+    def _edit_event(self, real_daemon, actor=None):
         event = {
             "tool_name": "Write",
             "tool_input": {
@@ -370,11 +396,72 @@ class TestTddGateBlocksWriteInFixLoop:
             },
             "cwd": real_daemon["project_root"],
         }
-        output = _invoke_hook("pre_tool_hook.py", event, real_daemon)
+        if actor is not None:
+            event["agent_id"] = actor
+        return event
 
+    def test_write_allowed_after_the_courier_names_the_actor(self, real_daemon):
+        """After the failing test is recorded *and attributed*, Write passes."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _freshen_enforcement_cache(real_daemon)
+
+        self._record_failing_test(real_daemon)
+
+        output = _invoke_hook(
+            "pre_tool_hook.py", self._edit_event(real_daemon), real_daemon
+        )
         hook_out = output.get("hookSpecificOutput", {})
         assert hook_out.get("permissionDecision") == "allow", (
-            f"After test_failed_before_fix event, Write should be allowed. Got: {output}"
+            f"After the courier attributed the failing test, Write should be "
+            f"allowed. Got: {output}"
+        )
+
+    def test_a_sibling_agent_cannot_ride_another_actors_failing_test(
+        self, real_daemon
+    ):
+        """P0.3's defect, stated as a test.
+
+        The gate used to read a run-global `test_failed_before_fix`, so with two
+        agents working each one's source edit was authorised by the other's
+        failing test — which is why the fix loop had to run one-at-a-time. The
+        orchestrator records here; a subagent must still be refused.
+        """
+        _fast_forward_to_fix_loop(real_daemon)
+        _freshen_enforcement_cache(real_daemon)
+
+        self._record_failing_test(real_daemon)
+
+        output = _invoke_hook(
+            "pre_tool_hook.py",
+            self._edit_event(real_daemon, actor="agent-B"),
+            real_daemon,
+        )
+        hook_out = output.get("hookSpecificOutput", {})
+        assert hook_out.get("permissionDecision") == "deny", (
+            f"agent-B recorded no failing test of its own and must not inherit "
+            f"one. Got: {output}"
+        )
+
+    def test_each_agent_is_released_by_its_own_failing_test(self, real_daemon):
+        """The other half: scoping must not make the gate unsatisfiable.
+
+        A block whose escape cannot be reached is a deadlock, so the agent that
+        does the work must be let through on its own evidence.
+        """
+        _fast_forward_to_fix_loop(real_daemon)
+        _freshen_enforcement_cache(real_daemon)
+
+        self._record_failing_test(real_daemon, actor="agent-B")
+
+        output = _invoke_hook(
+            "pre_tool_hook.py",
+            self._edit_event(real_daemon, actor="agent-B"),
+            real_daemon,
+        )
+        hook_out = output.get("hookSpecificOutput", {})
+        assert hook_out.get("permissionDecision") == "allow", (
+            f"agent-B recorded its own failing test and must be released by it. "
+            f"Got: {output}"
         )
 
     def test_write_blocked_in_recon_state_without_tdd_event(self, real_daemon):

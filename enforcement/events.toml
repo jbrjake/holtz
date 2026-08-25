@@ -592,6 +592,36 @@ fields = [
 [[events.test_failed_before_fix.producers]]
 id = "agent:cli"
 
+# The same fact, recorded from a signal that entails it (P0.3, D33).
+#
+# `test_failed_before_fix` is agent-written and names no actor, so a gate over
+# it can only ask "did anyone record a failing test", never "did *this* agent".
+# That is what held the fix loop at concurrency 1: with two agents working,
+# each one's source edit was authorised by the other's failing test.
+#
+# The actor cannot be an agent-stated field. Claude Code puts `agent_id` on the
+# hook event, not in the model's context, so the agent has no honest way to
+# state it and a dishonest one would be indistinguishable. The courier reads it
+# off the hook payload instead, where the host set it.
+#
+# `agent_id` carries no pattern because the orchestrator is the empty string —
+# a real actor like every other, never a wildcard.
+[events.tdd_evidence]
+description = "A failing test was recorded, by a named actor"
+attestation = "tool"
+restricted = true
+fields = [
+    { name = "finding_id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
+    { name = "test_name", type = "string" },
+    { name = "agent_id", type = "string" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
+[[events.tdd_evidence.producers]]
+id = "hook:enforcement/hooks/tdd_courier.py"
+
 # ── Enforcement hardening events ──
 [events.lens_sweep_started]
 description = "A lens sweep has been initiated for a specific perspective"

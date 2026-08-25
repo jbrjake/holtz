@@ -27,5 +27,12 @@ if [[ -n "${HOST_TRIPLE}" && -f "${BIN_DIR}/sahjhan-${HOST_TRIPLE}" ]]; then
     ln -sfn "sahjhan-${HOST_TRIPLE}" "${BIN_DIR}/sahjhan"
 fi
 
+# The pin that governs at runtime lives in _resolve.py, not in the marker
+# below: ensure_sahjhan() reads SAHJHAN_VERSION and re-downloads whatever it
+# names. Updating it here is what makes vendoring actually switch versions —
+# without it the next hook invocation restores the old binary and rewrites the
+# marker to match, leaving every pin agreeing on the version nobody asked for.
+python3 "$REPO_ROOT/scripts/update_sahjhan_pin.py" "${VERSION}" "${BIN_DIR}"
+
 echo "${VERSION}" > "${BIN_DIR}/.sahjhan-version"
 echo "Vendored sahjhan v${VERSION} → bin/"

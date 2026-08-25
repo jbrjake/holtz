@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MARKER_REL = "bin/.sahjhan-version"
 
@@ -73,3 +75,65 @@ def test_retracked_marker_is_detected(monkeypatch):
     monkeypatch.setattr(check, "_is_git_tracked", lambda p: True)
     failures = check.check()
     assert any("git-tracked" in f for f in failures), failures
+
+
+# ── Vendoring must move the pin that governs ────────────────────────────────
+#
+# The checks above compare the marker to `SAHJHAN_VERSION`, which sounds like
+# it covers version drift — and does not. The marker is runtime state the
+# resolver *writes*: when `ensure_sahjhan()` restored an older binary during
+# P0.3 it rewrote the marker too, so the tree became self-consistent again at
+# the old version and `check()` had nothing to report. A freshly vendored
+# 0.23.0 silently reverted to 0.22.0 with every pin in agreement.
+#
+# The hole was that `vendor-sahjhan.sh` never touched `_resolve.py`. These
+# tests hold the two together.
+
+
+def _load_updater() -> ModuleType:
+    path = REPO_ROOT / "scripts" / "update_sahjhan_pin.py"
+    spec = importlib.util.spec_from_file_location("update_sahjhan_pin", str(path))
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["update_sahjhan_pin"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_vendor_script_updates_the_resolver_pin():
+    """Vendoring must rewrite `_resolve.py`, not just the marker.
+
+    Asserted against the script's own text rather than by running it: the
+    downloads need the network, and what matters is that the step is in the
+    taught sequence at all.
+    """
+    script = (REPO_ROOT / "scripts" / "vendor-sahjhan.sh").read_text(encoding="utf-8")
+    assert "update_sahjhan_pin.py" in script, (
+        "vendor-sahjhan.sh writes bin/.sahjhan-version but not "
+        "_resolve.SAHJHAN_VERSION, which is the pin ensure_sahjhan() actually "
+        "reads. Without this step, vendoring is undone by the next hook run."
+    )
+
+
+def test_the_updater_moves_both_the_version_and_the_checksums():
+    """A version bump with stale checksums is the half-update that shipped."""
+    updater = _load_updater()
+    source = (REPO_ROOT / "enforcement" / "hooks" / "_resolve.py").read_text(
+        encoding="utf-8"
+    )
+    sums = {t: f"{i:064x}" for i, t in enumerate(updater.TARGETS, start=1)}
+
+    updated = updater.render(source, "9.9.9", sums)
+
+    assert 'SAHJHAN_VERSION = "9.9.9"' in updated
+    assert updated.count("SAHJHAN_VERSION = ") == 1
+    for triple, digest in sums.items():
+        assert f'"{triple}": "{digest}",' in updated, triple
+
+
+def test_the_updater_refuses_a_shape_it_does_not_recognise():
+    """Fail loudly rather than write a file whose pin it did not move."""
+    updater = _load_updater()
+    sums = {t: f"{i:064x}" for i, t in enumerate(updater.TARGETS, start=1)}
+    with pytest.raises(SystemExit):
+        updater.render("# nothing to pin here\n", "9.9.9", sums)

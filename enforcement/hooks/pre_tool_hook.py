@@ -27,7 +27,11 @@ from _common import (  # noqa: E402
     read_event,
     resolve_config_dir,
 )
-from _protocol_cache import is_enforcement_fresh, read_cache_with_boundary  # noqa: E402
+from _protocol_cache import (  # noqa: E402
+    event_actor,
+    is_enforcement_fresh,
+    read_cache_with_boundary,
+)
 from _resolve import ensure_sahjhan  # noqa: E402
 from _sahjhan_bootstrap import MANAGED_DOCS  # noqa: E402
 
@@ -115,8 +119,15 @@ def main() -> None:
     if not config_found:
         exit_enforcement_error(cwd, "Enforcement config not found")
 
+    # Which actor is asking. A hook gate can filter on `{{agent_id}}` since
+    # sahjhan 0.23.0, and the TDD gate does: without it the gate is run-global
+    # and two concurrent fix agents each pass on the other's failing test.
+    # Always passed, never omitted — the orchestrator is the empty-string
+    # actor, a real bucket rather than a wildcard, and omitting the flag would
+    # bind the same empty value by a less obvious route.
     cmd = [binary, "--config-dir", config_dir, "--json",
-           "hook", "eval", "--event", "PreToolUse"]
+           "hook", "eval", "--event", "PreToolUse",
+           "--agent-id", event_actor(event)]
     if tool_name:
         cmd.extend(["--tool", tool_name])
     if file_path:

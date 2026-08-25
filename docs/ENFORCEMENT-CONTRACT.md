@@ -23,7 +23,7 @@ Every event gets exactly one, declared in `events.toml` and ordered by `[attesta
 
 ## Posture
 
-**21 of 31 gate-consumed events are the agent's own word.**
+**21 of 32 gate-consumed events are the agent's own word.**
 
 This is not a bug — self-attestation is fine for bookkeeping, and a protocol whose every step needed host evidence would not be usable. It is here because it should be a *deliberate, visible* posture rather than an accident nobody had counted. The defect is a **mismatch**: a gate whose purpose is to constrain the agent, fed by evidence the agent controls.
 
@@ -31,7 +31,7 @@ This is not a bug — self-attestation is fine for bookkeeping, and a protocol w
 |---|---|
 | `agent` (21) | `audit_claim`, `baseline_updated`, `blast_radius`, `finding`, `finding_deferred`, `finding_resolved`, `fix_start`, `hardening_complete`, `iteration_complete`, `justine_dispatched`, `lens_sweep_started`, `living_punchlist_updated`, `merge_agent_dispatched`, `pattern_contribution_complete`, `protocol_violation`, `recon_step`, `reference_read`, `set_member_complete`, `snapshot`, `source_edit`, `test_failed_before_fix` |
 | `engine` (1) | `state_transition` |
-| `tool` (7) | `pattern_analysis_complete`, `quiz_answered`, `quiz_bank_generated`, `quiz_exhausted`, `quiz_posed`, `stale_sweep_complete`, `suite_green` |
+| `tool` (8) | `pattern_analysis_complete`, `quiz_answered`, `quiz_bank_generated`, `quiz_exhausted`, `quiz_posed`, `stale_sweep_complete`, `suite_green`, `tdd_evidence` |
 | `host` (1) | `context_reset` |
 | `human` (1) | `quiz_exhausted_resolved` |
 
@@ -378,7 +378,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fires on | States | Action | Fact required | Evidence | Attests | Forgeable |
 |---|---|---|---|---|---|---|
-| `PreToolUse` (Edit, Write) | fix_loop | `block` | ledger_has_event_since `test_failed_before_fix` | `test_failed_before_fix` | `agent` | **yes** — `sahjhan event` |
+| `PreToolUse` (Edit, Write) | fix_loop | `block` | ledger_has_event_since `tdd_evidence` | `tdd_evidence` | `tool` | no — daemon refuses unauthenticated callers |
 | `Stop` | any except converged, finalized | `block` | the agent's output claims none of 13 completion phrases | *direct check* | `direct` | n/a |
 | `PostToolUse` (Edit) | fix_loop | `warn` | fewer than 8 source_edit since the last transition | `source_edit` | `agent` | **yes** — `sahjhan event` |
 | monitor `fix_loop_stall` | fix_loop | `warn` | fewer than 12 source_edit since the last transition | `source_edit` | — | — |
@@ -406,3 +406,4 @@ Every Python writer in the tree, with the registration and pin that decide wheth
 | `enforcement/hooks/session_start.py` | `SessionStart` | `session_start.py` | `context_reset` |
 | `enforcement/hooks/stale_sweep_courier.py` | `PostToolUse` | `stale_sweep_courier.py` | `stale_sweep_complete` |
 | `enforcement/hooks/suite_courier.py` | `PostToolUse` | `suite_courier.py` | `suite_green` |
+| `enforcement/hooks/tdd_courier.py` | `PostToolUse` | `tdd_courier.py` | `tdd_evidence` |
