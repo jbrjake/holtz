@@ -817,7 +817,13 @@ fields = [
     { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
     { name = "step", type = "string", pattern = "^\\d+$" },
     { name = "id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
-    { name = "reason", type = "string", pattern = "^(cant_reproduce|low_priority|medium_budget)$" },
+    # `theoretical` is P0.5's third route (D29), written only by
+    # `theoretical_courier.py`. It is a reason of its own rather than
+    # `low_priority` because nothing about a theoretical finding says it is low
+    # priority — only that no path to it has been found — and because
+    # `medium_deferral_budget` counts `medium_budget` alone, so a route with its
+    # own word cannot spend a cap it was never meant to touch.
+    { name = "reason", type = "string", pattern = "^(cant_reproduce|low_priority|medium_budget|theoretical)$" },
     { name = "evidence_path", type = "string", optional = true },
 ]
 
@@ -837,3 +843,9 @@ id = "engine:emits:defer_low"
 
 [[events.finding_deferred.producers]]
 id = "engine:emits:defer_medium"
+
+# P0.5's third route: the courier defers a `theoretical` finding at filing
+# time, from a population it re-derives off the ledger rather than reads out of
+# the command that woke it.
+[[events.finding_deferred.producers]]
+id = "hook:enforcement/hooks/theoretical_courier.py"

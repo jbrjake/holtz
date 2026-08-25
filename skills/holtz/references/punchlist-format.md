@@ -49,6 +49,11 @@ Assess for every finding. `sahjhan event finding` requires
 - **fault_injected** — reachable only by making another call raise
 - **theoretical** — no path found; reachability itself is unestablished
 
+A `theoretical` finding is deferred automatically when it is filed, and appears
+in `docs/holtz/DEFERRED.md` with reason `theoretical`. Grade at filing time: the
+id stays deferred once it is. If a probe later establishes a path, file the
+defect as a new finding at `user_reachable`.
+
 ## Categories
 `bug/logic` `bug/state` `bug/error-handling` `bug/security` `bug/type`
 `test/missing` `test/bogus` `test/mock-abuse` `test/fragile` `test/shallow` `test/integration-gap`

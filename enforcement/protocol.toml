@@ -144,6 +144,24 @@ intent = "open findings whose latest filing is LOW"
 sql = "SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='MEDIUM' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
 intent = "open findings whose latest filing is MEDIUM"
 
+# P0.5's third route (D29): `theoretical` auto-defers. Same shape as the two
+# batch populations above, one field over — and the max-seq clause carries the
+# same weight it does there. A finding re-graded `theoretical` ->
+# `user_reachable` must leave this set the moment a probe establishes a path,
+# and one re-graded the other way must join it; matching any row ever filed
+# under the id is the defect `fe2ef56` fixed for severity.
+#
+# The run context rides along because the courier writes the deferral and must
+# invent none of it: the deferral is stamped with the phase and step of the
+# filing it defers, which is where it actually happened.
+#
+# Lives here rather than as a string in `theoretical_courier.py` for H7's
+# reason — a hook holding its own copy of a predicate is how #77 shipped.
+
+[queries.open_theoretical_findings]
+sql = "SELECT f.id, f.project, f.run, f.auditor, f.phase, f.step FROM events f WHERE f.type='finding' AND f.reachability='theoretical' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
+intent = "open findings whose latest filing grades them theoretical"
+
 # The escape's first conjunct. `open_low_findings` returns the ids the batch
 # transitions; a gate needs a scalar, and named queries cannot reference one
 # another. `test_amplification_breaker.py` runs both and asserts the count

@@ -27,3 +27,4 @@
 "hooks/pattern_courier.py" = "sha256:c7a42c64eada2d9cfb2eab985230fa544dbf3bd36f5dbec56816f944d0ec2586"
 "hooks/stale_sweep_courier.py" = "sha256:f9d81e7ee7e4afaf10cb602690a2df71d50112c42efaf23b1a25f38971085883"
 "hooks/tdd_courier.py" = "sha256:04e6204cc82bca8dbe703c58089a6d78199154f13790430c223d7d99d009c145"
+"hooks/theoretical_courier.py" = "sha256:094fda53844f8207032df2b71ae27d4e2149370678e4ba65f1ae450a28894bc9"

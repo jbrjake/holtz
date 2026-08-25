@@ -86,6 +86,10 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/tdd_courier.py\""
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/enforcement/hooks/theoretical_courier.py\""
           }
         ]
       }
