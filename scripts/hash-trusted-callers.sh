@@ -35,6 +35,7 @@ TRUSTED_SCRIPTS=(
     "enforcement/hooks/quiz_capture.py"
     "enforcement/hooks/suite_courier.py"
     "enforcement/hooks/pattern_courier.py"
+    "enforcement/hooks/stale_sweep_courier.py"
 )
 
 cat > "$MANIFEST" << 'HEADER'

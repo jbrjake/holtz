@@ -84,7 +84,9 @@ Your output should be:
 
 If you find yourself writing a summary table, STOP. You are not in the finalize phase.
 
-### Step 11: Pattern Analysis [recurring: every 3-5 fixes during Step 10]
+### Step 11: Pattern Analysis [recurring: every 3-5 fixes during Step 10, through round 8]
+
+From round 9 on, run [Step 11b](#step-11b-stale-sweep-recurring-at-each-iteration-boundary) in place of this step — its record discharges the owed round.
 
 Use extended thinking (ultrathink) for this step — cross-finding pattern discovery and sibling search require deep reasoning.
 
@@ -163,6 +165,11 @@ Triage every open finding, at every severity, in one pass, before dispatching an
    sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer cant-reproduce BH-NNN
    ```
    Record each `fix_start` after the previous deferral, not ahead of the batch — its gate is scoped to the last transition.
+4. **Record the sweep.** After step 3, alone on its own Bash line — chaining records nothing:
+   ```bash
+   python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/stale_sweep.py --record --present BH-NNN,BH-NNN --retired BH-NNN
+   ```
+   Every id from step 1 goes in one list or the other. Run with `--show` for the ids the sweep must account for.
 
 ### Step 12: Per-Fix Hardening [recurring: after each fix in Step 10]
 

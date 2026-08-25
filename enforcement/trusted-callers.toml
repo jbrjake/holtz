@@ -25,3 +25,4 @@
 "hooks/quiz_capture.py" = "sha256:3d1697849e6a9a313f29bb9745c1181ba69a31258eec27f4bb84b65afe0484aa"
 "hooks/suite_courier.py" = "sha256:d5b3335c29d9bcafaab6bf4111370ac56a9bed388175ca9f20c142dc39607d3b"
 "hooks/pattern_courier.py" = "sha256:c7a42c64eada2d9cfb2eab985230fa544dbf3bd36f5dbec56816f944d0ec2586"
+"hooks/stale_sweep_courier.py" = "sha256:f9d81e7ee7e4afaf10cb602690a2df71d50112c42efaf23b1a25f38971085883"

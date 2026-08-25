@@ -153,6 +153,44 @@ fields = [
 [[events.pattern_analysis_complete.producers]]
 id = "hook:enforcement/hooks/pattern_courier.py"
 
+# A stale sweep closed, and what it covered (P0.2, D8).
+#
+# Past ~round 8 this is what discharges the owed round instead of a pattern
+# analysis — the swap the plan's ~220–470 agent-min saving rests on. The sweep
+# is the best-performing mechanism the audited run had: 68 open HIGHs triaged
+# in 14 agent-min, ~3.5 min per retirement against 23.4 for a round, writing no
+# code. It retires board; a round adds to it.
+#
+# Nothing recorded a sweep before this. Step 11b writes `fix_start` and a
+# `cant_reproduce` deferral only for the findings it *retires*, so a sweep
+# where everything still reproduces left no trace, and that deferral is
+# reachable outside a sweep anyway. An obligation cannot be discharged by a
+# fact the ledger does not hold.
+#
+# What makes the claim cost something is coverage, which is why `triaged` is
+# derived rather than typed: D21 settled the population as every open finding
+# at every severity, and `stale_sweep.py` refuses unless the verdicts name
+# exactly it. `restricted` + a hash-pinned PostToolUse writer is what keeps
+# that hold — the script runs in the sandboxed shell and cannot reach the
+# daemon, and a weaker sibling event would simply become the cheaper door past
+# round 8, undoing what P5.4 bought for the round it replaces.
+[events.stale_sweep_complete]
+description = "A stale sweep triaged the whole open board"
+attestation = "tool"
+restricted = true
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
+    { name = "step", type = "string", pattern = "^\\d+$" },
+    { name = "triaged", type = "string", pattern = "^\\d+$" },
+    { name = "retired", type = "string", pattern = "^\\d+$" },
+]
+
+[[events.stale_sweep_complete.producers]]
+id = "hook:enforcement/hooks/stale_sweep_courier.py"
+
 [events.set_member_complete]
 description = "A completion set member passed clean"
 attestation = "agent"

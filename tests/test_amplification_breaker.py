@@ -130,6 +130,49 @@ class _Run:
         assert courier.returncode == 0, courier.stderr
         assert "NOT recorded" not in courier.stdout, courier.stdout
 
+    def sweep(self, present=(), retired=()):
+        """One stale sweep, through `stale_sweep.py --record` + its courier.
+
+        Same two-process shape as `round()`, and for the same reason: the
+        script runs where the daemon is unreachable and the courier writes the
+        restricted event. Defaults to sweeping whatever is open, which is what
+        `--show` would tell the agent.
+        """
+        script = os.path.join(SCRIPTS_DIR, "stale_sweep.py")
+        if not present and not retired:
+            present = json.loads(self.sah(
+                "query",
+                "SELECT DISTINCT f.id FROM events f WHERE f.type='finding' "
+                "AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') "
+                "AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')",
+                "--format", "json").stdout)
+            present = sorted(row["id"] for row in present)
+
+        args = ["--record", "--present", ",".join(present)]
+        if retired:
+            args += ["--retired", ",".join(retired)]
+        command = f"python3 {script} " + " ".join(
+            a if a.startswith("--") else (a or "''") for a in args)
+
+        env = {**os.environ, "SAHJHAN_DAEMON_SOCKET": self.d["sock_path"]}
+        record = subprocess.run(
+            [sys.executable, script, *args],
+            cwd=self.root, capture_output=True, text=True, env=env, timeout=60,
+        )
+        assert record.returncode == 0, f"{record.stdout}\n{record.stderr}"
+        courier = subprocess.run(
+            [sys.executable, os.path.join(HOOKS_DIR, "stale_sweep_courier.py")],
+            input=json.dumps({
+                "tool_name": "Bash",
+                "tool_input": {"command": command},
+                "tool_response": {"output": record.stdout, "exit_code": 0},
+                "cwd": self.root,
+            }),
+            capture_output=True, text=True, env=env, timeout=60,
+        )
+        assert courier.returncode == 0, courier.stderr
+        assert "NOT recorded" not in courier.stdout, courier.stdout
+
     def answer(self, query_name):
         out = self.sah("query", _named_query(query_name), "--format", "json").stdout
         return str(list(json.loads(out)[0].values())[0])

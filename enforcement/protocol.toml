@@ -239,8 +239,25 @@ intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings"
 # `pattern_ids` is a joined string, and fencing both sides with commas is what
 # stops PAT-1 matching PAT-10. A NULL on either side yields NULL and drops out,
 # which is right for a dry round and for an unattributed finding.
+# The swap (P0.2, D8). Past ~round 8 the owed round is satisfied by a stale
+# sweep *instead of* pattern analysis, and the plan's ~220-470 agent-min saving
+# rests substantially on that: a round costs a 17.9-min median and adds board,
+# while the sweep that triaged all 68 open HIGHs did it in 14 min and retired
+# four findings writing no code.
+#
+# It is spelled as one floor over two event types rather than as a fourth
+# conjunct. A conjunct that merely withdrew the obligation past round 8 would
+# withdraw it *permanently* — nothing would raise it again, because the only
+# thing that resets this counter is a round, and no round is owed. Widening the
+# floor keeps the obligation cycling on exactly the same "3+ resolved since"
+# rule, with a sweep now able to be the thing it counts from.
+#
+# The ordinal is `count(*)` of the rounds so far, evaluated inside the floor so
+# a `stale_sweep_complete` only becomes a reset once the run has actually got
+# there. Before round 8 a sweep is still worth running and still costs nothing
+# here; it simply does not discharge a round.
 [queries.pattern_analysis_overdue]
-sql = "SELECT (SELECT count(*) FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)) >= 3 AND (SELECT count(*) FROM events e WHERE e.type='pattern_analysis_complete' AND CAST(e.patterns_found AS INTEGER) = 0 AND e.seq >= COALESCE((SELECT MAX(p.seq) FROM events p WHERE p.type='pattern_analysis_complete' AND p.seq < (SELECT MAX(q.seq) FROM events q WHERE q.type='pattern_analysis_complete')), 0)) < 2 AND (SELECT count(*) FROM (SELECT DISTINCT f.id FROM events f JOIN events p2 ON p2.type='pattern_analysis_complete' AND strpos(','||p2.pattern_ids||',', ','||f.pattern_id||',') > 0 WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))) <= 25"
+sql = "SELECT (SELECT count(*) FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete' OR (type='stale_sweep_complete' AND (SELECT count(*) FROM events WHERE type='pattern_analysis_complete') >= 8)), 0)) >= 3 AND (SELECT count(*) FROM events e WHERE e.type='pattern_analysis_complete' AND CAST(e.patterns_found AS INTEGER) = 0 AND e.seq >= COALESCE((SELECT MAX(p.seq) FROM events p WHERE p.type='pattern_analysis_complete' AND p.seq < (SELECT MAX(q.seq) FROM events q WHERE q.type='pattern_analysis_complete')), 0)) < 2 AND (SELECT count(*) FROM (SELECT DISTINCT f.id FROM events f JOIN events p2 ON p2.type='pattern_analysis_complete' AND strpos(','||p2.pattern_ids||',', ','||f.pattern_id||',') > 0 WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))) <= 25"
 intent = "3+ findings resolved since the last pattern analysis, unless the last two rounds added no pattern or more than 25 pattern-filed findings are open"
 
 # P0.2's round cap and its obligation (D7). A round's job is to find siblings;
