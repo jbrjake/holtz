@@ -1373,6 +1373,19 @@ def check_h8_escape_identity(model: Model) -> list[Finding]:
         unnamed_is_finding: bool = True,
     ) -> None:
         for escape in _named_escapes(text, commands, own):
+            if escape not in escape_queries:
+                # The escape carries no gates at all, so there is no state in
+                # which running it is refused and it cannot be unsatisfiable at
+                # the moment it is printed — which is the only thing this check
+                # is about. `sweep_dirty`, the `final_sweep -> fix_loop` edge
+                # every convergence conjunct points at, is the case: warning
+                # there asserts something untrue about the tree on every run.
+                #
+                # The map distinguishes this from an inline-gated escape for
+                # free: `setdefault` fires per gate, so a transition with
+                # inline gates registers an empty set and a transition with no
+                # gates registers nothing. Only the latter is exempt.
+                continue
             named = escape_queries.get(escape) or set()
             available = _run_wide(named)
             if named and not available:

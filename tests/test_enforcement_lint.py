@@ -894,6 +894,38 @@ class TestH8EscapeIdentity:
         assert findings[0].level == "warning"
         assert "pattern_check" in findings[0].message
 
+    UNGATED = """
+        [[transitions]]
+        from = "final_sweep"
+        to = "convergence"
+        command = "converge"
+        gates = [
+            { type = "query", sql = "SELECT count(*) = 0 FROM events WHERE type='finding'", expect = "true", intent = "findings remain — run `sahjhan transition sweep_dirty` and finish the work" },
+        ]
+
+        [[transitions]]
+        from = "final_sweep"
+        to = "fix_loop"
+        command = "sweep_dirty"
+        """
+
+    def test_an_escape_with_no_gates_at_all_is_silent(self, tmp_path: Path) -> None:
+        """An ungated escape cannot be unsatisfiable, so the warning is false.
+
+        H8's whole subject is an escape that can be blocked at the moment it is
+        printed. `sweep_dirty` — the `final_sweep -> fix_loop` edge every
+        convergence conjunct points at — carries no gates, so there is no state
+        in which running it is refused. Warning here does not merely cry wolf;
+        it asserts something untrue about the tree, on every commit.
+
+        The distinction is already in the model: a transition whose gates are
+        *inline* registers an (empty) entry while building the escape map, and
+        a transition with no gates registers none. Only the second is exempt —
+        `test_warns_while_the_escape_is_decided_inline` pins the first.
+        """
+        tree = build_tree(tmp_path, events="", transitions=self.UNGATED)
+        assert findings_for(tree, "H8") == []
+
     def test_errors_when_the_block_ignores_the_escape_s_query(
         self, tmp_path: Path
     ) -> None:

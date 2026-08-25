@@ -32,6 +32,7 @@ reverted in `e123a86`.
 | BLOCKED(x) | owed; cannot land before x |
 | MOOT? | likely overtaken by later work; confirm via its D-number |
 | REJECTED (Jon) | struck by Jon in the spec itself |
+| WON'T DO (Jon) | ruled not to ship after implementation falsified its premise; the spec text is unchanged, so this is *not* REJECTED (Jon). Carries a D-number |
 | N/A | out of scope per Jon's standing "ignore tqdm items" rule |
 | — | not started |
 
@@ -52,9 +53,9 @@ reverted in `e123a86`.
 | P0.4 · ship `open_findings.py` / `show_findings.py` as the mandated lookup path | SHIPPED as a single `findings.py` with `list`/`show` (trivial merge); `f17aaec` applied the mandated path at a site the first sweep missed | `57a4c02`, `f17aaec` | — |
 | P0.4 · delete the two `step-10-fix-loop.md` update steps | SHIPPED+ (11 lines across 5 skill files; also **added** mandates — per-sibling `event finding`, `event blast_radius` — and re-scoped `status-file-format.md` to Justine's file) | `fa058cd` | D19 |
 | P0.5 · require `--field reachability=user_reachable\|fault_injected\|theoretical` | SHIPPED — required, not optional, because D4's conjunct is defined over it; taught in `punchlist-format.md` with a test that fails the build if schema and doc disagree; `migrate_legacy.py` writes `theoretical` for archives, which is that value's own definition | `5679f5c` | D4 |
-| P0.5 · derive severity from `(reachability, blast_radius.affected_count, public-API surface)` | **OWED** — premise false: `blast_radius` is recorded at Step 10's per-fix procedure, *after* filing, and "public-API surface" has no ledger representation. Two of three inputs absent at filing time; the derivation needs a re-grading trigger nobody has chosen | — | — |
-| P0.5 · only `user_reachable` fix-loop eligible; `fault_injected` batches at finalize; `theoretical` auto-defers | **OWED** — the eligibility half is a plain query gate; auto-defer has no mechanism (`event finding` is an event, and only transitions carry `emits`), and finalize batching has none either | — | — |
-| P0.5 · reopen, don't refile (`--supersedes`) | **OWED** — two gaps: the engine does not gate events, and nothing reopens a closed finding. Re-filing an id supersedes its fields (D25) but leaves `finding_resolved` standing; a reopen needs a new event and every openness predicate taught to respect it | — | — |
+| P0.5 · derive severity from `(reachability, blast_radius.affected_count, public-API surface)` | **WON'T DO (Jon, 2026-08-25)** — premise false: `blast_radius` is recorded at Step 10's per-fix procedure, *after* filing, and "public-API surface" has no ledger representation. Two of three inputs absent at filing time. All three re-grading triggers were costed (courier on `blast_radius`, render/gate-time computation, drop `affected_count`); none ships. Severity stays a typed field | — | D28 |
+| P0.5 · only `user_reachable` fix-loop eligible; `fault_injected` batches at finalize; `theoretical` auto-defers | **OWED** — eligibility gate and `theoretical` auto-defer courier ruled to ship (D29); **finalize batching is still owed a ruling** and must not land as unenforced prose — `location` is a `file:line` string, so "per module" has no ledger meaning yet | — | D29 |
+| P0.5 · reopen, don't refile (`--supersedes`) | **WON'T DO (Jon, 2026-08-25)** — two gaps: the engine does not gate events, and nothing reopens a closed finding. The rejection half alone is worse than nothing (it routes new information onto a closed record); the reopen half converts seven openness predicates from set-membership to temporal, inside the gates that decide convergence, the round cap and the deferral budget. D25 keeps the reachable part of the value | — | D30 |
 
 ## Tier 1
 
