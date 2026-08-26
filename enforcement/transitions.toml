@@ -532,6 +532,14 @@ gates = [
     # Every one of these is escapable by `sweep_dirty`, the ungated
     # `final_sweep -> fix_loop` edge: a blocked converge goes back and works.
     { type = "query", query = "all_critical_resolved", expect = "true", intent = "every CRITICAL finding must be resolved — run `sweep_dirty` and fix them" },
+    # P0.5's second route (D29/D34/D35). The spec batches `fault_injected` at
+    # finalize; the gate is here instead, because `all_critical_resolved` above
+    # carries no reachability filter and refuses a deferral — a fault-injected
+    # CRITICAL blocks this transition, two doors upstream of `finalize`, so a
+    # batch compelled there could never be reached by the run that needed it.
+    # Escape: Step 15's `hardening_batch.py --record --module <dir>`, the line
+    # immediately above `transition converge` in `phase-convergence.md`.
+    { type = "query", query = "no_open_fault_injected", expect = "true", intent = "every fault_injected finding must be hardened or deferred — run Step 15's hardening batch, one commit per module" },
     { type = "query", query = "all_user_reachable_high_closed", expect = "true", intent = "every user-reachable HIGH must be resolved or deferred — run `sweep_dirty` and work them" },
     { type = "query", query = "amplification_diverging", expect = "false", intent = "the run is still filing faster than it retires over the last 3 rounds" },
     { type = "file_exists", path = "docs/holtz/DEFERRED.md", intent = "docs/holtz/DEFERRED.md must exist" },

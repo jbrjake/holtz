@@ -96,6 +96,16 @@ id = "engine:emits:fix_commit"
 [[events.finding_resolved.producers]]
 id = "engine:emits:merge_finding"
 
+# P0.5's second route (D29/D34/D35): one hardening commit closes a whole
+# module's fault-injected findings. It has to be a hook and not an `emits`
+# because a transition writes exactly one event with a fixed field map, and a
+# batch's size is not something the config knows. Attestation stays `agent` —
+# the courier re-derives the batch from the ledger and stamps HEAD, but this is
+# the same event an ordinary fix writes, and giving it a second, stronger trust
+# level would mean two definitions of closed.
+[[events.finding_resolved.producers]]
+id = "hook:enforcement/hooks/hardening_batch_courier.py"
+
 [events.blast_radius]
 description = "Blast radius query after a fix"
 attestation = "agent"

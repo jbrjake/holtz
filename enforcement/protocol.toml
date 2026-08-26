@@ -162,6 +162,49 @@ intent = "open findings whose latest filing is MEDIUM"
 sql = "SELECT f.id, f.project, f.run, f.auditor, f.phase, f.step FROM events f WHERE f.type='finding' AND f.reachability='theoretical' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
 intent = "open findings whose latest filing grades them theoretical"
 
+# P0.5's second route (D29/D34/D35): `fault_injected` batches into one
+# hardening commit per module. `location` rides along because the module is the
+# containing directory of the file it names — free text (`file.py:88`,
+# `` `file.py:88` ``, `file.py:88 (function f)` all appear in this repo's
+# archived ledgers), so the directory rule is applied in `hardening_batch.py`
+# and the ledger holds the *result*: one `finding_resolved` per covered id.
+# Deliberately not SQL — a `location` parser written as string surgery inside a
+# gate would be a second, weaker copy of `merge_punchlists.parse_location`.
+#
+# The max-seq clause carries the same weight it does above, and one field more:
+# a finding *relocated* by a later filing must move into the batch that will
+# actually harden it, not stay in the module it was first mis-filed under.
+
+[queries.open_fault_injected_findings]
+sql = "SELECT f.id, f.location, f.project, f.run, f.auditor FROM events f WHERE f.type='finding' AND f.reachability='fault_injected' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
+intent = "open findings whose latest filing grades them fault_injected"
+
+# `converge`'s conjunct, and the scalar half of the pair above — a gate needs
+# one value and named queries cannot reference one another, so this is the
+# `open_low_findings` / `open_low_count` arrangement one route over.
+# `test_hardening_batch.py::test_the_two_queries_agree` runs both and fails the
+# build if they ever disagree about what "open" means.
+#
+# It gates `converge` rather than `finalize`, which is where the spec puts the
+# batching. `all_critical_resolved` carries no reachability filter and refuses
+# a deferral by design, so a `fault_injected` CRITICAL blocks `converge` — two
+# transitions upstream of `finalize`. A batch taught there could never be
+# reached by the run that needed it.
+[queries.no_open_fault_injected]
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.reachability='fault_injected' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"
+intent = "every fault_injected finding must be hardened or deferred"
+
+# What stops one commit disposing of the whole board. `hardening_batch.py`
+# refuses a HEAD that already carries a resolution, so a second module cannot
+# ride the first module's commit — which is the only thing making "one
+# hardening commit **per module**" cost more than one commit in total.
+# Read by the script rather than by a gate, the way
+# `open_theoretical_findings` is: a predicate is named here so there is one of
+# it, whoever asks.
+[queries.resolution_commit_hashes]
+sql = "SELECT DISTINCT r.commit_hash FROM events r WHERE r.type='finding_resolved'"
+intent = "commit hashes already carried by a finding resolution"
+
 # The escape's first conjunct. `open_low_findings` returns the ids the batch
 # transitions; a gate needs a scalar, and named queries cannot reference one
 # another. `test_amplification_breaker.py` runs both and asserts the count

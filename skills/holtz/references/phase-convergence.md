@@ -12,13 +12,20 @@ All sahjhan commands below must include `--config-dir "$CLAUDE_PLUGIN_ROOT/enfor
 
 1. From `perspective_clean`: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition all_perspectives` — gate checks all 13 lenses are marked complete. Transitions to `all_perspectives_clean`.
 2. From `all_perspectives_clean`: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition final_sweep_start` — transitions to `final_sweep`.
-3. From `final_sweep`: run `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record --scope full` (the `converge` gate reads that green; per-fix `affected` greens do not satisfy it), then `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition converge` — Sahjhan checks all gates: all perspectives complete, suite passes, linters pass, zero open items, no protocol violations.
-4. **`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition converge` MUST succeed before SUMMARY.md is rendered.** If gates fail, Sahjhan reports which gates are blocking. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" gate check converge` for details.
-5. If the final sweep found new issues: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition sweep_dirty` to return to `fix_loop`. Fix the issues and repeat the convergence flow.
-6. If not converged for other reasons: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" ledger checkpoint --snapshot pre-clear` then `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition iteration_boundary`. Tell the user: *"Not converged. `/clear` then any message to continue."* Stop. The stop gate hook enforces this: blocks premature stops until the protocol reaches a terminal state.
-7. If converged: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition confirm_convergence` — transitions from `final_sweep_clean` to `converged`. Proceed to Step 16.
+3. Harden the fault-injected findings, one commit per module. Run `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/hardening_batch.py --show` to list them, grouped by containing directory. For each module: make the code robust to the injected faults, commit that module's work in **one** commit whose message names every finding id in that module and no id outside it, then run `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/hardening_batch.py --record --module <dir>` as its own Bash call. Repeat until `--show` prints `{}`.
+4. From `final_sweep`: run `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record --scope full` (the `converge` gate reads that green; per-fix `affected` greens do not satisfy it), then `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition converge` — Sahjhan checks all gates: all perspectives complete, suite passes, linters pass, zero open items, no protocol violations.
+5. **`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition converge` MUST succeed before SUMMARY.md is rendered.** If gates fail, Sahjhan reports which gates are blocking. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" gate check converge` for details.
+6. If the final sweep found new issues: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition sweep_dirty` to return to `fix_loop`. Fix the issues and repeat the convergence flow.
+7. If not converged for other reasons: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" ledger checkpoint --snapshot pre-clear` then `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition iteration_boundary`. Tell the user: *"Not converged. `/clear` then any message to continue."* Stop. The stop gate hook enforces this: blocks premature stops until the protocol reaches a terminal state.
+8. If converged: run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition confirm_convergence` — transitions from `final_sweep_clean` to `converged`. Proceed to Step 16.
 
 After `/clear`, Claude Code's `SessionStart` records the `context_reset` event and the primer injects resume context — the user types anything and the model resumes from `sahjhan status`.
+
+#### Blocked by open fault-injected findings
+
+`converge` refuses while any finding whose latest filing grades it `fault_injected` is still open. Clear it with step 3 above — `--show`, one hardening commit per module, `--record --module <dir>`. Re-filing a finding with a corrected `reachability` or a corrected `location` moves it; the latest filing decides both.
+
+`--record` refuses and names what is wrong when: the module has no open fault-injected findings, the commit message misses one of them, the message names a finding from another module, the commit has no changes in it, the commit already closed something, or a finding's `location` has no readable path. Fix what it names and run it again.
 
 #### Blocked by an exhausted lens quiz
 
