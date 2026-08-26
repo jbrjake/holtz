@@ -38,14 +38,14 @@ Fixes are **delegated to subagents; the orchestrator merges and records.** You (
 
 **The subagent is under the same enforcement you are.** The hooks fire on a subagent's Bash/Edit exactly as they fire on yours, and the TDD gate is scoped to the caller: the pre-edit hook stops a subagent from writing a source fix until **that subagent** has recorded `test_failed_before_fix` since the last transition, and a sibling's does not count. Its `sahjhan event ...` calls write the same ledger you read. "Follow TDD" is not a request you make of the subagent in its prompt — it is mechanically unavoidable for it, just as it is for you. (This is why the subagent must run Sahjhan, not avoid it: recording the TDD events is exactly what unblocks its own edits.)
 
-For each finding, in dispatch order:
+Take findings in punchlist order, up to three in flight:
 
 **Step A — Dispatch the fix subagents (investigate + author + verify, each in its own worktree).**
 Launch up to **3** Agent subagents at once, one finding each, with `isolation: "worktree"`. Give each: the finding (ID, description, location, category, Discovery Chain), which triage path it falls under (see [references/step-10-fix-loop.md](references/step-10-fix-loop.md)), the instruction to work **only** this finding, the name of the branch you merge onto (`git rev-parse --abbrev-ref HEAD`), and `$CLAUDE_PLUGIN_ROOT` so it can invoke Sahjhan.
 
 **Model routing:** `model: "sonnet"` for a test that can't fail, or a fix confined to one file. Everything else → `model: "opus"`.
 
-The subagent runs the enforced TDD sequence itself, in the real tree:
+The subagent runs the enforced TDD sequence itself, in its worktree:
 
 1. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event fix_start --field finding_id=BH-NNN`
 2. Write a failing test that reproduces the finding. Run it. Confirm it FAILS. (Files under `tests/**` are exempt from the pre-edit gate, so this write is allowed.)
