@@ -115,6 +115,19 @@ intent = "finding must exist and its latest filing must be LOW"
 sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='MEDIUM' AND seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id='{{item_id}}')"
 intent = "finding must exist and its latest filing must be MEDIUM"
 
+# P0.5's first route (D29/D34): only `user_reachable` findings are fix-loop
+# eligible. `item_is_low`'s shape, one field over, and it gates `fix_commit`
+# because that is the only place the engine can see fix-loop eligibility —
+# `fix_start` is an event, and the engine does not gate events (D30).
+#
+# The max-seq clause is the escape as much as the filter. `theoretical` means
+# no path has been found, not that none exists; a probe that establishes one
+# re-files the finding and this predicate flips, which is the legitimate way
+# back onto the board. A re-grade the other way takes it off.
+[queries.item_is_user_reachable]
+sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND reachability='user_reachable' AND seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id='{{item_id}}')"
+intent = "finding must exist and its latest filing must be user_reachable"
+
 # count(DISTINCT id), not count(*): this is a policy on findings, and the
 # ledger holds rows. A MEDIUM re-filed under its own id is a correction, not a
 # second finding — counting rows inflated the denominator and let a deferral
@@ -394,9 +407,25 @@ intent = "a pattern round must close or merge at least as many findings as it op
 # Every conjunct's escape is `sweep_dirty`, the ungated `final_sweep ->
 # fix_loop` edge. A blocked converge can always go back and do the work.
 
+# One exclusion beyond `finding_resolved`, and it is the escape the fix-loop
+# eligibility gate needs rather than a softening of this conjunct.
+#
+# `theoretical` is written by `theoretical_courier.py`, not chosen by the
+# agent, and it says no path to the defect has been found — reachability itself
+# unestablished. With `item_is_user_reachable` on `fix_commit`, a theoretical
+# CRITICAL is auto-deferred at filing and then has no route left at all:
+# measured against a real daemon, this conjunct refused the deferral,
+# `merge_finding` refused an already-closed finding, and the hardening batch's
+# population is `fault_injected` **and open**. Re-grading was the only exit,
+# and re-grading to clear a gate is a forgery.
+#
+# Every other reason word still refuses. `low_priority`, `medium_budget` and
+# `cant_reproduce` are discretionary acts, and refusing them is what this
+# conjunct is for; `test_an_ordinary_deferral_still_does_not_converge` fails
+# the build if the exclusion ever widens past the one machine-written word.
 [queries.all_critical_resolved]
-sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved'))"
-intent = "every CRITICAL finding must be resolved — deferring one does not converge"
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred' AND d.reason='theoretical'))"
+intent = "every CRITICAL finding must be resolved — only a theoretical auto-deferral closes one without a fix"
 
 [queries.all_user_reachable_high_closed]
 sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='HIGH' AND f.reachability='user_reachable' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"

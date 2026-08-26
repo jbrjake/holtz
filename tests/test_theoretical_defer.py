@@ -232,15 +232,24 @@ class TestAnAutoDeferredCriticalIsStillFixable:
     """The property that keeps auto-deferral safe, and it is not obvious.
 
     `all_critical_resolved` requires every CRITICAL to carry a
-    `finding_resolved` and **refuses a deferral** — "deferring one does not
-    converge". So auto-deferring a `theoretical` CRITICAL would deadlock
-    convergence outright if the deferral also closed the fix route.
+    `finding_resolved`, so auto-deferring a `theoretical` CRITICAL would
+    deadlock convergence outright unless the deferral either converges or
+    leaves the fix route open. **Both hold, and each is load-bearing on its
+    own.**
 
-    It does not, for one reason: `fix_commit` has no openness gate. Its gates
-    are the ordinary fix-work ones — commit message, green suite, blast radius,
-    hardening — all satisfiable by doing the work. Add `item_open` to
-    `fix_commit` and a theoretical CRITICAL becomes permanently unconvergeable,
-    which is why this asserts on the gate list rather than on a symptom.
+    *It converges.* Per Jon's 2026-08-25 ruling the conjunct excludes a
+    deferral whose reason is `theoretical` — the one reason word a courier
+    writes rather than an agent choosing it, and the one that says no path was
+    found rather than that the work is not worth doing. Before that exclusion,
+    P0.5's fix-loop eligibility gate (D34) would have left a theoretical
+    CRITICAL with no route at all: measured against a real daemon, the
+    conjunct refused the deferral, `merge_finding` refused an already-closed
+    finding, and the hardening batch covers `fault_injected` findings that are
+    still open.
+
+    *And the fix route stays open.* `fix_commit` has no openness gate, so a
+    finding whose probe later establishes a path comes back onto the board by
+    re-filing. Add `item_open` there and that return trip closes.
     """
 
     def _fix_commit_gates(self):
@@ -255,22 +264,33 @@ class TestAnAutoDeferredCriticalIsStillFixable:
     def test_fix_commit_does_not_gate_on_openness(self):
         for gate in self._fix_commit_gates():
             assert gate.get("query") != "item_open", (
-                "fix_commit gained an openness gate — a theoretical CRITICAL is "
-                "auto-deferred at filing and can then never be resolved, so "
-                "all_critical_resolved is false forever and the run cannot "
-                "converge or make itself converge"
+                "fix_commit gained an openness gate — an auto-deferred finding "
+                "whose probe later establishes a path could no longer be fixed "
+                "after re-filing, so the only route back onto the board closes"
             )
 
-    def test_a_deferred_critical_still_blocks_convergence(self, board):
-        """The other half of the pair: deferral is not a way out for a
-        CRITICAL, which is what makes the fix route load-bearing."""
+    def test_a_theoretical_deferral_converges_a_critical(self, board):
+        """The other half of the pair. This is the escape D34's eligibility
+        gate rests on; `test_fix_loop_eligibility.py` drives the whole set of
+        routes, and this one pins the reason word."""
         from _protocol_cache import named_query_sql  # noqa: PLC0415
 
         board.file("BH-001", severity="CRITICAL")
-        board.defer("BH-001", reason="theoretical")
         sql = named_query_sql(CONFIG_DIR, "all_critical_resolved")
-        result = board.sah("query", sql, "--format", "json")
-        assert "false" in result.stdout.lower()
+        assert "false" in board.sah("query", sql, "--format", "json").stdout.lower()
+        board.defer("BH-001", reason="theoretical")
+        assert "true" in board.sah("query", sql, "--format", "json").stdout.lower()
+
+    def test_a_discretionary_deferral_does_not(self, board):
+        """The exclusion is one word wide. A CRITICAL deferred `low_priority`
+        still blocks — that is what the conjunct is for, and it must not be an
+        empty set that a broken query could satisfy."""
+        from _protocol_cache import named_query_sql  # noqa: PLC0415
+
+        board.file("BH-001", severity="CRITICAL")
+        board.defer("BH-001", reason="low_priority")
+        sql = named_query_sql(CONFIG_DIR, "all_critical_resolved")
+        assert "false" in board.sah("query", sql, "--format", "json").stdout.lower()
 
 
 # ── The predicate lives in the config, not in Python ─────────────────────────

@@ -25,10 +25,12 @@ The same `awaiting_clear` boundary recurs mid-loop via `iteration_boundary` (Ste
 
 Read [references/impact-graph-operations.md](references/impact-graph-operations.md) for blast radius queries and risk score updates.
 
-**Re-read worklist.** Query it; do not read `docs/holtz/PUNCHLIST.md`:
+**Re-read worklist.** Query it; do not read `docs/holtz/PUNCHLIST.md`. The fix loop works `user_reachable` findings only — `fix_commit` refuses the rest:
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list --reachability user_reachable
 ```
+
+A `fault_injected` finding is hardened in one commit per module at Step 15; a `theoretical` one is auto-deferred when it is filed. To move a finding onto the workable list, run a reachability probe and re-file it with `--field reachability=user_reachable` — the latest filing decides. Do not re-file to clear the gate without a probe that found a path.
 
 #### Per-Item Fix Procedure (MANDATORY — do not skip steps)
 

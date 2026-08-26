@@ -135,6 +135,13 @@ to = "fix_loop"
 command = "fix_commit"
 args = ["item_id"]
 gates = [
+    # P0.5's first route (D29/D34). `fix_commit` is the only place the engine
+    # can see fix-loop eligibility — `fix_start` is an event, and the engine
+    # does not gate events (D30). Its escapes had to exist first, one per
+    # grade: `fault_injected` is closed by Step 15's hardening batch, and a
+    # `theoretical` auto-deferral now clears `all_critical_resolved`. A probe
+    # that establishes a path re-files the finding and this gate opens.
+    { type = "query", query = "item_is_user_reachable", expect = "true", intent = "only user_reachable findings are fix-loop eligible — harden a fault_injected one with Step 15's batch, or re-file it with a path a probe established" },
     { type = "command_succeeds", cmd = "git log -1 --format=%B | grep -q '{{item_id}}'", intent = "commit must reference the punchlist item" },
     { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope affected', timeout = 60, evidence = "suite_green", intent = "test suite must pass after fix" },
     { type = "ledger_has_event_since", event = "blast_radius", since = "last_transition", intent = "blast radius must be checked after each fix" },

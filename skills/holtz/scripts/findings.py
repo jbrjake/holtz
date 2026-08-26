@@ -107,6 +107,7 @@ def _collect(binary: str, config_dir: str, cwd: str) -> list[dict]:
             "id": finding_id,
             "status": status,
             "severity": _field(event, "severity", "?"),
+            "reachability": _field(event, "reachability", "?"),
             "category": _field(event, "category"),
             "location": _field(event, "location"),
             "perspective": _field(event, "perspective"),
@@ -184,6 +185,13 @@ def main() -> None:
                          help="include resolved and deferred findings")
     listing.add_argument("--severity", nargs="+", metavar="SEV",
                          help="only these severities")
+    # P0.5's routing (D34): only `user_reachable` findings are fix-loop
+    # eligible, and `fix_commit` refuses the rest. Without this the agent picks
+    # blind and learns at the end of a cycle that the work could not be
+    # committed — the gate would cost exactly what the clause was written to
+    # save.
+    listing.add_argument("--reachability", nargs="+", metavar="GRADE",
+                         help="only these reachability grades")
     listing.add_argument("--count", action="store_true", help="print the count only")
 
     show = sub.add_parser("show", help="one finding's full record")
@@ -214,8 +222,8 @@ def main() -> None:
     if args.command == "show":
         for finding in findings:
             if finding["id"] == args.finding_id:
-                for key in ("id", "status", "severity", "category", "location",
-                            "perspective", "description"):
+                for key in ("id", "status", "severity", "reachability",
+                            "category", "location", "perspective", "description"):
                     print(f"{key}: {finding[key]}")
                 return
         print(f"ERROR: no finding {args.finding_id}", file=sys.stderr)
@@ -226,6 +234,9 @@ def main() -> None:
     if args.severity:
         wanted = {s.upper() for s in args.severity}
         findings = [f for f in findings if f["severity"].upper() in wanted]
+    if args.reachability:
+        grades = {g.lower() for g in args.reachability}
+        findings = [f for f in findings if f["reachability"].lower() in grades]
 
     if args.count:
         print(len(findings))
