@@ -188,6 +188,67 @@ def exit_enforcement_error(
         exit_ok()
 
 
+def _linked_worktree_main(git_link: str, fallback: str) -> str:
+    """The main worktree behind a `.git` *file*, or ``fallback``.
+
+    Two different things put a file where `.git` would normally be a
+    directory, and only one of them is part of this project. A linked
+    worktree's gitdir carries a ``commondir`` naming the shared repository; a
+    submodule's does not, because a submodule *is* its own repository and
+    deserves its own daemon. Following the ``gitdir:`` pointer without that
+    check would hand every submodule the superproject's socket.
+    """
+    try:
+        with open(git_link, encoding="utf-8") as fh:
+            pointer = fh.read()
+    except OSError:
+        return fallback
+    _, sep, rest = pointer.partition("gitdir:")
+    if not sep:
+        return fallback
+    gitdir = rest.strip().splitlines()[0].strip() if rest.strip() else ""
+    if not gitdir:
+        return fallback
+    if not os.path.isabs(gitdir):
+        gitdir = os.path.join(os.path.dirname(git_link), gitdir)
+
+    try:
+        with open(os.path.join(gitdir, "commondir"), encoding="utf-8") as fh:
+            common = fh.read().strip()
+    except OSError:
+        return fallback  # a submodule, or a gitdir we cannot read
+    if not common:
+        return fallback
+    if not os.path.isabs(common):
+        common = os.path.join(gitdir, common)
+    # `commondir` names the shared `.git`; the main worktree contains it.
+    return os.path.realpath(os.path.dirname(os.path.realpath(common)))
+
+
+def project_anchor(cwd: str) -> str:
+    """The path every system-owned path for ``cwd``'s project hangs off.
+
+    The main worktree of the repository containing ``cwd`` — so a subdirectory,
+    and a linked worktree, both resolve to the one place. Anything that is not
+    in a repository at all anchors on itself.
+
+    This walks the filesystem rather than shelling out to ``git rev-parse``.
+    Every hook calls it, including the ones whose whole job is to report that
+    the toolchain is broken, so it must be cheap and it must not raise.
+    """
+    current = os.path.realpath(cwd)
+    while True:
+        git_path = os.path.join(current, ".git")
+        if os.path.isdir(git_path):
+            return current
+        if os.path.isfile(git_path):
+            return _linked_worktree_main(git_path, current)
+        parent = os.path.dirname(current)
+        if parent == current:
+            return os.path.realpath(cwd)
+        current = parent
+
+
 def boundary_dir(cwd: str | None = None) -> str:
     """Return this project's out-of-tree directory for daemon state.
 
@@ -198,9 +259,14 @@ def boundary_dir(cwd: str | None = None) -> str:
     when the socket resolves inside the project root (``socket_inside_project``),
     so this is not merely tidiness.
 
-    Keyed by a digest of the project path rather than its basename so two
-    checkouts of the same repo get different sockets, and short enough to stay
-    inside the 104-byte macOS ``AF_UNIX`` limit.
+    Keyed by a digest of the *project anchor* rather than of the process cwd,
+    and short enough to stay inside the 104-byte macOS ``AF_UNIX`` limit. Two
+    checkouts of the same repo still get different sockets — that is what the
+    digest is for — while a fix subagent working in a linked worktree resolves
+    the socket the main daemon is bound to (P0.3 / D40). Keyed on cwd, that
+    subagent found nothing listening, and since ``tdd_evidence`` is
+    ``restricted`` its courier could not write one, so the per-actor TDD gate
+    could never open for it.
 
     If ``~`` cannot be resolved the result is a relative path, which lands
     inside the project and trips the fuse — failing closed, which is the
@@ -208,7 +274,7 @@ def boundary_dir(cwd: str | None = None) -> str:
     """
     if cwd is None:
         cwd = os.getcwd()
-    key = hashlib.sha256(os.path.realpath(cwd).encode()).hexdigest()[:12]
+    key = hashlib.sha256(project_anchor(cwd).encode()).hexdigest()[:12]
     return os.path.join(os.path.expanduser("~"), ".holtz", "run", key)
 
 
