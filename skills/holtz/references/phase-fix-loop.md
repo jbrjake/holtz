@@ -34,14 +34,14 @@ A `fault_injected` finding is hardened in one commit per module at Step 15; a `t
 
 #### Per-Item Fix Procedure (MANDATORY — do not skip steps)
 
-Fixes are **delegated to subagents; the orchestrator validates and commits.** You (the orchestrator) do not read a finding's code or author its test and fix in your own context — that is the subagent's job, and it is what keeps the main context under the ~300K budget (see SKILL.md → Context Survival Protocol). The subagent does the **whole TDD cycle in the enforced working tree** — writing the failing test, recording it, writing the fix, running the suite. You keep only the **git commits and the protocol-state transitions**; those stay linear in one place so subagents never race on the branch or the state machine.
+Fixes are **delegated to subagents; the orchestrator merges and records.** You (the orchestrator) do not read a finding's code or author its test and fix in your own context — that is the subagent's job, and it is what keeps the main context under the ~300K budget (see SKILL.md → Context Survival Protocol). Each subagent does the **whole TDD cycle in its own enforced worktree** — writing the failing test, recording it, writing the fix, running the suite, committing. You keep the **merges and the protocol-state transitions**; those stay linear in one place.
 
-**The subagent is under the same enforcement you are.** The hooks fire on a subagent's Bash/Edit exactly as they fire on yours — Claude Code adds an `agent_id` to the hook event but the TDD gate does not look at it. So the pre-edit hook physically stops the subagent from writing a source fix until it has recorded `test_failed_before_fix` since the last transition, and its `sahjhan event ...` calls write the same ledger you read. "Follow TDD" is not a request you make of the subagent in its prompt — it is mechanically unavoidable for it, just as it is for you. (This is why the subagent must run Sahjhan, not avoid it: recording the TDD events is exactly what unblocks its own edits.)
+**The subagent is under the same enforcement you are.** The hooks fire on a subagent's Bash/Edit exactly as they fire on yours, and the TDD gate is scoped to the caller: the pre-edit hook stops a subagent from writing a source fix until **that subagent** has recorded `test_failed_before_fix` since the last transition, and a sibling's does not count. Its `sahjhan event ...` calls write the same ledger you read. "Follow TDD" is not a request you make of the subagent in its prompt — it is mechanically unavoidable for it, just as it is for you. (This is why the subagent must run Sahjhan, not avoid it: recording the TDD events is exactly what unblocks its own edits.)
 
-For EACH punchlist item, in order:
+For each finding, in dispatch order:
 
-**Step A — Dispatch the fix subagent (investigate + author + verify, in-tree).**
-Launch **one** Agent subagent for the finding. Give it: the finding (ID, description, location, category, Discovery Chain), which triage path it falls under (see [references/step-10-fix-loop.md](references/step-10-fix-loop.md)), the instruction to work **only** this finding, and `$CLAUDE_PLUGIN_ROOT` so it can invoke Sahjhan.
+**Step A — Dispatch the fix subagents (investigate + author + verify, each in its own worktree).**
+Launch up to **3** Agent subagents at once, one finding each, with `isolation: "worktree"`. Give each: the finding (ID, description, location, category, Discovery Chain), which triage path it falls under (see [references/step-10-fix-loop.md](references/step-10-fix-loop.md)), the instruction to work **only** this finding, the name of the branch you merge onto (`git rev-parse --abbrev-ref HEAD`), and `$CLAUDE_PLUGIN_ROOT` so it can invoke Sahjhan.
 
 **Model routing:** `model: "sonnet"` for a test that can't fail, or a fix confined to one file. Everything else → `model: "opus"`.
 
@@ -55,26 +55,30 @@ The subagent runs the enforced TDD sequence itself, in the real tree:
 6. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field finding_id=BH-NNN --field affected_count=N`
 7. Write ≥1 edge-case hardening test. Run it. Confirm it passes.
 8. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event hardening_complete --field finding_id=BH-NNN --field edge_cases_tested=N`
-9. **Last, once nothing else will touch the tree:** `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record --scope affected` — runs the tests covering your change (widens to full if it can't prove the subset), records `suite_green` for this tree. Red records nothing.
+9. **Once nothing else will touch the tree,** commit your worktree and rebase it onto the branch you were given:
+   ```bash
+   git add -A && git commit -m "fix(<scope>): <desc>" -m "BH-NNN"
+   git rebase <branch>
+   ```
+   Commit exactly once. If the rebase conflicts, run `git rebase --abort`, record nothing, and return the conflicting paths — the finding goes back out, it does not get merged.
 
-   Ordering is load-bearing: the green is bound to a hash of the working tree, so **any** later edit — the hardening test above especially — invalidates it, and the orchestrator's step 10 would then reject a fix that is perfectly good. Record after the last write, not before.
+10. **Last, after the rebase:** `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record --scope affected` — runs the tests covering your change (widens to full if it can't prove the subset), records `suite_green` for this tree. Red records nothing.
 
-   **Run it alone on its own Bash line.** Chaining anything before or after it (`&&`, `;`, `|`) records nothing. A green run with no `suite_green` at step 10 is almost always this.
+   Ordering is load-bearing: the green is bound to a hash of the working tree, so **any** later edit — the hardening test above especially — invalidates it, and the orchestrator's step 11 would then reject a fix that is perfectly good. The rebase moves the tree too, which is why it comes first. Record after the last write, not before.
 
-The subagent returns a **compact result**, not artifacts to apply: root cause + confidence (`bug/*` needs HIGH confidence before any fix), the blast-radius node, the test name(s), and the suite pass-count. The edits and the ledger events are already on disk — that is the whole point. The subagent does **NOT** `git commit` and does **NOT** run any `transition`; those are yours.
+   **Run it alone on its own Bash line.** Chaining anything before or after it (`&&`, `;`, `|`) records nothing. A green run with no `suite_green` at step 11 is almost always this.
+
+The subagent returns a **compact result**, not artifacts to apply: root cause + confidence (`bug/*` needs HIGH confidence before any fix), the blast-radius node, the test name(s), the suite pass-count, and its worktree's branch. The edits, the commit and the ledger events are already on disk — that is the whole point. The subagent does **NOT** run any `transition`; those are yours.
 
 If the subagent cannot reach HIGH confidence, it records nothing, leaves the tree clean, and returns its investigation notes plus a recommendation (defer-low / defer-medium / can't-reproduce with evidence). You then follow the deferral path in [references/step-10-fix-loop.md](references/step-10-fix-loop.md) — do not invent a fix.
 
-**Step B — Orchestrator validates and commits.** You author and apply nothing. With the finding's work already in the tree and on the ledger:
+**Step B — Orchestrator merges and records.** You author and apply nothing. Take finished subagents **one at a time**, in the order they finish:
 
-10. **Validate — read the evidence, don't redo it.** `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --check --scope affected` exits 0 only if a `suite_green` names *this exact tree*, and the ledger must show this finding's `test_failed_before_fix` and `hardening_complete` (`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" status`). If either fails, the fix is not real — send it back or defer; do not commit.
-11. `git commit` with finding ID in body. Format: `fix(<scope>): <desc>`
-12. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit BH-NNN` — the item id is **positional** (`item_id=BH-NNN` also works); the CLI rejects `--item-id`. Its suite gate re-reads the same `suite_green` step 10 did: the tree hash names content, and `git commit` does not change content, so no second run is needed. **This transition auto-records the `finding_resolved` event for BH-NNN** (id from the arg, commit hash from `HEAD`, run context inherited from the ledger). That resolution event — not the transition itself — is what marks the finding resolved for STATUS.md / PUNCHLIST.md "Resolved" counts and every downstream gate (`pattern_check`, `set complete perspective`, `converge`). You do **not** record `finding_resolved` by hand; one command does both. (Emitted by sahjhan ≥ 0.18.0; the pin is enforced by `scripts/check_sahjhan_pin.py`.)
-13. Move to next item.
+11. **Merge, then validate — read the evidence, don't redo it.** `git merge --ff-only <worktree-branch>`. A refusal means the subagent's rebase is stale; send it back. Then `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --check --scope affected` exits 0 only if a `suite_green` names *this exact tree*, and the ledger must show this finding's `test_failed_before_fix` and `hardening_complete` (`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" status`). If either fails, the fix is not real — send it back or defer; do not record it.
+12. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit BH-NNN` — the item id is **positional** (`item_id=BH-NNN` also works); the CLI rejects `--item-id`. Its suite gate re-reads the same `suite_green` step 11 did: the tree hash names content, and a fast-forward merge does not change content, so no second run is needed. **This transition auto-records the `finding_resolved` event for BH-NNN** (id from the arg, commit hash from `HEAD`, run context inherited from the ledger). That resolution event — not the transition itself — is what marks the finding resolved for STATUS.md / PUNCHLIST.md "Resolved" counts and every downstream gate (`pattern_check`, `set complete perspective`, `converge`). You do **not** record `finding_resolved` by hand; one command does both. (Emitted by sahjhan ≥ 0.18.0; the pin is enforced by `scripts/check_sahjhan_pin.py`.)
+13. Move to the next finished subagent.
 
-Dispatch subagents **one finding at a time** — the ledger is a single hash chain and commits land on one branch, so concurrent fix subagents would race on both. Because the subagent is gated by the **same** TDD pre-edit hook you are, it cannot write the fix (step 4) before recording `test_failed_before_fix` (step 3), and its `suite_green` is bound to a tree hash rather than to its word — that pair is what lets you commit on a ledger read instead of a second suite run.
-
-**The subagent cannot do step 4 before step 3.** The pre-edit hook enforces this — on the subagent, exactly as it would on you.
+Merge and record **one subagent at a time** — the ledger is a single hash chain, so the transitions stay linear. The subagents run concurrently: each holds its own worktree, so its tree hash is its own, and each is gated by the **same** TDD pre-edit hook you are, keyed on the actor that recorded the failing test. A subagent cannot write its fix (step 4) before recording `test_failed_before_fix` (step 3), and a sibling's failing test does not authorise it. Its `suite_green` is bound to a tree hash rather than to its word — that pair is what lets you merge on a ledger read instead of a second suite run.
 
 #### Fix Loop Output Rules
 

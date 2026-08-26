@@ -66,8 +66,9 @@ def test_phase_fix_loop_affirms_in_tree_tdd() -> None:
     silently revert to artifact-only without also dropping these affirmations."""
     text = (SKILL_DIR / "references" / "phase-fix-loop.md").read_text(encoding="utf-8")
     lowered = text.lower()
-    assert "enforced working tree" in lowered, (
-        "phase-fix-loop.md must say the subagent works in the enforced working tree"
+    assert "enforced worktree" in lowered, (
+        "phase-fix-loop.md must say the subagent works in an enforced worktree — "
+        "P0.3 gave each subagent its own, and the enforcement travels with it"
     )
     assert "test_failed_before_fix" in text, (
         "phase-fix-loop.md must have the subagent record test_failed_before_fix"
@@ -78,12 +79,66 @@ def test_phase_fix_loop_affirms_in_tree_tdd() -> None:
     )
 
 
-def test_orchestrator_keeps_commit_and_transition() -> None:
-    """The orchestrator, not the subagent, owns git commits and protocol-state
-    transitions. Both must be stated so the linear-git/ledger invariant holds."""
+def test_orchestrator_keeps_the_merge_and_the_transition() -> None:
+    """The orchestrator owns what must stay linear: the merge and the transitions.
+
+    Under P0.3 the commit moved into the subagent's worktree, so the invariant
+    is no longer "the orchestrator commits" — it is that one actor advances the
+    branch and the ledger. `--ff-only` is the load-bearing half: an ordinary
+    merge writes a merge commit whose tree is not the tree the subagent proved,
+    and `fix_commit`'s suite gate would then find no green naming it.
+    """
     text = (SKILL_DIR / "references" / "phase-fix-loop.md").read_text(encoding="utf-8")
     assert "fix_commit" in text
-    assert "git commit" in text.lower()
+    assert "git merge --ff-only" in text, (
+        "the orchestrator must fast-forward; a merge commit invents a tree no "
+        "suite_green names"
+    )
+    assert "one subagent at a time" in text
+
+
+def test_the_subagent_rebases_before_it_records_and_commits_before_that() -> None:
+    """The green must name the tree that will land on the branch.
+
+    `suite_green.tree_hash` names one exact tree and `fix_commit`'s gate
+    recomputes it at the project root. Rebasing after the record would leave
+    the green naming the pre-rebase tree, so the orchestrator's `--check`
+    would reject every fix — the v0.141.2 failure with a different cause. And
+    the commit has to precede the rebase, because `git rebase` has nothing to
+    move until the work is a commit.
+
+    Asserted on the document's own line order rather than on a gate, because a
+    gate cannot tell that the steps are taught in the wrong sequence.
+    """
+    lines = _fix_loop_lines()
+
+    commit = [i for i, line in enumerate(lines) if "git commit -m" in line]
+    rebase = [i for i, line in enumerate(lines) if line.strip().startswith("git rebase <branch>")]
+    record = [i for i, line in enumerate(lines) if "verify_suite.py --record --scope affected" in line]
+
+    assert len(commit) == 1, f"expected one subagent commit step, found {len(commit)}"
+    assert len(rebase) == 1, f"expected one rebase step, found {len(rebase)}"
+    assert len(record) == 1, f"expected one per-fix record, found {len(record)}"
+
+    assert commit[0] < rebase[0], "commit first — rebase has nothing to move otherwise"
+    assert rebase[0] < record[0], (
+        "rebase before the record, or the green names a tree that never lands"
+    )
+
+
+def test_the_subagent_is_told_to_commit_exactly_once() -> None:
+    """A second commit blocks on the actor's own unregistered first one.
+
+    The pending-commit block is keyed on the actor (D41) and its escape,
+    `transition fix_commit`, belongs to the orchestrator. So a subagent has
+    exactly one commit available to it, and the document has to say so rather
+    than leave it to be discovered by deadlock.
+    """
+    text = (SKILL_DIR / "references" / "phase-fix-loop.md").read_text(encoding="utf-8")
+    assert "Commit exactly once" in text
+    assert "git rebase --abort" in text, (
+        "a conflicted rebase needs a stated way out that is not a second commit"
+    )
 
 
 def test_per_item_procedure_couples_fix_commit_to_resolution() -> None:
@@ -167,16 +222,22 @@ def test_the_commit_needs_no_second_green() -> None:
     side of the seam.
     """
     lines = _fix_loop_lines()
-    commit = [i for i, line in enumerate(lines) if "`git commit` with finding ID" in line]
-    assert len(commit) == 1, f"expected one commit step, found {len(commit)}"
-    late = [
-        line
-        for i, line in enumerate(lines)
-        if i > commit[0] and "verify_suite.py --record --scope affected" in line
+    records = [
+        line for line in lines
+        if "verify_suite.py --record --scope affected" in line
     ]
-    assert not late, (
-        "a per-fix green must not be re-recorded after the commit — the hash is "
-        f"content-addressed, so step 10's evidence still holds. Found: {late}"
+    assert len(records) == 1, (
+        "a fix must record exactly one per-fix green. Under P0.3 that record "
+        "sits after the commit and the rebase, because the rebase moves the "
+        f"tree — but it is still one run, not two. Found: {records}"
+    )
+    checks = [
+        line for line in lines
+        if "verify_suite.py --check --scope affected" in line
+    ]
+    assert len(checks) == 1, (
+        "and the orchestrator reads that green rather than producing its own; "
+        f"found {len(checks)} check steps"
     )
 
 
