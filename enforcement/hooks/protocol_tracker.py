@@ -31,6 +31,7 @@ from _protocol_cache import (  # noqa: E402
     is_read_only_cmd,
     is_sahjhan_cmd,
     parse_status_text,
+    pending_commits_appended,
     query_named_predicate,
     read_cache,
     stall_bumped,
@@ -214,7 +215,11 @@ def _apply_sahjhan_cmd(cwd: str, cache: dict | None, cmd: str, actor: str) -> di
     # cache-tracked, but it clears solely on the mutating `transition fix_commit`
     # verb, so a diagnostic can't silently clear a real pending commit either.
     if _runs_transition(cmd, "fix_commit"):
-        cache["unregistered_commits"] = []
+        # Every bucket, not this actor's. The transition registers the commit
+        # at HEAD, and under P0.3 that commit reached HEAD by fast-forward from
+        # a subagent's worktree — so the author it discharges is one the
+        # orchestrator running this command cannot name.
+        cache["unregistered_commits"] = {}
     # P3.4: the round is over, so the obligation is discharged — say so here
     # rather than hoping the derivation above could reach the ledger. It
     # returns None on timeout or a missing binary, and None keeps the previous
@@ -261,11 +266,11 @@ def main() -> None:
 
     if is_git_commit(cmd) and exit_code == 0:
         commit_hash = _parse_commit_hash(output)
-        commits = list(cache.get("unregistered_commits", []))
-        commits.append(commit_hash)
         with contextlib.suppress(RuntimeError):
             update_cache(cwd, {
-                "unregistered_commits": commits,
+                "unregistered_commits": pending_commits_appended(
+                    cache, actor, commit_hash
+                ),
                 "stall": stall_cleared(cache, actor),
             })
         exit_ok()

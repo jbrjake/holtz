@@ -646,7 +646,8 @@ class TestProtocolTracker:
 
         updated = read_cache(str(tmp_path))
         assert updated is not None
-        assert "abc1234" in updated["unregistered_commits"]
+        # Keyed by actor since P0.3/D41; no `agent_id` means the orchestrator.
+        assert updated["unregistered_commits"] == {"": ["abc1234"]}
 
     def test_detects_git_commit_cc2x_payload(self, tmp_path, mock_daemon):
         """CC 2.x Bash payload registers commits (#75).
@@ -682,7 +683,8 @@ class TestProtocolTracker:
 
         updated = read_cache(str(tmp_path))
         assert updated is not None
-        assert "abc1234" in updated["unregistered_commits"]
+        # Keyed by actor since P0.3/D41; no `agent_id` means the orchestrator.
+        assert updated["unregistered_commits"] == {"": ["abc1234"]}
 
     def test_increments_stall_counter(self, tmp_path, mock_daemon):
         """Commands that can change the tree increment stall.
@@ -754,7 +756,7 @@ class TestProtocolTracker:
         run_enforcement_hook("protocol_tracker.py", event)
 
         updated = read_cache(str(tmp_path))
-        assert updated["unregistered_commits"] == []
+        assert updated["unregistered_commits"] == {}
 
     def test_no_cache_no_update(self):
         """Without existing cache, non-sahjhan commands are no-ops."""
@@ -1157,7 +1159,7 @@ class TestEnforcementIntegration:
 
         # 2. Verify cache has unregistered commit
         c = read_cache(str(tmp_path))
-        assert len(c["unregistered_commits"]) == 1
+        assert c["unregistered_commits"] == {"": ["bbb2222"]}
 
         # 3. Gate blocks next commit
         _, out, _ = run_enforcement_hook("commit_gate.py", {
@@ -1176,7 +1178,7 @@ class TestEnforcementIntegration:
 
         # 5. Verify unregistered commits cleared
         c = read_cache(str(tmp_path))
-        assert c["unregistered_commits"] == []
+        assert c["unregistered_commits"] == {}
         # #77/#82: pattern_analysis_overdue is derived by running the gate's
         # own named query against the ledger, no longer a token-incremented
         # mirror. With no real ledger behind the mock daemon the transition

@@ -179,7 +179,9 @@ class TestPostToolUseBashChain:
         assert _is_post_tool_ok(output)
 
         # Verify commit was recorded in state
-        assert "abc1234" in mock_daemon.state.get("unregistered_commits", [])
+        # Keyed by actor since P0.3/D41; this event carries no `agent_id`,
+        # so the charge lands in the orchestrator's bucket.
+        assert mock_daemon.state["unregistered_commits"] == {"": ["abc1234"]}
 
     def test_sahjhan_command_refreshes_state(self, mock_daemon, tmp_path, monkeypatch):
         """A sahjhan command triggers state refresh in protocol_tracker."""
@@ -283,7 +285,7 @@ class TestFullRoundTrip:
         # PostToolUse: tracker records the commit
         output = _run_hook(POST_TOOL_TRACKER, post_event)
         assert _is_post_tool_ok(output)
-        assert "a1b2c3d" in mock_daemon.state.get("unregistered_commits", [])
+        assert mock_daemon.state["unregistered_commits"] == {"": ["a1b2c3d"]}
 
         # Now a second commit should be blocked by commit_gate
         pre_event2 = {

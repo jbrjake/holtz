@@ -31,6 +31,7 @@ from _protocol_cache import (  # noqa: E402
     is_fix_loop_state,
     is_git_commit,
     is_sahjhan_cmd,
+    pending_commits_for,
     read_cache_with_boundary,
 )
 
@@ -74,9 +75,13 @@ def main() -> None:
     if not is_enforcement_fresh(cache):
         exit_ok("PreToolUse")
 
-    # Unconditional: in fix_loop, git commit requires prior fix_commit registration
+    # Unconditional: in fix_loop, git commit requires prior fix_commit
+    # registration — of *this actor's* own commits (P0.3, D41). A sibling fix
+    # subagent's pending commit is not evidence about this caller, and the
+    # escape named below is the orchestrator's transition, which a subagent
+    # cannot run.
     if cache and is_fix_loop_state(cache) and is_git_commit(cmd):
-        commits = cache.get("unregistered_commits", [])
+        commits = pending_commits_for(cache, event_actor(event))
         if commits:
             exit_block(
                 f"BLOCKED: {len(commits)} unregistered commit(s). "

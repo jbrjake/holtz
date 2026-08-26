@@ -43,7 +43,8 @@ def empty_cache() -> dict[str, Any]:
     return {
         "active": True,
         "state": "",
-        "unregistered_commits": [],
+        # Keyed by actor — see ORCHESTRATOR and pending_commits below.
+        "unregistered_commits": {},
         # The gate's own predicate, resolved from protocol.toml [queries] by
         # protocol_tracker. The key IS the query name: block, derivation and
         # gate all say the same word, which is what enforcement_lint H8 checks.
@@ -597,6 +598,56 @@ def stall_cleared(cache: dict[str, Any] | None, actor: str) -> dict[str, int]:
     return counts
 
 
+# ── The pending-commit block's actor (P0.3, D41) ──
+#
+# Same argument as the stall counter one section up, arrived at from the other
+# end. The block asks "is there a commit you have not registered?", and asking
+# it of the whole run meant the first fix subagent to commit refused every
+# other one — while naming `transition fix_commit` as the way out, which is
+# the orchestrator's transition, gated on `git log -1` and a tree hash taken
+# at the project root. The blocked actor could not reach its own escape.
+#
+# Clearing stays run-global (see protocol_tracker's fix_commit branch): the
+# transition registers whatever commit is at HEAD, and after a fast-forward
+# that commit was authored by a subagent the transition cannot name.
+
+
+def pending_commits(cache: dict[str, Any] | None) -> dict[str, list[str]]:
+    """Per-actor unregistered commits, tolerating a cache written before keying.
+
+    A run that upgrades mid-flight has a flat list stored here. That list was
+    the whole run's, which is the orchestrator's as far as anything can now
+    tell, so it lands in that bucket rather than being discarded — dropping it
+    would hand a real pending commit a free pass at exactly the wrong moment.
+    """
+    raw = (cache or {}).get("unregistered_commits", {})
+    if isinstance(raw, list):
+        return {ORCHESTRATOR: [str(h) for h in raw]} if raw else {}
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        str(k): [str(h) for h in v]
+        for k, v in raw.items()
+        if isinstance(v, list) and v
+    }
+
+
+def pending_commits_for(
+    cache: dict[str, Any] | None, actor: str = ORCHESTRATOR
+) -> list[str]:
+    """The commits this actor has made and not yet had registered."""
+    return pending_commits(cache).get(actor, [])
+
+
+def pending_commits_appended(
+    cache: dict[str, Any] | None, actor: str, commit_hash: str
+) -> dict[str, list[str]]:
+    """The buckets with ``commit_hash`` charged to ``actor`` — others untouched."""
+    buckets = pending_commits(cache)
+    buckets.setdefault(actor, []).append(commit_hash)
+    return buckets
+
+
 def is_fix_loop_state(cache: dict[str, Any] | None) -> bool:
     """Check if the current protocol state is fix_loop."""
     if cache is None:
@@ -628,7 +679,7 @@ def compute_obligations(
         return []
 
     obligations: list[dict[str, Any]] = []
-    commits = cache.get("unregistered_commits", [])
+    commits = pending_commits_for(cache, actor)
     stall = stall_count(cache, actor)
     overdue = cache.get("pattern_analysis_overdue", False)
     perspective = cache.get("perspective", "?")
@@ -680,7 +731,8 @@ def format_state_line(cache: dict[str, Any] | None) -> str:
     perspective = cache.get("perspective", "?")
     p_done = cache.get("perspectives_done", 0)
     p_total = cache.get("perspectives_total", 13)
-    commits = len(cache.get("unregistered_commits", []))
+    # The run's total, not this actor's: the primer describes the run.
+    commits = sum(len(v) for v in pending_commits(cache).values())
     parts = [f"Protocol: {state}", f"{perspective} {p_done}/{p_total}"]
     if commits:
         parts.append(f"{commits} pending commits")
