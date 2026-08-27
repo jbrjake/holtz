@@ -158,6 +158,37 @@ def mock_daemon(tmp_path, monkeypatch):
     shutil.rmtree(short_dir, ignore_errors=True)
 
 
+@pytest.fixture
+def worktree_cwd(tmp_path):
+    """F1 — a main checkout with an ignored audit dir, plus a linked worktree.
+
+    Yields a :class:`worktree_project.WorktreeProject`. See that module for why
+    the stub binary and the scrubbed environment are part of the fixture rather
+    than of each test.
+    """
+    from worktree_project import make_worktree_project
+
+    project = make_worktree_project(str(tmp_path))
+    yield project
+    # `git worktree add` registers metadata under the main checkout's .git;
+    # tmp_path removal takes both, so there is nothing to unregister.
+
+
+@pytest.fixture
+def two_actors(real_daemon):
+    """F2 — several fix actors sharing one real ledger, in the loop's order.
+
+    Yields a bootstrapped :class:`two_actors.TwoActors`; see that module for
+    why the ordering and the per-actor accessors are the fixture rather than
+    each test's own scaffolding.
+    """
+    from two_actors import TwoActors
+
+    actors = TwoActors(real_daemon)
+    actors.bootstrap()
+    return actors
+
+
 def _write_sandbox_settings(project_root: str) -> None:
     """Declare a confining sandbox for a temp project, as `holtz-start` does.
 

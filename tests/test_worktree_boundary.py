@@ -50,18 +50,8 @@ def _load_common():
 _common = _load_common()
 
 
-def _clean_env(**overrides: str) -> dict[str, str]:
-    """The ambient environment with git's per-invocation variables removed.
-
-    `git-hooks/pre-commit` runs this suite, and a git hook inherits `GIT_DIR`,
-    `GIT_INDEX_FILE` and friends pointing at *this* repository. Left in place
-    they follow every subprocess into the throwaway repositories below, where
-    `git worktree add` exits 128 — so the tests would pass when run by hand and
-    fail only inside the commit that ships them.
-    """
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    env.update(overrides)
-    return env
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from git_env import scrubbed_env as _clean_env  # noqa: E402
 
 
 def _git(*args: str, cwd: str) -> None:
