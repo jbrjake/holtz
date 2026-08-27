@@ -16,6 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
+    audit_active,
     exit_enforcement_error,
     exit_ok,
     exit_warn,
@@ -46,8 +47,11 @@ def main() -> None:
     # Check if there's an active Sahjhan run (data dir exists) BEFORE
     # triggering ensure_sahjhan(). Without this ordering, projects without
     # an audit pay the ~100MB binary download on the first Bash command.
-    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
-    if not os.path.isdir(data_dir):
+    #
+    # Anchored, not cwd-relative: the audit dir is gitignored, so a fix
+    # subagent's linked worktree does not contain it and every Bash call the
+    # three of them make would skip manifest verification entirely.
+    if not audit_active(cwd):
         exit_ok()
 
     # Stale enforcement: skip manifest verification for abandoned audits.

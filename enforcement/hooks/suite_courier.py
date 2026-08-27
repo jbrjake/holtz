@@ -60,6 +60,7 @@ from _common import (  # noqa: E402
     bash_output,
     exit_ok,
     exit_warn,
+    project_anchor,
     read_event,
     record_authed_event,
 )
@@ -170,7 +171,12 @@ def main() -> None:
     assert root is not None
 
     fields = {
-        "project": os.path.basename(root),
+        # The project, not the checkout. `root` is this event's git top-level,
+        # which in a fix subagent's linked worktree is the worktree directory —
+        # so a three-wide run recorded three different project names for one
+        # project. `tree_hash` and the scope below stay on `root` on purpose:
+        # those describe the tree that was actually tested.
+        "project": os.path.basename(project_anchor(cwd)),
         "run": _run_number(cwd),
         "auditor": "holtz",
         "tree_hash": compute_tree_hash(root),

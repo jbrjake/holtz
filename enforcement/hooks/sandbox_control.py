@@ -49,6 +49,7 @@ from _common import (  # noqa: E402
     _daemon_request,
     _enforcement_root,
     _get_daemon_socket_path,
+    audit_data_dir,
     boundary_dir,
     exit_ok,
     exit_prompt_block,
@@ -257,7 +258,7 @@ def _record_init_pid(cwd: str) -> None:
     different key". The PID file stays in `data_dir` even though the socket
     moved out — consumers watch it there, and it guards nothing.
     """
-    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
+    data_dir = audit_data_dir(cwd)
     src = os.path.join(data_dir, "daemon.pid")
     if _wait_for(lambda: os.path.isfile(src), timeout=5.0):
         with contextlib.suppress(OSError):
@@ -273,7 +274,7 @@ def _needs_init(cwd: str) -> bool:
     artifact: does the default ledger exist under `data_dir`? Matching on the
     exit code instead would swallow every other usage error along with it.
     """
-    ledger = os.path.join(cwd, "docs", "holtz", ".sahjhan", "ledger.jsonl")
+    ledger = os.path.join(audit_data_dir(cwd), "ledger.jsonl")
     return not os.path.isfile(ledger)
 
 
@@ -285,7 +286,7 @@ def _clear_audit_markers(cwd: str) -> None:
     audit died" — leaving the human unable to work in a project they just
     asked to have handed back.
     """
-    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
+    data_dir = audit_data_dir(cwd)
     for name in ("daemon-init-pid", "terminated"):
         with contextlib.suppress(OSError):
             os.remove(os.path.join(data_dir, name))

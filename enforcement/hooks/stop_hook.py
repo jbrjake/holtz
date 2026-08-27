@@ -31,6 +31,7 @@ from _common import (
     _is_process_alive,
     _read_init_pid,
     _write_terminated_marker,
+    audit_data_dir,
     exit_stop_allow,
     exit_stop_block,
     exit_stop_warn,
@@ -59,7 +60,7 @@ def _try_stop_daemon(cwd: str) -> None:
 
 def _has_active_audit(cwd: str) -> bool:
     """Check if there's an active Sahjhan audit (data dir exists)."""
-    return os.path.isdir(os.path.join(cwd, "docs", "holtz", ".sahjhan"))
+    return os.path.isdir(audit_data_dir(cwd))
 
 
 def _read_status_cache_state(cwd: str) -> str | None:
@@ -69,7 +70,7 @@ def _read_status_cache_state(cwd: str) -> str | None:
     Used as a fallback when the daemon is alive but the enforcement cache
     is unreachable (e.g., macOS auth failure — sahjhan #26).
     """
-    cache_path = os.path.join(cwd, "docs", "holtz", ".sahjhan", "status-cache.json")
+    cache_path = os.path.join(audit_data_dir(cwd), "status-cache.json")
     try:
         with open(cache_path, encoding="utf-8") as f:
             data = json.load(f)
@@ -91,7 +92,7 @@ def main() -> None:
         exit_stop_allow()
 
     # Terminated audit — always allow stop
-    terminated = os.path.join(cwd, "docs", "holtz", ".sahjhan", "terminated")
+    terminated = os.path.join(audit_data_dir(cwd), "terminated")
     if os.path.isfile(terminated):
         _try_stop_daemon(cwd)
         exit_stop_allow()

@@ -168,8 +168,7 @@ def exit_enforcement_error(
     """
     from _protocol_cache import is_enforcement_fresh, read_cache_with_boundary  # noqa: PLC0415
 
-    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
-    if os.path.isdir(data_dir):
+    if audit_active(cwd):
         cache, boundary = read_cache_with_boundary(cwd)
         # Checked before freshness on purpose: a refusing daemon serves no
         # cache, so `is_enforcement_fresh` is False and this degrade path
@@ -247,6 +246,33 @@ def project_anchor(cwd: str) -> str:
         if parent == current:
             return os.path.realpath(cwd)
         current = parent
+
+
+def audit_data_dir(cwd: str) -> str:
+    """Where this project's audit state lives, from anywhere inside it.
+
+    Anchored on the project rather than on the process cwd, for the same
+    reason ``boundary_dir`` is and defined in terms of the same expression:
+    ``.gitignore`` carries ``docs/holtz/.sahjhan/``, so a checkout produced by
+    ``git worktree add`` does not contain it. A fix subagent runs with its
+    worktree as cwd, and a cwd-relative probe therefore answers "no audit
+    here" for the three actors the fix loop dispatches — turning off manifest
+    verification, daemon-death detection, and the fail-closed degrade path for
+    exactly the callers enforcement is for.
+
+    The socket was already anchored (D40). The probe next to it was not.
+    """
+    return os.path.join(project_anchor(cwd), "docs", "holtz", ".sahjhan")
+
+
+def audit_active(cwd: str) -> bool:
+    """Whether an audit's state directory exists for ``cwd``'s project.
+
+    One named fact with several consumers, rather than several careful copies
+    of one path expression. Every site that used to build the path inline is
+    deciding this same question.
+    """
+    return os.path.isdir(audit_data_dir(cwd))
 
 
 def boundary_dir(cwd: str | None = None) -> str:
@@ -424,7 +450,7 @@ def _read_init_pid(cwd: str) -> int | None:
     the specific daemon instance that holds the session key — if this
     PID is dead, the key is gone and the audit is unrecoverable.
     """
-    pid_file = os.path.join(cwd, "docs", "holtz", ".sahjhan", "daemon-init-pid")
+    pid_file = os.path.join(audit_data_dir(cwd), "daemon-init-pid")
     try:
         with open(pid_file, encoding="utf-8") as f:
             return int(f.read().strip())
@@ -455,8 +481,7 @@ def _write_terminated_marker(
     (stop_hook, primer, _daemon_lifecycle) check this marker before
     read_cache(), so no daemon-side state update is needed.
     """
-    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
-    marker = os.path.join(data_dir, "terminated")
+    marker = os.path.join(audit_data_dir(cwd), "terminated")
     with open(marker, "w", encoding="utf-8") as f:
         f.write("reason: daemon_pid_dead\n")
         f.write(f"init_pid: {init_pid}\n")

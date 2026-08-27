@@ -348,6 +348,27 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
     return (subcmd, sub_subcmd)
 
 
+def _audit_data_dir(cwd: str) -> str | None:
+    """``_common.audit_data_dir(cwd)``, or None if ``_common`` will not import.
+
+    Lazy by design: this hook is deliberately import-free at module level so a
+    broken sibling module cannot disable the bootstrap guards. Anchored rather
+    than cwd-relative — the audit dir is gitignored, so a fix subagent's linked
+    worktree does not contain it, and every guard keyed on that path answered
+    "nothing to protect here" for exactly the three actors the fix loop
+    dispatches.
+
+    Callers decide what None means, because the two callers want opposite
+    things from it: refusing `daemon stop` fails closed, while the
+    audit-terminated escape hatch must stay open.
+    """
+    try:
+        from _common import audit_data_dir  # noqa: PLC0415
+    except ImportError:
+        return None
+    return str(audit_data_dir(cwd))
+
+
 def _daemon_stop_permitted(cwd: str) -> tuple[bool, str]:
     """Graduated `sahjhan daemon stop` policy (#57).
 
@@ -364,7 +385,12 @@ def _daemon_stop_permitted(cwd: str) -> tuple[bool, str]:
     Fails closed when the state of a live daemon cannot be determined.
     Returns (permitted, reason-for-block).
     """
-    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
+    # An unimportable `_common` fails closed here, the same direction the block
+    # below already takes: not being able to tell whether there is an audit to
+    # protect is not the same as knowing there is none.
+    data_dir = _audit_data_dir(cwd)
+    if data_dir is None:
+        return False, "(enforcement modules unavailable — failing closed)"
     if not os.path.isdir(data_dir):
         return True, ""
     if os.path.exists(os.path.join(data_dir, "terminated")):
@@ -544,9 +570,17 @@ def _audit_terminated(cwd: str) -> bool:
     mid-run. Once the daemon is dead the ledger is already unwritable — the
     primer and stop_hook both instruct the user to remove .sahjhan/ as the
     recovery step, and keeping the guard active traps them in a dead-end.
+
+    An unimportable ``_common`` answers "not terminated", which keeps the
+    MANAGED guard **on** — the opposite direction from `_daemon_stop_permitted`
+    and the protective one in both cases. This reads the same marker
+    ``_common._write_terminated_marker`` writes, so it must resolve it the same
+    way or a marker written at the anchor is invisible to the guard it releases.
     """
-    marker = os.path.join(cwd, "docs", "holtz", ".sahjhan", "terminated")
-    return os.path.isfile(marker)
+    data_dir = _audit_data_dir(cwd)
+    if data_dir is None:
+        return False
+    return os.path.isfile(os.path.join(data_dir, "terminated"))
 
 
 def _arg_contains_managed(arg: str, cwd: str, managed: list[str]) -> str | None:

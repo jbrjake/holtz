@@ -26,6 +26,7 @@ from _common import (  # noqa: E402
     _is_process_alive,
     _read_init_pid,
     _write_terminated_marker,
+    audit_data_dir,
     exit_block,
     exit_ok,
     read_event,
@@ -75,7 +76,7 @@ def main() -> None:
     cwd = event.get("cwd", os.getcwd())
     tool_name = event.get("tool_name", "")
 
-    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
+    data_dir = audit_data_dir(cwd)
     if not os.path.isdir(data_dir):
         exit_ok("PreToolUse")
 

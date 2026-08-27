@@ -28,6 +28,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import subprocess
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -113,6 +114,20 @@ class WorktreeProject:
             cwd=cwd,
             env=self.env(**env_overrides),
         )
+
+    def disable_binary(self) -> None:
+        """Make `ensure_sahjhan()` return None without attempting a download.
+
+        The cooldown marker is what stops `_bootstrap` reaching for the
+        network, so this is the only honest way to drive the
+        "binary unavailable" degrade path in a test.
+        """
+        stub = os.path.join(self.plugin_root, "bin", f"sahjhan-{_platform_triple()}")
+        if os.path.exists(stub):
+            os.unlink(stub)
+        marker = os.path.join(self.plugin_root, "bin", ".sahjhan-bootstrap-failed")
+        with open(marker, "w", encoding="utf-8") as fh:
+            fh.write(str(time.time()))
 
     def binary_calls(self) -> list[str]:
         """Every argv line the stub binary recorded, oldest first."""

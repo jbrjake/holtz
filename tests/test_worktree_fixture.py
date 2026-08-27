@@ -1,13 +1,13 @@
 """F1-V — the worktree fixture is correct when it reproduces item 29.
 
-W01 ships fixtures and no product change, so these tests describe the tree as
-it stands: a hook driven at a linked worktree's cwd skips the very check it
-exists to perform, because the audit directory it probes for is gitignored and
-therefore absent from the worktree.
+These tests are about the *fixture*: that it builds a main checkout whose audit
+directory a linked worktree does not carry, and that its observable — the stub
+binary's argv log — can tell "this hook verified" from "this hook exited early".
 
-When W02 lands, `test_the_probe_is_cwd_relative_today` is the test that must
-flip. It is written as an assertion about the *observed* asymmetry rather than
-as an xfail so that the flip is a visible, deliberate edit.
+At `17e648e` the fixture recorded item 29 as observed: the worktree leg called
+the binary not at all. W02 anchored the probe and that assertion was rewritten
+in place. The substantive claims about what each leg decides live in
+`test_worktree_audit_anchor.py`.
 """
 from __future__ import annotations
 
@@ -67,35 +67,49 @@ class TestTheFixtureBuildsTheSituation:
         assert os.access(stub, os.X_OK)
 
 
-class TestTheAsymmetryItReproduces:
-    """F1-V: `bash_guard` verifies in one checkout and not in the other."""
+class TestTheFixtureCanSeeWhichCheckRan:
+    """F1-V: the fixture's observable discriminates the two legs.
 
-    def test_the_probe_is_cwd_relative_today(self, worktree_cwd, mock_daemon):
+    This test asserted item 29 as the tree stood at `17e648e` — the worktree
+    leg called the binary not at all — and was rewritten when W02 anchored the
+    probe. It is kept rather than deleted because the claim it needs to make is
+    unchanged: *the observable can tell the legs apart*. If it could not, W02's
+    own V1 would be measuring nothing.
+
+    The substantive assertion about what each leg now decides lives in
+    `test_worktree_audit_anchor.py`.
+    """
+
+    def test_both_legs_reach_manifest_verify(self, worktree_cwd, mock_daemon):
         mock_daemon.state = fresh_enforcement_state()
+        seen = {}
+        for name, cwd in (("main", worktree_cwd.main), ("worktree", worktree_cwd.worktree)):
+            worktree_cwd.reset_binary_calls()
+            worktree_cwd.run_hook("bash_guard.py", _echo_event(), cwd=cwd)
+            seen[name] = worktree_cwd.binary_calls()
+        for name, calls in seen.items():
+            assert any("manifest verify" in line for line in calls), (name, calls)
 
-        worktree_cwd.reset_binary_calls()
-        worktree_cwd.run_hook("bash_guard.py", _echo_event(), cwd=worktree_cwd.main)
-        main_calls = worktree_cwd.binary_calls()
+    def test_the_observable_still_discriminates(self, worktree_cwd, mock_daemon):
+        """Remove the audit dir and the same leg records nothing.
 
+        Without this, "both legs verify" would hold just as well against a
+        fixture whose log recorded every subprocess, or none.
+        """
+        import shutil
+
+        mock_daemon.state = fresh_enforcement_state()
+        shutil.rmtree(worktree_cwd.sahjhan_dir)
         worktree_cwd.reset_binary_calls()
         worktree_cwd.run_hook("bash_guard.py", _echo_event(), cwd=worktree_cwd.worktree)
-        worktree_calls = worktree_cwd.binary_calls()
-
-        # Positive on both sides: the main checkout reaches a *named* command,
-        # the worktree reaches the binary not at all. Asserting only that the
-        # worktree log is empty would pass just as well against a fixture whose
-        # binary was never resolvable.
-        assert any("manifest verify" in line for line in main_calls), main_calls
-        assert worktree_calls == [], (
-            "item 29: the worktree leg is expected to skip verification "
-            f"entirely at this commit, but the binary was called: {worktree_calls}"
-        )
+        assert worktree_cwd.binary_calls() == []
 
     def test_both_legs_still_exit_cleanly(self, worktree_cwd, mock_daemon):
-        """The asymmetry is in what got checked, not in what got reported.
+        """`bash_guard` reports `allow` either way when the tree is clean.
 
-        Both legs allow. That is exactly why the defect is invisible to a test
-        that reads only the permission decision.
+        The permission decision carries no information about whether
+        verification happened — which is exactly why item 29 shipped, and why
+        this fixture measures the binary call instead.
         """
         mock_daemon.state = fresh_enforcement_state()
         for cwd in (worktree_cwd.main, worktree_cwd.worktree):

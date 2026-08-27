@@ -75,7 +75,21 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _ledger_query import query_ledger, sahjhan_target  # noqa: E402
+from _ledger_query import _hooks_dir, query_ledger, sahjhan_target  # noqa: E402
+
+
+def _audit_data_dir(cwd: str) -> str:
+    """``_common.audit_data_dir``, reached the way ``sahjhan_target`` reaches
+    ``resolve_config_dir``: lazily, through ``enforcement/hooks``.
+
+    Imported rather than restated. Two expressions of "where the audit state
+    lives" is what left this file reading a worktree's missing marker while
+    the socket beside it resolved correctly.
+    """
+    sys.path.insert(0, _hooks_dir())
+    from _common import audit_data_dir  # noqa: PLC0415
+
+    return str(audit_data_dir(cwd))
 
 # The suite command, in one place. `-x --ff` is the fail-fast pair T1 settled
 # on: `--lf`/`--last-failed` is banned because it runs *only* the previously
@@ -314,8 +328,15 @@ def accepted_scopes(requested: str) -> tuple[str, ...]:
 
 
 def _run_number(cwd: str) -> str:
-    """Current run number from sahjhan's active-ledger marker ('0' if none)."""
-    marker = os.path.join(cwd, "docs", "holtz", ".sahjhan", "active-ledger")
+    """Current run number from sahjhan's active-ledger marker ('0' if none).
+
+    Read at the project anchor, not at ``cwd``. The marker lives under the
+    gitignored audit directory, so a linked worktree does not carry it and a
+    cwd-relative read returns ``"0"`` — which ``events.toml`` accepts against
+    ``^\\d+$``. Because sahjhan's emit resolver inherits the newest ledger
+    value, one such write poisons run attribution for every event after it.
+    """
+    marker = os.path.join(_audit_data_dir(cwd), "active-ledger")
     try:
         with open(marker, encoding="utf-8") as fh:
             return fh.read().strip().replace("run-", "") or "0"

@@ -21,6 +21,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
+    audit_data_dir,
     exit_stop_allow,
     exit_stop_block,
     mask_fenced_blocks,
@@ -345,7 +346,7 @@ def _run_sahjhan(
 
 def _get_run_number(cwd: str) -> str:
     """Get current run number from sahjhan active-ledger marker."""
-    active_file = os.path.join(cwd, "docs", "holtz", ".sahjhan", "active-ledger")
+    active_file = os.path.join(audit_data_dir(cwd), "active-ledger")
     try:
         with open(active_file, encoding="utf-8") as f:
             return f.read().strip().replace("run-", "") or "0"
