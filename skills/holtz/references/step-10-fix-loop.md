@@ -138,4 +138,4 @@ See [impact-graph-operations.md](impact-graph-operations.md) for the blast radiu
 2. **Query** the impact graph with `blast_radius` (depth 2, or depth 3 for architectural fixes)
 3. **For each node in the blast radius:** check assumptions, update edges
 4. **Update impact graph:** lower risk scores, add/update edges
-5. **Record:** `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field finding_id={item_id} --field affected_count=N` — `fix_commit` gates on it.
+5. **Record:** `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field project=holtz --field run=N --field auditor=holtz --field phase=fix_loop --field step=10 --field finding_id={item_id} --field target_node=<node> --field depth=2 --field affected_count=N` — `fix_commit` gates on it.

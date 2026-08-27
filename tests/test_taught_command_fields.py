@@ -30,6 +30,18 @@ import taught_commands as tc  # noqa: E402
 
 pytestmark = pytest.mark.contract
 
+#: The full-field form `phase-fix-loop.md` step 3 and `hooks.toml`'s TDD block
+#: message both teach. Spelled once here so a test cannot drift from the file.
+_TDD_RECORD = (
+    "sahjhan event test_failed_before_fix "
+    "--field project=holtz --field run=1 --field auditor=holtz "
+    "--field finding_id=BH-001 --field test_name=test_thing"
+)
+
+
+def _span(text: str, *, source: str = "x.md", line: int = 1, origin: str = "inline"):
+    return tc.CommandSpan(source=source, line=line, origin=origin, text=text)
+
 
 class TestItReadsTheSchemaRatherThanRestatingIt:
     def test_required_fields_come_from_events_toml(self):
@@ -64,11 +76,7 @@ class TestItSeesBothSources:
 
     def test_a_bare_mention_is_not_a_taught_command(self):
         """Prose naming the tool is not a form anyone is told to type."""
-        found = tc._commands_in(
-            "record findings via `sahjhan event finding` immediately",
-            source="x.md", line=1, origin="inline",
-        )
-        assert found == []
+        assert tc._commands_in(_span("sahjhan event finding")) == []
 
 
 class TestItReportsPerCommand:
@@ -80,45 +88,74 @@ class TestItReportsPerCommand:
 
     def test_it_names_the_field_and_the_place(self):
         """A report that says only "something is wrong" cannot drive a fix."""
-        _failures, lines = tc.report()
-        hit = [line for line in lines if "phase-fix-loop.md:52" in line]
-        assert len(hit) == 1, lines
-        assert "test_failed_before_fix" in hit[0]
+        short = tc._commands_in(_span(
+            "sahjhan event test_failed_before_fix --field finding_id=BH-001",
+            source="phase-fix-loop.md", line=52,
+        ))
+        _failures, lines = tc.report(short)
+        assert len(lines) == 1, lines
+        assert "phase-fix-loop.md:52" in lines[0]
+        assert "test_failed_before_fix" in lines[0]
         for field in ("project", "run", "auditor"):
-            assert field in hit[0], hit[0]
+            assert field in lines[0], lines[0]
 
 
-class TestItReproducesItem31:
-    """Positive claims about the omissions as they stand at this commit."""
+class TestEveryTaughtFormIsRunnable:
+    """W03: the whole tree passes, and the two named sites carry the same set."""
 
-    def test_the_taught_tdd_record_omits_three_required_fields(self):
+    def test_nothing_taught_is_missing_a_required_field(self):
+        failures, lines = tc.report()
+        assert failures == 0, "\n".join(
+            line for line in lines if not line.strip().startswith("ok")
+        )
+
+    def test_the_taught_tdd_record_is_complete(self):
         command = next(
             c for c in tc.all_taught_commands()
             if c.source.endswith("phase-fix-loop.md")
             and c.event_type == "test_failed_before_fix"
         )
-        assert tc.missing_fields(command) == {"project", "run", "auditor"}
+        assert tc.missing_fields(command) == set()
 
-    def test_the_gates_own_escape_omits_the_same_three(self):
-        command = next(
+    def test_the_block_message_and_the_skill_file_teach_the_same_fields(self):
+        """V5 — the two cannot drift apart again.
+
+        `hooks.toml`'s message is the string a blocked agent copies; the skill
+        file's step 3 is the string it was following when it got blocked. They
+        described different commands, and only one of them was in any gate's
+        scope. Compared as **field sets**, not as text: the two lines differ in
+        wording (`--config-dir`, ordering) and always will.
+        """
+        skill = next(
+            c for c in tc.all_taught_commands()
+            if c.source.endswith("phase-fix-loop.md")
+            and c.event_type == "test_failed_before_fix"
+        )
+        message = next(
             c for c in tc.commands_in_hook_messages()
             if c.event_type == "test_failed_before_fix"
         )
-        assert tc.missing_fields(command) == {"project", "run", "auditor"}
+        assert skill.fields == message.fields, (
+            f"skill file: {sorted(skill.fields)}\n"
+            f"hooks.toml: {sorted(message.fields)}"
+        )
+        # Positive: both equal the schema, so "they agree" cannot be satisfied
+        # by two identically-wrong commands.
+        assert skill.fields >= tc.load_required_fields()["test_failed_before_fix"]
 
-    def test_a_complete_form_reports_nothing_missing(self):
-        """Non-vacuity: the check is capable of passing.
+    def test_a_form_missing_one_field_is_reported(self):
+        """V4 non-vacuity: drop `--field project=` and the check goes red.
 
         Without this, every assertion above would hold just as well against a
-        function that reported every field of every event as missing.
+        `missing_fields` that always returned the empty set.
         """
-        complete = tc._commands_in(
-            "sahjhan event test_failed_before_fix --field finding_id=BH-001 "
-            "--field test_name=t --field project=holtz --field run=1 "
-            "--field auditor=holtz",
-            source="x.md", line=1, origin="inline",
-        )[0]
-        assert tc.missing_fields(complete) == set()
+        without_project = _TDD_RECORD.replace("--field project=holtz ", "")
+        command = tc._commands_in(_span(without_project))[0]
+        assert tc.missing_fields(command) == {"project"}
+
+    def test_a_complete_form_reports_nothing_missing(self):
+        command = tc._commands_in(_span(_TDD_RECORD))[0]
+        assert tc.missing_fields(command) == set()
 
 
 @pytest.mark.slow
@@ -135,7 +172,13 @@ class TestTheEngineAgreesWithTheStaticCheck:
             cwd=real_daemon["project_root"],
         )
 
-    def test_the_taught_tdd_record_is_refused_for_a_named_field(self, real_daemon):
+    def test_a_form_missing_a_field_is_refused_for_that_field(self, real_daemon):
+        """The shape item 31 shipped: the taught form minus `project`.
+
+        Not read from the skill file — the file is fixed now. This is the
+        engine's half of the static check: when `missing_fields` says a field
+        is absent, `sahjhan` refuses the command and names it.
+        """
         result = self._run(
             real_daemon,
             "sahjhan event test_failed_before_fix "
@@ -157,10 +200,40 @@ class TestTheEngineAgreesWithTheStaticCheck:
 
         actors = TwoActors(real_daemon)
         actors.bootstrap()
-        result = self._run(
-            real_daemon,
-            "sahjhan event test_failed_before_fix "
-            "--field finding_id=BH-001 --field test_name=test_thing "
-            "--field project=holtz --field run=1 --field auditor=holtz",
-        )
+        result = self._run(real_daemon, _TDD_RECORD)
         assert result.returncode == 0, result.stdout + result.stderr
+
+    def test_the_string_the_skill_file_teaches_runs(self, real_daemon):
+        """V3 — the exact line from `phase-fix-loop.md`, not a paraphrase.
+
+        Taken from the file at test time and run against the binary. A test
+        carrying its own copy of the command would go green while the file it
+        is supposed to be about drifted — which is the shape of item 31 itself.
+
+        Only the placeholders a reader substitutes are substituted: `N`,
+        `BH-NNN`, `...`, and `$CLAUDE_PLUGIN_ROOT`.
+        """
+        from two_actors import TwoActors
+
+        actors = TwoActors(real_daemon)
+        actors.bootstrap()
+
+        taught = next(
+            c for c in tc.all_taught_commands()
+            if c.source.endswith("phase-fix-loop.md")
+            and c.event_type == "test_failed_before_fix"
+        )
+        command = (
+            taught.text
+            .replace('--config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" ', "")
+            .replace("--field run=N", "--field run=1")
+            .replace("--field finding_id=BH-NNN", "--field finding_id=BH-001")
+            .replace("--field test_name=...", "--field test_name=test_thing")
+        )
+        assert "BH-NNN" not in command and "run=N" not in command, command
+
+        result = self._run(real_daemon, command)
+        assert result.returncode == 0, (
+            f"the taught command still does not run:\n{command}\n"
+            + result.stdout + result.stderr
+        )

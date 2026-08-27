@@ -15,7 +15,7 @@ INHERITED RECON: Holtz's recon data is at docs/holtz/recon/ (step0-project-overv
 Write all output to docs/holtz/justine/ and use docs/holtz/justine/impact-graph.json for your impact graph. Leave docs/holtz/architecture-baseline.md and docs/holtz/LIVING-PUNCHLIST.md untouched. Run through convergence, then stop. Report completion by writing docs/holtz/justine/SUMMARY.md. Holtz handles the merge and fix loop. This is an autonomous execution context — choose the most conservative default for ambiguities and proceed. Report NEEDS_CONTEXT only if the task is genuinely impossible without human input.")
 ```
 
-After dispatching, record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event justine_dispatched --field mode=full` (or `--field mode=skipped` for targeted audits).
+After dispatching, record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event justine_dispatched --field project=holtz --field run=N --field auditor=holtz --field phase=recon --field mode=full` (or `--field mode=skipped` for targeted audits).
 
 Continue immediately with Step 6. Justine runs in parallel — that is the point. Check for her results before entering Step 9.
 
@@ -109,7 +109,7 @@ Same subagent strategy. Partition source modules into batches.
 
    **Model routing:** Use `model: "sonnet"` for cross-file lens subagents. Path tracing against entry points is structured work.
 
-   Record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event lens_sweep_started --field perspective={lens} --field sweep_type=initial-audit` for each cross-file lens before dispatching.
+   Record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event lens_sweep_started --field project=holtz --field run=N --field auditor=holtz --field perspective={lens} --field sweep_type=initial-audit` for each cross-file lens before dispatching.
 
 5c. **Write lens coverage matrix.** After all Step 7-8 subagents (including cross-file) complete, write `docs/holtz/audit/lens-coverage.md`:
 
@@ -132,7 +132,7 @@ Same subagent strategy. Partition source modules into batches.
    | ... | ... | ... | ... |
    ```
 
-   Record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event lens_coverage_recorded --field per_file_lenses_covered=N --field cross_file_lenses_covered=N --field artifact_path=docs/holtz/audit/lens-coverage.md`
+   Record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event lens_coverage_recorded --field project=holtz --field run=N --field auditor=holtz --field per_file_lenses_covered=N --field cross_file_lenses_covered=N --field artifact_path=docs/holtz/audit/lens-coverage.md`
 
 6. Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition audit_complete` to advance protocol state. Mark remaining unconfirmed predictions as UNCONFIRMED in `step4-predictions.md`.
 

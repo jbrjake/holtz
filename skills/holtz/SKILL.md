@@ -167,7 +167,8 @@ sahjhan event iteration_complete --field project=holtz --field run=N \
   --field perspective=component --field items_resolved=3 --field items_remaining=2 \
   --field test_count=50 --field tests_passed=true
 # Snapshot for gate comparison (key must match snapshot_compare reference in transitions.toml)
-sahjhan event snapshot --field key=pre_audit_edge_count --field value=28
+sahjhan event snapshot --field project=holtz --field run=N \
+  --field auditor=holtz --field key=pre_audit_edge_count --field value=28
 # mode is for audit trail only — gate checks presence, not mode value
 sahjhan event justine_dispatched --field project=holtz --field run=N \
   --field auditor=holtz --field phase=recon --field mode=full

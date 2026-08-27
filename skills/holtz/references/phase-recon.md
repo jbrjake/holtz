@@ -83,7 +83,7 @@ Create `docs/holtz/` and `docs/holtz/recon/`. Read project structure, docs, CLAU
 
 Output: `docs/holtz/recon/step0-project-overview.md`
 
-**After each step:** record a `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event recon_step` with the step number and artifact path. Additionally, record significant findings as `recon_finding` events (e.g., `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event recon_finding --field topic=architecture --field content="..."`) so they are captured in the ledger alongside the markdown artifacts.
+**After each step:** record a `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event recon_step` with the step number and artifact path. Additionally, record significant findings as `recon_finding` events (e.g., `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event recon_finding --field project=holtz --field run=N --field auditor=holtz --field phase=recon --field step=N --field topic=architecture --field content="..."`) so they are captured in the ledger alongside the markdown artifacts.
 
 ### Step 1: Run Toolchain (Subagent)
 

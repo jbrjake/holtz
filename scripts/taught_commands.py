@@ -32,15 +32,47 @@ SKILLS_DIR = os.path.join(REPO_ROOT, "skills")
 EVENTS_TOML = os.path.join(ENFORCEMENT_DIR, "events.toml")
 HOOKS_TOML = os.path.join(ENFORCEMENT_DIR, "hooks.toml")
 
+#: A sahjhan invocation, as `contract_gate` has always recognized one. Kept
+#: identical so the gate and this check cannot disagree about what counts as a
+#: command in the first place.
+_SAHJHAN_RE = re.compile(r"(?:^|\s|nohup\s+)sahjhan\s")
+
+#: The subcommand token, past any `--config-dir "$X"`-style flags. Reading
+#: inline backticks brings prose into scope, and prose writes things like
+#: ``the very first `sahjhan …` command`` — a typographic ellipsis where a verb
+#: goes. That is not a form anyone can run, so it is not a command. Requiring
+#: a lowercase-ASCII verb rejects it, and rejects `<verb>`/`{cmd}` too.
+_SUBCOMMAND_RE = re.compile(
+    r"\bsahjhan\s+(?:(?:--?[\w-]+(?:=\S+)?|\"[^\"]*\"|'[^']*'|\$\{?\w+\}?)\s+)*"
+    r"([a-z][a-z0-9-]*)"
+)
+
+
+def _is_runnable(text: str) -> bool:
+    """Whether a span names a sahjhan subcommand rather than a placeholder."""
+    return _SUBCOMMAND_RE.search(text) is not None
+
 #: `sahjhan … event <type>` — the verb and its subcommand, wherever they sit in
 #: the line. Tolerates `--config-dir "$X"` and a `nohup`/`&&` prefix, because
 #: the taught forms carry both.
 _EVENT_RE = re.compile(r"\bsahjhan\b[^\n]*?\bevent\s+([a-z_][a-z0-9_]*)")
 _FIELD_RE = re.compile(r"--field\s+([A-Za-z_][A-Za-z0-9_]*)=")
 
-#: A placeholder the docs use where a real value goes. Field *names* are what
-#: this module checks, so a placeholder value is not a defect.
-_PLACEHOLDER = re.compile(r"^(\.\.\.|<.*>|\{\{.*\}\}|N|BH-NNN)$")
+
+@dataclass(frozen=True)
+class CommandSpan:
+    """One `sahjhan …` invocation as it appears in a markdown file.
+
+    The single answer to "where are the commands we teach". `contract_gate.py`
+    asks whether the hook allows each one; this module asks whether the engine
+    accepts its fields. Two questions, one extraction — a second copy is how
+    the gate came to read fenced blocks only while six inline commands drifted.
+    """
+
+    source: str          # repo-relative path
+    line: int            # 1-indexed
+    origin: str          # "fenced" | "inline" | "hooks.toml message"
+    text: str
 
 
 @dataclass(frozen=True)
@@ -82,8 +114,8 @@ def _fields_of(text: str) -> frozenset[str]:
     return frozenset(_FIELD_RE.findall(text))
 
 
-def _commands_in(text: str, *, source: str, line: int, origin: str) -> list[TaughtCommand]:
-    """Every `sahjhan event <type> --field …` invocation in one span of text.
+def _commands_in(span: CommandSpan) -> list[TaughtCommand]:
+    """The `sahjhan event <type> --field …` invocation in a span, if it is one.
 
     A form carrying **no** `--field` at all is a reference to the command, not
     a runnable form — `"record findings via \\`sahjhan event finding\\`"` names
@@ -92,15 +124,15 @@ def _commands_in(text: str, *, source: str, line: int, origin: str) -> list[Taug
     carry. The scope is the plan's: commands of the shape
     `sahjhan event <type> --field …`.
     """
-    match = _EVENT_RE.search(text)
+    match = _EVENT_RE.search(span.text)
     if not match:
         return []
-    fields = _fields_of(text)
+    fields = _fields_of(span.text)
     if not fields:
         return []
     return [TaughtCommand(
-        source=source, line=line, origin=origin,
-        event_type=match.group(1), fields=fields, text=text.strip(),
+        source=span.source, line=span.line, origin=span.origin,
+        event_type=match.group(1), fields=fields, text=span.text.strip(),
     )]
 
 
@@ -113,28 +145,31 @@ def _inline_spans(line: str) -> list[str]:
     return re.findall(r"`([^`\n]+)`", line)
 
 
-def commands_in_markdown(md_path: str) -> list[TaughtCommand]:
-    """Taught commands in one markdown file — fenced blocks and inline spans.
+def command_spans(md_path: str) -> list[CommandSpan]:
+    """Every `sahjhan …` invocation in one markdown file.
 
-    A fenced command may be split across continuation lines (`\\`), so fenced
-    lines are joined before matching; inline spans never are.
+    Fenced blocks **and** inline backtick spans. A fenced command may be split
+    across continuation lines (`\\`), so fenced lines are joined before
+    matching — the engine sees one command, so the check should too. Inline
+    spans are never joined; a backtick span is self-contained by construction.
     """
     with open(md_path, encoding="utf-8") as fh:
         lines = fh.readlines()
 
     source = os.path.relpath(md_path, REPO_ROOT)
-    found: list[TaughtCommand] = []
+    found: list[CommandSpan] = []
     in_fence = False
     buffer: list[str] = []
     buffer_line = 0
 
     def flush() -> None:
         nonlocal buffer, buffer_line
-        if buffer:
-            found.extend(_commands_in(
-                " ".join(buffer), source=source, line=buffer_line, origin="fenced",
-            ))
+        text = " ".join(buffer).strip()
         buffer = []
+        if text and _SAHJHAN_RE.search(text) and _is_runnable(text):
+            found.append(CommandSpan(
+                source=source, line=buffer_line, origin="fenced", text=text,
+            ))
 
     for i, raw in enumerate(lines, 1):
         stripped = raw.strip()
@@ -153,9 +188,31 @@ def commands_in_markdown(md_path: str) -> list[TaughtCommand]:
                 flush()
             continue
         for span in _inline_spans(raw):
-            found.extend(_commands_in(span, source=source, line=i, origin="inline"))
+            text = span.strip()
+            if text and _SAHJHAN_RE.search(text) and _is_runnable(text):
+                found.append(CommandSpan(
+                    source=source, line=i, origin="inline", text=text,
+                ))
     flush()
     return found
+
+
+def commands_in_markdown(md_path: str) -> list[TaughtCommand]:
+    """Taught `event` commands in one markdown file, both origins."""
+    found: list[TaughtCommand] = []
+    for span in command_spans(md_path):
+        found.extend(_commands_in(span))
+    return found
+
+
+def markdown_files(root: str = SKILLS_DIR) -> list[str]:
+    """Every markdown file under ``root``, in a stable order."""
+    paths: list[str] = []
+    for dirpath, _dirs, files in os.walk(root):
+        for name in files:
+            if name.endswith(".md"):
+                paths.append(os.path.join(dirpath, name))
+    return sorted(paths)
 
 
 def commands_in_hook_messages(hooks_toml: str = HOOKS_TOML) -> list[TaughtCommand]:
@@ -180,19 +237,17 @@ def commands_in_hook_messages(hooks_toml: str = HOOKS_TOML) -> list[TaughtComman
         line = next(
             (i for i, raw in enumerate(raw_lines, 1) if needle in raw), 0
         )
-        found.extend(_commands_in(
-            message, source=source, line=line, origin="hooks.toml message",
-        ))
+        found.extend(_commands_in(CommandSpan(
+            source=source, line=line, origin="hooks.toml message", text=message,
+        )))
     return found
 
 
 def all_taught_commands() -> list[TaughtCommand]:
     """Every taught `sahjhan event` command in the tree, both sources."""
     found: list[TaughtCommand] = []
-    for root, _dirs, files in os.walk(SKILLS_DIR):
-        for name in sorted(files):
-            if name.endswith(".md"):
-                found.extend(commands_in_markdown(os.path.join(root, name)))
+    for path in markdown_files():
+        found.extend(commands_in_markdown(path))
     found.extend(commands_in_hook_messages())
     return found
 

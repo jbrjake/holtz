@@ -4,7 +4,7 @@
 
 <HARD-GATE>
 Before entering the fix loop, read [references/step-10-fix-loop.md](references/step-10-fix-loop.md) and record:
-`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event reference_read --field path=step-10-fix-loop.md`
+`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event reference_read --field project=holtz --field run=N --field auditor=holtz --field path=step-10-fix-loop.md`
 The `fix_loop_start` transition will not pass without this event.
 </HARD-GATE>
 
@@ -47,14 +47,14 @@ Launch up to **3** Agent subagents at once, one finding each, with `isolation: "
 
 The subagent runs the enforced TDD sequence itself, in its worktree:
 
-1. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event fix_start --field finding_id=BH-NNN`
+1. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event fix_start --field project=holtz --field run=N --field auditor=holtz --field finding_id=BH-NNN`
 2. Write a failing test that reproduces the finding. Run it. Confirm it FAILS. (Files under `tests/**` are exempt from the pre-edit gate, so this write is allowed.)
-3. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event test_failed_before_fix --field finding_id=BH-NNN --field test_name=...`
+3. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event test_failed_before_fix --field project=holtz --field run=N --field auditor=holtz --field finding_id=BH-NNN --field test_name=...`
 4. Write the fix. (The pre-edit hook now allows the source edit because step 3 is on the ledger.) Run the failing test. Confirm it PASSES.
 5. Run blast radius: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json blast_radius <node> --depth 2`
-6. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field finding_id=BH-NNN --field affected_count=N`
+6. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field project=holtz --field run=N --field auditor=holtz --field phase=fix_loop --field step=10 --field finding_id=BH-NNN --field target_node=<node> --field depth=2 --field affected_count=N`
 7. Write ≥1 edge-case hardening test. Run it. Confirm it passes.
-8. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event hardening_complete --field finding_id=BH-NNN --field edge_cases_tested=N`
+8. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event hardening_complete --field project=holtz --field run=N --field auditor=holtz --field phase=fix_loop --field step=10 --field finding_id=BH-NNN --field edge_cases_tested=N --field tests_added=N`
 9. **Once nothing else will touch the tree,** commit your worktree and rebase it onto the branch you were given:
    ```bash
    git add -A && git commit -m "fix(<scope>): <desc>" -m "BH-NNN"
@@ -112,7 +112,19 @@ sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer batch --severity lo
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list --all
    ```
    Use `findings.py show BH-NNN` for a finding's full record.
-2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify the pattern, search for siblings, record each sibling with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding --field pattern_id=PAT-NNN` IMMEDIATELY — one call per sibling, before the next group. At most 3 of a round's siblings may still be open when the round ends. Merge a sibling that repeats a finding already on the board — `BH-MMM` is that finding, open or already fixed:
+2. Group resolved items by category. Also compare Discovery Chains across items — items in different categories but with similar chains may share a root cause. For groups of 2+: identify the pattern, search for siblings, record each sibling IMMEDIATELY — one call per sibling, before the next group:
+
+   ```bash
+   sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event finding \
+     --field project=holtz --field run=N --field auditor=holtz \
+     --field phase=fix_loop --field step=12 \
+     --field id=BH-NNN --field severity=HIGH --field category=bug/logic \
+     --field location="file.py:1" --field perspective=component \
+     --field reachability=user_reachable --field description="..." \
+     --field predicted_by=none --field pattern_id=PAT-NNN
+   ```
+
+   `pattern_id` is what charges the sibling to this round — an untagged sibling is invisible to the round cap. At most 3 of a round's siblings may still be open when the round ends. Merge a sibling that repeats a finding already on the board — `BH-MMM` is that finding, open or already fixed:
 
    ```bash
    sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition merge_finding BH-NNN BH-MMM
@@ -164,7 +176,8 @@ Triage every open finding, at every severity, in one pass, before dispatching an
 2. Dispatch **one** subagent for the whole set, with the listing and `$CLAUDE_PLUGIN_ROOT`. It reads the code at each location, runs the finding's recorded probe where there is one, and returns *still present* or *not reproducible* with evidence. It writes no code and records no events.
 3. For each finding it could not reproduce, one at a time:
    ```bash
-   sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event fix_start --field finding_id=BH-NNN
+   sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event fix_start \
+     --field project=holtz --field run=N --field auditor=holtz --field finding_id=BH-NNN
    ```
    Write the evidence to `docs/holtz/investigations/BH-NNN.md` ([format](investigation-format.md)), then:
    ```bash
@@ -198,7 +211,7 @@ Read [references/lens-registry.md](references/lens-registry.md) for the full set
 | cross-file | covered | **Focused:** Re-trace entry points from lens registry using updated impact graph. Focus on paths affected by fixes since initial audit. Record `sweep_type=cross-file-focused`. |
 | cross-file | not covered | **Full:** Standard Steps 6-8 scoped to this lens entry point. Record `sweep_type=full`. |
 
-For each lens sweep, record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event lens_sweep_started --field perspective={lens} --field sweep_type={type}`
+For each lens sweep, record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event lens_sweep_started --field project=holtz --field run=N --field auditor=holtz --field perspective={lens} --field sweep_type={type}`
 
 **Gap-fill sweep procedure (per-file lenses with initial coverage):**
 1. Read `docs/holtz/audit/lens-coverage.md` for which files were covered
