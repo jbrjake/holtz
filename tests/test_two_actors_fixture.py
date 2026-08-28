@@ -1,12 +1,12 @@
 """F2-V — the two-actor fixture can name an actor's own row, positively.
 
-W01 changes no product code, so the misattribution these tests observe is item
-19 as it stands. What is being validated here is the *fixture*: that it drives
-the concurrent ordering, and that a test written on it can state "A's evidence
-row names A's finding" as a claim about a value rather than as a count or an
-inequality.
+What is being validated here is the *fixture*: that it drives the concurrent
+ordering a three-wide dispatch produces, and that a test written on it can state
+"A's evidence row names A's finding" as a claim about a value rather than as a
+count or an inequality.
 
-`test_the_courier_misattributes_today` is the test W04 flips.
+At `17e648e` this file also recorded item 19 as observed; that assertion was
+rewritten in place when W04 landed, and its history is in its docstring.
 """
 from __future__ import annotations
 
@@ -62,27 +62,29 @@ class TestItCanNameAnActorsOwnRow:
             for row in two_actors.evidence_for(actor):
                 assert (row.get("agent_id") or "") == actor
 
-    def test_the_courier_misattributes_today(self, two_actors):
-        """Item 19, observed: the row an actor's courier stamps is not its own.
+    def test_the_courier_pairs_by_row(self, two_actors):
+        """The fixture's whole reason for existing, as one claim.
 
-        `_UNPAIRED` selects the newest unpaired `test_failed_before_fix` on the
-        whole ledger, so with every record landing first, the first courier to
-        fire takes the *last* row written — `BH-104`, which belongs to a
-        different step than the command the courier was handed.
+        At `17e648e` this test asserted the defect: `_UNPAIRED` selected the
+        newest unpaired `test_failed_before_fix` on the *whole ledger*, so with
+        every record landing before any courier — which is what a three-wide
+        dispatch produces — the first courier to fire took the last row
+        written, `BH-104`. W04 keyed both halves of the query on the finding
+        the command names, and this now asserts the correct value.
 
-        Written as a positive claim about the value observed at this commit.
-        W04 replaces it with the same claim about the correct value.
+        The seeding is what makes the claim discriminating: `BH-101` is the
+        first row and `BH-104` the newest, so "its own" and "the newest" are
+        different answers. The exhaustive per-actor version lives in
+        `test_tdd_courier_pairing.py`.
         """
         two_actors.seed_concurrently()
         first_actor, first_finding, first_test = DEFAULT_SEEDING[0]
+        newest_recorded = DEFAULT_SEEDING[-1][1]
+        assert first_finding != newest_recorded, "the seeding must make these differ"
+
         two_actors.courier(first_actor, first_finding, first_test)
 
         rows = two_actors.evidence_for(first_actor)
         assert len(rows) == 1, rows
-        newest_recorded = DEFAULT_SEEDING[-1][1]
-        assert rows[0]["finding_id"] == newest_recorded, (
-            "expected the pre-W04 behaviour: the courier stamps the newest "
-            f"unpaired row ({newest_recorded}), not the actor's own "
-            f"({first_finding}); got {rows[0]}"
-        )
-        assert first_finding != newest_recorded, "the seeding must make these differ"
+        assert rows[0]["finding_id"] == first_finding, rows[0]
+        assert rows[0]["test_name"] == first_test, rows[0]

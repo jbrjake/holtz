@@ -156,24 +156,71 @@ class TestTheActorComesFromTheHost:
 
 
 class TestTheQueryPairsEvidenceToWork:
-    """`_UNPAIRED` is what stops a replayed Bash line minting a second
-    evidence row for work already attributed."""
+    """The query is what stops a replayed Bash line minting a second evidence
+    row for work already attributed — and, since item 19, what stops one
+    actor's courier attributing another actor's row.
 
-    def test_it_floors_on_the_last_evidence_row(self):
-        assert "MAX(seq) FROM events WHERE type='tdd_evidence'" in tdd_courier._UNPAIRED
+    `test_it_takes_the_newest_unpaired_row` used to live here, asserting
+    `ORDER BY seq DESC LIMIT 1` against the SQL string. It was asserting the
+    defect as intended behaviour: taking the newest row *on the whole ledger*
+    is exactly how agent-A's courier came to stamp agent-B's finding. It is
+    replaced by the behavioural tests in `test_tdd_courier_pairing.py`, not by
+    a string match on the new SQL — a string match would reproduce the same
+    mistake one revision later, since it tests what the query says rather than
+    what it selects.
+    """
+
+    def test_it_floors_on_this_findings_last_evidence_row(self):
+        """The watermark is per-finding, not run-global.
+
+        A run-global `MAX(seq)` means any actor's evidence row retires every
+        other actor's unpaired record.
+        """
+        sql = tdd_courier.unpaired_sql("BH-101")
+        assert (
+            "MAX(seq) FROM events WHERE type='tdd_evidence' "
+            "AND finding_id='BH-101'"
+        ) in sql
 
     def test_it_reads_only_the_agent_written_event(self):
-        assert "type='test_failed_before_fix'" in tdd_courier._UNPAIRED
+        assert "type='test_failed_before_fix'" in tdd_courier.unpaired_sql("BH-101")
 
-    def test_it_takes_the_newest_unpaired_row(self):
-        assert "ORDER BY seq DESC LIMIT 1" in tdd_courier._UNPAIRED
+    def test_both_halves_are_keyed_on_the_same_finding(self):
+        """One id, two places. Keyed on one and not the other, the courier
+        would select the right row and then floor it on everyone's."""
+        assert tdd_courier.unpaired_sql("BH-101").count("finding_id='BH-101'") == 2
 
     def test_it_selects_no_field_the_agent_could_redirect(self):
         """Every field the courier writes except `agent_id` comes from this
-        query or from the tree — none from the command text."""
+        query or from the tree — none from the command text.
+
+        `finding_id` is now *also* read off the command, to choose which row to
+        select. It is still written from the selected row, so a mismatch
+        selects nothing rather than mis-attributing.
+        """
+        sql = tdd_courier.unpaired_sql("BH-101")
         for field in ("finding_id", "test_name", "run", "auditor", "project"):
-            assert field in tdd_courier._UNPAIRED, field
-        assert "agent_id" not in tdd_courier._UNPAIRED
+            assert field in sql, field
+        assert "agent_id" not in sql
+
+    def test_the_id_comes_from_a_closed_character_set(self):
+        """`query_ledger` takes a statement, not bound parameters.
+
+        So the only thing making interpolation safe is that the id was
+        pattern-matched first. Assert the refusal, not just the acceptance.
+        """
+        assert tdd_courier._finding_id_of(
+            "sahjhan event test_failed_before_fix --field finding_id=BH-101"
+        ) == "BH-101"
+        for hostile in (
+            "--field finding_id=BH-101'; DROP TABLE events;--",
+            "--field finding_id=../../etc",
+            "--field finding_id=BH-1",
+            "--field finding_id=XX-101",
+        ):
+            assert tdd_courier._finding_id_of(hostile) is None, hostile
+        with pytest.raises(ValueError):
+            tdd_courier.unpaired_sql("BH-101' OR '1'='1")
 
     def test_the_courier_needs_nothing_from_the_working_tree(self):
         """`project` comes from the ledger row, not from a git call.

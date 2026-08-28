@@ -21,6 +21,49 @@
 # to `hook eval`; the orchestrator is the empty string, a real actor and never
 # a wildcard. Needs sahjhan >= 0.23.0, which resolves templates in gate
 # filters — before that a filter value was compared literally.
+#
+# D33 scoped the *filter* to the actor and left the *window* run-global, which
+# is item 1: `since = "last_transition"` reads the whole ledger's last
+# transition, and the orchestrator records a `fix_commit` every time any
+# subagent lands. So every other in-flight subagent lost its own authorisation
+# the moment a sibling committed, and its escape — re-record a failing test —
+# was unreachable once its fix was already written. Driven: agent-B records ->
+# allow; an unrelated `fix_commit` lands -> the same edit returns deny.
+#
+# `ledger_has_event_since` cannot express an actor-scoped window. Driven
+# against 0.23.0: `since` understands `last_transition` and nothing else, and
+# an unrecognised anchor does not error — it silently *falls back* to
+# `last_transition`, which is #65's hazard, still live. So the window is
+# expressed as SQL here rather than as an anchor the engine would quietly
+# reinterpret.
+#
+# The window closes on this actor's own fix, not on anyone's transition: the
+# actor holds authorisation while it has a `tdd_evidence` row whose finding has
+# no later `finding_resolved`. `fix_commit BH-NNN` auto-emits
+# `finding_resolved` for that id, so an actor's evidence is consumed by its own
+# commit and by nothing else. A sibling's commit emits its own id and leaves
+# this actor's row standing. Dropping the consumption term instead — "any
+# evidence this run" — would satisfy the letter of "scope it to the actor"
+# while turning a per-fix gate into a per-actor-per-run one.
+#
+# The correlation is on `finding_id`, which `tdd_courier.py` now pairs
+# per-finding (item 19). Before that fix the courier stamped whichever
+# unpaired row was newest on the whole ledger, so this term would have keyed on
+# the wrong finding — the two land together for that reason.
+#
+# ⚠️ The generated contract now reports this gate as forgeable, and it is right
+# to: `finding_resolved` is agent-writable by design (the documented
+# `sahjhan resolve` reconciliation path). **Read the direction before reading
+# the flag.** The gate is `count(*) > 0` over evidence rows *not yet resolved*,
+# and `tdd_evidence` itself is `restricted`. So forging `finding_resolved` can
+# only ever *remove* rows from that count — it denies the forger, it cannot
+# admit them. There is no spelling of an agent-written event that opens this
+# gate; that is still `tdd_courier.py`'s alone.
+#
+# The one thing it does buy an agent is the ability to revoke a *sibling's*
+# authorisation by resolving the sibling's finding out of band. That is
+# strictly narrower than what shipped: under `since = "last_transition"` any
+# transition revoked *every* actor at once, which is item 1.
 
 [[hooks]]
 event = "PreToolUse"
@@ -30,10 +73,9 @@ action = "block"
 message = "TDD violation: write and run a failing test before editing source files. Record with: sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" event test_failed_before_fix --field project=holtz --field run=N --field auditor=holtz --field finding_id=BH-NNN --field test_name=..."
 
 [hooks.gate]
-type = "ledger_has_event_since"
-event = "tdd_evidence"
-since = "last_transition"
-filter = { agent_id = "{{agent_id}}" }
+type = "query"
+sql = "SELECT count(*) > 0 FROM events e WHERE e.type='tdd_evidence' AND e.agent_id='{{agent_id}}' AND NOT EXISTS (SELECT 1 FROM events r WHERE r.type='finding_resolved' AND r.id = e.finding_id AND r.seq > e.seq)"
+expect = "true"
 
 [hooks.filter]
 path_not_matches = "tests/**"

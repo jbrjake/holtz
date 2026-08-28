@@ -121,6 +121,23 @@ class TwoActors:
         from test_e2e_audit_flow import _fast_forward_to_fix_loop  # noqa: PLC0415
 
         _fast_forward_to_fix_loop(self.daemon)
+        self.freshen()
+
+    def freshen(self) -> None:
+        """Make `is_enforcement_fresh` true, so gates actually evaluate.
+
+        `pre_tool_hook` skips `hook eval` entirely on a stale cache and exits
+        `allow`. Without this the TDD-gate tests below pass **vacuously** — an
+        `allow` that means "the gate never ran" is indistinguishable from an
+        `allow` the gate decided, and that is precisely the shape item 1 hides
+        in. `test_the_gate_still_bites` is the guard that catches it; this is
+        what lets that guard mean something.
+        """
+        self.hook("protocol_tracker.py", {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan status"},
+            "tool_response": {"exit_code": 0, "output": "fix_loop"},
+        })
 
     # ── the fix-loop steps, per actor ───────────────────────────────────────
 
@@ -153,6 +170,34 @@ class TwoActors:
             },
             "agent_id": actor,
         })
+
+    def sibling_fix_commit(self, finding_id: str) -> None:
+        """A `fix_commit` landing for ``finding_id``, as the orchestrator's is.
+
+        Records the run-global `state_transition` **and** the `finding_resolved`
+        that `fix_commit` auto-emits — both, because the two halves are what
+        item 1's window turns on: the transition is what used to revoke every
+        actor's authorisation, and the resolution is what now consumes only the
+        actor whose finding it names.
+
+        Recorded as events rather than driven through `sahjhan transition
+        fix_commit`, whose own gates (suite green, blast radius, hardening) are
+        a different subject and would have to be faked to get here.
+        """
+        self.sahjhan(
+            "event", "state_transition",
+            "--field", "from=fix_loop", "--field", "to=fix_loop",
+            "--field", "command=fix_commit",
+            "--field", "run=1", "--field", "auditor=holtz",
+            "--field", "project=holtz",
+        )
+        self.sahjhan(
+            "event", "finding_resolved",
+            "--field", "project=holtz", "--field", "run=1",
+            "--field", "auditor=holtz", "--field", "phase=fix_loop",
+            "--field", "step=10", "--field", f"id={finding_id}",
+            "--field", "commit_hash=abc1234",
+        )
 
     # ── the loop's own ordering ─────────────────────────────────────────────
 
