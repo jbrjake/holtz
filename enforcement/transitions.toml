@@ -550,7 +550,6 @@ gates = [
     { type = "query", query = "all_user_reachable_high_closed", expect = "true", intent = "every user-reachable HIGH must be resolved or deferred — run `sweep_dirty` and work them" },
     { type = "query", query = "amplification_diverging", expect = "false", intent = "the run is still filing faster than it retires over the last 3 rounds" },
     { type = "file_exists", path = "docs/holtz/DEFERRED.md", intent = "docs/holtz/DEFERRED.md must exist" },
-    { type = "query", query = "medium_deferral_budget", expect = "false", intent = "the MEDIUM deferral budget must be spent — half the MEDIUMs get fixed, not deferred" },
     { type = "no_violations", intent = "no unresolved protocol violations" },
     { type = "query", query = "quiz_exhaustions_resolved", expect = "true" },
 ]

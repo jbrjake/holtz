@@ -11,9 +11,16 @@ be closed. These four conjuncts say it:
     AND A < 1.0 over the last 3 rounds
     AND DEFERRED.md written
 
-plus D5's constraint, which is the counterweight to the carve-out: converging
-still requires the MEDIUM budget spent, so "MEDIUM may stay open" cannot become
-"defer the MEDIUMs instead of fixing half of them."
+D5 added a fifth conjunct — the MEDIUM budget **spent** — as the counterweight
+to the carve-out, so that "MEDIUM may stay open" could not become "defer the
+MEDIUMs instead of fixing half of them." **D-a (Jon, 2026-08-27) removed it from
+this transition**, and W05 is where that landed: the denominator counts every
+MEDIUM ever filed and `defer_medium`'s cap is the same integer division, so
+converging required *exactly* `floor(N/2)` deferrals and a run that fixed all
+its MEDIUMs could never converge at all. The counterweight is not lost — it
+lives in the cap itself (`defer_medium`, both states), which still refuses the
+deferral past half. See `tests/test_medium_budget_seats.py` for the three seats
+that remain and why this one was the wrong one.
 
 The third conjunct is the one the 2026-08-21 session rejected, on the grounds
 that it "blocks a run that has legitimately closed everything." That is true
@@ -131,7 +138,7 @@ class TestAllUserReachableHighClosed:
 
 
 class TestTheGateIsThePackage:
-    """All four conjuncts on `converge`, plus D5's."""
+    """All four conjuncts on `converge`. D5's fifth was removed by D-a (W05)."""
 
     def _at_final_sweep(self, run):
         run.sah("event", "state_transition", "--field", "from=all_perspectives_clean",
@@ -147,9 +154,13 @@ class TestTheGateIsThePackage:
         converge = next(t for t in transitions if t["command"] == "converge")
         queries = {g.get("query") for g in converge["gates"]}
         assert {"all_critical_resolved", "all_user_reachable_high_closed",
-                "amplification_diverging", "medium_deferral_budget"} <= queries
+                "amplification_diverging"} <= queries
         assert any(g.get("path") == "docs/holtz/DEFERRED.md"
                    for g in converge["gates"]), "the DEFERRED.md conjunct is missing"
+        # D-a / W05. Stated as a negative here as well as positively in
+        # test_medium_budget_seats.py: `<=` is a subset test, so dropping the
+        # name from the set above would pass whether or not the seat came back.
+        assert "medium_deferral_budget" not in queries
 
     def test_all_findings_closed_no_longer_gates_converge(self):
         """The clause *replaces* it. Leaving it would keep the unreachable
@@ -167,14 +178,21 @@ class TestTheGateIsThePackage:
         line = [ln for ln in out.splitlines() if "'all_critical_resolved'" in ln]
         assert len(line) == 1 and line[0].strip().startswith("✗"), out
 
-    def test_an_unspent_medium_budget_blocks_converge(self, run):
-        """D5: the 50% fix-half rule keeps force at convergence."""
+    def test_an_unspent_medium_budget_no_longer_blocks_converge(self, run):
+        """D-a / W05, the reverse of what D5 asserted here.
+
+        Four MEDIUMs filed and none deferred is an unspent budget. It used to
+        block, which meant a run had to abandon two of the four *before* it
+        could converge, whether or not it had fixed them.
+        """
         for n in range(1, 5):
             run.file(f"BH-1{n:02d}", "MEDIUM")
         self._at_final_sweep(run)
         out = self._lines(run)
-        line = [ln for ln in out.splitlines() if "'medium_deferral_budget'" in ln]
-        assert len(line) == 1 and line[0].strip().startswith("✗"), out
+        assert "medium_deferral_budget" not in out, out
+        # ...and the gate did run, so the absence is a decision and not a
+        # skipped evaluation.
+        assert "all_critical_resolved" in out, out
 
 
 class TestTheBlockIsEscapable:
