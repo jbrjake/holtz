@@ -1511,6 +1511,74 @@ class TestCurrentDev:
         assert unknown == set()
 
 
+class TestSinceAnchorIsADependency:
+    """A `since` anchor names an event the gate depends on.
+
+    `since = "last_event_of_type:<type>"` decides where the gate's window
+    *starts*, which is as much a dependency as `event` deciding what fills it.
+    Unwalked, an anchor-only dependency is invisible to every consumer-side
+    check and to the generated contract — the contract reported the TDD gate as
+    non-forgeable not because it had stopped reading an agent-writable event,
+    but because nothing looked at the anchor that reads it.
+
+    The blind spot was inert until sahjhan 0.24.0: the only other
+    `last_event_of_type:` anchor in the tree names `set_member_complete`, which
+    is also that gate's `event`, so it was consumed either way.
+    """
+
+    def test_a_since_anchor_names_a_consumed_event(self) -> None:
+        gate = {
+            "type": "ledger_has_event_since",
+            "event": "tdd_evidence",
+            "since": "last_event_of_type:finding_resolved",
+        }
+        assert el._gate_consumed(gate) == {"tdd_evidence", "finding_resolved"}
+
+    def test_last_transition_names_no_event(self) -> None:
+        """The other legal anchor is a position, not an event type."""
+        gate = {
+            "type": "ledger_has_event_since",
+            "event": "tdd_evidence",
+            "since": "last_transition",
+        }
+        assert el._gate_consumed(gate) == {"tdd_evidence"}
+
+    def test_an_anchor_inside_a_composite_is_walked(self) -> None:
+        """`_gate_consumed` recurses; the anchor must recurse with it."""
+        gate = {
+            "any_of": [
+                {
+                    "type": "ledger_has_event_since",
+                    "event": "tdd_evidence",
+                    "since": "last_event_of_type:finding_resolved",
+                },
+                {"type": "no_violations"},
+            ]
+        }
+        assert el._gate_consumed(gate) == {
+            "tdd_evidence",
+            "finding_resolved",
+            "protocol_violation",
+        }
+
+    def test_the_live_tdd_gate_declares_its_anchor(self, model: el.Model) -> None:
+        """The claim, against the real config rather than a constructed gate.
+
+        Asserts the whole set, not membership: a change that lands on some
+        third answer must fail here rather than pass on a superset.
+        """
+        gates = [
+            hook["gate"]
+            for hook in model.hooks
+            if hook.get("gate", {}).get("event") == "tdd_evidence"
+        ]
+        assert len(gates) == 1, "expected exactly one gate reading tdd_evidence"
+        assert el.gate_event_types(model, gates[0]) == {
+            "tdd_evidence",
+            "finding_resolved",
+        }
+
+
 class TestEngineGateTypes:
     """#85: a gate whose predicate is compiled into the sahjhan binary.
 

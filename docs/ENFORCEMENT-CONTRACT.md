@@ -317,6 +317,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | lens quiz must be passed | `quiz_answered` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
 | quiz must be posed by enforcement hook before completion | `quiz_posed` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
 | a lens sweep must be started for this perspective before completion | `lens_sweep_started` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `set_member_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 
 ### `lens_rotate` — perspective_clean → audit
 
@@ -383,7 +384,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fires on | States | Action | Fact required | Evidence | Attests | Forgeable |
 |---|---|---|---|---|---|---|
-| `PreToolUse` (Edit, Write) | fix_loop | `block` | `SELECT count(*) > 0 FROM events e WHERE e.type='tdd_evidence' AND e.agent_id='{{agent_id}}' AND NOT EXISTS (SELECT 1 FROM events r WHERE r.type='finding_resolved' AND r.id = e.finding_id AND r.seq > e.seq)` | `finding_resolved`, `tdd_evidence` | `agent`, `tool` | **yes** — `sahjhan event`, no — daemon refuses unauthenticated callers |
+| `PreToolUse` (Edit, Write) | fix_loop | `block` | ledger_has_event_since `tdd_evidence` | `finding_resolved`, `tdd_evidence` | `agent`, `tool` | **yes** — `sahjhan event`, no — daemon refuses unauthenticated callers |
 | `Stop` | any except converged, finalized | `block` | the agent's output claims none of 13 completion phrases | *direct check* | `direct` | n/a |
 | `PostToolUse` (Edit) | fix_loop | `warn` | fewer than 8 source_edit since the last transition | `source_edit` | `agent` | **yes** — `sahjhan event` |
 | monitor `fix_loop_stall` | fix_loop | `warn` | fewer than 12 source_edit since the last transition | `source_edit` | — | — |

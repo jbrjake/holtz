@@ -368,14 +368,14 @@ from = "fix_loop"
 to = "pattern_analysis"
 command = "pattern_check"
 gates = [
-    # #65: use a COALESCE-scoped query rather than ledger_has_event_since. The
-    # old gate referenced `last_event_of_type:...`, a syntax that gate type does
-    # not understand: it matched no event, silently fell back to "since last
-    # state_transition", and ignored min_count entirely — so the first
-    # pattern_check could never fire (chicken-and-egg: you need a prior
-    # pattern_analysis_complete to satisfy the gate that produces the first one).
-    # COALESCE(..., 0) treats "no prior pattern analysis" as the run start, so
-    # the first pattern_check becomes ready once 3+ findings are resolved.
+    # #65: use a COALESCE-scoped query rather than ledger_has_event_since,
+    # because the predicate has a term that gate type cannot express — the
+    # obligation lapses once two consecutive rounds add no pattern. The
+    # counting half alone would fit: an anchor whose event has never occurred
+    # measures from the run start (seq 0), which is what COALESCE(..., 0) does
+    # here, so the first pattern_check becomes ready once 3+ findings are
+    # resolved rather than deadlocking on needing a prior
+    # pattern_analysis_complete to produce the first one.
     #
     # #82: the predicate itself now lives in protocol.toml [queries], shared
     # with iteration_boundary's block and the commit gate's. See that comment.

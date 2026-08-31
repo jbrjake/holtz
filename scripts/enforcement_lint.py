@@ -333,6 +333,11 @@ _ENGINE_GATE_EVENTS: dict[str, tuple[str, ...]] = {
     "no_violations": ("protocol_violation",),
 }
 
+# The one `since` anchor form that names an event type. sahjhan 0.24.0 closed
+# the vocabulary to this and `last_transition`; anything else is refused where
+# the config is sealed (jbrjake/sahjhan#34).
+_ANCHOR_EVENT_PREFIX = "last_event_of_type:"
+
 
 def _gate_consumed(gate: dict, queries: dict[str, dict] | None = None) -> set[str]:
     """Event types one gate depends on, across every gate shape.
@@ -356,6 +361,15 @@ def _gate_consumed(gate: dict, queries: dict[str, dict] | None = None) -> set[st
         consumed.add(gate["evidence"])
     if isinstance(gate.get("sql"), str):
         consumed |= _sql_event_types(gate["sql"])
+    # `since = "last_event_of_type:<type>"` makes the gate depend on <type> as
+    # surely as `event` does — one decides what fills the window, the other
+    # decides where it starts. Unwalked, an anchor-only dependency is invisible
+    # to every consumer-side check here and to the generated contract, which
+    # reported the TDD gate non-forgeable while its anchor read an
+    # agent-writable event. `last_transition` names a position, not a type.
+    since = gate.get("since")
+    if isinstance(since, str) and since.startswith(_ANCHOR_EVENT_PREFIX):
+        consumed.add(since[len(_ANCHOR_EVENT_PREFIX) :])
     if queries is not None:
         for name in _gate_query_names(gate):
             consumed |= _sql_event_types(queries.get(name, {}).get("sql", ""))
