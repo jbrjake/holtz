@@ -609,6 +609,33 @@ class TestPatternDoneClearsOverdue:
 
         assert read_cache(str(tmp_path))["pattern_analysis_overdue"] is True
 
+    def test_a_refused_pattern_done_clears_nothing(self, tmp_path, mock_daemon):
+        """The round is discharged by the transition landing, not by trying it.
+
+        Same shape as the pending-commit clear one branch below, and the same
+        answer: `_runs_transition` reads the command, `exit_code` reads the
+        engine, and only the engine knows whether the round actually closed.
+        A refused `pattern_done` leaves the round owed.
+        """
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["pattern_analysis_overdue"] = True
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        run_enforcement_hook("protocol_tracker.py", {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan transition pattern_done"},
+            "tool_response": {"exit_code": 1, "output": "gate not satisfied"},
+            "cwd": str(tmp_path),
+        })
+
+        assert read_cache(str(tmp_path))["pattern_analysis_overdue"] is True
+
 
 class TestProtocolTracker:
     """Tests for protocol_tracker.py PostToolUse hook."""

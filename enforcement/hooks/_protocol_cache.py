@@ -433,10 +433,10 @@ def named_query_sql(config_dir: str, name: str) -> str | None:
     return sql if isinstance(sql, str) else None
 
 
-def query_named_predicate(
+def query_named_rows(
     binary: str, config_dir: str, cwd: str, name: str,
-) -> bool | None:
-    """Evaluate a `[queries.<name>]` predicate against the active ledger.
+) -> list[dict[str, Any]] | None:
+    """Run a `[queries.<name>]` predicate and return its rows.
 
     Runs sahjhan's generic `query` primitive — the same ledger the gates
     evaluate, the same SQL the gates use, so block condition and evidence
@@ -444,6 +444,10 @@ def query_named_predicate(
     unavailable, timeout, non-zero exit, malformed output, or the query
     missing from the config) so callers can decide what an unanswerable
     question means for them rather than being handed a fabricated answer.
+
+    ``None`` and ``[]`` are different answers and callers must treat them so:
+    the first is "the ledger could not be asked", the second is "the ledger
+    says nothing matches".
     """
     import subprocess
 
@@ -461,11 +465,77 @@ def query_named_predicate(
         return None
     try:
         rows = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+    return rows if isinstance(rows, list) else None
+
+
+def query_named_predicate(
+    binary: str, config_dir: str, cwd: str, name: str,
+) -> bool | None:
+    """Evaluate a `[queries.<name>]` predicate against the active ledger.
+
+    None on any failure, for the reasons ``query_named_rows`` gives — plus
+    one of its own: a predicate that returns no row at all has not answered
+    "false", it has failed to answer.
+    """
+    rows = query_named_rows(binary, config_dir, cwd, name)
+    if rows is None:
+        return None
+    try:
         # A boolean predicate renders as the string "true"/"false", which is
         # also exactly what the gate's `expect` compares against.
         return str(next(iter(rows[0].values()))).lower() == "true"
-    except (json.JSONDecodeError, StopIteration, IndexError, TypeError):
+    except (StopIteration, IndexError, TypeError, AttributeError):
         return None
+
+
+# Which commits the ledger says are registered, by name. `fix_commit` and
+# `merge_finding` both auto-emit `finding_resolved` with `commit_hash` stamped
+# from `git rev-parse --short=7 HEAD`, so the ledger has always been able to
+# say which commit a transition registered — the cache could not, and that is
+# the difference item 32 turned on. `hardening_batch.py` asks the same
+# question for its own reason; resolving the name rather than restating the
+# SQL is what keeps there being one of it (H7).
+REGISTERED_COMMITS_QUERY = "resolution_commit_hashes"
+
+# git's own floor for an unambiguous abbreviation, and the width the emit
+# stamps. Below it a "hash" is a prefix of everything — an empty string would
+# discharge every bucket — so anything shorter is not an answer.
+MIN_ABBREV = 7
+
+
+def registered_commit_hashes(
+    binary: str, config_dir: str, cwd: str,
+) -> list[str] | None:
+    """Every commit hash the ledger records a resolution against.
+
+    None when the ledger could not be asked. An empty list is an answer: no
+    commit is registered, so no charge may be discharged.
+    """
+    rows = query_named_rows(binary, config_dir, cwd, REGISTERED_COMMITS_QUERY)
+    if rows is None:
+        return None
+    hashes = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        value = str(row.get("commit_hash") or "").strip()
+        if len(value) >= MIN_ABBREV:
+            hashes.append(value)
+    return hashes
+
+
+def same_commit(left: str, right: str) -> bool:
+    """Whether two abbreviations name one commit.
+
+    The tracker charges whatever width `git commit` printed (7 in this repo,
+    wider in a repo with more objects); the ledger stamps `--short=7`. So the
+    two ends legitimately differ in length and one is a prefix of the other.
+    """
+    if len(left) < MIN_ABBREV or len(right) < MIN_ABBREV:
+        return False
+    return left.startswith(right) or right.startswith(left)
 
 
 def _segment_is_sahjhan(seg: str) -> bool:
@@ -528,6 +598,17 @@ def contains_sahjhan_cmd(cmd: str) -> bool:
     (TDD, managed-path) keep using the stricter checks.
     """
     return any(_segment_is_sahjhan(seg) for seg in _split_shell_segments(cmd))
+
+
+def sahjhan_segments(cmd: str) -> list[str]:
+    """The segments of ``cmd`` that actually invoke the sahjhan CLI.
+
+    What a caller wants when it needs to read a sahjhan command's *arguments*
+    rather than merely detect one: the words in `cd repo && echo "run
+    transition fix_commit"` are not arguments to anything, and a scan over the
+    whole line cannot tell them from the ones that ran.
+    """
+    return [seg for seg in _split_shell_segments(cmd) if _segment_is_sahjhan(seg)]
 
 
 # ── The stall counter's actor (P3.2) ──
@@ -607,9 +688,20 @@ def stall_cleared(cache: dict[str, Any] | None, actor: str) -> dict[str, int]:
 # the orchestrator's transition, gated on `git log -1` and a tree hash taken
 # at the project root. The blocked actor could not reach its own escape.
 #
-# Clearing stays run-global (see protocol_tracker's fix_commit branch): the
-# transition registers whatever commit is at HEAD, and after a fast-forward
-# that commit was authored by a subagent the transition cannot name.
+# Clearing is per *commit*, decided by the ledger (see protocol_tracker's
+# fix_commit branch). It used to be run-global on the argument that the
+# transition registers whatever commit is at HEAD, and that after a
+# fast-forward that commit was authored by a subagent the transition cannot
+# name. The cache cannot name it — but `fix_commit` auto-emits
+# `finding_resolved` stamped with that very hash, so the ledger names it, and
+# the question was unasked rather than unanswerable. While it went unasked one
+# subagent's registration discharged every sibling's charge: the deny
+# direction was keyed and the allow direction, the one that loses the gate,
+# was not.
+#
+# Where the ledger cannot be reached the discharge falls back to the
+# orchestrator's bucket alone. That is the safe direction of a fallback:
+# losing a clear costs a nudge, losing a charge loses the gate.
 
 
 def pending_commits(cache: dict[str, Any] | None) -> dict[str, list[str]]:
@@ -645,6 +737,40 @@ def pending_commits_appended(
     """The buckets with ``commit_hash`` charged to ``actor`` — others untouched."""
     buckets = pending_commits(cache)
     buckets.setdefault(actor, []).append(commit_hash)
+    return buckets
+
+
+def pending_commits_discharged(
+    cache: dict[str, Any] | None, registered: list[str]
+) -> dict[str, list[str]]:
+    """The buckets with every ``registered`` commit removed from whichever holds it.
+
+    A charge is discharged by the commit it names being registered, so this
+    removes commits rather than emptying buckets: an actor holding a second,
+    unregistered commit stays charged for that one.
+
+    A registered hash that no bucket holds discharges nothing. That is the
+    answer, not a shortfall — a rebase rewrites the hash the tracker charged,
+    so the bucket keeps a charge whose commit no longer exists, and inventing
+    a nearest match would discharge a commit nobody registered.
+    """
+    buckets = pending_commits(cache)
+    return {
+        actor: kept
+        for actor, commits in buckets.items()
+        if (kept := [
+            c for c in commits
+            if not any(same_commit(c, r) for r in registered)
+        ])
+    }
+
+
+def pending_commits_cleared(
+    cache: dict[str, Any] | None, actor: str
+) -> dict[str, list[str]]:
+    """The buckets with ``actor``'s emptied — every other actor untouched."""
+    buckets = pending_commits(cache)
+    buckets.pop(actor, None)
     return buckets
 
 

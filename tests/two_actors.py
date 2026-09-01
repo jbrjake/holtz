@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -171,7 +172,9 @@ class TwoActors:
             "agent_id": actor,
         })
 
-    def sibling_fix_commit(self, finding_id: str) -> None:
+    def sibling_fix_commit(
+        self, finding_id: str, commit_hash: str = "abc1234"
+    ) -> None:
         """A `fix_commit` landing for ``finding_id``, as the orchestrator's is.
 
         Records the run-global `state_transition` **and** the `finding_resolved`
@@ -179,6 +182,10 @@ class TwoActors:
         item 1's window turns on: the transition is what used to revoke every
         actor's authorisation, and the resolution is what now consumes only the
         actor whose finding it names.
+
+        ``commit_hash`` is the field item 32 reads: the emit stamps it from
+        `git rev-parse --short=7 HEAD`, so it names the commit the transition
+        registered and is how the discharge finds the bucket holding it.
 
         Recorded as events rather than driven through `sahjhan transition
         fix_commit`, whose own gates (suite green, blast radius, hardening) are
@@ -196,8 +203,75 @@ class TwoActors:
             "--field", "project=holtz", "--field", "run=1",
             "--field", "auditor=holtz", "--field", "phase=fix_loop",
             "--field", "step=10", "--field", f"id={finding_id}",
-            "--field", "commit_hash=abc1234",
+            "--field", f"commit_hash={commit_hash}",
         )
+
+    # ── the pending-commit charge, per actor (item 32) ───────────────────────
+    #
+    # The enforcement cache lives in the daemon, and a real daemon refuses
+    # `enforcement_write` from a test process — `auth_failed`, reason
+    # `pid_resolution_failed`, because the caller is pytest rather than a
+    # hash-pinned hook. So the buckets are seeded through the tracker and read
+    # back through the gate: the only two paths production has, and neither
+    # can be poisoned by a fixture writing a shape the hooks never produce.
+
+    def git_commit(self, actor: str, commit_hash: str) -> dict:
+        """Step: ``actor`` commits, and PostToolUse charges the commit to it."""
+        return self.hook("protocol_tracker.py", {
+            "tool_name": "Bash",
+            "tool_input": {"command": 'git commit -m "fix(x): BH-101"'},
+            "tool_response": {
+                "exit_code": 0,
+                "stdout": f"[dev {commit_hash}] fix(x): BH-101\n 1 file changed",
+                "stderr": "",
+            },
+            "agent_id": actor,
+        })
+
+    def fix_commit_transition(
+        self,
+        finding_id: str = "BH-101",
+        exit_code: int = 0,
+        actor: str = ORCHESTRATOR,
+    ) -> dict:
+        """Step: the orchestrator runs the transition the discharge turns on.
+
+        ``exit_code`` is the engine's answer, not a detail: a refused
+        transition registers nothing, so the tracker must discharge nothing.
+        """
+        return self.hook("protocol_tracker.py", {
+            "tool_name": "Bash",
+            "tool_input": {
+                "command": (
+                    'sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" '
+                    f"transition fix_commit {finding_id}"
+                )
+            },
+            "tool_response": {"exit_code": exit_code, "stdout": "", "stderr": ""},
+            "agent_id": actor,
+        })
+
+    def charged_to(self, actor: str) -> int | None:
+        """How many unregistered commits the gate charges ``actor``.
+
+        ``None`` when the gate allows the commit — read out of the block the
+        actor would actually see, so the answer is the production one rather
+        than a fixture's view of a cache it cannot read.
+        """
+        output = self.hook("commit_gate.py", {
+            "tool_name": "Bash",
+            "tool_input": {"command": 'git commit -m "fix(x): BH-999"'},
+            "agent_id": actor,
+        })
+        hso = output.get("hookSpecificOutput", {})
+        if hso.get("permissionDecision") != "deny":
+            return None
+        m = re.search(r"(\d+) unregistered", hso.get("permissionDecisionReason", ""))
+        return int(m.group(1)) if m else -1
+
+    def charges(self, *actors: str) -> dict[str, int | None]:
+        """The charge against each named actor — the by-name reading of V4."""
+        return {actor: self.charged_to(actor) for actor in actors}
 
     # ── the loop's own ordering ─────────────────────────────────────────────
 

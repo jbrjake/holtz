@@ -23,6 +23,7 @@ from _common import (  # noqa: E402
     resolve_config_dir,
 )
 from _protocol_cache import (  # noqa: E402
+    ORCHESTRATOR,
     contains_sahjhan_cmd,
     empty_cache,
     event_actor,
@@ -32,8 +33,12 @@ from _protocol_cache import (  # noqa: E402
     is_sahjhan_cmd,
     parse_status_text,
     pending_commits_appended,
+    pending_commits_cleared,
+    pending_commits_discharged,
     query_named_predicate,
     read_cache,
+    registered_commit_hashes,
+    sahjhan_segments,
     stall_bumped,
     stall_cleared,
     update_cache,
@@ -88,12 +93,23 @@ def _runs_transition(cmd: str, command: str) -> bool:
     merely mention the command name as a bare token — ``sahjhan gate check
     fix_commit``, ``sahjhan query "... 'fix_commit' ..."``, ``sahjhan status``.
     Only the actual transition should move cache bookkeeping. #77.
+
+    Read only where a sahjhan command's arguments are: adjacency over the
+    whole line said yes to ``sahjhan status && echo remember to run transition
+    fix_commit``, because a split on whitespace cannot tell an argument from a
+    word that was printed. Quoted spans go the same way — they are how the
+    diagnostics above carry the name — so the scan sees the segment's bare
+    words, which is where the verb has to be for the CLI to act on it.
     """
-    tokens = cmd.split()
-    return any(
-        tok == "transition" and tokens[i + 1] == command
-        for i, tok in enumerate(tokens[:-1])
-    )
+    for segment in sahjhan_segments(cmd):
+        bare = re.sub(r"""'[^']*'|"[^"]*\"""", " ", segment)
+        tokens = bare.split()
+        if any(
+            tok == "transition" and tokens[i + 1] == command
+            for i, tok in enumerate(tokens[:-1])
+        ):
+            return True
+    return False
 
 
 # #77: the authoritative backlog for "pattern analysis overdue" is the ledger,
@@ -186,7 +202,32 @@ def _stop_daemon(cwd: str) -> None:
         )
 
 
-def _apply_sahjhan_cmd(cwd: str, cache: dict | None, cmd: str, actor: str) -> dict:
+def _discharge_registered_commits(cwd: str, cache: dict) -> dict[str, list[str]]:
+    """The pending-commit buckets, minus whatever the ledger says is registered.
+
+    `fix_commit` stamps the commit it registered onto the `finding_resolved`
+    it emits, so the ledger can name the bucket to discharge even though the
+    transition's caller cannot — see `_protocol_cache`'s section on the
+    pending-commit block.
+
+    An unreachable ledger discharges the orchestrator's bucket only. It ran
+    the transition, so it is the one actor whose charge the command is
+    evidence about without anything having to be looked up.
+    """
+    binary = ensure_sahjhan()
+    config_dir, _ = resolve_config_dir(cwd)
+    registered = (
+        registered_commit_hashes(binary, config_dir, cwd)
+        if binary is not None else None
+    )
+    if registered is None:
+        return pending_commits_cleared(cache, ORCHESTRATOR)
+    return pending_commits_discharged(cache, registered)
+
+
+def _apply_sahjhan_cmd(
+    cwd: str, cache: dict | None, cmd: str, actor: str, exit_code: int
+) -> dict:
     """Record the effects of a sahjhan enforcement command on the cache.
 
     Runs for pure sahjhan lines and for wrapped re-sync lines like
@@ -214,12 +255,18 @@ def _apply_sahjhan_cmd(cwd: str, cache: dict | None, cmd: str, actor: str) -> di
     # `pattern_check` no longer moves it. The pending-commit registration is still
     # cache-tracked, but it clears solely on the mutating `transition fix_commit`
     # verb, so a diagnostic can't silently clear a real pending commit either.
-    if _runs_transition(cmd, "fix_commit"):
-        # Every bucket, not this actor's. The transition registers the commit
-        # at HEAD, and under P0.3 that commit reached HEAD by fast-forward from
-        # a subagent's worktree — so the author it discharges is one the
-        # orchestrator running this command cannot name.
-        cache["unregistered_commits"] = {}
+    #
+    # Two conditions, because the verb alone was never enough, and it was
+    # wrong about two different things. It was read off the whole line, so an
+    # echoed reminder riding on a real sahjhan command was indistinguishable
+    # from the command — `_runs_transition` now reads only where a sahjhan
+    # command's arguments are. And it was read without the exit code, so a
+    # transition the engine *refused* discharged a charge that nothing had
+    # registered — the same `exit_code == 0` guard the git-commit branch below
+    # already applied, two lines from a path that ignored it. What is then
+    # discharged comes from the ledger rather than from the command text.
+    if exit_code == 0 and _runs_transition(cmd, "fix_commit"):
+        cache["unregistered_commits"] = _discharge_registered_commits(cwd, cache)
     # P3.4: the round is over, so the obligation is discharged — say so here
     # rather than hoping the derivation above could reach the ledger. It
     # returns None on timeout or a missing binary, and None keeps the previous
@@ -229,7 +276,12 @@ def _apply_sahjhan_cmd(cwd: str, cache: dict | None, cmd: str, actor: str) -> di
     # drift into the blocking disagreement #77 deadlocked on. The ledger stays
     # the sole authority for owing a round; the next refresh re-raises the flag
     # if three more findings close.
-    if _runs_transition(cmd, "pattern_done"):
+    #
+    # Gated on the engine's answer for the same reason the discharge above is:
+    # the round is closed by the transition landing, not by it being attempted,
+    # and a refused `pattern_done` that released the obligation would let a run
+    # skip the round it was blocked for.
+    if exit_code == 0 and _runs_transition(cmd, "pattern_done"):
         cache[PATTERN_OVERDUE_QUERY] = False
     with contextlib.suppress(RuntimeError):
         write_cache(cwd, cache)
@@ -254,7 +306,7 @@ def main() -> None:
     cache = read_cache(cwd)
 
     if is_sahjhan_cmd(cmd):
-        _apply_sahjhan_cmd(cwd, cache, cmd, actor)
+        _apply_sahjhan_cmd(cwd, cache, cmd, actor, exit_code)
         exit_ok()
 
     if cache is None:
@@ -281,7 +333,7 @@ def main() -> None:
     # the stall counter. Checked after the git-commit branch so a
     # ``git commit && sahjhan status`` line still registers its commit. #70 item 1.
     if contains_sahjhan_cmd(cmd):
-        _apply_sahjhan_cmd(cwd, cache, cmd, actor)
+        _apply_sahjhan_cmd(cwd, cache, cmd, actor, exit_code)
         exit_ok()
 
     # Test/lint/type-check commands are legitimate TDD activity — don't count
