@@ -68,7 +68,7 @@ The subagent runs the enforced TDD sequence itself, in its worktree:
 
    **Run it alone on its own Bash line.** Chaining anything before or after it (`&&`, `;`, `|`) records nothing. A green run with no `suite_green` at step 11 is almost always this.
 
-The subagent returns a **compact result**, not artifacts to apply: root cause + confidence (`bug/*` needs HIGH confidence before any fix), the blast-radius node, the test name(s), the suite pass-count, and its worktree's branch. The edits, the commit and the ledger events are already on disk — that is the whole point. The subagent does **NOT** run any `transition`; those are yours.
+The subagent returns a **compact result**, not artifacts to apply: root cause + confidence (`bug/*` needs HIGH confidence before any fix), the blast-radius node, the test name(s), the suite pass-count, and its worktree's branch. The edits, the commit and the ledger events are already on disk — that is the whole point. The subagent runs **no** `transition`; those are yours. Its one exception is the pending-commit block: a subagent whose `git commit` is refused for an unregistered earlier commit registers that commit itself, from its own worktree, with `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit BH-NNN`.
 
 If the subagent cannot reach HIGH confidence, it records nothing, leaves the tree clean, and returns its investigation notes plus a recommendation (defer-low / defer-medium / can't-reproduce with evidence). You then follow the deferral path in [references/step-10-fix-loop.md](references/step-10-fix-loop.md) — do not invent a fix.
 

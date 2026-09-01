@@ -34,6 +34,7 @@ and read back through the gate.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -413,3 +414,58 @@ def test_the_deny_message_still_counts_this_actors_commits(mock_daemon, tmp_path
 
     assert reason is not None
     assert "3 unregistered" in reason, reason
+
+
+class TestTheEscapeIsRunnableByTheActorItBlocks:
+    """Item 43 — the block prints a route its audience can actually execute.
+
+    Two things made it unrunnable, and they were fixed in different places.
+    The transition itself could not be satisfied from a subagent's worktree
+    until `fix_commit` gained `anchor = "caller"` on its two tree-reading gates
+    and its emit — pinned by `test_fix_commit_caller_anchor.py`, which drives
+    the engine. What is left for this file is the *text*: a command that omits
+    a required positional argument is not an escape either, however well the
+    gates behind it are anchored.
+    """
+
+    def test_it_names_the_commits_the_actor_is_charged_for(
+        self, mock_daemon, tmp_path
+    ):
+        """Which commit to register is the first thing the reader needs.
+
+        Asserted against a sibling's hash too: a message that pasted the whole
+        run's charges would satisfy a check for its own and still be telling a
+        subagent to register a commit it did not make.
+        """
+        mock_daemon.state = _fix_loop_state(
+            unregistered_commits={"agent-a": ["a111111"], "agent-b": ["b222222"]}
+        )
+
+        reason = _blocked(_run_hook(COMMIT_GATE, _commit_event(str(tmp_path), "agent-b")))
+
+        assert reason is not None
+        assert "b222222" in reason, reason
+        assert "a111111" not in reason, f"named a sibling's commit: {reason}"
+
+    def test_it_does_not_print_a_bare_transition_the_cli_refuses(
+        self, mock_daemon, tmp_path
+    ):
+        """`item_id` is positional and required on `fix_commit`.
+
+        `sahjhan transition fix_commit` with nothing after it exits non-zero on
+        the missing argument, so a block printing that spelling sends its reader
+        into a second error. The escape has to carry the item id — as the
+        literal `BH-NNN` placeholder the skill files use, since the hook reads
+        the cache and not the commit message.
+        """
+        mock_daemon.state = _fix_loop_state(
+            unregistered_commits={"agent-a": ["a111111"]}
+        )
+
+        reason = _blocked(_run_hook(COMMIT_GATE, _commit_event(str(tmp_path), "agent-a")))
+
+        assert reason is not None
+        assert "fix_commit BH-NNN" in reason, reason
+        assert not re.search(r"fix_commit(?!\s+BH-NNN)", reason), (
+            f"a `fix_commit` with no item id after it: {reason}"
+        )

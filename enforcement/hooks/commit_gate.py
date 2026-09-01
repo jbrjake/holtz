@@ -77,15 +77,30 @@ def main() -> None:
 
     # Unconditional: in fix_loop, git commit requires prior fix_commit
     # registration — of *this actor's* own commits (P0.3, D41). A sibling fix
-    # subagent's pending commit is not evidence about this caller, and the
-    # escape named below is the orchestrator's transition, which a subagent
-    # cannot run.
+    # subagent's pending commit is not evidence about this caller.
+    #
+    # The escape below is reachable by whichever actor this blocks, which it
+    # was not before sahjhan 0.25.0/0.26.0. `fix_commit`'s two tree-reading
+    # gates and its `finding_resolved` emit are anchored on the caller, so a
+    # fix subagent blocked on a second commit registers the first one from its
+    # own worktree: the gates read the tree holding the commit, and the emit
+    # stamps that tree's hash — which is the hash the tracker charged, so this
+    # charge is what discharges. The orchestrator's path is unchanged; it calls
+    # from the project root, where caller and project anchor are the same
+    # directory (sahjhan#46, #48; item 43).
+    #
+    # `item_id` is positional and required — the CLI refuses a bare
+    # `transition fix_commit` — so it is named in the escape rather than left
+    # for the reader to discover from a second error.
     if cache and is_fix_loop_state(cache) and is_git_commit(cmd):
         commits = pending_commits_for(cache, event_actor(event))
         if commits:
             exit_block(
-                f"BLOCKED: {len(commits)} unregistered commit(s). "
-                f"Run sahjhan --config-dir {config_dir} transition fix_commit before committing again."
+                f"BLOCKED: {len(commits)} unregistered commit(s): "
+                f"{', '.join(commits)}. Register from the tree holding the "
+                f"commit — run sahjhan --config-dir {config_dir} transition "
+                f"fix_commit BH-NNN, where BH-NNN is the finding that commit "
+                f"fixes, before committing again."
             )
 
     # Same actor the tracker charged, so what this reads is this caller's own

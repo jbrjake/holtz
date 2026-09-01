@@ -100,12 +100,14 @@ def test_orchestrator_keeps_the_merge_and_the_transition() -> None:
 def test_the_subagent_rebases_before_it_records_and_commits_before_that() -> None:
     """The green must name the tree that will land on the branch.
 
-    `suite_green.tree_hash` names one exact tree and `fix_commit`'s gate
-    recomputes it at the project root. Rebasing after the record would leave
-    the green naming the pre-rebase tree, so the orchestrator's `--check`
-    would reject every fix — the v0.141.2 failure with a different cause. And
-    the commit has to precede the rebase, because `git rebase` has nothing to
-    move until the work is a commit.
+    `suite_green.tree_hash` names one exact tree, and `fix_commit`'s suite gate
+    recomputes it at whichever tree its caller stands in — the project root for
+    the orchestrator, which is where this sequence matters, since `--ff-only`
+    makes that tree the subagent's. Rebasing after the record would leave the
+    green naming the pre-rebase tree, so the orchestrator's `--check` would
+    reject every fix — the v0.141.2 failure with a different cause. And the
+    commit has to precede the rebase, because `git rebase` has nothing to move
+    until the work is a commit.
 
     Asserted on the document's own line order rather than on a gate, because a
     gate cannot tell that the steps are taught in the wrong sequence.
@@ -129,15 +131,45 @@ def test_the_subagent_rebases_before_it_records_and_commits_before_that() -> Non
 def test_the_subagent_is_told_to_commit_exactly_once() -> None:
     """A second commit blocks on the actor's own unregistered first one.
 
-    The pending-commit block is keyed on the actor (D41) and its escape,
-    `transition fix_commit`, belongs to the orchestrator. So a subagent has
-    exactly one commit available to it, and the document has to say so rather
-    than leave it to be discovered by deadlock.
+    The pending-commit block is keyed on the actor (D41), so a subagent has one
+    commit available to it before the block lands, and the document has to say
+    so rather than leave it to be discovered by deadlock. That is still the
+    instruction after item 43 gave the block a reachable escape: registering an
+    earlier commit is the way *out* of the block, not a licence to plan on two.
     """
     text = (SKILL_DIR / "references" / "phase-fix-loop.md").read_text(encoding="utf-8")
     assert "Commit exactly once" in text
     assert "git rebase --abort" in text, (
         "a conflicted rebase needs a stated way out that is not a second commit"
+    )
+
+
+def test_the_subagent_is_taught_the_escape_from_its_own_commit_block() -> None:
+    """Item 43 — the one transition a subagent may run, stated where it works.
+
+    `commit_gate.py` prints `transition fix_commit BH-NNN` at a blocked
+    subagent, and `fix_commit`'s two tree-reading gates and its emit are
+    anchored on the caller so that it passes from the worktree holding the
+    commit (sahjhan#46, #48). A brief that still said the subagent runs *no*
+    transition would contradict the block it is about to hit — the
+    unenforced-contradictory-contract shape of `800624f`.
+
+    The blanket must survive alongside the exception: the normal path is still
+    "the transitions are the orchestrator's", and a document that dropped that
+    to make room would license a subagent to drive the loop.
+    """
+    text = (SKILL_DIR / "references" / "phase-fix-loop.md").read_text(encoding="utf-8")
+
+    assert "runs **no** `transition`; those are yours" in text, (
+        "the normal path must still reserve transitions to the orchestrator"
+    )
+    assert "pending-commit block" in text, (
+        "the one exception has to name the block it is an escape from"
+    )
+    assert "transition fix_commit BH-NNN" in text, (
+        "the escape must be spelled with its positional item id — the CLI "
+        "refuses a bare `transition fix_commit`, so a half-spelled escape "
+        "sends the subagent into a second error"
     )
 
 

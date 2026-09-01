@@ -142,8 +142,24 @@ gates = [
     # `theoretical` auto-deferral now clears `all_critical_resolved`. A probe
     # that establishes a path re-files the finding and this gate opens.
     { type = "query", query = "item_is_user_reachable", expect = "true", intent = "only user_reachable findings are fix-loop eligible — harden a fault_injected one with Step 15's batch, or re-file it with a path a probe established" },
-    { type = "command_succeeds", cmd = "git log -1 --format=%B | grep -q '{{item_id}}'", intent = "commit must reference the punchlist item" },
-    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope affected', timeout = 60, evidence = "suite_green", intent = "test suite must pass after fix" },
+    # `anchor = "caller"` on both tree-reading gates (sahjhan >= 0.25.0).
+    #
+    # The orchestrator's path is unchanged and this is a no-op for it: it runs
+    # `fix_commit` from the project root after `git merge --ff-only`, so the
+    # caller *is* the project anchor, HEAD is already the subagent's commit and
+    # the ff-merge left the tree byte-identical.
+    #
+    # What it changes is the one actor the project anchor stranded: a fix
+    # subagent blocked on a second, unregistered commit is told to run this
+    # transition, and its commit is in its own worktree. Read at the project
+    # anchor these two gates answer about a tree that has none of its work —
+    # `git log -1` misses the item id, and `verify_suite --check` recomputes the
+    # project's tree hash rather than the one the subagent's `--record` named.
+    # Both are in sahjhan#46's reproduction, which shows the two of them failing
+    # identically from either directory. The emit below is the same defect and
+    # a separate issue (#48): #46's ask covered gates only.
+    { type = "command_succeeds", cmd = "git log -1 --format=%B | grep -q '{{item_id}}'", anchor = "caller", intent = "commit must reference the punchlist item" },
+    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope affected', anchor = "caller", timeout = 60, evidence = "suite_green", intent = "test suite must pass after fix" },
     { type = "ledger_has_event_since", event = "blast_radius", since = "last_transition", intent = "blast radius must be checked after each fix" },
     { type = "ledger_has_event_since", event = "hardening_complete", since = "last_transition", intent = "edge cases must be hardened after each fix" },
     { type = "query", sql = "SELECT count(*) < 15 FROM events WHERE type='state_transition' AND command='fix_commit' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='state_transition' AND command='iteration_boundary'), 0)", expect = "true", intent = "circuit breaker: max 15 fixes per iteration (scoped since the last iteration_boundary /clear, so the cap resets each context reset instead of capping the whole run)" },
@@ -159,8 +175,19 @@ gates = [
 # "Resolved: 0" with all findings open, unable to converge. id comes from the
 # positional item_id arg; commit_hash from the just-made HEAD; project/run/
 # auditor are inherited from the run's prior events; phase/step are literals.
+#
+# `anchor = "caller"` (sahjhan >= 0.26.0) for the same reason the two gates
+# above carry it, and it is the half that must not be forgotten: a transition
+# runs its gates' conditions *and* its emits' derivations, and anchoring only
+# the first is worse than anchoring neither. The gate would attest that the
+# caller's HEAD carries the fix and this line would then stamp the project
+# root's unrelated HEAD as the commit that resolved the finding — a false
+# resolution record where there used to be a loud block. That hash is
+# load-bearing twice: `pending_commits_discharged` matches it against what the
+# commit tracker charged, and `hardening_batch.py`'s spent set treats it as a
+# module already hardened. sahjhan#48.
 emits = [
-    { event = "finding_resolved", commands = { commit_hash = "git rev-parse --short=7 HEAD" }, fields = { id = "{{item_id}}", commit_hash = "{{commit_hash}}", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
+    { event = "finding_resolved", anchor = "caller", commands = { commit_hash = "git rev-parse --short=7 HEAD" }, fields = { id = "{{item_id}}", commit_hash = "{{commit_hash}}", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
 ]
 
 # ── Merge: this finding is a duplicate of that one ──
