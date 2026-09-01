@@ -496,7 +496,15 @@ to = "perspective_clean"
 command = "set complete perspective"
 args = ["current_perspective"]
 gates = [
-    { type = "query", query = "all_findings_closed", expect = "0" },
+    # Item 3, RULED (Jon, 2026-08-26) option (a). This was
+    # `all_findings_closed == 0` — the query P0.1 removed from `converge` as
+    # unreachable, left sitting on the door a run passes thirteen times. These
+    # two ask the same thing of this lens only: a clean lens is not an empty
+    # board. What they let past — another lens's open findings, and a
+    # `fault_injected` HIGH whose route is Step 15's batch — `converge` still
+    # refuses run-wide.
+    { type = "query", query = "lens_critical_resolved", expect = "true", intent = "every CRITICAL filed under this lens must be resolved — work it with `fix_commit`, or harden a fault_injected one with Step 15's `hardening_batch.py --record --module <dir>`" },
+    { type = "query", query = "lens_user_reachable_high_closed", expect = "true", intent = "every user-reachable HIGH filed under this lens must be resolved or deferred — work it with `fix_commit`, or defer it with `defer_cant_reproduce` once the investigation file records the attempts" },
     # The other end of the fix batch. `iteration_boundary` holds the /clear and
     # this holds the lens, so the pattern round is owed wherever a batch of
     # fixes ends and at neither point inside one. Without this a run that

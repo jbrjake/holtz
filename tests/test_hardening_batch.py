@@ -163,10 +163,10 @@ class _Board:
         return self.git("rev-parse", "--short=7", "HEAD").stdout.strip()
 
     def file(self, finding_id, location, reachability="fault_injected",
-             severity="HIGH"):
+             severity="HIGH", perspective="component"):
         self.sah("event", "finding", "--field", f"id={finding_id}",
                  "--field", f"severity={severity}", "--field", "category=bug/logic",
-                 "--field", f"location={location}", "--field", "perspective=component",
+                 "--field", f"location={location}", "--field", f"perspective={perspective}",
                  "--field", "predicted_by=none", "--field", f"reachability={reachability}",
                  "--field", "description=x", *_COMMON)
 

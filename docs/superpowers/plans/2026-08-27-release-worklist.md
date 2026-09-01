@@ -50,8 +50,8 @@ imprecision (`CLAUDE.md`).
 | W03 | 31 | A | `DONE` | — |
 | W04 | 19, 1 | A | `DONE` — item 1 redone declaratively on sahjhan 0.24.0 | W01 |
 | W05 | 2 | A | `DONE` | ~~D-a~~ ruled |
-| W06 | 20 | B | `DONE` @ `f21620e` — V4's second half owed to W07; V8 open for Jon | ~~D-d~~ ruled |
-| W07 | 3 | A | `TODO` | W06 |
+| W06 | 20 | B | `DONE` @ `f21620e` — V4 completed by W07; V8 open for Jon | ~~D-d~~ ruled |
+| W07 | 3 | A | `DONE` — discharges W06's V4 | ~~W06~~ landed |
 | W22 | 27 | **A** | `DONE` @ `6852e0d` — code only; the seccomp functional run is owed | — *(moved from P3 by D-h)* |
 | **P2 — before trusting results** ||||
 | W08 | 32, 43 | B | `DONE` — 32 `780ba47`; 43 landed on sahjhan 0.26.0 | — |
@@ -1286,10 +1286,11 @@ future commit rather than for one. The diff itself is recorded under step 3.
 **Status:** `DONE` @ `f21620e` (v0.169.12)  ·  **Tier:** B — *pulled into P1 because it blocks W07*  ·  **D-d RULED**
 **Commit:** `fix(merge): require a stated lens and carry it through the merge`
 
-⚠️ **Two things this unit does not close, both named in the commit:** V4's
-second half is W07's to discharge (the lens gate cannot name a finding until
-`all_findings_closed` is scoped, which is item 3), and **V8 is open for Jon** —
-it is an engine question and was not filed unilaterally.
+⚠️ **One thing this unit does not close: V8 is open for Jon** — it is an engine
+question and was not filed unilaterally.
+
+✅ **V4's second half was discharged by W07**, as this unit said it must be. It
+is no longer owed; the checkbox below is closed and names W07's test.
 
 ⚠️ **Coordinate with W09 — the division of labour, so neither unit guesses.**
 D-d and item 26 both add a required-field check to `validate_punchlist.py` and
@@ -1407,13 +1408,15 @@ sees, and renaming them is not implied by this ruling.
       that accepts everything. Plus `test_the_scanner_agrees_with_tomllib`,
       `test_the_scanner_is_scoped_to_the_named_section`, and
       `test_the_lens_registry_and_the_protocol_set_are_the_same_thirteen`.
-- [~] **V4** A merged finding lands carrying Justine's stated perspective, and its
+- [x] **V4** A merged finding lands carrying Justine's stated perspective, and its
       lens gate names it. Drive it through W07's gate, not just the merge.
-      Evidence: **first half only** —
+      Evidence: first half —
       `test_a_merged_finding_lands_carrying_her_lens` reads `perspective` back
-      off a real ledger after the merge. **The second half is owed and belongs
-      to W07:** `all_findings_closed` is still run-wide (item 3), so there is no
-      lens-scoped gate to drive it through yet. W07 must discharge it.
+      off a real ledger after the merge. **Second half discharged by W07**
+      (`lens_critical_resolved` / `lens_user_reachable_high_closed`): the gate
+      is now lens-scoped, and `test_the_gate_moves_with_the_lens_it_is_asked_
+      about` drives one board under two lenses and requires the two answers to
+      differ — a gate that ignored the lens fails it.
 - [x] **V5** The `unspecified` default is unreachable via the validated path —
       assert it, keeping the fallback as a fail-safe. Evidence:
       `test_the_fail_safe_is_unreachable_through_the_validated_path` — the item
@@ -1455,8 +1458,49 @@ sees, and renaming them is not implied by this ruling.
 
 ## W07 — Item 3: `all_findings_closed` still gates lens completion, thirteen times
 
-**Status:** `TODO`  ·  **Tier:** A  ·  **PROVEN**  ·  **D-d RULED — unblocked, W06 first**
+**Status:** `DONE`  ·  **Tier:** A  ·  **PROVEN**  ·  **D-d RULED — unblocked, W06 first**
 **Commit:** `fix(enforcement): scope lens completion to the lens`
+
+✅ **This unit discharges W06's V4 second half** — a merged finding lands
+carrying Justine's stated lens *and its lens gate names it*. The gate is
+`lens_critical_resolved` / `lens_user_reachable_high_closed`, and
+`test_the_gate_moves_with_the_lens_it_is_asked_about` drives both directions
+against a real ledger.
+
+⚠️ **Three things landed beyond the four steps below, each named in the commit.**
+None is a redesign; each closes a hole the gate change itself opened, and they
+are listed here so a reader is not surprised by them in the diff:
+
+1. **`enforcement_lint` H9's precondition was narrowed** from "the gate's SQL
+   mentions `{{arg}}`" to "the argument binds an `id` column". The new gates
+   matched H9's old shape — an absence predicate over an argument — and it
+   errored, demanding that completing a lens emit a `finding` whose id is the
+   *lens's name*. The docstring already said "item-scoped"; the code did not.
+   `test_an_argument_that_selects_a_population_is_not_item_scope` and
+   `test_the_same_transition_still_fires_when_it_binds_the_id` are the pair.
+2. **`findings.py list --lens <name>`** — a lens-scoped gate whose blocking
+   population cannot be listed is `TestTheWorklistRoutes`'s complaint one field
+   over. `--lens` and not `--perspective`, per the 2026-09-01 ruling.
+3. **`phase-fix-loop.md` now says what "passes clean" means.** It was
+   compatible with either gate, so an agent would still clear the whole board —
+   a green gate over a stale taught sequence.
+
+**Two smaller decisions, recorded rather than left to be rediscovered:**
+
+- **`all_findings_closed` stays declared, consumed by no gate.** Step 3 said to
+  let `enforcement_lint` H1 decide; H1 is an *event* check and says nothing
+  about an unconsumed query, and neither does `sahjhan lint` (L5 is events
+  too), so the decision procedure returned no signal. It is kept because it is
+  the one named spelling of "a finding is open" — the six predicates around it
+  carry the same `NOT IN` pair inline only because a named query cannot
+  reference another — and deleting it would push that SQL into test files as a
+  seventh copy. The hazard is re-attachment, not existence, and the two doors
+  are guarded by `test_all_findings_closed_no_longer_gates_converge` and
+  `test_all_findings_closed_no_longer_gates_lens_completion`.
+- **`lens_`, not `perspective_`, in the query names.** `gate check` prints the
+  query name (measured), so it is a string a reader sees, and the axis is a
+  Lens everywhere a reader sees it. The `perspective` *column* is the event
+  field's spelling and is untouched.
 
 ### Defect · `transitions.toml:472`
 
@@ -1489,40 +1533,83 @@ that stops lens 7 being answerable for lens 2's board.
 
 ### Plan
 
-- [ ] **0.** **Land W06 first.** D-d is ruled (Justine states the perspective), so
+- [x] **0.** **Land W06 first.** D-d is ruled (Justine states the perspective), so
       every finding on the board now belongs to a lens that will ask about it —
       which is precisely the precondition this gate needs. Landing this before W06
       would move the whole merged board to `converge` silently
-- [ ] **1.** Two new named queries in `protocol.toml [queries]`, both parameterised
+- [x] **1.** Two new named queries in `protocol.toml [queries]`, both parameterised
       on `{{current_perspective}}` — the binding `set complete perspective` already
       uses for its `iteration_complete` and quiz gates, so the argument is in scope
-- [ ] **2.** Shape them on `all_critical_resolved` / `all_user_reachable_high_closed`
+- [x] **2.** Shape them on `all_critical_resolved` / `all_user_reachable_high_closed`
       with one added `f.perspective = '…'` term and the **same max-seq
-      correlation**, so severity and reachability stay graded by latest filing (D25)
-- [ ] **3.** Delete `all_findings_closed` from this transition. It then has **no
+      correlation**, so severity and reachability stay graded by latest filing (D25).
+      ⚠️ The lens is therefore *also* the latest filing — a finding re-filed under
+      another lens moves to that lens's board. Asserted, not assumed, by
+      `test_the_lens_is_the_latest_filing`, which also asserts the run-wide
+      conjunct still holds it, so the move is not a way out
+- [x] **3.** Delete `all_findings_closed` from this transition. It then has **no
       consumer in `transitions.toml`** — run `enforcement_lint` H1 and let it tell
-      you whether to keep it declared for `findings.py`/render use or drop it
-- [ ] **4.** Give the gate an `intent` naming a command. H8 note: these are
+      you whether to keep it declared for `findings.py`/render use or drop it.
+      **H1 said nothing** (it is an event check, and `sahjhan lint` L5 likewise);
+      kept declared, reasoning above and in `protocol.toml`'s own comment
+- [x] **4.** Give the gate an `intent` naming a command. H8 note: these are
       parameterised, so `_run_wide()` drops them from escape identity — the intent
-      still must name a command, it is just not judged against a named query
+      still must name a command, it is just not judged against a named query.
+      Both name `fix_commit`; the HIGH one also names `defer_cant_reproduce` and
+      the CRITICAL one Step 15's hardening batch. H8 clean, 0 errors
 
 ### Validation
 
-- [ ] **V1** **Extend `TestEveryCriticalHasARoute` to this transition**, driven
+- [x] **V1** **Extend `TestEveryCriticalHasARoute` to this transition**, driven
       against a real daemon for **all three** reachability grades, as the
       `converge` version does. The invariant: no grade of finding may be
-      un-closable at a gate the run must pass thirteen times. Evidence: ___
-- [ ] **V2** Lens 3 blocks on its own open CRITICAL. Evidence: ___
-- [ ] **V3** Lens 3 **passes** with lens 1's MEDIUM open — this is the ruling.
-      Evidence: ___
-- [ ] **V4** The accepted cost is asserted: a finding filed under a completed lens
-      **is** caught by `converge`. Evidence: ___
-- [ ] **V5** One open `fault_injected` HIGH no longer blocks a lens, and is still
-      caught by `no_open_fault_injected` at `converge`. Evidence: ___
-- [ ] **V6** The block prints an escape **and the escape runs**. Not "has an intent
-      string" — run it. Evidence: ___
-- [ ] **V7 · non-vacuity** Restore `all_findings_closed` → V3 and V5 go red.
-      Evidence: ___
+      un-closable at a gate the run must pass thirteen times. Evidence:
+      `TestEveryCriticalHasARouteAtTheLensGate` — `user_reachable` closes on
+      `fix_commit`'s emitted resolution, `fault_injected` on `live.batch(...)`
+      driven end to end through the real courier, `theoretical` on its
+      auto-deferral. Plus `test_an_ordinary_deferral_still_does_not_close_one`,
+      so route 3 is not a hole. Confirmed RED on the unmodified tree first
+      (`protocol.toml has no [queries.lens_critical_resolved]`, all four).
+- [x] **V2** Lens 3 blocks on its own open CRITICAL. Evidence:
+      `test_a_lens_blocks_on_its_own_open_critical` and
+      `test_a_lens_blocks_on_its_own_open_user_reachable_high` — each asserts
+      the query answer **and** the ✗ line `gate check` prints, keyed on the
+      query name.
+- [x] **V3** Lens 3 **passes** with lens 1's MEDIUM open — this is the ruling.
+      Evidence: `test_another_lenss_open_medium_does_not_block`, and the
+      sharper `test_another_lenss_open_critical_does_not_block_this_one` —
+      the half the ruling spells out and the one a MEDIUM-only test would miss.
+      `test_the_gate_moves_with_the_lens_it_is_asked_about` asserts both
+      directions on one board, so a query ignoring its argument fails.
+- [x] **V4** The accepted cost is asserted: a finding filed under a completed lens
+      **is** caught by `converge`. Evidence:
+      `test_a_finding_under_a_finished_lens_is_caught_only_at_converge` — the
+      lens under way passes, and `gate check converge` carries ✗ on
+      `all_critical_resolved`. `final_sweep` is seeded as a state event, a
+      precondition and not the claim, the way `test_fix_commit_caller_anchor`
+      reaches `fix_loop`.
+- [x] **V5** One open `fault_injected` HIGH no longer blocks a lens, and is still
+      caught by `no_open_fault_injected` at `converge`. Evidence:
+      `test_a_fault_injected_high_no_longer_blocks_a_lens` and
+      `test_that_fault_injected_high_is_still_caught_at_converge`. The second
+      was **green before the change and after it** — the unchanged-behaviour
+      control.
+- [x] **V6** The block prints an escape **and the escape runs**. Not "has an intent
+      string" — run it. Evidence: `test_the_escape_runs_for_a_theoretical_critical`
+      fires the real `theoretical_courier.py` against the real daemon and the
+      ✗ clears; V1's `fault_injected` route runs the real hardening batch.
+      `test_each_intent_names_a_command_declared_from_this_state` closes the
+      third route structurally — `fix_commit` is declared **from `fix_loop`**,
+      the state this block is printed in. ⚠️ **Stated limit:** `fix_commit`
+      itself is not driven to success, and cannot be — a real daemon refuses
+      `enforcement_write` from a test process, so no test can write the
+      `suite_green` its gate reads. That is the standing constraint recorded in
+      the handoff, not a gap this unit introduced.
+- [x] **V7 · non-vacuity** Restore `all_findings_closed` → V3 and V5 go red.
+      Evidence: `TestNonVacuity`, and it is a **permanent test** rather than a
+      transcript: it `copytree`s the shipped `enforcement/`, puts the one gate
+      line back, and requires both scenarios to block under it while asserting
+      the shipped config does not. A derived copy, so it cannot drift-fail.
 
 ---
 ---

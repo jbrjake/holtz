@@ -363,11 +363,17 @@ class TestDeferralDoesNotPayTheObligation:
         no escape left at `iteration_boundary` — and the run is not wedged,
         because `set complete perspective` is a different door and no *ledger*
         gate on it is shut by any of this: deferred findings count as closed
-        for `all_findings_closed`, and the round just run is not owed again.
+        for the lens conjuncts, and the round just run is not owed again.
 
         What is still ✗ there — the suite, the linter, a lens sweep — is the
         run's ordinary work, not a consequence of the deferral, so this asserts
-        on the two named queries rather than on the absence of any ✗.
+        on the named queries rather than on the absence of any ✗.
+
+        The lens is bound because item 3 scoped the two finding conjuncts to
+        one (`lens_critical_resolved`, `lens_user_reachable_high_closed`), and
+        an unbound `gate check` reports them `unevaluable` rather than
+        answering. `component` is the lens every finding here is filed under,
+        which is what keeps the assertion about a lens with a board.
         """
         self._round_of_lows(run)
         run.merge("BH-001", "BH-101")           # the last open finding
@@ -375,8 +381,11 @@ class TestDeferralDoesNotPayTheObligation:
         assert _blocked_on(run.gate_check("iteration_boundary"),
                            "round_opens_exceed_closes")
 
-        out = run.gate_check("set complete perspective")
-        for query in ("all_findings_closed", "pattern_analysis_overdue"):
+        out = run.gate_check("set complete perspective",
+                             "current_perspective=component")
+        for query in ("lens_critical_resolved",
+                      "lens_user_reachable_high_closed",
+                      "pattern_analysis_overdue"):
             assert not _blocked_on(out, query), (
                 f"the obligation shut `iteration_boundary` and {query} shuts "
                 f"the other door — a round whose items were deferred is "

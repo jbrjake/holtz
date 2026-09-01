@@ -1482,6 +1482,33 @@ def check_h8_escape_identity(model: Model) -> list[Finding]:
 _ABSENCE_PREDICATE = re.compile(r"count\s*\(\s*\*\s*\)\s*=\s*0", re.I)
 
 
+def _binds_the_item_id(sql: str, arg: str) -> bool:
+    """Whether the argument is the *item* — compared against an ``id`` column.
+
+    H9's subject is a transition acting on one item, so the argument has to be
+    that item: ``id='{{item_id}}'``. An argument bound to any other column
+    names a **population** instead, and the ids in it are neither the argument
+    nor the transition's to record. ``set complete perspective`` asks whether
+    the findings carrying ``perspective='{{current_perspective}}'`` are closed;
+    reading any mention of the argument as item-scope made this check demand
+    that completing a lens emit a ``finding`` whose id is the lens's *name*.
+
+    So the precondition is narrowed to what the docstring above already says.
+    Every true positive in the tree binds the id — the three deferrals through
+    ``item_open``, and ``merge_finding`` — and a transition that really does
+    close its argument cannot dodge this by renaming the argument.
+    """
+    placeholder = re.escape("{{" + arg + "}}")
+    return bool(
+        re.search(
+            rf"(?:\w+\.)?\bid\s*=\s*'{placeholder}'"
+            rf"|'{placeholder}'\s*=\s*(?:\w+\.)?\bid\b",
+            sql,
+            re.I,
+        )
+    )
+
+
 def check_h9_transition_state_decoupling(model: Model) -> list[Finding]:
     """A transition that acts on an item without recording the item's new state.
 
@@ -1515,7 +1542,7 @@ def check_h9_transition_state_decoupling(model: Model) -> list[Finding]:
             if not isinstance(sql, str):
                 continue
             # Per-item, and phrased as "none of these has happened yet".
-            if not any(f"{{{{{arg}}}}}" in sql for arg in args):
+            if not any(_binds_the_item_id(sql, arg) for arg in args):
                 continue
             if not _ABSENCE_PREDICATE.search(sql):
                 continue

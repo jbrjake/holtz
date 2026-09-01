@@ -84,11 +84,11 @@ class _Run:
         return result
 
     def file(self, finding_id, severity="HIGH", pattern_id=None,
-             reachability="user_reachable"):
+             reachability="user_reachable", perspective="component"):
         attribution = ["--field", f"pattern_id={pattern_id}"] if pattern_id else []
         self.sah("event", "finding", "--field", f"id={finding_id}",
                  "--field", f"severity={severity}", "--field", "category=bug",
-                 "--field", "location=a.py:1", "--field", "perspective=component",
+                 "--field", "location=a.py:1", "--field", f"perspective={perspective}",
                  "--field", "predicted_by=none", "--field", f"reachability={reachability}",
                  "--field", "description=x",
                  *attribution, *_COMMON)
@@ -193,8 +193,14 @@ class _Run:
     def merge(self, finding_id, into, check=True):
         return self.sah("transition", "merge_finding", finding_id, into, check=check)
 
-    def gate_check(self, command="pattern_done"):
-        return self.sah("gate", "check", command, check=False).stdout
+    def gate_check(self, command="pattern_done", *args):
+        """`args` are `key=value` bindings, the way the CLI takes them.
+
+        A parameterised gate reports `unevaluable` without its argument, so a
+        transition with `args` has to be checked with them bound or the read
+        says nothing about the gate.
+        """
+        return self.sah("gate", "check", command, *args, check=False).stdout
 
     def blocked_on_amplification(self):
         out = self.gate_check()

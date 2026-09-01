@@ -1215,6 +1215,68 @@ class TestH9TransitionStateDecoupling:
         )
         assert findings_for(tree, "H9") == []
 
+    #: `set complete perspective`'s shape after item 3: the argument selects a
+    #: population by lens, and the absence predicate is over that population.
+    POPULATION = """
+        [[transitions]]
+        from = "fix_loop"
+        to = "perspective_clean"
+        command = "set complete perspective"
+        args = ["current_perspective"]
+        gates = [
+            { type = "query", sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.perspective='{{current_perspective}}' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved'))", expect = "true", intent = "every CRITICAL filed under this lens must be resolved" },
+        ]
+        """
+
+    def test_an_argument_that_selects_a_population_is_not_item_scope(
+        self, tmp_path: Path
+    ) -> None:
+        """The argument is a lens name, not a finding.
+
+        The ids in that set are the lens's findings; they are closed one at a
+        time by `fix_commit`, and no `emits` on this transition could record
+        them — `EmitConfig` produces exactly one event with a fixed field map.
+        Firing here would demand a `finding` whose id is the *lens's name*,
+        which is the hint this check actually printed.
+        """
+        tree = build_tree(tmp_path, events="", transitions=self.POPULATION)
+        assert findings_for(tree, "H9") == []
+
+    def test_the_same_transition_still_fires_when_it_binds_the_id(
+        self, tmp_path: Path
+    ) -> None:
+        """Non-vacuity: the narrowing is about *which column*, nothing else.
+
+        Same command, same args, same absence predicate over the same event —
+        the one change is that the argument now binds `id`. A check that had
+        simply stopped looking at this transition would pass the test above and
+        fail this one.
+        """
+        tree = build_tree(
+            tmp_path,
+            events="",
+            transitions=self.POPULATION.replace(
+                "f.perspective='{{current_perspective}}'",
+                "f.id='{{current_perspective}}'",
+            ),
+        )
+        assert len(findings_for(tree, "H9")) == 1
+
+    def test_the_binding_is_read_in_either_order(self, tmp_path: Path) -> None:
+        """`'{{item_id}}'=id` is the same claim as `id='{{item_id}}'`.
+
+        Otherwise the narrowing above doubles as a way out of the check for
+        anyone who writes the comparison backwards.
+        """
+        tree = build_tree(
+            tmp_path,
+            events="",
+            transitions=self.DEFER.replace(
+                "id='{{item_id}}'", "'{{item_id}}'=id"
+            ),
+        )
+        assert len(findings_for(tree, "H9")) == 1
+
 
 class TestH10DelegatedGateEvidence:
     """A gate that shells out to a tool must name the event that tool reads.

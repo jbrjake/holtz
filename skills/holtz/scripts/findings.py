@@ -192,6 +192,14 @@ def main() -> None:
     # save.
     listing.add_argument("--reachability", nargs="+", metavar="GRADE",
                          help="only these reachability grades")
+    # Item 3 scoped `set complete perspective` to one lens, so the block names
+    # a population this read is the only way to see. Without it the agent meets
+    # a lens-scoped gate holding a board-wide list, which is the same cost
+    # `--reachability` exists to avoid one field over. `--lens` and not
+    # `--perspective`: the axis is a Lens everywhere a reader sees it
+    # (Jon, 2026-09-01); `perspective` is the event field's spelling.
+    listing.add_argument("--lens", nargs="+", metavar="LENS",
+                         help="only findings filed under these lenses")
     listing.add_argument("--count", action="store_true", help="print the count only")
 
     show = sub.add_parser("show", help="one finding's full record")
@@ -237,6 +245,9 @@ def main() -> None:
     if args.reachability:
         grades = {g.lower() for g in args.reachability}
         findings = [f for f in findings if f["reachability"].lower() in grades]
+    if args.lens:
+        lenses = {p.lower() for p in args.lens}
+        findings = [f for f in findings if f["perspective"].lower() in lenses]
 
     if args.count:
         print(len(findings))

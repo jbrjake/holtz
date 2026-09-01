@@ -71,6 +71,18 @@ path = "docs/holtz/project.jsonl"
 # object, so they cannot disagree. `sahjhan lint` L6 reports the copies not yet
 # migrated.
 
+# ⚠️ **No gate consumes this, and none should.** P0.1 removed it from
+# `converge` as unreachable (the audited run's open count rose 124 -> 273 and
+# fell exactly once) and item 3 removed it from `set complete perspective`,
+# where a run met it thirteen times. It is kept declared because it is the one
+# *named* spelling of "a finding is open" — the six predicates below carry the
+# same NOT IN pair inline only because a named query cannot reference another
+# one — and the tests that assert on openness read it from here rather than
+# pasting a seventh copy.
+#
+# Re-attaching it to a gate is the regression, not deleting it:
+# `test_all_findings_closed_no_longer_gates_converge` and
+# `test_all_findings_closed_no_longer_gates_lens_completion` guard both doors.
 [queries.all_findings_closed]
 sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
 intent = "all findings must be resolved or deferred"
@@ -430,6 +442,56 @@ intent = "every CRITICAL finding must be resolved — only a theoretical auto-de
 [queries.all_user_reachable_high_closed]
 sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='HIGH' AND f.reachability='user_reachable' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"
 intent = "every user-reachable HIGH finding must be resolved or deferred"
+
+# The same two predicates, scoped to one lens, for `set complete perspective`
+# (item 3). P0.1 removed `all_findings_closed == 0` from `converge` as
+# unreachable and left the identical query on lens completion, which a run
+# meets **thirteen times** — the unreachable requirement moved one door
+# upstream and multiplied.
+#
+# RULED (Jon, 2026-08-26), option (a): a lens is answerable for its own
+# findings. **A clean lens is not an empty board.** Lens 3 blocks on its own
+# open CRITICALs and ignores lens 1's open MEDIUMs — and lens 1's open
+# CRITICALs, which the two conjuncts above still catch run-wide. Clearing the
+# whole board thirteen times is what made convergence take weeks; it is the
+# disease, not the cure.
+#
+# Accepted cost, recorded so it is not rediscovered as a bug: a finding filed
+# under an already-completed lens is caught only at `converge`. That is the
+# trade that stops lens 7 being answerable for lens 2's board, and
+# `test_a_finding_under_a_finished_lens_is_caught_only_at_converge` asserts
+# `converge` really does catch it.
+#
+# `f.perspective` sits inside the same max-seq row filter as severity and
+# reachability, so the lens is the *latest* filing too (D25) — a finding
+# re-filed under another lens moves to that lens's board. Re-filing to dodge a
+# lens gate is the forgery D34 names, and it is bounded the same way: the
+# CRITICAL is still sitting in front of `converge` afterwards.
+#
+# `lens_`, not `perspective_`: `gate check` prints the query name, so this is a
+# string a reader sees, and the audit axis is a Lens everywhere a reader sees
+# it (Jon, 2026-09-01). The `perspective` *column* is the event field's
+# spelling and is an implementation identifier, unchanged by that ruling.
+
+# `all_critical_resolved` with the lens bound, `reason='theoretical'` exclusion
+# and all. Dropping the exclusion here would strand a theoretical CRITICAL at
+# every one of the thirteen doors: `fix_commit` refuses it
+# (`item_is_user_reachable`), the hardening batch's population is
+# `fault_injected`, and re-grading to clear a gate is a forgery — the wedge D34
+# ruled out at `converge`, thirteen times over.
+[queries.lens_critical_resolved]
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.perspective='{{current_perspective}}' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred' AND d.reason='theoretical'))"
+intent = "every CRITICAL filed under this lens must be resolved — only a theoretical auto-deferral closes one without a fix"
+
+# `all_user_reachable_high_closed` with the lens bound. The reachability filter
+# is what item 3's second consequence needs: under the run-wide gate one open
+# `fault_injected` HIGH read `1` and blocked the lens, and that finding could
+# not be `fix_commit`'d while Step 15's hardening batch is taught after all
+# thirteen lenses — a block naming an act the run could not reach.
+# `no_open_fault_injected` still refuses to converge on it.
+[queries.lens_user_reachable_high_closed]
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='HIGH' AND f.reachability='user_reachable' AND f.perspective='{{current_perspective}}' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"
+intent = "every user-reachable HIGH filed under this lens must be resolved or deferred"
 
 [queries.quiz_exhaustions_resolved]
 sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')"

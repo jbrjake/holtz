@@ -228,6 +228,72 @@ class TestEveryCriticalHasARoute:
         assert str(list(json.loads(out)[0].values())[0]) == "true"
 
 
+class TestEveryCriticalHasARouteAtTheLensGate:
+    """W07 / item 3: the same enumeration, at the door the run passes thirteen
+    times.
+
+    `lens_critical_resolved` scopes `all_critical_resolved` to one lens, so it
+    inherits the property the class above exists to protect — and needs it
+    thirteen times more badly. A grade with no route at `converge` wedges a run
+    once, at the end; a grade with no route here wedges it at the first lens
+    that files one, with twelve lenses still to go.
+
+    Driven against a real daemon for all three grades, and read with the lens
+    bound the way the transition binds it.
+    """
+
+    LENS = "security"
+
+    def _resolved(self, board):
+        sql = _named_query("lens_critical_resolved").replace(
+            "{{current_perspective}}", self.LENS)
+        assert "{{" not in sql, sql
+        out = board.sah("query", sql, "--format", "json").stdout
+        return str(list(json.loads(out)[0].values())[0])
+
+    def test_a_user_reachable_critical_is_fixable(self, board):
+        """Route 1 — the ordinary cycle. `fix_commit` auto-emits the
+        resolution, which is what this conjunct reads."""
+        board.file("BH-001", "a.py:1", severity="CRITICAL",
+                   reachability="user_reachable", perspective=self.LENS)
+        sql = _named_query(ELIGIBILITY_QUERY, "BH-001")
+        out = board.sah("query", sql, "--format", "json").stdout
+        assert str(list(json.loads(out)[0].values())[0]) == "true"
+        assert self._resolved(board) == "false"
+        board.resolve("BH-001")
+        assert self._resolved(board) == "true"
+
+    def test_a_fault_injected_critical_is_closed_by_the_batch(self, live):
+        """Route 2, driven end to end against the real transitions.
+
+        This is the grade the run-wide gate stranded: `item_is_user_reachable`
+        refuses it at `fix_commit`, so without the batch reaching it the lens
+        could not be completed at all.
+        """
+        live.file("BH-001", "tqdm/std.py:736", severity="CRITICAL",
+                  perspective=self.LENS)
+        assert self._resolved(live) == "false"
+        live.batch("tqdm", ["tqdm/std.py"])
+        assert self._resolved(live) == "true"
+
+    def test_a_theoretical_critical_converges_on_its_deferral(self, board):
+        """Route 3 — the machine-written deferral, inherited from
+        `all_critical_resolved` along with the rest of the predicate."""
+        board.file("BH-001", "a.py:1", severity="CRITICAL",
+                   reachability="theoretical", perspective=self.LENS)
+        assert self._resolved(board) == "false"
+        board.defer("BH-001", reason="theoretical")
+        assert self._resolved(board) == "true"
+
+    def test_an_ordinary_deferral_still_does_not_close_one(self, board):
+        """Non-vacuity for the exclusion: it is scoped to the one machine
+        written reason word here too, not widened by the lens filter."""
+        board.file("BH-001", "a.py:1", severity="CRITICAL",
+                   reachability="user_reachable", perspective=self.LENS)
+        board.defer("BH-001", reason="low_priority")
+        assert self._resolved(board) == "false"
+
+
 # ── The worklist has to show what is workable ────────────────────────────────
 
 
@@ -270,3 +336,60 @@ class TestTheWorklistRoutes:
                             "phase-fix-loop.md")
         with open(path, encoding="utf-8") as fh:
             assert "--reachability user_reachable" in fh.read()
+
+
+class TestTheWorklistShowsOneLenssBoard:
+    """W07 / item 3: a lens-scoped gate needs a lens-scoped read.
+
+    `TestTheWorklistRoutes` above is the same argument one field over — a gate
+    the agent only meets at the transition costs it a whole cycle. Scoping
+    `set complete perspective` to the lens made the blocking population
+    invisible in `findings.py list`, which shows the whole board; that gap was
+    opened by the gate change, so it is closed with it.
+    """
+
+    LENS = "security"
+    OTHER = "component"
+
+    def _list(self, board, *args):
+        result = subprocess.run(
+            [sys.executable, os.path.join(SCRIPTS_DIR, "findings.py"), "list", *args],
+            capture_output=True, text=True, timeout=60, cwd=board.root,
+            env=board.env,
+        )
+        assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+        return result.stdout
+
+    def test_it_filters_to_one_lens(self, board):
+        board.file("BH-001", "a.py:1", perspective=self.LENS)
+        board.file("BH-002", "a.py:2", perspective=self.OTHER)
+        out = self._list(board, "--lens", self.LENS)
+        assert "BH-001" in out
+        assert "BH-002" not in out
+
+    def test_the_unfiltered_list_still_shows_both(self, board):
+        """Non-vacuity: the filter is a filter, not a broken read."""
+        board.file("BH-001", "a.py:1", perspective=self.LENS)
+        board.file("BH-002", "a.py:2", perspective=self.OTHER)
+        out = self._list(board)
+        assert "BH-001" in out and "BH-002" in out
+
+    def test_it_composes_with_the_reachability_filter(self, board):
+        """The two questions the lens gate asks are both filters here: which
+        lens, and which grade has a fix-loop route."""
+        board.file("BH-001", "a.py:1", perspective=self.LENS,
+                   reachability="user_reachable")
+        board.file("BH-002", "a.py:2", perspective=self.LENS,
+                   reachability="fault_injected")
+        board.file("BH-003", "a.py:3", perspective=self.OTHER,
+                   reachability="user_reachable")
+        out = self._list(board, "--lens", self.LENS,
+                         "--reachability", "user_reachable")
+        assert "BH-001" in out
+        assert "BH-002" not in out and "BH-003" not in out
+
+    def test_the_fix_loop_teaches_the_lens_read(self):
+        path = os.path.join(REPO_ROOT, "skills", "holtz", "references",
+                            "phase-fix-loop.md")
+        with open(path, encoding="utf-8") as fh:
+            assert "list --lens <name>" in fh.read()

@@ -28,10 +28,10 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**8 of 32 units · 9 of 51 items · 42 items across 24 units remain.**
+**9 of 32 units · 10 of 51 items · 41 items across 23 units remain.**
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
-W08 (32, 43) · W22 (27) · W06 (20). Commits are in `git log`; do not
+W08 (32, 43) · W22 (27) · W06 (20) · W07 (3). Commits are in `git log`; do not
 re-summarise them here.
 
 **Two corrections to the line this replaced** (*"8 of 30 units · 7 of 49
@@ -76,10 +76,17 @@ carrying the number forward:
   session a prerequisite of the **P1 functional test** — raise it when P1 is
   `DONE`, and do not let the green suite read as having covered it.
 
-- **W06 / item 20 — V4's second half.** Landed at `f21620e`. A merged finding
-  carries the stated lens and that is tested against a real ledger; *"its lens
-  gate names it"* is not, because the gate is still run-wide. **W07 discharges
-  it.**
+- ~~**W06 / item 20 — V4's second half.**~~ **Discharged by W07.** The gate is
+  lens-scoped now, and `test_the_gate_moves_with_the_lens_it_is_asked_about`
+  drives one board under two lenses and requires the answers to differ.
+
+- **W07 / item 3 — `fix_commit` as an escape is asserted structurally, not
+  driven.** Its two other routes (`theoretical`'s courier, `fault_injected`'s
+  hardening batch) are run end to end against the real daemon; `fix_commit`
+  itself cannot be driven to success by any test, because a real daemon refuses
+  `enforcement_write` from a test process and so no test can write the
+  `suite_green` its gate reads. That is the standing constraint below, not a
+  W07 gap — but do not read the green suite as having driven it.
 
 - **The hook tests flake under load, and it is not this branch.** `TestPrimer`,
   `TestPrimerWithMockBinary`, `TestProtocolTrackerDaemonTeardown` and
@@ -99,19 +106,7 @@ carrying the number forward:
 
 ## Do this next
 
-### 1. W07 — item 3. W06 has landed, so it is unblocked.
-
-`all_findings_closed` gates lens completion run-wide, thirteen times. W06
-(`f21620e`) made every merged finding carry a real lens, which is the
-precondition W07's lens-scoped gate needed.
-
-**W07 also owes W06's V4 second half.** V4 reads: *a merged finding lands
-carrying Justine's stated lens, and its lens gate names it.* The first half is
-done and tested against a real ledger. The second cannot be driven until the
-gate is lens-scoped — which is exactly this unit. Do not mark W07 done without
-it.
-
-### 2. W09 — items 25, 26. Unblocked, and W06 built its mechanism.
+### 1. W09 — items 25, 26. Unblocked, and W06 built its mechanism.
 
 Do **not** write a second required-field checker: `SetValuedField` +
 `set_valued_fields()` + one loop in `validate()` is the mechanism, and
@@ -119,7 +114,11 @@ Do **not** write a second required-field checker: `SetValuedField` +
 one genuine decision there (`reachability` has no `[sets.*]` to point at), and
 it is W09's to make, not a gap in the mechanism.
 
-### 3. W22 (item 27) is `DONE` in code only — see Carried debts above.
+**W07 left a `SetValuedField`-shaped precedent W09 should not mistake for its
+own work:** it added `--lens` to `findings.py list`, which is a *read* filter,
+not a required-field check. W09's mechanism is still W06's.
+
+### 2. W22 (item 27) is `DONE` in code only — see Carried debts above.
 
 ---
 
@@ -151,6 +150,13 @@ it is W09's to make, not a gap in the mechanism.
   passing. See `test_fix_commit_caller_anchor.py` for the pattern, including
   deriving a probe config from `enforcement/` at test time rather than pasting a
   copy that cannot drift-fail.
+- **`gate check <transition>` without its arguments reports parameterised gates
+  as `? unevaluable`, not as passing.** So "the run is not blocked on X" read
+  off an unbound `gate check` is vacuous for every gate that takes an argument
+  — the line is there and carries no ✗. Bind them (`gate check "set complete
+  perspective" current_perspective=security`); `_Run.gate_check` now forwards
+  `key=value` args for this reason. Measured 2026-09-01 while scoping the lens
+  gate, on a test that had been asserting exactly that absence.
 - **Run every new test RED against the unmodified tree first** and read the
   reason, not the colour. Unchanged-behaviour tests must be green before, during
   the non-vacuity mutation, and after.

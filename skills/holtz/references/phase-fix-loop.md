@@ -226,7 +226,9 @@ For each lens sweep, record: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcem
 4. Dispatch a subagent with the focused path list and lens audit priorities
 5. Write findings to `docs/holtz/audit/lens-{name}.md` (append or replace)
 
-After completing a lens sweep (any type), return to Step 10 (fix loop) for any new findings. When a perspective passes clean, run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" set complete perspective <name>`. Then run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition lens_rotate` to switch to the next perspective.
+After completing a lens sweep (any type), return to Step 10 (fix loop) for any new findings. A lens passes clean when every CRITICAL and every `user_reachable` HIGH **filed under that lens** is resolved or deferred — findings under other lenses do not block it, and neither does a `fault_injected` HIGH under this one. Then run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" set complete perspective <name>`, and `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition lens_rotate` to switch to the next perspective.
+
+To see one lens's board: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list --lens <name>`.
 
 **Three transitions need a `full` green first** — `iteration_boundary`, `set complete perspective`, `converge`. Run `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record --scope full` before each. This is the periodic whole-suite run that re-bases what `--scope affected` measures against; per-fix greens never satisfy it.
 
