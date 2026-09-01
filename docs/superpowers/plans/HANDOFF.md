@@ -28,10 +28,11 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**7 of 32 units · 8 of 51 items · 43 items across 25 units remain.**
+**8 of 32 units · 9 of 51 items · 42 items across 24 units remain.**
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
-W08 (32, 43) · W22 (27). Commits are in `git log`; do not re-summarise them here.
+W08 (32, 43) · W22 (27) · W06 (20). Commits are in `git log`; do not
+re-summarise them here.
 
 **Two corrections to the line this replaced** (*"8 of 30 units · 7 of 49
 items"*), both made 2026-09-01 after counting the dashboard rather than
@@ -51,6 +52,20 @@ carrying the number forward:
 
 **Nothing is pushed. CI has never run on any of it.** Do not claim it has.
 
+### Open for Jon — two, both raised, neither guessed at
+
+- **W32 step 3** (above): does the hand-vendored-old-binary path still want a
+  diagnostic now the pin is 0.26.0? Unit recommends no; not ruled.
+- **W06's V8 — a sahjhan question.** `sahjhan event finding --field
+  perspective=not-a-lens` exits 0 and the row lands with that value; measured
+  on the pinned engine, not inferred. `events.toml` gives `perspective` no
+  `pattern` while `reachability` right below it has one, and no field can
+  reference a declared `[sets.*]` — so `[sets.perspective]` decorates rather
+  than validates. Closing it holtz-side means restating the 13 values in 8+
+  places; closing it properly means letting a field name its set, which is an
+  engine change. Justine's side is already closed by `f21620e`; this is the
+  Holtz side, which the merge reads back from the ledger.
+
 ### Carried debts — landed code that did not finish its unit
 
 - **W22 / item 27 — the seccomp functional run.** The fix is in (`6852e0d`) and
@@ -61,37 +76,50 @@ carrying the number forward:
   session a prerequisite of the **P1 functional test** — raise it when P1 is
   `DONE`, and do not let the green suite read as having covered it.
 
+- **W06 / item 20 — V4's second half.** Landed at `f21620e`. A merged finding
+  carries the stated lens and that is tested against a real ledger; *"its lens
+  gate names it"* is not, because the gate is still run-wide. **W07 discharges
+  it.**
+
+- **The hook tests flake under load, and it is not this branch.** `TestPrimer`,
+  `TestPrimerWithMockBinary`, `TestProtocolTrackerDaemonTeardown` and
+  `test_source_write_allowed_once_gate_satisfied` fail intermittently whenever
+  other pytest work runs alongside — measured 3 in one full-suite run, 4 in a
+  pre-commit run, 4/25 and 2/25 in a 25-iteration loop. The same tests fail on
+  a **clean tree with everything stashed**, so it predates this work. A commit
+  may need retrying; that is not a reason to `--no-verify`.
+  **The obvious hypothesis is disproved-as-stated:** the primer's `timeout=5`
+  on its `sahjhan status` subprocess looked confirmed (5s failed, 15s and 60s
+  passed) until the **control at the unchanged 5s also passed 3/3** — the
+  machine had gone quiet between arms. Production is unchanged. `3446897` makes
+  the next occurrence report its reason (the harness had been discarding every
+  hook's stderr); **get that reason before changing anything.**
+
 ---
 
 ## Do this next
 
-### 1. W06 — item 20. Then W07 (item 3), which depends on it.
+### 1. W07 — item 3. W06 has landed, so it is unblocked.
 
-**The field is `**Lens:**`. RULED (Jon, 2026-09-01):** *"they're lenses, they're
-always lenses."* W06's plan text saying `**Perspective:**` is struck. Internal
-identifiers (`[sets.perspective]`, `PunchlistItem.perspective`) stay — they are
-not names a reader sees.
+`all_findings_closed` gates lens completion run-wide, thirteen times. W06
+(`f21620e`) made every merged finding carry a real lens, which is the
+precondition W07's lens-scoped gate needed.
 
-**Two premises in that plan are stale; the plan has been corrected but read this
-anyway.** `Lens` is *already* taught (`justine-skill.md:250`,
-`phase-audit.md:67,94,100`) and already in archived punchlists. The break is
-downstream: `validate_punchlist.py` lists `Lens` in `FIELD_NAMES` as a **section
-terminator only** — never extracted, no attribute on `PunchlistItem`,
-`merge_punchlists.justine_findings` never passes one — so the value Justine
-writes is parsed, discarded, then defaulted to `"unspecified"`, which no set
-contains and nothing refuses.
+**W07 also owes W06's V4 second half.** V4 reads: *a merged finding lands
+carrying Justine's stated lens, and its lens gate names it.* The first half is
+done and tested against a real ledger. The second cannot be driven until the
+gate is lens-scoped — which is exactly this unit. Do not mark W07 done without
+it.
 
-Owed: extract it, validate membership against `[sets.perspective]`'s 13 values,
-make `punchlist-format.md:15` required and replace its 6-value inline copy with
-a pointer to the set.
+### 2. W09 — items 25, 26. Unblocked, and W06 built its mechanism.
 
-**Constraint:** `validate_punchlist.py` is deliberately Python 3.9-compatible
-(`# PEP 604 unions run on Python 3.9 (issue #59)`) and `tomllib` is 3.11+. Read
-the set with one scanner in production, cross-checked in a **test** against
-`tomllib` — one derivation, not two that can drift.
+Do **not** write a second required-field checker: `SetValuedField` +
+`set_valued_fields()` + one loop in `validate()` is the mechanism, and
+`reachability` is a row. Read W06's *"How W09 plugs in"* box first — there is
+one genuine decision there (`reachability` has no `[sets.*]` to point at), and
+it is W09's to make, not a gap in the mechanism.
 
-**Build the required-field mechanism once.** W09 step 3 needs the same one for
-`reachability`; if W09 writes a second, W06 under-built.
+### 3. W22 (item 27) is `DONE` in code only — see Carried debts above.
 
 ---
 
@@ -126,6 +154,19 @@ the set with one scanner in production, cross-checked in a **test** against
 - **Run every new test RED against the unmodified tree first** and read the
   reason, not the colour. Unchanged-behaviour tests must be green before, during
   the non-vacuity mutation, and after.
+- **A green run after a change is not evidence when the failure is load-flaky.
+  Run the control.** 2026-09-01: raising the primer's status timeout made four
+  failing tests pass, three times running — and then the **unchanged 5s passed
+  three times too**. Both arms were measuring an idle machine. Before believing
+  any fix for an intermittent failure, re-run the *unmodified* tree under the
+  same conditions in the same sitting.
+- **`git commit` can outlive the 2-minute Bash default** — `pre-commit` runs the
+  fast subset. Pass an explicit timeout; a killed commit leaves everything
+  staged and looks like a hook failure.
+- **`tests/hook_runner.py` used to discard a hook's stderr** whenever the hook
+  printed valid JSON, and defaulted its exit code to 0. Fixed in `3446897`. If
+  you are reading a hook test that "says nothing", check you are on that commit
+  or later before concluding the hook was silent.
 
 ---
 

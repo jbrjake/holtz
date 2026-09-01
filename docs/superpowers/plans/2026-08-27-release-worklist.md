@@ -50,7 +50,7 @@ imprecision (`CLAUDE.md`).
 | W03 | 31 | A | `DONE` | — |
 | W04 | 19, 1 | A | `DONE` — item 1 redone declaratively on sahjhan 0.24.0 | W01 |
 | W05 | 2 | A | `DONE` | ~~D-a~~ ruled |
-| W06 | 20 | B | `TODO` | ~~D-d~~ ruled |
+| W06 | 20 | B | `DONE` @ `f21620e` — V4's second half owed to W07; V8 open for Jon | ~~D-d~~ ruled |
 | W07 | 3 | A | `TODO` | W06 |
 | W22 | 27 | **A** | `DONE` @ `6852e0d` — code only; the seccomp functional run is owed | — *(moved from P3 by D-h)* |
 | **P2 — before trusting results** ||||
@@ -1283,8 +1283,13 @@ future commit rather than for one. The diff itself is recorded under step 3.
 
 ## W06 — Item 20: every merged finding belongs to no lens
 
-**Status:** `TODO`  ·  **Tier:** B — *pulled into P1 because it blocks W07*  ·  **D-d RULED**
-**Commit:** `fix(merge): require a stated perspective and carry it through the merge`
+**Status:** `DONE` @ `f21620e` (v0.169.12)  ·  **Tier:** B — *pulled into P1 because it blocks W07*  ·  **D-d RULED**
+**Commit:** `fix(merge): require a stated lens and carry it through the merge`
+
+⚠️ **Two things this unit does not close, both named in the commit:** V4's
+second half is W07's to discharge (the lens gate cannot name a finding until
+`all_findings_closed` is scoped, which is item 3), and **V8 is open for Jon** —
+it is an engine question and was not filed unilaterally.
 
 ⚠️ **Coordinate with W09 — the division of labour, so neither unit guesses.**
 D-d and item 26 both add a required-field check to `validate_punchlist.py` and
@@ -1299,6 +1304,20 @@ is how the pair drifts, so the mechanism is built once — **here**:
 W09 keeps its own **V6**; it is asserting a different field's behaviour, not
 re-testing the mechanism. If W09 finds itself writing a second checking
 mechanism, W06 under-built — go back and widen it rather than adding one.
+
+**How W09 plugs in — built, so W09 does not have to guess.** The mechanism is
+`SetValuedField(label, attr, set_name, values, source)` in
+`validate_punchlist.py`, a tuple of them from `set_valued_fields()`, and one
+loop in `validate()`. Adding `reachability` is a row in that tuple.
+
+⚠️ **One thing W09 must decide, and it is not decided here:**
+`[sets.perspective]` is the *only* `[sets.*]` in `protocol.toml`, so
+`reachability` has no set to point at — `events.toml` constrains it with a
+`pattern` regex instead. So W09 either declares `[sets.reachability]` in
+`protocol.toml` (matching how the mechanism reads values today, and the shape
+V8 would need anyway) or teaches `set_valued_fields` a second kind of source.
+The first is one row plus one TOML table; the second widens the mechanism.
+**Neither is "write a second checker."**
 
 ### Defect · verified against a real daemon
 
@@ -1347,51 +1366,90 @@ sees, and renaming them is not implied by this ruling.
 
 ### Plan
 
-- [ ] **1.** `validate_punchlist.py` **extracts** `**Lens:**` and errors when it
+- [x] **1.** `validate_punchlist.py` **extracts** `**Lens:**` and errors when it
       is missing, using the same required-field mechanism W09 builds for
       `reachability`. Today it is a terminator only — parsing it into
       `PunchlistItem.perspective` is the missing link, not the error message
-- [ ] **2.** ⚠️ **Validate membership, not just presence.** A presence-only check
+- [x] **2.** ⚠️ **Validate membership, not just presence.** A presence-only check
       lets `unspecified` and every typo straight through — which is the whole
       defect. Read the 13 values **from `[sets.perspective]`**, do not restate them
       in the validator; one named source, so the two cannot drift
-- [ ] **3.** ⚠️ **Premise stale — `justine-skill.md:250` and `phase-audit.md:67,94,100`
+- [x] **3.** ⚠️ **Premise stale — `justine-skill.md:250` and `phase-audit.md:67,94,100`
       already teach the field.** What is owed is the enumeration and dropping
       "optional": make `punchlist-format.md:15`'s entry required and replace its
       6-value inline copy with a pointer to `[sets.perspective]`'s 13. Add the
       `reachability` line W09 needs alongside it
-- [ ] **4.** `merge_punchlists.py:108,363` carries the stated value.
+- [x] **4.** `merge_punchlists.py:108,363` carries the stated value.
       `DEFAULT_PERSPECTIVE`/`"unspecified"` stays as a code-level fallback but
       becomes **unreachable in practice** — assert that, rather than deleting it
       and losing the fail-safe
-- [ ] **5.** Record in `merge-protocol.md` that merged findings are lens-attributed
+- [x] **5.** Record in `merge-protocol.md` that merged findings are lens-attributed
       and therefore lens-gated
 
 ### Validation
 
-- [ ] **V1** `validate_punchlist.py` on an item with no `**Lens:**` →
-      non-zero exit naming the field. Evidence: ___
-- [ ] **V2** ⭐ **Membership, not presence.** An item stating
+- [x] **V1** `validate_punchlist.py` on an item with no `**Lens:**` →
+      non-zero exit naming the field. Evidence: `test_lens_field_is_required`
+      (unit) and `test_cli_exits_nonzero_naming_the_missing_lens` (exit 1,
+      `BH-001: missing Lens` on stdout — the step reads a status, not a return
+      value).
+- [x] **V2** ⭐ **Membership, not presence.** An item stating
       `**Lens:** unspecified` → **rejected**. An item stating a misspelled
       lens (`concurency`) → **rejected**. A presence-only check passes both, and
-      would ship the bug under a green test. Evidence: ___
-- [ ] **V3** The validator's lens list is **read from `[sets.perspective]`** —
+      would ship the bug under a green test. Evidence: `test_unspecified_is_
+      rejected`, `test_a_misspelled_lens_is_rejected`; both confirmed
+      discriminating under V7's mutation.
+- [x] **V3** The validator's lens list is **read from `[sets.perspective]`** —
       mutate the set, and the validator's accepted values follow without a code
-      edit. Evidence: ___
-- [ ] **V4** A merged finding lands carrying Justine's stated perspective, and its
+      edit. Evidence: `test_accepted_lenses_follow_the_protocol_set` — asserts
+      *both* directions (a name only in the mutated set accepted, a name only in
+      the real set refused); the first half alone would pass for a validator
+      that accepts everything. Plus `test_the_scanner_agrees_with_tomllib`,
+      `test_the_scanner_is_scoped_to_the_named_section`, and
+      `test_the_lens_registry_and_the_protocol_set_are_the_same_thirteen`.
+- [~] **V4** A merged finding lands carrying Justine's stated perspective, and its
       lens gate names it. Drive it through W07's gate, not just the merge.
-      Evidence: ___
-- [ ] **V5** The `unspecified` default is unreachable via the validated path —
-      assert it, keeping the fallback as a fail-safe. Evidence: ___
-- [ ] **V6** A test asserting **every value the merge can write is a set member** —
-      enumerate the field's domain in a test, not in a paragraph. Evidence: ___
-- [ ] **V7 · non-vacuity** Revert step 2 to presence-only → V2 goes red (both
-      halves). Revert step 4 → V4 goes red. Evidence: ___
-- [ ] **V8 · rider, independent of this ruling** Decide whether the daemon should
-      refuse a non-member value for a set-typed field. Today it does not
-      (`sahjhan event finding --field perspective=unspecified` exits 0), which
-      makes this defect class silent everywhere, not just here. If that is a
-      sahjhan change, file it; if accepted, record it. Evidence: ___
+      Evidence: **first half only** —
+      `test_a_merged_finding_lands_carrying_her_lens` reads `perspective` back
+      off a real ledger after the merge. **The second half is owed and belongs
+      to W07:** `all_findings_closed` is still run-wide (item 3), so there is no
+      lens-scoped gate to drive it through yet. W07 must discharge it.
+- [x] **V5** The `unspecified` default is unreachable via the validated path —
+      assert it, keeping the fallback as a fail-safe. Evidence:
+      `test_the_fail_safe_is_unreachable_through_the_validated_path` — the item
+      that falls back is the same item `validate_punchlist` refuses.
+- [x] **V6** A test asserting **every value the merge can write is a set member** —
+      enumerate the field's domain in a test, not in a paragraph. Evidence:
+      `test_every_lens_the_merge_can_write_is_a_declared_one` — one item per
+      declared lens through the real parser, compared as sets so a dropped lens
+      fails as loudly as a stray value. **Covers Justine's side only**; the
+      Holtz side is read from the ledger and is bounded by V8, not by this test.
+- [x] **V7 · non-vacuity** Revert step 2 to presence-only → V2 goes red (both
+      halves). Revert step 4 → V4 goes red. Evidence: **both measured.**
+      Presence-only failed exactly the four membership tests
+      (`unspecified`, `concurency`, the message test, and V3's mutation) while
+      `test_lens_field_is_required` and the CLI test stayed green — the
+      discriminating shape. Dropping the carry failed three tests with
+      `AssertionError: assert 'unspecified' == 'security'`, at the parser and
+      at the real ledger.
+- [ ] **V8 · rider, independent of this ruling — OPEN FOR JON, not filed**
+      Decide whether the daemon should refuse a non-member value for a set-typed
+      field. **Measured directly on the pinned engine, not inferred:**
+      `sahjhan event finding --field perspective=not-a-lens` exits 0 and the row
+      lands carrying that value. The cause is visible in
+      `enforcement/events.toml`: `perspective` is `{ name = "perspective",
+      type = "string" }` with no `pattern`, while `reachability` on the line
+      below carries `pattern = "^(user_reachable|fault_injected|theoretical)$"`
+      and *is* enforced — and no field can reference a declared `[sets.*]`, so
+      `[sets.perspective]` validates nothing. Two ways to close it:
+      (a) add a `pattern` to every `perspective` field in `events.toml`, which
+      restates the 13 values in 8+ places and can drift from the set; or
+      (b) let a field name its set (e.g. `set = "perspective"`), which is a
+      **sahjhan change**. (b) is the non-drifting one and is why this was not
+      decided here. Pinned meanwhile by
+      `test_the_engine_admits_a_lens_that_is_not_one`, which asserts the exit-0
+      so that closing the gap upstream fails a test instead of passing silently.
+      Evidence: transcript of the direct probe, 2026-09-01.
 
 ---
 
