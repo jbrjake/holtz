@@ -45,7 +45,16 @@ together via `scripts/vendor-sahjhan.sh 0.25.0` (which calls
 the binary). All four hashes were checked against the release's published
 `SHA256SUMS`, not just recomputed locally.
 
-The upgrade is inert for this config, checked rather than assumed:
+**The migration this release exists for is OWED and NOT DONE.** Read that before
+anything else in this file. sahjhan#46 was filed *by this repo* so that
+`fix_commit`'s commit-message gate could carry `anchor = "caller"` — without it
+a fix subagent can never register its own commit. Moving that gate is the
+migration, it is the point of the upgrade, and it is not in the tree. Why is
+under *W08 item 43* below; the short version is that the ask was filed
+incomplete and the other half is sahjhan#48.
+
+Separately — and this is a *checklist*, not a verdict on the release's value —
+0.25.0's three breaking-change items need no action here:
 
 - **no `anchor` key anywhere** in `enforcement/*.toml`, so 0.25.0's new
   validation — which stops a config loading for *every* command — has nothing
@@ -54,6 +63,11 @@ The upgrade is inert for this config, checked rather than assumed:
   `ledger create`, a different flag);
 - **nothing reads `gate_attestation`'s fields**, so the additive `working_dir`
   column changes no render and no query.
+
+An earlier revision of this file summarised those three as *"the upgrade is
+inert for this config"*. That was wrong and is corrected here rather than
+deleted: a clean breaking-change checklist says nothing about whether the
+release delivered what was asked for, and this one delivered exactly that.
 
 ### W32 (item 51) — fixed upstream, and now pinned by a test
 
@@ -101,8 +115,25 @@ is why adding `anchor = "caller"` to gate 2 — sahjhan#46's own migration advic
 Also found: **`anchor` on an emit validates clean and does nothing.**
 `EmitConfig` does not `deny_unknown_fields`. Filed with the rest.
 
-**Filed: [sahjhan#48](https://github.com/jbrjake/sahjhan/issues/48)**, under
-D-i, which rules this branch generally rather than only its first occurrence.
+**This is a hole in the request, not in what shipped.** sahjhan#46's *"What
+would resolve it"* asked for a per-gate opt-in and nothing else; v0.25.0
+delivered exactly that, completely, including the validation and the
+attestation field. The emit was described in that issue's own downstream
+narrative and then left out of the ask. **A future session must not read the
+paragraph above as sahjhan under-delivering.** Check the issue you filed before
+characterising what came back.
+
+**Filed: [sahjhan#48](https://github.com/jbrjake/sahjhan/issues/48).**
+
+**⚠️ The process failure this session, recorded because the git log is what a
+later session trusts.** Finding the emit gap was the moment to stop and tell
+Jon — he owns sahjhan and turned #46 and #47 around overnight. Instead this
+session filed #48 and kept going: wrote this handoff, surveyed W06, drafted a
+three-option design question, and reported the release as *"inert."* The
+correct sequence when an engine gap appears is: name the ask in one sentence,
+**stop**, wait for the engine change. Not a handoff, and never a holtz-side
+route around it (a gate-verified `commit_hash` argument was probed and works —
+it is still the wrong answer, because the engine fix is coming).
 
 ---
 
