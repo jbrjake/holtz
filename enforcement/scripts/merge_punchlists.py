@@ -65,6 +65,15 @@ LINE_PROXIMITY = 5
 # an archived finding filed before the field existed.
 DEFAULT_REACHABILITY = "theoretical"
 
+# A fail-safe, not a value the board should carry: it is not a member of
+# `[sets.perspective]`, so a finding wearing it belongs to no lens and no lens
+# gate will ask about it. `validate_punchlist.py` rejects a punchlist item that
+# does not state a declared `**Lens:**`, so nothing reaching the merge from
+# Justine's side can be defaulted here. Kept rather than deleted: the Holtz
+# side is read from the ledger, and a row that somehow lacks the field should
+# produce an obviously-wrong perspective rather than a KeyError mid-merge.
+DEFAULT_PERSPECTIVE = "unspecified"
+
 # `merge-protocol.md:81`: an explicit statement that the other auditor's
 # finding is not a bug. Deliberately over-broad — these are candidates for a
 # human-equivalent reading, and a missed contradiction is the expensive one.
@@ -105,7 +114,7 @@ class Finding:
     location: str
     description: str
     reachability: str = DEFAULT_REACHABILITY
-    perspective: str = "unspecified"
+    perspective: str = DEFAULT_PERSPECTIVE
 
 
 @dataclass
@@ -329,6 +338,7 @@ def justine_findings(path: str) -> list[Finding]:
             location=item.location,
             description=description,
             reachability=item.reachability or DEFAULT_REACHABILITY,
+            perspective=item.perspective or DEFAULT_PERSPECTIVE,
         ))
     return findings
 
@@ -360,7 +370,7 @@ def holtz_findings(binary: str, config_dir: str, cwd: str) -> tuple[list[Finding
             category=str(row.get("category") or ""),
             location=str(row.get("location") or ""),
             description=str(row.get("description") or ""),
-            perspective=str(row.get("perspective") or "unspecified"),
+            perspective=str(row.get("perspective") or DEFAULT_PERSPECTIVE),
         )
     return list(by_id.values()), ""
 

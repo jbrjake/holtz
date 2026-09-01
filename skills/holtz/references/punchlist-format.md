@@ -12,7 +12,7 @@
 **Pattern:** {PAT-NNN if applicable}
 **Determinism:** {deterministic | intermittent | theoretical} ← bug/* categories only, optional for others
 **Investigation:** {`docs/holtz/investigations/BH-{NNN}.md` if complex, omit if straightforward}
-**Lens:** {component | integration | security | error-propagation | data-flow | contract — which analytical lens discovered this finding, optional}
+**Lens:** {which analytical lens discovered this finding — one of the 13 names `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/parse_lens_registry.py --names-only` prints, required}
 **Predicted:** {Prediction N (confidence: HIGH|MEDIUM|LOW) — if this finding matched a prediction from step4-predictions.md, optional}
 
 **Problem:** {What's wrong. Actual vs expected behavior. 1-3 sentences.}
@@ -114,5 +114,6 @@ Discovery Chain is required for all items regardless of status (OPEN, RESOLVED, 
 - Resolved items stay (audit trail). Update status + fill Resolution field.
 - After status change: update summary table counts and pattern block if applicable.
 - Evidence is recommended but not enforced — the validator warns on missing Evidence but does not error. Include it whenever possible.
-- Determinism, Investigation, Root Cause Confidence, Lens, and Predicted fields are optional. Only add them when relevant.
+- Determinism, Investigation, Root Cause Confidence, and Predicted fields are optional. Only add them when relevant.
+- Lens is required on every item and must name one of the 13 lenses. The validator errors on an item that omits it or states a name outside the set.
 - Items deferred due to can't-reproduce must include evidence of reproduction attempts in the Evidence section or the linked investigation file.

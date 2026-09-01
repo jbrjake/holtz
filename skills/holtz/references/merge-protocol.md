@@ -41,6 +41,8 @@ For each item in either punchlist, classify it into exactly one of the five cate
 
 Keep ids as filed. Re-filing an existing id supersedes it: the punchlist keeps the last filing per id.
 
+Every recorded finding carries the `**Lens:**` its punchlist item states, so a merged finding is gated by that lens's completion check like any other.
+
 **Note:** Severity disagreement is a sub-case of Agreement — both auditors found the same bug, they just disagree on severity. In the merge report, severity disagreements are counted in the Agreement section total (e.g., "5 items found by both auditors, including 2 with severity disagreements") and listed individually in the Severity Disagreements section for visibility. They are NOT double-counted in the merged total.
 
 Contradictions stay OPEN. Do not run a deferral transition on one.

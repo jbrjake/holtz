@@ -6,6 +6,7 @@ Parses PUNCHLIST.md files and validates:
 - All items have required fields (severity, category, status, problem,
   discovery chain, acceptance criteria, validation command)
 - Severity, status, and category values are from valid sets
+- Every item states a `**Lens:**` naming a member of `[sets.perspective]`
 - Resolved items have a resolution documented
 - Deferred bug items have reproduction evidence or an investigation link
 - Validation commands are present
@@ -32,6 +33,116 @@ from markdown_utils import has_unclosed_fence, mask_code_fences
 
 VALID_DETERMINISM = {"deterministic", "intermittent", "theoretical"}
 
+# The protocol the enforcement engine reads, shipped beside this script.
+# `skills/holtz/scripts/` -> plugin root -> `enforcement/protocol.toml`, the
+# same derivation `boundary_check.py` uses to reach `enforcement/hooks/`.
+PROTOCOL_TOML = Path(__file__).resolve().parents[3] / "enforcement" / "protocol.toml"
+
+
+def _array_body(text: str) -> tuple[str, bool]:
+    """`text` up to the array's closing `]`, and whether that `]` was found.
+
+    Quote-aware, so a `#` or `]` inside a value is neither a comment nor the
+    end of the array.
+    """
+    out: list[str] = []
+    quote = ""
+    for ch in text:
+        if quote:
+            out.append(ch)
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+            out.append(ch)
+        elif ch == "#":
+            break
+        elif ch == "]":
+            return "".join(out), True
+        else:
+            out.append(ch)
+    return "".join(out), False
+
+
+def read_protocol_set(name: str, protocol_path: str | Path | None = None) -> tuple[str, ...]:
+    """The values of `[sets.<name>]`, in declaration order.
+
+    A line scanner rather than a TOML parse: this module is kept
+    Python 3.9-compatible (issue #59) and `tomllib` is 3.11+. It is scoped to
+    the named section, so a `values` key belonging to any other table cannot
+    answer for this one. `test_validate_punchlist.py` reads the same file with
+    `tomllib` and asserts the two agree, so there is one derivation of the set
+    and a test that says when the scanner stops matching the format.
+
+    Returns an empty tuple if the file or the section is absent — the caller
+    decides what an unreadable protocol means.
+    """
+    path = PROTOCOL_TOML if protocol_path is None else protocol_path
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return ()
+
+    wanted = f"[sets.{name}]"
+    values: list[str] = []
+    in_section = False
+    in_values = False
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not in_values and line.startswith("["):
+            in_section = line == wanted
+            continue
+        if not in_section:
+            continue
+        if not in_values:
+            opener = re.match(r"values[ \t]*=[ \t]*\[(.*)$", line)
+            if not opener:
+                continue
+            in_values = True
+            rest = opener.group(1)
+        else:
+            rest = line
+        body, closed = _array_body(rest)
+        for m in re.finditer(r'"([^"]*)"|\'([^\']*)\'', body):
+            values.append(m.group(1) if m.group(1) is not None else m.group(2))
+        if closed:
+            break
+    return tuple(values)
+
+
+@dataclass(frozen=True)
+class SetValuedField:
+    """A punchlist field that must be stated, naming a member of a declared set.
+
+    One spec per field, and one loop in `validate` that reads them, so a second
+    field of this kind is a row here rather than a second checker.
+    """
+
+    label: str      # how the punchlist spells it: `**Lens:**`
+    attr: str       # the `PunchlistItem` attribute it parses into
+    set_name: str   # the `[sets.<name>]` its values come from
+    values: tuple[str, ...]
+    source: str     # the file those values were read from, for the message
+
+
+def set_valued_fields(protocol_path: str | Path | None = None) -> tuple[SetValuedField, ...]:
+    """The fields checked against a declared set, with their values read in.
+
+    Values are read here rather than restated: `[sets.perspective]` is the one
+    place the lenses are declared for the engine, and a copy in this file would
+    be a second thing to keep right.
+    """
+    path = PROTOCOL_TOML if protocol_path is None else protocol_path
+    return (
+        SetValuedField(
+            label="Lens",
+            attr="perspective",
+            set_name="perspective",
+            values=read_protocol_set("perspective", path),
+            source=str(path),
+        ),
+    )
+
 
 @dataclass
 class PunchlistItem:
@@ -46,6 +157,9 @@ class PunchlistItem:
     investigation: str = ""
     root_cause_confidence: str = ""
     reachability: str = ""
+    # Written as `**Lens:**`; `perspective` is the engine-side spelling, which
+    # is what the merge and the ledger carry.
+    perspective: str = ""
     # The prose the merge re-files as an event's `description`. Extracted here
     # already for the `has_*` checks below; kept rather than discarded so
     # `merge_punchlists.py` does not need a second parser for the same file.
@@ -170,6 +284,13 @@ def parse_punchlist(content: str, *, _masked: tuple[str, str] | None = None) -> 
         reach = re.search(r'\*\*Reachability:\*\*[ \t]*(\w+)', masked_block)
         if reach:
             item.reachability = reach.group(1).strip()
+
+        # `\S+` rather than `\w+`: eight of the thirteen lenses are hyphenated
+        # (`error-propagation`, `semantic-fidelity`, …), and `\w+` would clip
+        # them to a prefix that is not a member and not what was written.
+        lens = re.search(r'\*\*Lens:\*\*[ \t]*(\S+)', masked_block)
+        if lens:
+            item.perspective = lens.group(1).strip()
 
         # Section content uses a three-step approach:
         # 1. Find the field header in masked_block (ensures it's not inside a code fence)
@@ -386,9 +507,16 @@ def render_items(
     return header + "\n" + "\n\n".join(blocks) + "\n"
 
 
-def validate(items: list[PunchlistItem], content: str = "", masked_content: str = "") -> ValidationResult:
+def validate(
+    items: list[PunchlistItem],
+    content: str = "",
+    masked_content: str = "",
+    set_fields: tuple[SetValuedField, ...] | None = None,
+) -> ValidationResult:
     """Validate parsed punchlist items."""
     result = ValidationResult()
+    if set_fields is None:
+        set_fields = set_valued_fields()
     status_counts: Counter[str] = Counter()
     severity_counts: Counter[str] = Counter()
     category_counts: Counter[str] = Counter()
@@ -427,6 +555,19 @@ def validate(items: list[PunchlistItem], content: str = "", masked_content: str 
             for field_name in _pat_fields:
                 if f'**{field_name}:**' not in pat_block:
                     result.warnings.append(f"{pat_id}: missing {field_name} in pattern block")
+
+    # A set that could not be read is one broken check, not one broken item per
+    # entry: say so once, and skip the field rather than rejecting every value
+    # stated against a list we do not have.
+    checkable = []
+    for spec in set_fields:
+        if spec.values:
+            checkable.append(spec)
+        else:
+            result.errors.append(
+                f"cannot validate {spec.label}: [sets.{spec.set_name}] "
+                f"not readable from {spec.source}"
+            )
 
     for item in items:
         prefix = f"{item.id}"
@@ -467,6 +608,19 @@ def validate(items: list[PunchlistItem], content: str = "", masked_content: str 
 
         if not item.has_validation_command:
             result.errors.append(f"{prefix}: missing validation command")
+
+        # Stated, and naming a declared value. Presence alone would admit
+        # `unspecified` and every misspelling, which is the whole defect: no
+        # lens gate asks about a value no lens has.
+        for spec in checkable:
+            stated = getattr(item, spec.attr, "")
+            if not stated:
+                result.errors.append(f"{prefix}: missing {spec.label}")
+            elif stated not in spec.values:
+                result.errors.append(
+                    f"{prefix}: invalid {spec.label} '{stated}' "
+                    f"(expected one of: {', '.join(spec.values)})"
+                )
 
         # Resolved items must have resolution
         if item.status == "RESOLVED" and not item.has_resolution:

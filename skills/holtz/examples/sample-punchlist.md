@@ -24,6 +24,7 @@
 **Category:** bug/security
 **Location:** `src/handlers/users.ts:42`
 **Status:** RESOLVED
+**Lens:** security
 **Pattern:** PAT-001
 **Determinism:** deterministic
 
@@ -55,6 +56,7 @@ npm test -- --grep "user search.*injection"
 **Category:** bug/error-handling
 **Location:** `src/db/pool.ts:18`
 **Status:** OPEN
+**Lens:** error-propagation
 **Determinism:** deterministic
 
 **Problem:** Database pool creation has no timeout handler. If the database is unreachable at startup, the process hangs indefinitely instead of failing with an error.
@@ -80,6 +82,7 @@ npm test -- --grep "pool.*timeout"
 **Category:** bug/security
 **Location:** `src/handlers/uploads.ts:31`
 **Status:** RESOLVED
+**Lens:** security
 **Pattern:** PAT-001
 **Determinism:** deterministic
 
@@ -111,6 +114,7 @@ npm test -- --grep "upload.*traversal"
 **Category:** bug/state
 **Location:** `src/cache/user-cache.ts:55`
 **Status:** DEFERRED
+**Lens:** data-flow
 **Determinism:** intermittent
 
 **Problem:** User cache is populated on read but not invalidated on delete. Deleted users continue to appear in search results until cache TTL expires (5 minutes).
@@ -135,6 +139,7 @@ npm test -- --grep "cache.*delete"
 **Category:** test/shallow
 **Location:** `tests/rate-limiter.test.ts:12`
 **Status:** OPEN
+**Lens:** component
 
 **Problem:** Rate limiter test sends 5 requests and asserts all succeed. Never sends enough requests to trigger the limit (100/min). The test would pass if the rate limiter were removed entirely.
 
@@ -159,6 +164,7 @@ npm test -- --grep "rate.limiter"
 **Category:** bug/state
 **Location:** `src/auth/session.ts:78`
 **Status:** RESOLVED
+**Lens:** concurrency
 **Determinism:** theoretical
 **Investigation:** `docs/holtz/investigations/BH-006.md`
 

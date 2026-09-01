@@ -555,6 +555,7 @@ def test_well_formed_item_no_errors():
 **Category:** bug/logic
 **Location:** `file.py:1`
 **Status:** OPEN
+**Lens:** component
 **Determinism:** deterministic
 
 **Problem:** This is a real problem that describes what went wrong in enough detail.
@@ -1377,6 +1378,7 @@ def test_present_discovery_chain_passes():
 **Category:** bug/logic
 **Location:** `file.py:1`
 **Status:** OPEN
+**Lens:** data-flow
 **Determinism:** deterministic
 
 **Problem:** This is a real problem that describes what went wrong in enough detail.
@@ -1456,6 +1458,7 @@ def test_multi_step_discovery_chain_accepted():
 **Category:** bug/logic
 **Location:** `file.py:1`
 **Status:** OPEN
+**Lens:** data-flow
 **Determinism:** deterministic
 
 **Problem:** This is a real problem that describes what went wrong in enough detail.
@@ -2025,8 +2028,8 @@ pytest tests/test_seam.py -k delimiter
     assert not any("Lens" in w for w in result.warnings)
 
 
-def test_lens_field_not_required():
-    """Item without Lens field → validator passes (Lens is optional)."""
+def test_lens_field_is_required():
+    """Item without a Lens → error naming the field (D-d: Justine states it)."""
     content = """\
 ### BH-100: Missing null check
 **Severity:** HIGH
@@ -2051,11 +2054,16 @@ pytest tests/test_core.py -k null
     items = vp.parse_punchlist(content)
     assert len(items) == 1
     result = vp.validate(items, content)
-    assert len(result.errors) == 0
+    assert "BH-100: missing Lens" in result.errors
 
 
 def test_lens_field_in_code_fence():
-    """**Lens:** inside code fence → not treated as real field."""
+    """**Lens:** inside a code fence → not treated as a real field.
+
+    The fenced value is a *valid* lens, so this discriminates: if masking
+    failed the item would validate, and the missing-Lens error is the only
+    outcome that says the fence was skipped.
+    """
     content = """\
 ### BH-101: Formatting example
 **Severity:** LOW
@@ -2067,7 +2075,7 @@ def test_lens_field_in_code_fence():
 
 **Evidence:**
 ```markdown
-**Lens:** this is inside a code fence and should be ignored
+**Lens:** contract
 ```
 
 **Discovery Chain:** read docs → found outdated format example
@@ -2082,8 +2090,9 @@ grep -c "Lens:" docs/format.md
 """
     items = vp.parse_punchlist(content)
     assert len(items) == 1
+    assert items[0].perspective == ""
     result = vp.validate(items, content)
-    assert len(result.errors) == 0
+    assert "BH-101: missing Lens" in result.errors
 
 
 # --- Predicted field (Tier 2: Predictive Recon) ---
@@ -2097,6 +2106,7 @@ def test_predicted_field_accepted():
 **Category:** bug/logic
 **Location:** `paginate.py:88`
 **Status:** OPEN
+**Lens:** contract
 **Predicted:** Prediction 3 (confidence: HIGH)
 
 **Problem:** Paginator skips the last page when total items is a multiple of page size.
@@ -2128,6 +2138,7 @@ def test_predicted_field_not_required():
 **Category:** bug/state
 **Location:** `cache.py:22`
 **Status:** OPEN
+**Lens:** contract
 **Determinism:** intermittent
 
 **Problem:** Cache TTL set to 24h but data changes hourly.
@@ -2158,6 +2169,7 @@ def test_predicted_field_in_code_fence():
 **Category:** doc/drift
 **Location:** `docs/predictions.md:3`
 **Status:** OPEN
+**Lens:** contract
 
 **Problem:** Documentation shows outdated prediction format.
 
@@ -2698,3 +2710,139 @@ def test_cli_main_filter_with_render(tmp_path, make_item, capsys):
     ], capsys)
     assert code == 0
     assert "BH-001" in out
+
+
+# --- W06 / item 20: the Lens is stated, and names a declared lens ---
+#
+# Presence alone was never the check worth having. `unspecified` — the value
+# the merge used to write on every Justine finding — is a perfectly present
+# string that no lens gate will ever ask about, and so is every typo. What
+# these assert is membership, against the one place the lenses are declared.
+
+
+def test_cli_exits_nonzero_naming_the_missing_lens(tmp_path, make_item, capsys):
+    """V1 — what the agent sees is an exit status and a named field."""
+    f = tmp_path / "PUNCHLIST.md"
+    f.write_text(make_item(item_id="BH-001", lens="", wrap=True))
+    code, out, _ = _run_vp_main([str(f)], capsys)
+    assert code == 1
+    assert "BH-001: missing Lens" in out
+
+
+def test_unspecified_is_rejected(make_item):
+    """V2 — the exact value the merge defaulted to, and it is not a lens."""
+    items = vp.parse_punchlist(make_item(lens="unspecified"))
+    errors = vp.validate(items).errors
+    assert any("invalid Lens 'unspecified'" in e for e in errors)
+
+
+def test_a_misspelled_lens_is_rejected(make_item):
+    """V2 — one letter from `concurrency`, and it belongs to no lens.
+
+    A presence-only check passes this and `unspecified` both, which is how a
+    green suite would have shipped the defect.
+    """
+    items = vp.parse_punchlist(make_item(lens="concurency"))
+    errors = vp.validate(items).errors
+    assert any("invalid Lens 'concurency'" in e for e in errors)
+
+
+def test_the_error_lists_the_declared_lenses(make_item):
+    """The reader is told what to write, not only that they were wrong."""
+    items = vp.parse_punchlist(make_item(lens="concurency"))
+    message = next(e for e in vp.validate(items).errors if "invalid Lens" in e)
+    for lens in vp.read_protocol_set("perspective"):
+        assert lens in message
+
+
+def test_accepted_lenses_follow_the_protocol_set(tmp_path, monkeypatch, make_item):
+    """V3 — mutate `[sets.perspective]`; the answers move, with no code edit.
+
+    Both halves are the assertion: a name that exists only in the mutated set
+    is accepted, and a name that exists only in the real one is refused. The
+    first half alone would also pass for a validator that accepts everything.
+    """
+    toml = tmp_path / "protocol.toml"
+    toml.write_text('[sets.perspective]\nvalues = [\n    "kaleidoscope",\n]\n')
+    monkeypatch.setattr(vp, "PROTOCOL_TOML", toml)
+
+    invented = vp.parse_punchlist(make_item(lens="kaleidoscope"))
+    assert not [e for e in vp.validate(invented).errors if "Lens" in e]
+
+    real = vp.parse_punchlist(make_item(lens="component"))
+    assert any("invalid Lens 'component'" in e for e in vp.validate(real).errors)
+
+
+def test_the_scanner_agrees_with_tomllib():
+    """One derivation of the set, and a test that says when it stops matching.
+
+    `validate_punchlist.py` is kept Python 3.9-compatible (issue #59) so it
+    cannot import `tomllib` in production. Reading the same file both ways
+    here is what keeps the hand scanner honest about the format.
+    """
+    import pytest
+    tomllib = pytest.importorskip("tomllib")
+    with open(vp.PROTOCOL_TOML, "rb") as fh:
+        cfg = tomllib.load(fh)
+    assert list(vp.read_protocol_set("perspective")) == cfg["sets"]["perspective"]["values"]
+
+
+def test_the_scanner_is_scoped_to_the_named_section(tmp_path):
+    """A `values` key in another table cannot answer for this one."""
+    toml = tmp_path / "protocol.toml"
+    toml.write_text(
+        '[sets.other]\nvalues = ["wrong"]\n\n'
+        '[sets.perspective]\nvalues = ["right"]\n\n'
+        '[sets.later]\nvalues = ["also-wrong"]\n'
+    )
+    assert vp.read_protocol_set("perspective", toml) == ("right",)
+
+
+def test_the_scanner_ignores_comments_and_bracket_values(tmp_path):
+    """Quote-aware: a `#` or `]` inside a value is neither comment nor close."""
+    toml = tmp_path / "protocol.toml"
+    toml.write_text(
+        '[sets.perspective]\n'
+        'values = [\n'
+        '    "component",  # the first one\n'
+        '    "odd]name",\n'
+        '    # "commented-out",\n'
+        ']\n'
+    )
+    assert vp.read_protocol_set("perspective", toml) == ("component", "odd]name")
+
+
+def test_the_lens_registry_and_the_protocol_set_are_the_same_thirteen():
+    """The doc points at the registry; the validator reads the set.
+
+    `punchlist-format.md` tells Justine to list the lenses with
+    `parse_lens_registry.py --names-only`, and the validator accepts
+    `[sets.perspective]`. That is only safe while the two agree, so the
+    agreement is asserted rather than assumed.
+    """
+    import parse_lens_registry as plr
+    registry = Path(__file__).parent.parent / "skills" / "holtz" / "references" / "lens-registry.md"
+    names = [lens["name"] for lens in plr.parse_lens_registry(registry.read_text(encoding="utf-8"))]
+    assert names == list(vp.read_protocol_set("perspective"))
+
+
+def test_an_unreadable_set_is_one_error_not_one_per_item(tmp_path, monkeypatch, make_item):
+    """A check we cannot perform is one broken check, not N broken items.
+
+    Rejecting every stated lens because the protocol went missing would bury
+    the real cause under a per-item error for each one.
+    """
+    monkeypatch.setattr(vp, "PROTOCOL_TOML", tmp_path / "absent.toml")
+    content = make_item(item_id="BH-001", wrap=True) + "\n" + make_item(item_id="BH-002")
+    items = vp.parse_punchlist(content)
+    assert len(items) == 2
+    errors = vp.validate(items).errors
+    assert len([e for e in errors if "cannot validate Lens" in e]) == 1
+    assert not [e for e in errors if "invalid Lens" in e or "missing Lens" in e]
+
+
+def test_a_hyphenated_lens_survives_parsing(make_item):
+    """Eight of the thirteen are hyphenated; `\\w+` would clip them silently."""
+    items = vp.parse_punchlist(make_item(lens="error-propagation"))
+    assert items[0].perspective == "error-propagation"
+    assert not [e for e in vp.validate(items).errors if "Lens" in e]

@@ -62,6 +62,7 @@ def make_item():
         category: str = "bug/logic",
         location: str = "`file.py:1`",
         status: str = "OPEN",
+        lens: str = "component",
         extra_fields: str = "",
         problem: str = "This is a real problem that describes what went wrong in enough detail.",
         evidence: str = "Here is the evidence showing the problem with code references.",
@@ -76,6 +77,9 @@ def make_item():
         lines.append(f"**Category:** {category}")
         lines.append(f"**Location:** {location}")
         lines.append(f"**Status:** {status}")
+        # Required since D-d: pass lens="" to build an item that omits it.
+        if lens:
+            lines.append(f"**Lens:** {lens}")
         if extra_fields:
             lines.append(extra_fields)
         lines.append("")

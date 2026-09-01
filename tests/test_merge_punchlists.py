@@ -41,6 +41,32 @@ sys.path.insert(0, HOOKS_DIR)
 import merge_punchlists as mp  # noqa: E402
 import validate_merge_report  # noqa: E402
 
+import validate_punchlist as vp  # noqa: E402
+
+# One well-formed item, parameterised by the lens it states.
+_ITEM_TEMPLATE = """\
+### BJ-{num:03d}: Item {num}
+**Severity:** LOW
+**Category:** bug/logic
+**Location:** `mod{num}.py:1`
+**Status:** OPEN
+**Lens:** {lens}
+
+**Problem:** Something is wrong in a way that takes a full sentence to say.
+
+**Evidence:** The evidence, also long enough to satisfy the length check.
+
+**Discovery Chain:** read it -> saw it -> concluded it
+
+**Acceptance Criteria:**
+- [ ] fixed
+
+**Validation Command:**
+```bash
+pytest
+```
+"""
+
 _COMMON = ["--field", "project=t", "--field", "run=1", "--field", "auditor=holtz",
            "--field", "phase=audit", "--field", "step=8"]
 
@@ -404,6 +430,7 @@ _JUSTINE = """# Holtz Punchlist
 **Reachability:** user_reachable
 **Category:** bug/security
 **Location:** `app/auth.py:47`
+**Lens:** security
 
 **Problem:** No email validation.
 
@@ -464,6 +491,49 @@ class TestReadingJustine:
         path = tmp_path / "PUNCHLIST.md"
         path.write_text(_JUSTINE, encoding="utf-8")
         assert mp.justine_findings(str(path))[1].reachability == "theoretical"
+
+    def test_her_stated_lens_is_carried(self, tmp_path):
+        """W06 — the merge re-files the lens she stated, not a default."""
+        path = tmp_path / "PUNCHLIST.md"
+        path.write_text(_JUSTINE, encoding="utf-8")
+        assert mp.justine_findings(str(path))[0].perspective == "security"
+
+    def test_the_fail_safe_is_unreachable_through_the_validated_path(self, tmp_path):
+        """V5 — `unspecified` survives in the code and not on the board.
+
+        BJ-002 states no lens, so the merge falls back to it. The same file
+        put through `validate_punchlist` is refused for exactly that item, so
+        a punchlist that reaches the merge in the taught order cannot carry
+        the fallback into the ledger.
+        """
+        path = tmp_path / "PUNCHLIST.md"
+        path.write_text(_JUSTINE, encoding="utf-8")
+        assert mp.justine_findings(str(path))[1].perspective == mp.DEFAULT_PERSPECTIVE
+        assert mp.DEFAULT_PERSPECTIVE not in vp.read_protocol_set("perspective")
+
+        refused = vp.validate(vp.parse_punchlist(_JUSTINE)).errors
+        assert "BJ-002: missing Lens" in refused
+
+    def test_every_lens_the_merge_can_write_is_a_declared_one(self, tmp_path):
+        """V6 — the field's domain enumerated, not described.
+
+        One item per declared lens through the real parser: whatever the merge
+        would record for a validated punchlist is drawn from the set and
+        nothing else. Written as a set comparison so a lens that silently
+        dropped out would fail as loudly as a stray value appearing.
+        """
+        lenses = vp.read_protocol_set("perspective")
+        assert len(lenses) > 1
+        items = "\n".join(
+            _ITEM_TEMPLATE.format(num=i + 1, lens=lens)
+            for i, lens in enumerate(lenses)
+        )
+        path = tmp_path / "PUNCHLIST.md"
+        path.write_text("# Holtz Punchlist\n\n## Items\n\n" + items, encoding="utf-8")
+
+        written = {f.perspective for f in mp.justine_findings(str(path))}
+        assert written == set(lenses)
+
 
 
 # ── End to end, against a real ledger ────────────────────────────────────────
@@ -528,6 +598,43 @@ class TestEndToEnd:
         assert result.returncode == 0, result.stderr
         ids = {f.get("id") or f.get("fields", {}).get("id") for f in board.findings()}
         assert {"BH-001", "BJ-001", "BJ-002"} <= ids
+
+    def test_a_merged_finding_lands_carrying_her_lens(self, board):
+        """V4 (first half) — the lens she stated is on the ledger row.
+
+        The second half of V4 — that the lens's own completion gate then names
+        the finding — cannot be driven here: `all_findings_closed` is still
+        run-wide, which is item 3, and W07 is the unit that scopes it.
+        """
+        board.file("BH-001", location="a.py:10")
+        result = board.run_merge(_JUSTINE)
+        assert result.returncode == 0, result.stderr
+        rows = {
+            (f.get("id") or f.get("fields", {}).get("id")):
+                (f.get("perspective") or f.get("fields", {}).get("perspective"))
+            for f in board.findings()
+        }
+        assert rows["BJ-001"] == "security"
+
+    def test_the_engine_admits_a_lens_that_is_not_one(self, board):
+        """The half this unit does not close — W06's V8 rider, measured.
+
+        `[sets.perspective]` declares thirteen lenses and `events.toml` gives
+        `perspective` no pattern, so the daemon accepts any string on a
+        `finding`. Justine's side is validated markdown and cannot carry a
+        non-member; Holtz's side is read back from this ledger, so it can.
+        Pinned here rather than described, so that closing the gap upstream
+        fails a test instead of passing silently.
+        """
+        result = board.sah(
+            "event", "finding", "--field", "id=BH-009",
+            "--field", "severity=LOW", "--field", "category=bug/logic",
+            "--field", "location=z.py:1", "--field", "perspective=not-a-lens",
+            "--field", "predicted_by=none", "--field", "reachability=theoretical",
+            "--field", "description=text", *_COMMON, check=False,
+        )
+        assert result.returncode == 0, "engine now validates the set — update W06's V8"
+        assert "not-a-lens" not in vp.read_protocol_set("perspective")
 
     def test_a_matched_justine_finding_is_not_refiled(self, board):
         """Agreement records nothing — `merge-protocol.md:36`."""
