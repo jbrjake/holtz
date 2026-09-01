@@ -123,6 +123,40 @@ def test_denied_connect_is_confined(tmp_path, monkeypatch):
         monkeypatch.setattr(socket.socket, "connect", real_connect)
 
 
+def test_denied_socket_syscall_is_confined(tmp_path, monkeypatch):
+    """The two sandboxes deny at different syscalls, and only one is `connect`.
+
+    macOS Seatbelt lets `socket(AF_UNIX)` succeed and answers EPERM on
+    `connect()`. Linux's seccomp filter blocks `socket(AF_UNIX)` itself, so
+    the denial arrives one call earlier — from the constructor, not the
+    connect. `test_denied_connect_is_confined` patches `.connect` and so
+    cannot reach this path at all.
+    """
+
+    def _deny(*args, **kwargs):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(boundary_check.socket, "socket", _deny)
+    assert boundary_check.probe(str(tmp_path / "any.sock")) == boundary_check.CONFINED
+
+
+def test_denied_socket_syscall_still_prints_a_verdict(tmp_path, monkeypatch, capsys):
+    """What recon Step 0 reads is the exit status and the printed line.
+
+    An exception out of `probe()` gives it neither: SKILL.md's step reads a
+    traceback as "it did not print BOUNDARY: confined" and tells the user to
+    run `holtz-start`, which cannot help — the boundary is already up.
+    """
+
+    def _deny(*args, **kwargs):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setenv("SAHJHAN_DAEMON_SOCKET", str(tmp_path / "any.sock"))
+    monkeypatch.setattr(boundary_check.socket, "socket", _deny)
+    assert boundary_check.main() == 0
+    assert boundary_check.CONFINED in capsys.readouterr().out
+
+
 def test_exit_status_gates_the_step(listener, monkeypatch):
     """Non-zero exit is what makes the skill step stop rather than continue."""
     monkeypatch.setenv("SAHJHAN_DAEMON_SOCKET", listener)

@@ -42,14 +42,18 @@ NO_DAEMON = "BOUNDARY: no-daemon"
 
 def probe(sock_path: str) -> str:
     """Classify what a connect() to the daemon socket does from here."""
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.settimeout(5)
+    sock = None
     try:
+        # The constructor is inside the try because it is itself one of the
+        # denied syscalls: Linux's seccomp filter blocks socket(AF_UNIX)
+        # before there is anything to connect with.
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(5)
         sock.connect(sock_path)
     except PermissionError:
-        # The sandbox denied the syscall: macOS Seatbelt answers EPERM, and
-        # Linux's seccomp filter blocks socket(AF_UNIX) outright. Either way
-        # the process was stopped from reaching a socket that exists.
+        # The sandbox denied the syscall: macOS Seatbelt answers EPERM on the
+        # connect, and Linux's seccomp filter blocks socket(AF_UNIX) outright.
+        # Either way the process was stopped from reaching a socket that exists.
         return CONFINED
     except (FileNotFoundError, ConnectionRefusedError):
         return NO_DAEMON
@@ -61,7 +65,8 @@ def probe(sock_path: str) -> str:
     else:
         return EXPOSED
     finally:
-        sock.close()
+        if sock is not None:
+            sock.close()
 
 
 def main() -> int:
