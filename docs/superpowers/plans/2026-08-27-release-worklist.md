@@ -52,7 +52,7 @@ imprecision (`CLAUDE.md`).
 | W05 | 2 | A | `DONE` | ~~D-a~~ ruled |
 | W06 | 20 | B | `TODO` | ~~D-d~~ ruled |
 | W07 | 3 | A | `TODO` | W06 |
-| W22 | 27 | **A** | `TODO` | — *(moved from P3 by D-h)* |
+| W22 | 27 | **A** | `DONE` @ `6852e0d` — code only; the seccomp functional run is owed | — *(moved from P3 by D-h)* |
 | **P2 — before trusting results** ||||
 | W08 | 32, 43 | B | `DONE` — 32 `780ba47`; 43 landed on sahjhan 0.26.0 | — |
 | W31 | **50** *(new)* | C | `TODO` | W08 |
@@ -2839,8 +2839,13 @@ must still be open — so a finding cannot be merged into something already clos
 
 ## W22 — Item 27: `boundary_check.py` crashes on the one platform path its docstring calls confinement
 
-**Status:** `TODO`  ·  **Tier: A — RULED (Jon, 2026-08-27, D-h)**  ·  **Runs in P1**
+**Status:** `DONE` @ `6852e0d` (v0.169.10)  ·  **Tier: A — RULED (Jon, 2026-08-27, D-h)**  ·  **Runs in P1**
 **Commit:** `fix(skills): construct the probe socket inside the try`
+
+⚠️ **`DONE` here covers the code and its unit tests only.** The seccomp
+functional run this unit's own ruling calls for has not happened — see *"Still
+owed"* under Validation. Do not read this row as retiring item 27's platform
+question.
 
 ### RULED — Tier A, before functional testing
 
@@ -2901,16 +2906,35 @@ exercises the macOS path and cannot see this.
 
 ### Plan
 
-- [ ] **1.** Move the constructor inside the `try` (or wrap it). One line
-- [ ] **2.** No dependencies — can land any time
+- [x] **1.** Move the constructor inside the `try` (or wrap it). One line
+- [x] **2.** No dependencies — can land any time
+
+`sock` is initialised to `None` before the `try` so the `finally` can still
+close it when the constructor is the call that was denied.
 
 ### Validation
 
-- [ ] **V1** Patch `socket.socket` **itself** to raise `PermissionError` →
-      `probe()` returns `CONFINED`. Evidence: ___
-- [ ] **V2** The macOS path still returns `CONFINED`. Evidence: ___
-- [ ] **V3 · non-vacuity** Revert the one-line move → V1 goes red with the observed
-      `PermissionError [Errno 1] Operation not permitted`. Evidence: ___
+- [x] **V1** Patch `socket.socket` **itself** to raise `PermissionError` →
+      `probe()` returns `CONFINED`. Evidence: `test_denied_socket_syscall_is_confined`,
+      9 passed exit 0.
+- [x] **V2** The macOS path still returns `CONFINED`. Evidence:
+      `test_denied_connect_is_confined` green before the edit (7 passed), during
+      V3's red run, and after (9 passed).
+- [x] **V3 · non-vacuity** Revert the one-line move → V1 goes red with the observed
+      `PermissionError [Errno 1] Operation not permitted`. Evidence: taken *before*
+      the fix rather than by reverting after — both new tests failed at
+      `boundary_check.py:45`, `E PermissionError: [Errno 1] Operation not
+      permitted`, raised through `probe()` and out of `main()`.
+- [x] **V4** (added) The step reads an exit status, not a return value:
+      `test_denied_socket_syscall_still_prints_a_verdict` drives `main()` under the
+      denied constructor and asserts exit 0 with `BOUNDARY: confined` on stdout.
+      V1 alone would pass with the traceback merely moved.
+
+**Still owed by this unit:** the functional run on a seccomp-confined Linux
+session. Both new tests inject the errno on macOS, which is what makes them
+runnable at all — nothing here has executed under a real seccomp filter, and CI
+(`ubuntu-latest`) does not install one. Raise it when P1 is `DONE`, per the
+ruling above.
 
 ---
 ---
