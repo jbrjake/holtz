@@ -59,7 +59,7 @@ imprecision (`CLAUDE.md`).
 | W32 | **51** *(new)* | C | `WIP` — pin moved to 0.25.0, V1–V4 driven; step 3 open for Jon | — *(fixed upstream: sahjhan#47)* |
 | W09 | 25, 26 | B | `DONE` — W06's mechanism widened, not duplicated | — |
 | W10 | 35 | B | `DONE` — wider than the item said: one actor is enough | W01 |
-| W11 | 42 | B | `TODO` | W01 |
+| W11 | 42 | B | `BLOCKED` — upstream, sahjhan#49; step 2 fired | W01, **sahjhan#49** |
 | W12 | 34, 28 | B | `TODO` | — |
 | W13 | 37, 17 | B | `TODO` | — |
 | W14 | 5, 10 | B | `TODO` | — |
@@ -2411,8 +2411,34 @@ at, so the recovery is one command and already taught.
 
 ## W11 — Item 42: per-actor cache state is read-modify-written over the whole map
 
-**Status:** `TODO`  ·  **Tier:** B  ·  **Depends on:** W01 (F2)
+**Status:** `BLOCKED` upstream  ·  **Tier:** B  ·  **Depends on:** W01 (F2),
+**sahjhan#49**
 **Commit:** `fix(enforcement): write the actor's own bucket, not the whole map`
+
+### ⛔ Step 2 fired. Do not start this unit; do not write a holtz-side version.
+
+**Measured at the pinned 0.26.0** (`src/daemon/mod.rs:674`): the daemon merges
+an `enforcement_update` patch with `state.extend(patch_obj)` — a top-level
+insert-overwrite. A patch key whose value is an object *replaces* the stored
+object. Holtz's per-actor state lives one level down (`stall`,
+`unregistered_commits`), so the only way to change one actor's entry is to send
+the whole map, which is the defect. **Step 1 as written is not expressible.**
+
+That is exactly step 2's condition, so it went upstream: **sahjhan#49**, filed
+2026-09-03, covering both halves — the per-actor write *and* the cross-actor
+read-modify-write that `pending_commits_discharged` needs, which no per-actor
+op fixes and which wants the transform to run inside the daemon's vault lock.
+
+**RULED (Jon, 2026-09-03) — upstream, not holtz-side.** The alternative
+considered and rejected was flattening the actor into the top-level key
+(`stall::<actor>`), which would make the *existing* shallow merge a per-actor
+merge with no engine change. Rejected as an encoding trick standing in for the
+mechanism: it changes the cache schema, makes actor ids key fragments, and
+leaves the cross-actor discharge racing anyway.
+
+Resume when the engine ships it and the pin moves. The four write sites are all
+in `protocol_tracker.py` — `:287` (full `write_cache`), `:322`, `:347`, `:349`
+— and are enumerated in the issue.
 
 ### Defect · `protocol_tracker.py`
 

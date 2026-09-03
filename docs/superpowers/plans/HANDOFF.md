@@ -28,11 +28,21 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**10 of 32 units · 12 of 51 items · 39 items across 22 units remain.**
+**11 of 32 units · 13 of 51 items · 38 items across 21 units remain.**
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
-W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26). Commits are in
-`git log`; do not re-summarise them here.
+W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35).
+Commits are in `git log`; do not re-summarise them here.
+
+**W11 (item 42) is STOPPED on an upstream ask — do not start it.**
+`sahjhan#49`: the daemon's `enforcement_update` merges only at the top level
+(`state.extend`, `src/daemon/mod.rs:674` at the pinned 0.26.0), so a patch of
+`{"stall": {…}}` replaces the whole actor map and W11's step 1 — *"send the
+delta for one actor and let the daemon merge"* — is not expressible. W11's own
+step 2 says that is a sahjhan change; Jon ruled upstream on 2026-09-03. **No
+holtz-side workaround has been written and none should be.** The flattening
+dodge (`stall::<actor>` as top-level keys) was considered and rejected as the
+encoding trick it is. Resume W11 when the engine ships it and the pin moves.
 
 **Two corrections to the line this replaced** (*"8 of 30 units · 7 of 49
 items"*), both made 2026-09-01 after counting the dashboard rather than
@@ -140,10 +150,10 @@ carrying the number forward:
 
 ## Do this next
 
-### 1. W10 — item 35, then W11 (42), W12 (34, 28), W13 (37, 17), W14 (5, 10).
+### 1. W12 (34, 28), then W13 (37, 17), W14 (5, 10).
 
-P2's remaining five, none blocked by anything now landed. W10 and W11 both list
-W01 as their blocker and W01 is `DONE`.
+P2's remainder. W10 is `DONE`; **W11 is stopped upstream — skip it** (above).
+None of W12–W14 depends on W11 or on anything else unlanded.
 
 **Before starting any of them, read W09's settled decision** (the ⭐ box in its
 unit): when a field needs checking in two places, look at *which* declaration
@@ -193,6 +203,15 @@ difference was measurable in one command against the binary.
   perspective" current_perspective=security`); `_Run.gate_check` now forwards
   `key=value` args for this reason. Measured 2026-09-01 while scoping the lens
   gate, on a test that had been asserting exactly that absence.
+- **A transition's `state_transition` row lands BELOW the events it emits**, and
+  a `gate_attestation` sits between them. Measured on 0.26.0 while doing W10:
+  `defer cant-reproduce` writes `state_transition` at seq 6 and its
+  `finding_deferred` at seq 8. So **any window anchored on "the last
+  state_transition" is moved by the very transitions whose emits it is trying
+  to bound** — a second deferral drops the first one out of the window, with no
+  concurrency involved. Item 35 read as a concurrency bug and was not one.
+  Before writing `seq > MAX(state_transition)`, ask which transitions emit into
+  the set you are windowing.
 - **`sahjhan query --format json` spells an absent optional column `"NULL"`** —
   the four-character string, not `null` and not `""`. So
   `str(row.get(x) or "")` keeps it and passes it straight back into a write,
