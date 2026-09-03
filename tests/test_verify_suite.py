@@ -74,12 +74,20 @@ def _write(path, rel, text):
 
 
 def _run_verify(repo, *args, env=None):
-    """Invoke verify_suite.py the way an agent or a gate does — by path."""
+    """Invoke verify_suite.py the way an agent or a gate does — by path.
+
+    Without `--cwd`, which the recorded form no longer accepts (item 34): the
+    flag and `--record` together exited 0 and recorded nothing, so the parser
+    refuses the pair. The subprocess already runs *in* the repo, which is where
+    the agent runs it from, so this is the production shape. `--cwd` on the
+    diagnostic paths is still supported and is covered by
+    `test_cwd_still_points_the_diagnostic_paths`.
+    """
     full_env = os.environ.copy()
     if env:
         full_env.update(env)
     return subprocess.run(
-        [sys.executable, VERIFY_SUITE, *args, "--cwd", repo],
+        [sys.executable, VERIFY_SUITE, *args],
         cwd=repo,
         capture_output=True,
         text=True,

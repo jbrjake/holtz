@@ -44,9 +44,15 @@ sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 )
 
+from _recorded_command import (  # noqa: E402
+    looks_like_a_record,
+    not_the_taught_form,
+)
 from verify_suite import (  # noqa: E402
     _COMMIT_RE,
     RECORD_MARKER,
+    SCRIPT_TAIL,
+    TAUGHT_PREFIX,
     _git,
     _run_number,
     compute_tree_hash,
@@ -127,6 +133,26 @@ def _effective_scope(scope: str, root: str, cwd: str) -> str:
     return "full" if files is None else "affected"
 
 
+
+def _warn_if_it_meant_to_record(command: str, event: dict) -> None:
+    """Say something when the recognizer refused a line that asked to record.
+
+    The `None` above answers two questions at once — "not my command" and "my
+    command, in a shape I refuse" — and exiting 0 on both is items 34 and 28:
+    the agent believes it recorded something, nothing was written, and the gate
+    that needed the evidence blocks later with no connection to this moment.
+
+    Only when the host says the command *succeeded*. A non-zero exit means the
+    script's own parser already refused it and said why, and repeating that
+    here would turn one clear message into two.
+    """
+    if bash_exit_code(event) != 0:
+        return
+    if not looks_like_a_record(command, SCRIPT_TAIL):
+        return
+    exit_warn(not_the_taught_form('suite_green', TAUGHT_PREFIX), "PostToolUse")
+
+
 def main() -> None:
     event = read_event()
     if event.get("tool_name") != "Bash":
@@ -135,6 +161,7 @@ def main() -> None:
     command = event.get("tool_input", {}).get("command", "")
     scope = _scope(command)
     if scope is None:
+        _warn_if_it_meant_to_record(command, event)
         exit_ok()
 
     if bash_exit_code(event) != 0:

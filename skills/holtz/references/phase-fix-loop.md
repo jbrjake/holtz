@@ -49,7 +49,7 @@ The subagent runs the enforced TDD sequence itself, in its worktree:
 
 1. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event fix_start --field project=holtz --field run=N --field auditor=holtz --field finding_id=BH-NNN`
 2. Write a failing test that reproduces the finding. Run it. Confirm it FAILS. (Files under `tests/**` are exempt from the pre-edit gate, so this write is allowed.)
-3. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event test_failed_before_fix --field project=holtz --field run=N --field auditor=holtz --field finding_id=BH-NNN --field test_name=...`
+3. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event test_failed_before_fix --field project=holtz --field run=N --field auditor=holtz --field finding_id=BH-NNN --field test_name=...` — alone on its own Bash line; chaining records nothing.
 4. Write the fix. (The pre-edit hook now allows the source edit because step 3 is on the ledger.) Run the failing test. Confirm it PASSES.
 5. Run blast radius: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json blast_radius <node> --depth 2`
 6. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field project=holtz --field run=N --field auditor=holtz --field phase=fix_loop --field step=10 --field finding_id=BH-NNN --field target_node=<node> --field depth=2 --field affected_count=N`
@@ -249,7 +249,9 @@ export HOLTZ_PYTEST='.venv/bin/python -m pytest -x --ff --tb=short -q'  # or: po
 export HOLTZ_LINT='.venv/bin/ruff check .'                             # or: poetry run ruff check .
 ```
 
-Unset, these default to `python3 -m pytest -x --ff --tb=short -q` and `ruff check .`. Do not put `--lf`/`--last-failed` in `HOLTZ_PYTEST`: it runs only the previously-failing tests, so a green would mean nothing. When a gate command fails, Sahjhan surfaces a tail of its stderr in the block reason (sahjhan ≥ 0.16.0, holtz #63).
+Unset, these default to `python3 -m pytest -x --ff --tb=short -q` and `ruff check .`. Do not put `--lf`/`--last-failed` in `HOLTZ_PYTEST`: it runs only the previously-failing tests, so a green would mean nothing.
+
+`$HOLTZ_PYTEST` is how the suite reaches a project's own interpreter. The scripts under `enforcement/scripts/` are launched with `python3` and no wrapper, exactly as written above — they need no project environment of their own. When a gate command fails, Sahjhan surfaces a tail of its stderr in the block reason (sahjhan ≥ 0.16.0, holtz #63).
 
 ```dot
 digraph {

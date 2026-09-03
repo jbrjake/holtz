@@ -76,6 +76,11 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _ledger_query import _hooks_dir, query_ledger, sahjhan_target  # noqa: E402
+from _recorded_command import (  # noqa: E402
+    CWD_HELP,
+    INTERPRETERS,
+    refuse_cwd_with_record,
+)
 
 
 def _audit_data_dir(cwd: str) -> str:
@@ -358,8 +363,15 @@ def _record_command(scope: str) -> str:
 # a command it can identify, so a drift between "what the skill file teaches"
 # and "what the courier accepts" would be a silent deadlock — the agent runs a
 # green suite and nothing is ever written.
-_SCRIPT_TAIL = os.path.join("enforcement", "scripts", "verify_suite.py")
-_INTERPRETERS = frozenset({"python", "python3", "py"})
+SCRIPT_TAIL = os.path.join("enforcement", "scripts", "verify_suite.py")
+
+#: The invariant head of the taught invocation — what a courier quotes back
+#: when it refuses a shape. Pinned against the document by
+#: `TestTheWarningQuotesTheTaughtForm` rather than trusted to stay in step.
+TAUGHT_PREFIX = (
+    "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record"
+)
+_INTERPRETERS = INTERPRETERS
 
 
 def record_scope_of(segment: str) -> str | None:
@@ -389,7 +401,7 @@ def record_scope_of(segment: str) -> str | None:
         return None
     if os.path.basename(tokens[0]) not in _INTERPRETERS:
         return None
-    if not tokens[1].endswith(_SCRIPT_TAIL):
+    if not tokens[1].endswith(SCRIPT_TAIL):
         return None
 
     scope = "full"  # build_parser's default for --scope
@@ -793,13 +805,15 @@ def build_parser() -> argparse.ArgumentParser:
             "that subset is complete"
         ),
     )
-    parser.add_argument("--cwd", default=".", help="target project directory")
+    parser.add_argument("--cwd", default=None, help=CWD_HELP)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    cwd = os.path.abspath(args.cwd)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    refuse_cwd_with_record(parser, args)
+    cwd = os.path.abspath(args.cwd or ".")
 
     root = repo_root(cwd)
     if root is None:

@@ -28,11 +28,11 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**11 of 32 units · 13 of 51 items · 38 items across 21 units remain.**
+**12 of 32 units · 15 of 51 items · 36 items across 20 units remain.**
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
-W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35).
-Commits are in `git log`; do not re-summarise them here.
+W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
+W12 (34, 28). Commits are in `git log`; do not re-summarise them here.
 
 **W11 (item 42) is STOPPED on an upstream ask — do not start it.**
 `sahjhan#49`: the daemon's `enforcement_update` merges only at the top level
@@ -150,10 +150,16 @@ carrying the number forward:
 
 ## Do this next
 
-### 1. W12 (34, 28), then W13 (37, 17), W14 (5, 10).
+### 1. W13 (37, 17), then W14 (5, 10).
 
-P2's remainder. W10 is `DONE`; **W11 is stopped upstream — skip it** (above).
-None of W12–W14 depends on W11 or on anything else unlanded.
+P2's remainder. W10 and W12 are `DONE`; **W11 is stopped upstream — skip it**
+(above). Neither W13 nor W14 depends on W11 or on anything else unlanded.
+
+**W12 left a shared module worth knowing about before touching a courier:**
+`enforcement/scripts/_recorded_command.py`. A recognizer's `None` no longer
+means one thing — the couriers ask `looks_like_a_record` to tell "not my
+command" from "my command, refused", and warn only on the second. Adding a
+fifth recorded command means importing from there, not repeating the shape.
 
 **Before starting any of them, read W09's settled decision** (the ⭐ box in its
 unit): when a field needs checking in two places, look at *which* declaration

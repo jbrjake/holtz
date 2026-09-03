@@ -563,6 +563,20 @@ _SHELL_CHAIN_IDIOMS = [
     ("|| echo fail", "or-chain"),
 ]
 
+# Idioms that put another command *before* the sahjhan one (W12 / item 34).
+#
+# The shape a fix subagent naturally writes — run the test, then record that it
+# failed — and the one `phase-fix-loop.md` invited by teaching that step without
+# the "alone on its own Bash line" warning its three siblings carry. The
+# PreToolUse hook must keep allowing it: the line is legitimate work and
+# blocking it would be worse than not crediting it. What changed in W12 is that
+# `tdd_courier` now *says* the evidence row was not written, instead of exiting
+# 0 in silence — see `test_recorded_command_shapes.py`.
+_SHELL_PREFIX_CHAIN_IDIOMS = [
+    ("pytest -q tests/test_x.py; ", "test run before"),
+    ("ruff check . && ", "lint before"),
+]
+
 
 @pytest.mark.parametrize(
     "base_cmd,cmd_label",
@@ -623,6 +637,23 @@ def test_subcmd_with_chain_idiom(base_cmd, cmd_label, chain, chain_label):
     """Every allowed subcommand + chained second command must be allowed."""
     command = f"{base_cmd} {chain}"
     _assert_allowed(command, f"{cmd_label} + {chain_label}")
+
+
+# Prefix chains (pytest ...; sahjhan ...) must work with all subcommands
+@pytest.mark.parametrize(
+    "base_cmd,cmd_label",
+    _REPRESENTATIVE_SUBCMDS,
+    ids=[label for _, label in _REPRESENTATIVE_SUBCMDS],
+)
+@pytest.mark.parametrize(
+    "prefix,prefix_label",
+    _SHELL_PREFIX_CHAIN_IDIOMS,
+    ids=[label for _, label in _SHELL_PREFIX_CHAIN_IDIOMS],
+)
+def test_subcmd_with_prefix_chain_idiom(base_cmd, cmd_label, prefix, prefix_label):
+    """Every allowed subcommand preceded by other work must still be allowed."""
+    command = f"{prefix}{base_cmd}"
+    _assert_allowed(command, f"{prefix_label} + {cmd_label}")
 
 
 # Bare sahjhan with help flags

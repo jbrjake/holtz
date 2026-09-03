@@ -49,6 +49,11 @@ from typing import NamedTuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _ledger_query import query_ledger, sahjhan_target  # noqa: E402
+from _recorded_command import (  # noqa: E402
+    CWD_HELP,
+    INTERPRETERS,
+    refuse_cwd_with_record,
+)
 
 BRIEF_PATH = os.path.join("docs", "holtz", "patterns-brief.md")
 ARCHIVE_PATH = os.path.join("docs", "holtz", "patterns-brief-archive.md")
@@ -219,8 +224,15 @@ def round_yield(cwd: str) -> tuple[Yield | None, str]:
 # imports it rather than carrying a second regex: the courier records only for a
 # command it can identify, so a drift between what the skill file teaches and
 # what the courier accepts would be a silent deadlock.
-_SCRIPT_TAIL = os.path.join("enforcement", "scripts", "pattern_round.py")
-_INTERPRETERS = frozenset({"python", "python3", "py"})
+SCRIPT_TAIL = os.path.join("enforcement", "scripts", "pattern_round.py")
+
+#: The invariant head of the taught invocation — what a courier quotes back
+#: when it refuses a shape. Pinned against the document by
+#: `TestTheWarningQuotesTheTaughtForm` rather than trusted to stay in step.
+TAUGHT_PREFIX = (
+    "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/pattern_round.py --record"
+)
+_INTERPRETERS = INTERPRETERS
 
 
 def siblings_of(segment: str) -> str | None:
@@ -243,7 +255,7 @@ def siblings_of(segment: str) -> str | None:
         return None
     if os.path.basename(tokens[0]) not in _INTERPRETERS:
         return None
-    if not tokens[1].endswith(_SCRIPT_TAIL):
+    if not tokens[1].endswith(SCRIPT_TAIL):
         return None
 
     siblings: str | None = None
@@ -318,14 +330,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--siblings-found",
         help="how many sibling findings this round filed (required with --record)",
     )
-    parser.add_argument("--cwd", default=".", help="target project directory")
+    parser.add_argument("--cwd", default=None, help=CWD_HELP)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    cwd = os.path.abspath(args.cwd)
+    refuse_cwd_with_record(parser, args)
+    cwd = os.path.abspath(args.cwd or ".")
 
     if args.show:
         return mode_show(cwd)

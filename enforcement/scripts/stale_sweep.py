@@ -63,6 +63,11 @@ from typing import NamedTuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _ledger_query import query_ledger, sahjhan_target  # noqa: E402
+from _recorded_command import (  # noqa: E402
+    CWD_HELP,
+    INTERPRETERS,
+    refuse_cwd_with_record,
+)
 
 # The line `--record` prints and `stale_sweep_courier.py` requires before it
 # writes anything. Named here, imported there — the two ends of a channel that
@@ -210,8 +215,15 @@ def check(cwd: str, present: list[str], retired: list[str]) -> tuple[Coverage | 
 # One recognizer, defined beside the command it recognizes, imported by the
 # courier rather than restated there — a drift between what the skill file
 # teaches and what the courier accepts would be a silent deadlock.
-_SCRIPT_TAIL = os.path.join("enforcement", "scripts", "stale_sweep.py")
-_INTERPRETERS = frozenset({"python", "python3", "py"})
+SCRIPT_TAIL = os.path.join("enforcement", "scripts", "stale_sweep.py")
+
+#: The invariant head of the taught invocation — what a courier quotes back
+#: when it refuses a shape. Pinned against the document by
+#: `TestTheWarningQuotesTheTaughtForm` rather than trusted to stay in step.
+TAUGHT_PREFIX = (
+    "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/stale_sweep.py --record"
+)
+_INTERPRETERS = INTERPRETERS
 
 
 def verdicts_of(segment: str) -> tuple[list[str], list[str]] | None:
@@ -234,7 +246,7 @@ def verdicts_of(segment: str) -> tuple[list[str], list[str]] | None:
         return None
     if os.path.basename(tokens[0]) not in _INTERPRETERS:
         return None
-    if not tokens[1].endswith(_SCRIPT_TAIL):
+    if not tokens[1].endswith(SCRIPT_TAIL):
         return None
 
     present: list[str] | None = None
@@ -309,21 +321,34 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print the ids this sweep must account for, one per line (diagnostic)",
     )
-    parser.add_argument("--present", help="ids the sweep found still present")
+    parser.add_argument(
+        "--present",
+        help="ids the sweep found still present (required with --record; "
+             "pass --present '' for a sweep that retired everything)",
+    )
     parser.add_argument("--retired", help="ids the sweep could not reproduce")
-    parser.add_argument("--cwd", default=".", help="target project directory")
+    parser.add_argument("--cwd", default=None, help=CWD_HELP)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    cwd = os.path.abspath(args.cwd)
+    refuse_cwd_with_record(parser, args)
+    cwd = os.path.abspath(args.cwd or ".")
 
     if args.show:
         return mode_show(cwd)
-    if args.present is None and args.retired is None:
-        parser.error("--record requires --present and/or --retired")
+    if args.present is None:
+        # `verdicts_of` returns None without `--present`, so accepting it here
+        # meant the script checked the board, printed its marker and exited 0
+        # while the courier recorded nothing and said nothing (item 28). An
+        # empty sweep states itself as `--present ''`.
+        parser.error(
+            "--record requires --present; pass --present '' for a sweep that "
+            "retired every finding. Without it the courier cannot recognise "
+            "the command and records nothing."
+        )
     return mode_record(cwd, _ids(args.present), _ids(args.retired))
 
 

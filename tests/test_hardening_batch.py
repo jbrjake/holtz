@@ -207,9 +207,16 @@ class _Board:
         return json.loads(result.stdout)
 
     def record(self, module):
+        """The recorded form, which no longer takes `--cwd` (item 34).
+
+        The flag and `--record` together exit 0 and record nothing, so the
+        parser refuses the pair. Pointing the *process* at the board is what
+        the agent does anyway — it runs from the project directory — so this
+        is the production shape rather than a concession to the check.
+        """
         return subprocess.run(
-            [sys.executable, _SCRIPT, "--record", "--module", module,
-             "--cwd", self.root],
+            [sys.executable, _SCRIPT, "--record", "--module", module],
+            cwd=self.root,
             capture_output=True, text=True, timeout=60, env=self.env,
         )
 

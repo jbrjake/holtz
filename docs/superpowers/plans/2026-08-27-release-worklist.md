@@ -60,7 +60,7 @@ imprecision (`CLAUDE.md`).
 | W09 | 25, 26 | B | `DONE` — W06's mechanism widened, not duplicated | — |
 | W10 | 35 | B | `DONE` — wider than the item said: one actor is enough | W01 |
 | W11 | 42 | B | `BLOCKED` — upstream, sahjhan#49; step 2 fired | W01, **sahjhan#49** |
-| W12 | 34, 28 | B | `TODO` | — |
+| W12 | 34, 28 | B | `DONE` — one shared refusal, four scripts | — |
 | W13 | 37, 17 | B | `TODO` | — |
 | W14 | 5, 10 | B | `TODO` | — |
 | **P3 — before release** ||||
@@ -2475,8 +2475,59 @@ false of the write. No compare-and-swap and no concurrency test exist.
 
 ## W12 — Items 34 + 28: couriers go silent when a CLI accepts what its recognizer refuses
 
-**Status:** `TODO`  ·  **Tier:** B
+**Status:** `DONE`  ·  **Tier:** B
 **Commit:** `fix(enforcement): each script's parser refuses exactly what its courier refuses`
+
+### The shape, once, instead of four times
+
+`None` from a recognizer answered two questions at once — *"not my command"*
+and *"my command, in a shape I refuse"* — and every courier exited 0 on both.
+Four instances of that is what items 34 and 28 are. So the fix is two halves,
+each in one place:
+
+* **`enforcement/scripts/_recorded_command.py`** — `looks_like_a_record` (the
+  discriminator a courier uses to choose between silence and a warning),
+  `refuse_cwd_with_record` (the CLI-side half), `INTERPRETERS` and the warning
+  text. The four scripts and five couriers read them from here; a fifth
+  recorded command gets the behaviour by importing rather than by remembering.
+* **`TAUGHT_PREFIX`** on each script — the form the warning quotes back, pinned
+  against the reference files by `TestTheWarningQuotesTheTaughtForm`, so a
+  courier can never tell an agent to run something the docs do not teach.
+
+### The two forks the unit left open, and how they were picked
+
+**Step 1 — `--cwd`: dropped from the recorded form, not taught to the
+recognizer.** Teaching it would give back the property all four docstrings
+state: the courier derives against the *event's* cwd, so a recorded command
+pointed elsewhere attaches another project's board to this ledger. Presence is
+refused rather than value, because that is what the recognizers refuse —
+`--cwd .` is as unparseable to them as `--cwd /other`. The flag stays on the
+diagnostic paths (`--show`, `--check`), which is where it was always for.
+
+**Step 3 — the taught spelling is the only supported one, and it is said where
+`HOLTZ_PYTEST` is introduced.** Widening `_INTERPRETERS` loses: `poetry run`,
+`uv run`, `conda run -n env`, a venv shim — a wrapper lands in `tokens[0]` and
+shifts the script into `tokens[2]`, and the space is not enumerable. It is also
+unnecessary: these scripts need no project environment, and `$HOLTZ_PYTEST` is
+already the seam for a suite that does. So the failure is made **loud** instead,
+which is what V3 asks for (*"either records or fails loudly … silence is not"*).
+
+### One instance found in this repo while building it
+
+`scripts/venv-run.sh` — added two commits earlier, in `7b85f64`, to give the
+session one allowlistable prefix. `scripts/venv-run.sh python3
+…/verify_suite.py --record` puts `venv-run.sh` in `tokens[0]`, so every
+recognizer returns `None` and the courier exits silently. The defect is not
+hypothetical: the repo built a wrapper that trips it two commits before the
+unit that fixes it.
+
+### Fixture edits, recorded rather than quietly made
+
+Two test helpers passed `--record --cwd`, which the parser now refuses:
+`test_hardening_batch._Board.record` and `test_verify_suite._run_verify`. Both
+now pass `cwd=` to the subprocess instead, which is the shape the agent uses —
+it runs from the project directory. `_run_verify` already did; only the flag
+came off.
 
 ### Defect · at least four scripts
 
@@ -2491,32 +2542,69 @@ false of the write. No compare-and-swap and no concurrency test exist.
 
 ### Plan
 
-- [ ] **1.** Each script's argument parser refuses exactly what its courier
+- [x] **1.** Each script's argument parser refuses exactly what its courier
       refuses: `--present` required with `--record`; `--cwd` dropped from the
-      recorded form (or taught to the recognizer — pick one, read it from one place)
-- [ ] **2.** Every courier `exit_warn`s on the `None` path instead of `exit_ok`
-- [ ] **3.** Widen `_INTERPRETERS` to cover the invited shapes, **or** make the
+      recorded form (or taught to the recognizer — pick one, read it from one place).
+      **Dropped**, per the box above. `refuse_cwd_with_record` is the one place,
+      and `stale_sweep`'s `--present` is now required with `--record` (item 28)
+- [x] **2.** Every courier `exit_warn`s on the `None` path instead of `exit_ok`.
+      ⚠️ **Not the whole `None` path** — that path is also every unrelated Bash
+      line in the session, and warning there would fire on `ls`. The four script
+      couriers warn when the line **names the script and passes `--record`**;
+      `tdd_courier` warns when a segment of a chained line *is* the recording
+      command. Both are "my command, refused", which is the case the item is
+      about; "not my command" stays silent
+- [x] **3.** Widen `_INTERPRETERS` to cover the invited shapes, **or** make the
       taught command the only supported spelling and say so where `HOLTZ_PYTEST` is
       introduced. Do not leave `phase-fix-loop.md:230` inviting a shape that
-      silently records nothing
-- [ ] **4.** Add the "run it alone" warning to `phase-fix-loop.md:52`, matching
-      `:69/:150/:174`
+      silently records nothing. **Took the second**, per the box above
+- [x] **4.** Add the "run it alone" warning to `phase-fix-loop.md:52`, matching
+      `:69/:150/:174` — now on the `test_failed_before_fix` line at `:52`
 
 ### Validation
 
-- [ ] **V1** For each of the four: a command the CLI accepts but the recognizer
+- [x] **V1** For each of the four: a command the CLI accepts but the recognizer
       refuses now **fails at the CLI** (non-zero, with a message) rather than
-      exiting 0 and recording nothing. Evidence: ___
-- [ ] **V2** A courier reaching its `None` path emits a warning that reaches the
+      exiting 0 and recording nothing. Evidence:
+      `TestTheParserRefusesWhatTheCourierRefuses`, parametrized over all four.
+      ⚠️ **`returncode != 0` is a vacuous assertion here** and the RED run is what
+      showed it: on the unmodified tree these commands already exited non-zero,
+      because a bare tmp dir has no ledger. So the test asserts **exit 2** — the
+      parser's own code — and that `"ledger"` is absent from stderr, i.e. it was
+      refused before it read anything. `test_cwd_still_points_the_diagnostic_paths`
+      is the companion: green before, during and after, so "refuse `--cwd`" could
+      not have been implemented by deleting the flag.
+- [x] **V2** A courier reaching its `None` path emits a warning that reaches the
       transcript. **Silence is the defect**, so a test that only checks "nothing
-      recorded" reproduces the bug rather than catching it. Evidence: ___
-- [ ] **V3** `poetry run python …/verify_suite.py --record --scope full` either
+      recorded" reproduces the bug rather than catching it. Evidence: every test in
+      `TestTheCourierSaysSoInsteadOfExitingQuiet` reads the warning text, none
+      asserts an absence. RED first as *"passed over a wrapped record command in
+      silence"* for all four couriers. Two guards keep the warning from becoming
+      noise, which is the same failure from the other side:
+      `test_reading_the_script_is_not_running_it` (this repo edits these scripts
+      constantly — `git add`/`cat` must stay silent) and
+      `test_a_failed_command_is_not_warned_about_twice` (the parser already said it).
+- [x] **V3** `poetry run python …/verify_suite.py --record --scope full` either
       records or fails loudly — assert which the ruling chose. Both are acceptable;
-      silence is not. Evidence: ___
-- [ ] **V4** Add the chained form (`pytest …; sahjhan event …`) to the
-      combinatorial matrix in `test_contract_commands.py`. Evidence: ___
-- [ ] **V5 · non-vacuity** Restore one recognizer's narrow form → V1 goes red.
-      Evidence: ___
+      silence is not. Evidence: **fails loudly.**
+      `test_a_wrapper_before_the_interpreter_warns`, over all four, asserting both
+      `NOT recorded` and that the warning names `python3` — a warning that does not
+      say what to run instead is only half the fix.
+- [x] **V4** Add the chained form (`pytest …; sahjhan event …`) to the
+      combinatorial matrix in `test_contract_commands.py`. Evidence:
+      `_SHELL_PREFIX_CHAIN_IDIOMS` + `test_subcmd_with_prefix_chain_idiom`. The
+      matrix's claim is that the PreToolUse hook keeps **allowing** it — the line
+      is legitimate work, and blocking it would be worse than not crediting it.
+      The crediting half is `test_the_tdd_record_chained_with_a_test_run_warns`.
+- [x] **V5 · non-vacuity** Restore one recognizer's narrow form → V1 goes red.
+      Evidence: **both arms.** Measured — with `enforcement/` and `skills/` stashed,
+      17 of the new tests failed and each for the defect's own reason (the four
+      `--cwd` parsers ran to the ledger instead of refusing; all four couriers
+      "passed over a wrapped record command in silence"), while every
+      unchanged-behaviour guard stayed green. And permanent, as
+      `TestTheRefusalsAreWhatDoIt`: neutering `refuse_cwd_with_record` makes the
+      CLI accept `--record --cwd` again, and `looks_like_a_record` returning False
+      returns the courier to silence.
 
 ---
 

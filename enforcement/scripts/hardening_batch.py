@@ -53,6 +53,11 @@ from typing import NamedTuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from _ledger_query import query_ledger, sahjhan_target  # noqa: E402
+from _recorded_command import (  # noqa: E402
+    CWD_HELP,
+    INTERPRETERS,
+    refuse_cwd_with_record,
+)
 from merge_punchlists import parse_location  # noqa: E402
 
 # The line `--record` prints and `hardening_batch_courier.py` requires before it
@@ -255,8 +260,15 @@ def _spent_commits(cwd: str) -> tuple[set[str] | None, str]:
 # One recognizer, defined beside the command it recognizes, imported by the
 # courier rather than restated there — a drift between what the skill file
 # teaches and what the courier accepts would be a silent deadlock.
-_SCRIPT_TAIL = os.path.join("enforcement", "scripts", "hardening_batch.py")
-_INTERPRETERS = frozenset({"python", "python3", "py"})
+SCRIPT_TAIL = os.path.join("enforcement", "scripts", "hardening_batch.py")
+
+#: The invariant head of the taught invocation — what a courier quotes back
+#: when it refuses a shape. Pinned against the document by
+#: `TestTheWarningQuotesTheTaughtForm` rather than trusted to stay in step.
+TAUGHT_PREFIX = (
+    "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/hardening_batch.py --record"
+)
+_INTERPRETERS = INTERPRETERS
 
 
 def module_of_command(segment: str) -> str | None:
@@ -279,7 +291,7 @@ def module_of_command(segment: str) -> str | None:
         return None
     if os.path.basename(tokens[0]) not in _INTERPRETERS:
         return None
-    if not tokens[1].endswith(_SCRIPT_TAIL):
+    if not tokens[1].endswith(SCRIPT_TAIL):
         return None
 
     module: str | None = None
@@ -356,14 +368,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="print the module -> ids map this batch works from (diagnostic)",
     )
     parser.add_argument("--module", help="the containing directory this commit hardens")
-    parser.add_argument("--cwd", default=".", help="target project directory")
+    parser.add_argument("--cwd", default=None, help=CWD_HELP)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    cwd = os.path.abspath(args.cwd)
+    refuse_cwd_with_record(parser, args)
+    cwd = os.path.abspath(args.cwd or ".")
 
     if args.show:
         return mode_show(cwd)

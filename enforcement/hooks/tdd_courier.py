@@ -125,6 +125,24 @@ def _records_a_failing_test(command: str) -> bool:
     return parsed == ("event", "test_failed_before_fix")
 
 
+def _chains_the_record(command: str) -> bool:
+    """Is the recording command in here, riding on a longer shell line?
+
+    The refusal above is right and stays. What was wrong was its silence: a
+    subagent writing `pytest …; sahjhan event test_failed_before_fix …` records
+    nothing, and the next thing it sees is the TDD gate refusing its source
+    edit — which is item 19's mis-attribution one step further on, except there
+    is no evidence row to mis-attribute. `phase-fix-loop.md` teaches this step
+    without the "run it alone" warning its three siblings carry, so the shape
+    is one the document invites.
+    """
+    segments = _split_shell_segments(command)
+    return len(segments) > 1 and any(
+        _extract_sahjhan_subcmd(segment) == ("event", "test_failed_before_fix")
+        for segment in segments
+    )
+
+
 def main() -> None:
     event = read_event()
     if event.get("tool_name") != "Bash":
@@ -132,6 +150,17 @@ def main() -> None:
 
     command = event.get("tool_input", {}).get("command", "")
     if not _records_a_failing_test(command):
+        if bash_exit_code(event) == 0 and _chains_the_record(command):
+            exit_warn(
+                "tdd_evidence NOT recorded: the recording command was chained "
+                "with other work, and this courier records only for a line "
+                "that is nothing else. The event itself landed; the evidence "
+                "row that pairs it to you did not, so the TDD gate will refuse "
+                "your source edit. Run the `sahjhan ... event "
+                "test_failed_before_fix ...` line again, alone on its own Bash "
+                "line.",
+                "PostToolUse",
+            )
         exit_ok()
 
     if bash_exit_code(event) != 0:
