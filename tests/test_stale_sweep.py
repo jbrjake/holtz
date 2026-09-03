@@ -133,6 +133,43 @@ class _Board:
         self.sah("event", "finding_deferred", "--field", f"id={finding_id}",
                  "--field", "reason=cant_reproduce", *_COMMON)
 
+    def enter_fix_loop(self):
+        """The state a sweep runs in, so real transitions are accepted."""
+        self.sah("event", "state_transition", "--field", "from=merge_done",
+                 "--field", "to=fix_loop", "--field", "command=start_fix_loop",
+                 "--field", "run=1", "--field", "auditor=holtz", "--field", "project=t")
+
+    def retire(self, finding_id):
+        """Retire a finding the way Step 11b does — through the transition.
+
+        `defer_cant_reproduce` is a *transition*, so the engine writes a
+        `state_transition` of its own alongside the `finding_deferred` it
+        emits. `defer_cant_reproduce` above writes only the event, which is
+        the shape every earlier test used and the reason a run-global
+        watermark looked survivable.
+        """
+        investigations = os.path.join(self.root, "docs", "holtz", "investigations")
+        os.makedirs(investigations, exist_ok=True)
+        with open(os.path.join(investigations, f"{finding_id}.md"), "w",
+                  encoding="utf-8") as fh:
+            fh.write("reproduction attempts\n")
+        self.sah("event", "fix_start", "--field", f"finding_id={finding_id}",
+                 "--field", "project=t", "--field", "run=1", "--field", "auditor=holtz")
+        self.sah("transition", "defer_cant_reproduce", finding_id)
+
+    def sibling_fix_commit(self, finding_id):
+        """Another actor's fix landing while this sweep is in progress.
+
+        Both halves, as F2's `two_actors.sibling_fix_commit` records them: the
+        run-global `state_transition` — the thing that used to move this
+        sweep's window — and the `finding_resolved` the transition auto-emits,
+        which is what legitimately takes its own finding off the board.
+        """
+        self.sah("event", "state_transition", "--field", "from=fix_loop",
+                 "--field", "to=fix_loop", "--field", "command=fix_commit",
+                 "--field", "run=1", "--field", "auditor=holtz", "--field", "project=t")
+        self.resolve(finding_id)
+
 
 @pytest.fixture
 def board(tmp_path):
@@ -219,6 +256,132 @@ class TestCoverageIsTheCost:
         result, problem = stale_sweep.check(board.root, ["BH-001"], ["BH-002"])
         assert problem == ""
         assert result.population == ["BH-001", "BH-002"]
+
+
+#: The floor `_POPULATION_SQL` carried before item 35 — a watermark over the
+#: whole run. Restated here and nowhere else so V4's mutation is exactly the
+#: one line the fix changed.
+_RUN_GLOBAL_WATERMARK = (
+    "COALESCE((SELECT MAX(t.seq) FROM events t "
+    "WHERE t.type='state_transition'), 0)"
+)
+
+
+class TestTheWindowIsTheSweepNotTheRun:
+    """Item 35: "this sweep" was scoped to the run, and anyone could move it.
+
+    The window was `seq > MAX(seq of any state_transition)`. Every one of these
+    drives a `state_transition` that the sweep does not own — or, worse, one
+    that the sweep *does* — and asks whether the findings it retired are still
+    its work.
+    """
+
+    def test_two_retirements_by_one_actor_are_both_still_the_sweep_s_work(self, board):
+        """No concurrency at all, and the window still loses a retirement.
+
+        `defer cant-reproduce` is itself a transition, and the engine writes
+        that `state_transition` *below* the `finding_deferred` it emits. So the
+        second retirement's own transition stepped a run-global watermark past
+        the first retirement's row. A sweep that retires two findings is the
+        ordinary case, not the concurrent one.
+        """
+        board.file("BH-002")
+        board.file("BH-003")
+        board.enter_fix_loop()
+        board.retire("BH-002")
+        board.retire("BH-003")
+
+        result, problem = stale_sweep.check(
+            board.root, ["BH-001"], ["BH-002", "BH-003"])
+        assert problem == ""
+        assert result.population == ["BH-001", "BH-002", "BH-003"]
+
+    def test_a_sibling_fix_commit_does_not_take_the_retirements_with_it(self, board):
+        """V1 — a three-wide loop lands a fix while the sweep is running."""
+        for finding_id in ("BH-002", "BH-003", "BH-004"):
+            board.file(finding_id)
+        board.defer_cant_reproduce("BH-002")
+        board.defer_cant_reproduce("BH-003")
+        board.sibling_fix_commit("BH-004")
+
+        result, problem = stale_sweep.check(
+            board.root, ["BH-001"], ["BH-002", "BH-003"])
+        assert problem == ""
+        assert result.population == ["BH-001", "BH-002", "BH-003"], (
+            "BH-004 is off the board because the sibling resolved it; "
+            "BH-002 and BH-003 are this sweep's own retirements"
+        )
+
+    def test_the_sibling_between_two_retirements_is_the_case_adjacency_hides(self, board):
+        """V2 — the interleaving that needs three events to construct.
+
+        A window bug that only shows up when the sibling lands *after* both
+        retirements is the "a SQL LIMIT is not a window" trap: the natural test
+        set is consecutive, and the two spellings agree on every consecutive
+        case. Here the sibling sits between the two retirements, so only the
+        earlier one falls below a run-global watermark.
+        """
+        for finding_id in ("BH-002", "BH-003", "BH-004"):
+            board.file(finding_id)
+        board.defer_cant_reproduce("BH-002")
+        board.sibling_fix_commit("BH-004")
+        board.defer_cant_reproduce("BH-003")
+
+        result, problem = stale_sweep.check(
+            board.root, ["BH-001"], ["BH-002", "BH-003"])
+        assert problem == ""
+        assert result.population == ["BH-001", "BH-002", "BH-003"]
+
+    def test_the_run_global_watermark_is_what_lost_the_retirements(
+        self, board, monkeypatch
+    ):
+        """V4, as a permanent test rather than a transcript.
+
+        Put the old floor back and the retirement below the sibling goes
+        missing again; restore it and it comes back. That is what says the fix
+        is the window and not something else that moved alongside it.
+
+        The mutated population is asserted as the value it must be, not as
+        "not the right one": BH-001 is still open and BH-003 still sits above
+        the sibling, so a mutation that merely broke the query would give a
+        different answer than the one the defect gives.
+        """
+        for finding_id in ("BH-002", "BH-003", "BH-004"):
+            board.file(finding_id)
+        board.defer_cant_reproduce("BH-002")
+        board.sibling_fix_commit("BH-004")
+        board.defer_cant_reproduce("BH-003")
+
+        monkeypatch.setattr(
+            stale_sweep, "_POPULATION_SQL",
+            stale_sweep._population_sql(_RUN_GLOBAL_WATERMARK))
+        mutated, _ = stale_sweep.sweep_coverage(board.root)
+        assert mutated.population == ["BH-001", "BH-003"], (
+            "the old floor should lose exactly the retirement recorded below "
+            "the sibling's transition"
+        )
+        result, problem = stale_sweep.check(
+            board.root, ["BH-001"], ["BH-002", "BH-003"])
+        assert result is None and "BH-002" in problem
+
+        monkeypatch.undo()
+        result, problem = stale_sweep.check(
+            board.root, ["BH-001"], ["BH-002", "BH-003"])
+        assert problem == ""
+        assert result.population == ["BH-001", "BH-002", "BH-003"]
+
+    def test_the_courier_states_no_window_of_its_own(self, board):
+        """V3, the half that holds by construction.
+
+        The courier re-derives rather than trusting the script, and the only
+        thing that keeps the two derivations equal is that there is one of
+        them. A second copy of the window here would agree on the day it was
+        written and silently stop agreeing later.
+        """
+        with open(os.path.join(HOOKS_DIR, "stale_sweep_courier.py"), encoding="utf-8") as fh:
+            source = fh.read()
+        assert "SELECT" not in source and "state_transition" not in source
+        assert "from stale_sweep import" in source
 
 
 @pytest.mark.hook_e2e
@@ -366,6 +529,58 @@ from test_amplification_breaker import _Run  # noqa: E402
 @pytest.fixture
 def run(real_daemon):
     return _Run(real_daemon)
+
+
+def _sweeps_recorded(run) -> int:
+    rows = json.loads(run.sah(
+        "query", "SELECT count(*) AS n FROM events WHERE type='stale_sweep_complete'",
+        "--format", "json").stdout)
+    return int(rows[0]["n"])
+
+
+@pytest.mark.slow
+@pytest.mark.integration
+class TestTheWindowEndToEnd:
+    """The same two claims, driven through the script and its courier.
+
+    `check` running in-process is the script's own reading. These go through
+    the real daemon, because the window has to hold at the end that actually
+    writes the event — and because `stale_sweep_complete`, the thing the window
+    is now anchored on, is restricted and only the courier can put one there.
+    """
+
+    def test_a_sibling_fix_commit_mid_sweep_still_lets_the_sweep_record(self, run):
+        """V1 and V3's other half at once: the courier re-derives, so this is
+        the window holding where the ledger entry is actually made."""
+        for finding_id in ("BH-001", "BH-002", "BH-003"):
+            run.file(finding_id)
+        run.defer("BH-002", reason="cant_reproduce")
+        run.sah("event", "state_transition", "--field", "from=fix_loop",
+                "--field", "to=fix_loop", "--field", "command=fix_commit")
+        run.resolve("BH-003")
+
+        run.sweep(present=["BH-001"], retired=["BH-002"])
+        assert _sweeps_recorded(run) == 1
+
+    def test_an_earlier_sweep_s_retirements_stay_off_the_board(self, run):
+        """The property the run-global watermark bought, and the one a window
+        anchored on the sweep has to keep.
+
+        A finding retired by the *previous* sweep is not this sweep's work.
+        Asking for its verdict again would fail every sweep after the first —
+        the failure mode the fix could have traded the old one for.
+        """
+        run.file("BH-001")
+        run.file("BH-002")
+        run.defer("BH-002", reason="cant_reproduce")
+        run.sweep(present=["BH-001"], retired=["BH-002"])
+        assert _sweeps_recorded(run) == 1
+
+        run.sweep(present=["BH-001"])
+        assert _sweeps_recorded(run) == 2, (
+            "the second sweep recorded nothing — BH-002 is being counted as "
+            "this sweep's work a second time"
+        )
 
 
 def _owe_a_round(run, findings):

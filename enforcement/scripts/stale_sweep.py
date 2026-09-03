@@ -29,7 +29,22 @@ Two parts of the population that are easy to get wrong:
   successfully retired, which is exactly backwards.
 * **Deferred is not swept.** A finding retired by an *earlier* sweep, or
   deferred LOW by the breaker's escape, is off the board and out of the
-  population. Only this sweep's `cant_reproduce` deferrals rejoin it.
+  population. Only `cant_reproduce` deferrals since the last sweep rejoin it.
+
+**"Since the last sweep" is as precisely as the ledger can say "this sweep."**
+A `cant_reproduce` deferral records the same `phase` and `step` whether Step
+11b made it or a Step 10 fix did, and no event marks a sweep *beginning* — so
+a retirement made between two sweeps is one this sweep is asked to state a
+verdict for. That is the wider of the two readings and the safe one: the
+narrower would have to guess which deferrals were the sweep's, and guessing
+wrong drops a finding off the board with nobody accounting for it.
+
+The window is deliberately **not** the one `defer_cant_reproduce`'s own
+`fix_start` gate uses. That gate asks "has this actor started work on this
+item", and `since = "last_transition"` is the right span for it — Step 11b even
+teaches recording each `fix_start` after the previous deferral because of it.
+Reusing it here made "this sweep" mean "since anybody's last transition",
+which the sweep's own deferral transitions then moved out from under it.
 
 Usage::
 
@@ -62,11 +77,43 @@ RECORD_MARKER = "STALE-SWEEP:"
 SWEEP_PHASE = "fix_loop"
 SWEEP_STEP = "11"
 
-# The population, in one place. Findings still open, plus the ones this sweep
-# has already retired — a `cant_reproduce` deferral recorded since the last
-# state transition, which is the same window `defer_cant_reproduce`'s own
-# `fix_start` gate uses, so "this sweep" means the same span at both ends.
-_POPULATION_SQL = """
+# Where this sweep starts. A sweep's own first recorded event is whatever
+# landed after the previous sweep closed, so the floor is that sweep's
+# `stale_sweep_complete` — the only event that marks a sweep having happened,
+# and the only one no other actor writes.
+#
+# It used to be `MAX(seq)` over *any* `state_transition`, which is a run-global
+# watermark and not this sweep's anything. Two ways that lost the sweep's own
+# work, both measured against the pinned binary:
+#
+# * **The sweep moves it itself.** `defer cant-reproduce` is a transition, and
+#   the engine writes its `state_transition` *below* the `finding_deferred` it
+#   emits. So the second retirement's own transition stepped the watermark past
+#   the first retirement's row: a sweep retiring two findings lost one, with no
+#   concurrency in it at all.
+# * **A sibling moves it.** In a three-wide loop a `fix_commit` landing
+#   mid-sweep stepped it past every retirement already recorded.
+#
+# Both end the same way — `check` reports "verdicts name findings this sweep
+# does not cover", the courier writes nothing, and the round stays owed.
+#
+# A seq floor rather than a `LIMIT` over an ordered subquery: sahjhan applies an
+# outer `WHERE` before a derived table's `LIMIT`, so that form answers "any
+# event anywhere" and agrees with this one on exactly the consecutive cases.
+SWEEP_WINDOW_FLOOR = (
+    "COALESCE((SELECT MAX(s.seq) FROM events s "
+    "WHERE s.type='stale_sweep_complete'), 0)"
+)
+
+
+def _population_sql(floor: str) -> str:
+    """The population, in one place, over one named window.
+
+    ``floor`` is a parameter so a test can put the run-global watermark back
+    and require this to break — the window is the whole of the fix, so a
+    permanent mutation of it is the only thing that says so.
+    """
+    return f"""
 SELECT DISTINCT f.id FROM events f WHERE f.type='finding'
   AND (
     (f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved')
@@ -74,10 +121,12 @@ SELECT DISTINCT f.id FROM events f WHERE f.type='finding'
     OR f.id IN (
       SELECT c.id FROM events c WHERE c.type='finding_deferred'
         AND c.reason='cant_reproduce'
-        AND c.seq > COALESCE((SELECT MAX(t.seq) FROM events t
-                              WHERE t.type='state_transition'), 0))
+        AND c.seq > {floor})
   )
 """
+
+
+_POPULATION_SQL = _population_sql(SWEEP_WINDOW_FLOOR)
 
 
 class Coverage(NamedTuple):

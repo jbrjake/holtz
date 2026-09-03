@@ -58,7 +58,7 @@ imprecision (`CLAUDE.md`).
 | W31 | **50** *(new)* | C | `TODO` | W08 |
 | W32 | **51** *(new)* | C | `WIP` — pin moved to 0.25.0, V1–V4 driven; step 3 open for Jon | — *(fixed upstream: sahjhan#47)* |
 | W09 | 25, 26 | B | `DONE` — W06's mechanism widened, not duplicated | — |
-| W10 | 35 | B | `TODO` | W01 |
+| W10 | 35 | B | `DONE` — wider than the item said: one actor is enough | W01 |
 | W11 | 42 | B | `TODO` | W01 |
 | W12 | 34, 28 | B | `TODO` | — |
 | W13 | 37, 17 | B | `TODO` | — |
@@ -2275,8 +2275,46 @@ an eraser once D29 auto-defers on it.
 
 ## W10 — Item 35: `stale_sweep`'s population window is a run-global watermark
 
-**Status:** `TODO`  ·  **Tier:** B  ·  **Depends on:** W01 (F2)
+**Status:** `DONE`  ·  **Tier:** B  ·  **Depends on:** W01 (F2) — `DONE`
 **Commit:** `fix(enforcement): scope the sweep window to the sweep`
+
+### ⚠️ The defect is wider than the item's text — measured, not inferred
+
+Item 35 describes this as a **concurrency** bug: a sibling's `fix_commit`
+advancing the watermark in a three-wide loop. It also fires with **one actor
+and no concurrency at all**, and that is the common case.
+
+`defer cant-reproduce` is itself a *transition*. Driven against the pinned
+binary, the engine writes its `state_transition` **below** the
+`finding_deferred` it emits:
+
+```
+seq=5   fix_start
+seq=6   state_transition   command=defer_cant_reproduce
+seq=7   gate_attestation
+seq=8   finding_deferred   BH-002  cant_reproduce
+seq=9   fix_start
+seq=10  state_transition   command=defer_cant_reproduce   <-- past seq 8
+seq=12  finding_deferred   BH-003  cant_reproduce
+```
+
+So the second retirement's own transition steps the watermark past the first
+retirement's row. `--show` on that ledger returns `BH-001, BH-003` — BH-002 is
+gone, and `--record --retired BH-002,BH-003` fails with *"1 verdict(s) name
+findings this sweep does not cover: BH-002"*. **Any sweep retiring two or more
+findings loses all but the last.** Three measured interleavings, all on the
+pinned engine:
+
+| what happened | population before the fix |
+|---|---|
+| two retirements, no sibling | `BH-001, BH-003` — one lost |
+| sibling `fix_commit` after both retirements | `BH-001` — both lost |
+| sibling between the two retirements | `BH-001, BH-003` — one lost |
+
+The item's framing is not wrong, only narrow: the anchor is a run-global
+watermark, and the sweep is one of the things that moves it. Same defect, same
+fix; recorded here because a reader who trusted the item's text would test the
+concurrent case only, and the single-actor case is the one a real run hits.
 
 ### Defect · `stale_sweep.py:69-80`
 
@@ -2292,27 +2330,82 @@ it. This is D41 / item 1 a third time, in a courier.
 
 ### Plan
 
-- [ ] **1.** Scope the window to the sweep, not the run — define its start as the
-      sweep's own first recorded event, so a sibling's `fix_commit` cannot move it
-- [ ] **2.** Script and courier read **one** named window, imported not restated —
-      the discipline both files already claim in their comments
-- [ ] **3.** Fix the docstring's "same window as `defer_cant_reproduce`" claim, or
+- [x] **1.** Scope the window to the sweep, not the run — define its start as the
+      sweep's own first recorded event, so a sibling's `fix_commit` cannot move it.
+      **Named `SWEEP_WINDOW_FLOOR`, anchored on the previous
+      `stale_sweep_complete`** — a sweep's own first recorded event is by
+      construction whatever landed after the previous sweep closed, and that
+      completion is the only event marking a sweep at all. A seq floor, not a
+      `LIMIT` over an ordered subquery
+- [x] **2.** Script and courier read **one** named window, imported not restated —
+      the discipline both files already claim in their comments. The courier
+      already imported `check`; the window is now a *named* constant that the SQL
+      is built from, and `test_the_courier_states_no_window_of_its_own` fails the
+      build if the courier ever grows SQL or the word `state_transition`
+- [x] **3.** Fix the docstring's "same window as `defer_cant_reproduce`" claim, or
       make it true by moving that gate to the same named window. Do not leave the
-      comment asserting a correspondence the code no longer has
+      comment asserting a correspondence the code no longer has.
+      **Fixed the docstring, and said why the correspondence must not hold:**
+      that gate asks "has this actor started work on this item", for which
+      `since = "last_transition"` is right — `phase-fix-loop.md` Step 11b teaches
+      recording each `fix_start` after the previous deferral *because* of it.
+      Moving it would break the taught sequence to fix the wrong end
+
+### One thing the ledger cannot say, stated rather than left implicit
+
+**"Since the last sweep" is as precisely as this can be scoped.** A
+`cant_reproduce` deferral carries `phase=fix_loop, step=10` whether Step 11b
+made it or a Step 10 fix did (`transitions.toml:266`), and no event marks a
+sweep *beginning*. So a retirement made between two sweeps joins this sweep's
+population and the agent is asked for its verdict. That is the wider of the two
+readings and the safe one — the narrower would have to guess which deferrals
+were the sweep's, and a wrong guess drops a finding off the board with nobody
+accounting for it. `--show` is the authority Step 11b already points the agent
+at, so the recovery is one command and already taught.
 
 ### Validation
 
-- [ ] **V1** A sweep retires findings, a sibling `fix_commit` lands mid-sweep, then
+- [x] **V1** A sweep retires findings, a sibling `fix_commit` lands mid-sweep, then
       `--record`: retirements still covered, sweep records. Today the courier warns
-      and writes nothing. Evidence: ___
-- [ ] **V2 · the non-adjacent case** The sibling's transition sits **between** two
+      and writes nothing. Evidence:
+      `test_a_sibling_fix_commit_does_not_take_the_retirements_with_it`, RED first
+      with *"2 verdict(s) name findings this sweep does not cover: BH-002,
+      BH-003"*. Driven end to end against a real daemon by
+      `TestTheWindowEndToEnd::test_a_sibling_fix_commit_mid_sweep_still_lets_the_
+      sweep_record`, which asserts the `stale_sweep_complete` actually landed.
+      The sibling is recorded as **both** halves `fix_commit` writes — the
+      transition and the `finding_resolved` it auto-emits — so the test also
+      pins that the sibling's *own* finding leaves the board while this sweep's
+      retirements do not.
+- [x] **V2 · the non-adjacent case** The sibling's transition sits **between** two
       of the sweep's own retirements, not after both. A window bug that only shows
       up when the interleaving is adjacent is the "a SQL LIMIT is not a window"
-      trap — write the seq floor and test this explicitly. Evidence: ___
-- [ ] **V3** Courier and script resolve the same population for the same ledger —
-      by construction (same named query) and by test. Evidence: ___
-- [ ] **V4 · non-vacuity** Restore the run-global watermark → V1 and V2 go red.
-      Evidence: ___
+      trap — write the seq floor and test this explicitly. Evidence:
+      `test_the_sibling_between_two_retirements_is_the_case_adjacency_hides`, RED
+      first losing **exactly one** finding where V1's arrangement loses two — the
+      two counts differ, so neither passes for the other's reason.
+- [x] **V3** Courier and script resolve the same population for the same ledger —
+      by construction (same named query) and by test. Evidence: by construction,
+      `test_the_courier_states_no_window_of_its_own` (the courier holds no
+      `SELECT` and no `state_transition`, and imports from `stale_sweep`); by
+      test, the end-to-end case in V1 — the courier re-derives and records, so a
+      courier reading a different window would write nothing.
+- [x] **V4 · non-vacuity** Restore the run-global watermark → V1 and V2 go red.
+      Evidence: **both arms.** Measured — reverting `SWEEP_WINDOW_FLOOR` to the
+      old expression failed exactly the six new tests and left the other 28 in the
+      file green, and restoring it returned them in the same sitting. And
+      permanent — `test_the_run_global_watermark_is_what_lost_the_retirements`
+      rebuilds the SQL through `_population_sql()` with the old floor, asserts the
+      mutated population is `['BH-001', 'BH-003']` *by value* (open finding still
+      found, the retirement above the sibling still found, only the one below it
+      lost), then undoes it and requires all three back.
+- [x] **V5 · the failure mode the fix could have traded for** A second sweep must
+      not be asked for a verdict on the first sweep's retirements, or every sweep
+      after the first would fail instead. Evidence:
+      `test_an_earlier_sweep_s_retirements_stay_off_the_board` — two real sweeps
+      through the script and courier against a real daemon, asserting **two**
+      `stale_sweep_complete` rows. Not in the unit as written; added because
+      moving the floor is exactly the change that could buy V1 by breaking this.
 
 ---
 
