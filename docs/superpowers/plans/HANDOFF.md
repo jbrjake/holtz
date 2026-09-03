@@ -102,6 +102,40 @@ carrying the number forward:
   the next occurrence report its reason (the harness had been discarding every
   hook's stderr); **get that reason before changing anything.**
 
+  **✅ 2026-09-01/03 — the reason, captured. Read this before re-investigating.**
+  A pre-commit run failed **20** of these (far more than the 3–4 measured
+  before), and the preserved message was:
+
+  > `ENFORCEMENT DEGRADED: Hook eval subprocess failed`
+
+  That string has exactly one source: `enforcement/hooks/pre_tool_hook.py:155`,
+  the `except (OSError, subprocess.TimeoutExpired)` around its
+  `sahjhan hook eval` call at `timeout=5`. So the family's proximate cause is a
+  **hook's own subprocess to sahjhan failing**, not the test harness and not
+  the assertion under test.
+
+  **What is measured, and what is not.** Measured: the identical fast subset,
+  same tree, run standalone immediately after, passed **exit 0 twice**; the
+  affected files pass alone; `GIT_INDEX_FILE`/`GIT_DIR` set by hand did **not**
+  reproduce it, so the git-hook env leak is not this; `trusted-callers.toml`
+  regenerated to a **no-op diff**, so a stale manifest is not this either. Not
+  measured, and the open question: **which of the two exceptions fires.** The
+  handler collapses them, and they call for opposite responses — a timeout says
+  the machine was loaded or the daemon is wedged, an `OSError` says the binary
+  or socket is wrong. Collapsing them is why three sessions could not falsify
+  anything here.
+
+  **The concrete next step, deliberately not taken yet:** split that `except`
+  at each of the **five** sites that collapse it — `pre_tool_hook.py:155`,
+  `bash_guard.py:78` and `:152`, `_protocol_cache.py:462`,
+  `_sahjhan_bootstrap.py:1112` — so the message names the cause. Two of them
+  (`_protocol_cache`, `bash_guard:152`) return `None`/`set()` silently and need
+  a stderr line rather than a message. **This is instrumentation, not a fix:**
+  do not also change a timeout in the same commit, or the next green run will
+  again be unattributable. Note `bash_guard.py`'s `timeout=10` is pinned by
+  quiz-bank entry `[52]`, and these are daemon-calling hooks, so
+  `scripts/hash-trusted-callers.sh` must rerun (pre-commit does it).
+
 ---
 
 ## Do this next
@@ -142,6 +176,9 @@ not a required-field check. W09's mechanism is still W06's.
   it.
 - **`git` prints two `[dev …]` hashes and one is orphaned** (post-commit
   amends). Confirm with `git merge-base --is-ancestor`, never `cat-file`.
+  **Which one is orphaned is not fixed** — on `0df93b0` (W07) the *second*
+  printed hash was the dead one, the reverse of the previous occurrence. Do not
+  learn the position; run the check.
 - **The README test badge is a gated derived number** — bump it in the same
   commit that adds tests, before the run you intend to cite.
 - **A real daemon refuses `enforcement_write` from a test process**
