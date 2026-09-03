@@ -5,7 +5,7 @@
 ````markdown
 ### BH-{NNN}: {title}
 **Severity:** CRITICAL | HIGH | MEDIUM | LOW
-**Reachability:** user_reachable | fault_injected | theoretical
+**Reachability:** user_reachable | fault_injected | theoretical ← required
 **Category:** {from taxonomy below}
 **Location:** `path/to/file.py:NN`
 **Status:** OPEN | IN PROGRESS | RESOLVED | DEFERRED

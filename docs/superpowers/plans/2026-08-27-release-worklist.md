@@ -57,7 +57,7 @@ imprecision (`CLAUDE.md`).
 | W08 | 32, 43 | B | `DONE` — 32 `780ba47`; 43 landed on sahjhan 0.26.0 | — |
 | W31 | **50** *(new)* | C | `TODO` | W08 |
 | W32 | **51** *(new)* | C | `WIP` — pin moved to 0.25.0, V1–V4 driven; step 3 open for Jon | — *(fixed upstream: sahjhan#47)* |
-| W09 | 25, 26 | B | `TODO` | — |
+| W09 | 25, 26 | B | `DONE` — W06's mechanism widened, not duplicated | — |
 | W10 | 35 | B | `TODO` | W01 |
 | W11 | 42 | B | `TODO` | W01 |
 | W12 | 34, 28 | B | `TODO` | — |
@@ -2072,10 +2072,61 @@ rest on a cache shape the hooks never produce.
 
 ## W09 — Items 25 + 26: the merge destroys the grading it routes on
 
-**Status:** `TODO`  ·  **Tier:** B  ·  **both PROVEN**
+**Status:** `DONE`  ·  **Tier:** B  ·  **both PROVEN**
 **Commit:** `fix(merge): read the whole row, and require the grading that decides routing`
 
 Land together — two ends of one pipeline.
+
+### ⭐ The decision W06 left to this unit, settled by measurement
+
+W06 said `reachability` has no `[sets.*]` to point at, so W09 must either
+declare one or teach `set_valued_fields` a second kind of source — and that
+neither is "write a second checker". **Built the second**, because the two
+fields are enforced in different places and a test can tell:
+
+| field | `[sets.*]` | `pattern` | engine's answer to a non-member |
+|---|---|---|---|
+| `perspective` | 13 values | none | **exit 0, row lands** (W06's V8) |
+| `reachability` | none | `^(user_reachable\|fault_injected\|theoretical)$` | **exit 4, no row** — measured |
+
+So for `perspective` the validator *is* the enforcement and `[sets.perspective]`
+is the right source; for `reachability` the engine already refuses, and a
+`[sets.reachability]` declared beside the pattern would be a second spelling
+with nothing binding the two — the validator could then accept what the engine
+refuses, or refuse what it accepts, and no test would notice. Declaring the set
+was the option W06 guessed at ("the shape V8 would need anyway"); **V8 is still
+open for Jon**, and building its shape now would have pre-empted an unruled
+decision on top of introducing the drift.
+
+`read_event_field_pattern()` is the second source kind, and it is scoped to
+both the event and the field — `pattern_id` sits directly above `reachability`
+and also carries a pattern, so a scanner keyed on `pattern` alone would answer
+with the neighbour's domain. Both scopings are tested.
+
+### Two things found while building, each fixed with its own test
+
+- **`sahjhan query --format json` renders an absent optional column as the
+  string `"NULL"`,** not `null` and not `""`. So `str(row.get(...) or "")`
+  keeps it, and the merge would have re-filed `pattern_id=NULL`, which
+  `^PAT-\d+$` refuses — the escalation would fail outright on any finding that
+  simply had no pattern. Named as `_optional()` rather than fixed inline.
+- **The `**Reachability:**` parser used `\w+`,** which stops at a hyphen. The
+  three real grades are underscored, so this only ever misreported a
+  *misgrading*: `user-reachable` came back as `user`, and the agent was told
+  its Reachability was a string it had never written. `\S+`, the spelling the
+  `**Lens:**` line beside it already used.
+
+### Fixture edits, recorded rather than quietly made (V7)
+
+Making the field required turned **10 tests red on fixtures that were
+themselves ungraded** — `make_item`'s defaults, 8 hand-written items in
+`test_validate_punchlist.py`, and all 6 items in the shipped
+`skills/holtz/examples/sample-punchlist.md`. That is item 26 reproducing
+itself: the examples this repo ships taught the omission. They now state the
+field.
+
+**`_JUSTINE`'s BJ-002 is deliberately left ungraded** — it states neither Lens
+nor Reachability and is the reproduction both fail-safe tests read.
 
 ### Defect 25 · `merge_punchlists.py:336-339` · **the only route needing no agent intent**
 
@@ -2139,42 +2190,86 @@ an eraser once D29 auto-defers on it.
 
 ### Plan
 
-- [ ] **1.** (25) Add `reachability`, `pattern_id`, `predicted_by` to `_HOLTZ_SQL`,
-      carry them onto `Finding`, and have `_record` (`:401`) pass them through
-- [ ] **2.** (25) Confine `DEFAULT_REACHABILITY` to where a grading was genuinely
-      never stated — Justine's punchlist — never to a Holtz row that has one
-- [ ] **3.** (26) `validate_punchlist.py` errors on a missing `**Reachability:**`,
+- [x] **1.** (25) Add `reachability`, `pattern_id`, `predicted_by` to `_HOLTZ_SQL`,
+      carry them onto `Finding`, and have `_record` (`:401`) pass them through.
+      `pattern_id` is **omitted** rather than sent blank — it is `optional` but
+      pattern-constrained, so an empty one is a refused event, not an absent field
+- [x] **2.** (25) Confine `DEFAULT_REACHABILITY` to where a grading was genuinely
+      never stated — Justine's punchlist — never to a Holtz row that has one.
+      `apply_merge` now builds the escalation with `dataclasses.replace(holtz,
+      severity=…)`, so "changes exactly one field" is true **by construction**
+      and a field added to `Finding` later cannot be silently dropped again
+- [x] **3.** (26) `validate_punchlist.py` errors on a missing `**Reachability:**`,
       matching `events.toml`'s own claim about the field. ⚠️ **Use W06's
       required-field mechanism — do not write a second one.** W06 (P1) builds it
       and lands the `perspective` use; this step is its second consumer. If it
-      does not fit, widen W06's rather than hand-rolling here
-- [ ] **4.** (26) `justine-skill.md` says the word once, next to its
-      severity-calibration override
+      does not fit, widen W06's rather than hand-rolling here.
+      **Widened, per the box above:** one new source kind
+      (`read_event_field_pattern`), one new row, `set_name` generalised to
+      `declaration`. No second checker; the `validate()` loop is untouched
+- [x] **4.** (26) `justine-skill.md` says the word once, next to its
+      severity-calibration override. `punchlist-format.md`'s entry is marked
+      required alongside, matching how `**Lens:**` reads since W06
 
 ### Validation
 
-- [ ] **V1** Rewrite `test_merge_punchlists.py:538` to assert a re-file changes
+- [x] **V1** Rewrite `test_merge_punchlists.py:538` to assert a re-file changes
       `severity` and **nothing else** — compare the two filings field by field.
-      Evidence: ___
-- [ ] **V2** After the fix: `seq 2  BH-001  CRITICAL  user_reachable` — not
-      `theoretical`. Evidence: ___
-- [ ] **V3** `open_theoretical_findings` does **not** name BH-001;
+      Evidence: `test_a_higher_justine_severity_refiles_holtz_id`, now comparing
+      `_declared()` mappings with only the merge's own provenance
+      (`phase`/`step`/`auditor`) excluded. `_declared` drops the envelope by
+      name — `prev` is the hash-chain link and differs between *any* two events
+      — and asserts `{id, severity, reachability}` are present so a row-shape
+      change cannot make the comparison vacuous.
+- [x] **V2** After the fix: `seq 2  BH-001  CRITICAL  user_reachable` — not
+      `theoretical`. Evidence: `test_the_escalation_keeps_the_grading_that_
+      routes_it`; RED first with `assert 'theoretical' == 'user_reachable'`.
+- [x] **V3** `open_theoretical_findings` does **not** name BH-001;
       `all_critical_resolved` reads **false**; no `finding_deferred` is emitted.
-      Evidence: ___
-- [ ] **V4** `pattern_id` survives, so the escalated sibling stays in its round's
-      population. Evidence: ___
-- [ ] **V5** `predicted_by` survives. Evidence: ___
-- [ ] **V6** (26) `validate_punchlist.py` on an item with no `**Reachability:**` →
-      non-zero exit naming the field. Evidence: ___
-- [ ] **V7** (26) The shipped fixture reproduces the bug — `_JUSTINE`'s BJ-002
+      Evidence: `test_the_escalated_finding_is_not_swept_as_theoretical`, read
+      through the courier's own named query rather than a restatement of it.
+      RED first: `assert 'BH-001' not in ['BH-001', 'BJ-002']`.
+- [x] **V4** `pattern_id` survives, so the escalated sibling stays in its round's
+      population. Evidence: `test_the_escalation_keeps_the_round_it_belongs_to`;
+      RED first with `assert 'NULL' == 'PAT-007'` — which is also how the
+      `"NULL"` string was found.
+- [x] **V5** `predicted_by` survives. Evidence:
+      `test_the_escalation_keeps_the_prediction_link`; RED first with
+      `assert 'none' == '2'`. Its control is
+      `test_a_justine_finding_is_still_recorded_as_unpredicted` — hers has no
+      prediction and must still land `none`, so a `_record` that merely echoed
+      its argument fails.
+- [x] **V6** (26) `validate_punchlist.py` on an item with no `**Reachability:**` →
+      non-zero exit naming the field. Evidence:
+      `test_cli_exits_nonzero_naming_the_missing_reachability` (exit 1,
+      `BH-001: missing Reachability` on stdout) and `test_reachability_is_
+      required`. Membership too, not just presence:
+      `test_a_misgraded_reachability_is_rejected` and
+      `test_accepted_grades_follow_the_enforced_pattern`, which mutates the
+      pattern and asserts **both** directions.
+- [x] **V7** (26) The shipped fixture reproduces the bug — `_JUSTINE`'s BJ-002
       carries no reachability, so it must now fail validation. **That fixture edit
       is the proof; record it in the commit message** rather than quietly fixing it.
-      Evidence: ___
-- [ ] **V8** (26) Keep `test_an_unstated_reachability_is_theoretical` as a unit test
+      Evidence: `test_the_theoretical_default_is_unreachable_through_the_
+      validated_path` asserts BJ-002 is refused naming the field, and BJ-002 is
+      **kept ungraded** as the reproduction. The fixtures that *did* have to
+      change are listed in the box above and in the commit message.
+- [x] **V8** (26) Keep `test_an_unstated_reachability_is_theoretical` as a unit test
       of the *default*, and add a pipeline test that an ungraded item never reaches
-      the merge. Evidence: ___
-- [ ] **V9 · non-vacuity** Revert `_HOLTZ_SQL` → V1–V5 red. Remove the validator
-      check → V6 red. Evidence: ___
+      the merge. Evidence: the unit test is unchanged and still green; the
+      pipeline test is V7's, which reads the fallback off the merge **and** the
+      refusal off the validator for the same item. Plus
+      `test_every_reachability_the_merge_can_write_is_an_enforced_one`, the
+      domain enumerated as a set comparison.
+- [x] **V9 · non-vacuity** Revert `_HOLTZ_SQL` → V1–V5 red. Remove the validator
+      check → V6 red. Evidence: **first arm measured** — reverting `_HOLTZ_SQL`
+      to its six columns failed exactly V1–V5 and nothing else, and restoring it
+      returned them to green in the same sitting. **Second arm is a permanent
+      test** rather than a transcript:
+      `test_the_reachability_row_is_what_refuses_an_ungraded_item` drops the row
+      and requires the refusal to disappear, then restores it, with
+      `test_dropping_the_row_does_not_disturb_the_lens_check` proving the
+      mutation is scoped to one row rather than collapsing the mechanism.
 
 ---
 

@@ -63,6 +63,7 @@ def make_item():
         location: str = "`file.py:1`",
         status: str = "OPEN",
         lens: str = "component",
+        reachability: str = "user_reachable",
         extra_fields: str = "",
         problem: str = "This is a real problem that describes what went wrong in enough detail.",
         evidence: str = "Here is the evidence showing the problem with code references.",
@@ -80,6 +81,11 @@ def make_item():
         # Required since D-d: pass lens="" to build an item that omits it.
         if lens:
             lines.append(f"**Lens:** {lens}")
+        # Required since item 26, and for the same reason one field over: an
+        # unstated grading became `theoretical`, which auto-defers at filing.
+        # Pass reachability="" to build an item that omits it.
+        if reachability:
+            lines.append(f"**Reachability:** {reachability}")
         if extra_fields:
             lines.append(extra_fields)
         lines.append("")

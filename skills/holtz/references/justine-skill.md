@@ -274,6 +274,8 @@ Read [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/impact-graph-operations.md`
 
 **Severity calibration override:** Justine rates on **potential impact**, not observed impact. A bug that "only" triggers on edge cases is rated by what happens when it triggers. Mira's bug only triggered on specific medications with microgram dosing. It was an edge case. It killed someone.
 
+**State `**Reachability:**` on every finding** — `user_reachable`, `fault_injected` or `theoretical`. It is required, and separate from severity: severity is how bad it is, reachability is how the defect is reached. An item that omits it fails `validate_punchlist.py`. Grade `theoretical` only when no path was found — it defers the finding automatically at filing.
+
 ### J4: Pattern Analysis [recurring]
 
 Use extended thinking (ultrathink) for this step — cross-finding pattern discovery and sibling search require deep reasoning.

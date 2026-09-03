@@ -556,6 +556,7 @@ def test_well_formed_item_no_errors():
 **Location:** `file.py:1`
 **Status:** OPEN
 **Lens:** component
+**Reachability:** user_reachable
 **Determinism:** deterministic
 
 **Problem:** This is a real problem that describes what went wrong in enough detail.
@@ -1379,6 +1380,7 @@ def test_present_discovery_chain_passes():
 **Location:** `file.py:1`
 **Status:** OPEN
 **Lens:** data-flow
+**Reachability:** user_reachable
 **Determinism:** deterministic
 
 **Problem:** This is a real problem that describes what went wrong in enough detail.
@@ -1459,6 +1461,7 @@ def test_multi_step_discovery_chain_accepted():
 **Location:** `file.py:1`
 **Status:** OPEN
 **Lens:** data-flow
+**Reachability:** user_reachable
 **Determinism:** deterministic
 
 **Problem:** This is a real problem that describes what went wrong in enough detail.
@@ -2005,6 +2008,7 @@ def test_lens_field_accepted():
 **Location:** `seam.py:42`
 **Status:** OPEN
 **Lens:** integration
+**Reachability:** user_reachable
 
 **Problem:** Parser and serializer disagree on delimiter escaping.
 
@@ -2076,6 +2080,7 @@ def test_lens_field_in_code_fence():
 **Evidence:**
 ```markdown
 **Lens:** contract
+**Reachability:** user_reachable
 ```
 
 **Discovery Chain:** read docs → found outdated format example
@@ -2107,6 +2112,7 @@ def test_predicted_field_accepted():
 **Location:** `paginate.py:88`
 **Status:** OPEN
 **Lens:** contract
+**Reachability:** user_reachable
 **Predicted:** Prediction 3 (confidence: HIGH)
 
 **Problem:** Paginator skips the last page when total items is a multiple of page size.
@@ -2139,6 +2145,7 @@ def test_predicted_field_not_required():
 **Location:** `cache.py:22`
 **Status:** OPEN
 **Lens:** contract
+**Reachability:** user_reachable
 **Determinism:** intermittent
 
 **Problem:** Cache TTL set to 24h but data changes hourly.
@@ -2170,6 +2177,7 @@ def test_predicted_field_in_code_fence():
 **Location:** `docs/predictions.md:3`
 **Status:** OPEN
 **Lens:** contract
+**Reachability:** user_reachable
 
 **Problem:** Documentation shows outdated prediction format.
 
@@ -2846,3 +2854,146 @@ def test_a_hyphenated_lens_survives_parsing(make_item):
     items = vp.parse_punchlist(make_item(lens="error-propagation"))
     assert items[0].perspective == "error-propagation"
     assert not [e for e in vp.validate(items).errors if "Lens" in e]
+
+
+# --- W09 / item 26: the Reachability is stated, and names an enforced grade ---
+#
+# The same required-field mechanism W06 built, with its values read from a
+# different declaration — and the difference is the point. `perspective` has no
+# `pattern` and the engine accepts any string for it, so `[sets.perspective]`
+# is the only thing refusing a non-member. `reachability` *is* pattern-enforced
+# (measured: exit 4, no row), so the pattern is the fact, and a set declared
+# beside it would be a second spelling nothing binds to the first.
+
+
+def test_cli_exits_nonzero_naming_the_missing_reachability(tmp_path, make_item, capsys):
+    """V6 — what the agent sees is an exit status and a named field."""
+    f = tmp_path / "PUNCHLIST.md"
+    f.write_text(make_item(item_id="BH-001", reachability="", wrap=True))
+    code, out, _ = _run_vp_main([str(f)], capsys)
+    assert code == 1
+    assert "BH-001: missing Reachability" in out
+
+
+def test_reachability_is_required(make_item):
+    """V6 — an unstated grading is refused rather than defaulted.
+
+    Defaulting is what item 26 is: `theoretical` auto-defers at filing, so an
+    ungraded finding leaves the board before anyone reads it.
+    """
+    errors = vp.validate(vp.parse_punchlist(make_item(reachability=""))).errors
+    assert any("missing Reachability" in e for e in errors), errors
+
+
+def test_a_misgraded_reachability_is_rejected(make_item):
+    """Membership, not presence. `user-reachable` is one character from the
+    real grade and the engine would refuse the event outright, so accepting it
+    here would move the failure to the end of the merge."""
+    errors = vp.validate(vp.parse_punchlist(
+        make_item(reachability="user-reachable"))).errors
+    assert any("invalid Reachability 'user-reachable'" in e for e in errors), errors
+
+
+def test_accepted_grades_follow_the_enforced_pattern(tmp_path, monkeypatch, make_item):
+    """V6's discriminating half — mutate the pattern, the answers move.
+
+    Both directions, because the first alone would also pass for a validator
+    that accepts everything: a grade only in the mutated pattern is accepted,
+    and a grade only in the real one is refused.
+    """
+    events = tmp_path / "events.toml"
+    events.write_text(
+        '[events.finding]\nfields = [\n'
+        '    { name = "reachability", type = "string", pattern = "^(kaleidoscope)$" },\n'
+        ']\n'
+    )
+    monkeypatch.setattr(vp, "EVENTS_TOML", events)
+
+    invented = vp.parse_punchlist(make_item(reachability="kaleidoscope"))
+    assert not [e for e in vp.validate(invented).errors if "Reachability" in e]
+
+    real = vp.parse_punchlist(make_item(reachability="user_reachable"))
+    assert any("invalid Reachability 'user_reachable'" in e
+               for e in vp.validate(real).errors)
+
+
+def test_the_pattern_scanner_agrees_with_tomllib():
+    """One derivation of the domain, and a test that says when it stops
+    matching the format — `read_protocol_set`'s guard, one file over."""
+    import re as _re
+
+    import pytest
+    tomllib = pytest.importorskip("tomllib")
+    with open(vp.EVENTS_TOML, "rb") as fh:
+        cfg = tomllib.load(fh)
+    field = next(f for f in cfg["events"]["finding"]["fields"]
+                 if f["name"] == "reachability")
+    expected = _re.fullmatch(r"\^\((.*)\)\$", field["pattern"]).group(1).split("|")
+    assert list(vp.read_event_field_pattern("finding", "reachability")) == expected
+
+
+def test_the_pattern_scanner_is_scoped_to_the_named_field():
+    """`pattern_id` sits directly above `reachability` and also carries a
+    pattern, so a scanner keyed on `pattern` alone would answer with the
+    neighbour's domain."""
+    assert vp.read_event_field_pattern("finding", "pattern_id") == ()
+    assert "user_reachable" in vp.read_event_field_pattern("finding", "reachability")
+
+
+def test_the_scanner_is_scoped_to_the_named_event(tmp_path):
+    """A `reachability` field on another event cannot answer for this one."""
+    events = tmp_path / "events.toml"
+    events.write_text(
+        '[events.other]\nfields = [\n'
+        '    { name = "reachability", type = "string", pattern = "^(wrong)$" },\n'
+        ']\n\n'
+        '[events.finding]\nfields = [\n'
+        '    { name = "reachability", type = "string", pattern = "^(right)$" },\n'
+        ']\n'
+    )
+    assert vp.read_event_field_pattern("finding", "reachability", events) == ("right",)
+
+
+def test_an_unreadable_pattern_is_one_error_not_one_per_item(tmp_path, monkeypatch,
+                                                             make_item):
+    """The same failure mode as an unreadable set: one broken check, not N
+    broken items."""
+    monkeypatch.setattr(vp, "EVENTS_TOML", tmp_path / "absent.toml")
+    content = make_item(item_id="BH-001", wrap=True) + "\n" + make_item(item_id="BH-002")
+    errors = vp.validate(vp.parse_punchlist(content)).errors
+    assert len([e for e in errors if "cannot validate Reachability" in e]) == 1
+    assert not [e for e in errors
+                if "invalid Reachability" in e or "missing Reachability" in e]
+
+
+def test_the_reachability_row_is_what_refuses_an_ungraded_item(make_item, monkeypatch):
+    """V9's second half, as a test rather than a transcript.
+
+    Drop the `Reachability` row from the mechanism and the refusal disappears;
+    restore it and it comes back. That is what says the error comes from the
+    row W09 added and not from some other check that happens to mention the
+    field — and it keeps saying so, which a one-off measurement does not.
+    """
+    real = vp.set_valued_fields
+    monkeypatch.setattr(vp, "set_valued_fields", lambda *a, **k: tuple(
+        spec for spec in real(*a, **k) if spec.label != "Reachability"))
+
+    ungraded = vp.parse_punchlist(make_item(reachability=""))
+    assert not [e for e in vp.validate(ungraded).errors if "Reachability" in e]
+
+    monkeypatch.undo()
+    assert [e for e in vp.validate(ungraded).errors if "missing Reachability" in e]
+
+
+def test_dropping_the_row_does_not_disturb_the_lens_check(make_item, monkeypatch):
+    """The rows are independent, so V9's mutation is scoped.
+
+    A mechanism that collapsed under any missing row would make the test above
+    pass for the wrong reason.
+    """
+    real = vp.set_valued_fields
+    monkeypatch.setattr(vp, "set_valued_fields", lambda *a, **k: tuple(
+        spec for spec in real(*a, **k) if spec.label != "Reachability"))
+
+    lensless = vp.parse_punchlist(make_item(lens=""))
+    assert [e for e in vp.validate(lensless).errors if "missing Lens" in e]

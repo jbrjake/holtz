@@ -80,6 +80,56 @@ def _binary():
     return binary
 
 
+def _named_query(name):
+    """A predicate read from `protocol.toml`, never restated here.
+
+    Asserting a consequence through the query the production code actually
+    runs is what makes the assertion follow a config edit instead of drifting
+    from one.
+    """
+    try:
+        import tomllib  # noqa: PLC0415
+    except ModuleNotFoundError:  # pragma: no cover - 3.10 and below
+        import tomli as tomllib  # type: ignore[no-redef]  # noqa: PLC0415
+    with open(os.path.join(CONFIG_DIR, "protocol.toml"), "rb") as fh:
+        queries = tomllib.load(fh)["queries"]
+    assert name in queries, f"protocol.toml has no [queries.{name}]"
+    return queries[name]["sql"]
+
+
+def _flat(row):
+    """One ledger row as a single mapping.
+
+    `sahjhan query --format jsonl` puts declared fields under `fields` and the
+    envelope at the top level, and which keys land where has moved between
+    versions. Flattening once here is what lets a test compare two filings
+    field by field instead of naming the fields it happens to remember.
+    """
+    return {**row.get("fields", {}), **{k: v for k, v in row.items() if k != "fields"}}
+
+
+#: The envelope keys `_declared` must never let into a field comparison. `prev`
+#: is the hash-chain link, so it differs between *any* two events by
+#: construction — including two that carry identical fields.
+_ENVELOPE = ("seq", "ts", "timestamp", "hash", "prev", "prev_hash", "type")
+
+
+def _declared(row):
+    """Just the event's own fields — the envelope dropped, by name.
+
+    Used where a test compares two filings of one finding. `prev` alone would
+    make every such comparison fail for a reason that says nothing about the
+    merge, and adding it to a test-local ignore list would hide the next
+    envelope key that shows up. The guard below is what stops this returning
+    an empty mapping and passing vacuously.
+    """
+    fields = {k: v for k, v in _flat(row).items() if k not in _ENVELOPE}
+    assert {"id", "severity", "reachability"} <= set(fields), (
+        f"the row shape changed — this comparison would be vacuous: {fields}"
+    )
+    return fields
+
+
 def holtz(finding_id, severity="HIGH", category="bug/logic", location="a.py:10",
           description="x", reachability="user_reachable"):
     return mp.Finding(id=finding_id, severity=severity, category=category,
@@ -514,6 +564,53 @@ class TestReadingJustine:
         refused = vp.validate(vp.parse_punchlist(_JUSTINE)).errors
         assert "BJ-002: missing Lens" in refused
 
+    def test_the_theoretical_default_is_unreachable_through_the_validated_path(
+        self, tmp_path,
+    ):
+        """V7 + V8 (item 26) — the same shape as the lens fallback above, and
+        the field where the fallback does more than mislabel.
+
+        `theoretical` is not an inert placeholder: D29 auto-defers on it at
+        filing, so an ungraded item is off the board before anyone reads it.
+        The default is still right where a grading was genuinely never stated,
+        which is why `test_an_unstated_reachability_is_theoretical` stays — but
+        the validated path must never produce one.
+
+        **`_JUSTINE`'s BJ-002 is deliberately left ungraded.** It is the
+        reproduction, not an oversight: it states neither Lens nor
+        Reachability, and this asserts the validator refuses it for both.
+        """
+        path = tmp_path / "PUNCHLIST.md"
+        path.write_text(_JUSTINE, encoding="utf-8")
+        assert mp.justine_findings(str(path))[1].reachability == mp.DEFAULT_REACHABILITY
+
+        refused = vp.validate(vp.parse_punchlist(_JUSTINE)).errors
+        assert "BJ-002: missing Reachability" in refused, refused
+
+    def test_every_reachability_the_merge_can_write_is_an_enforced_one(self, tmp_path):
+        """The field's domain enumerated, not described — V6's shape one field
+        over, and it closes at the engine rather than at a declaration.
+
+        Compared as sets, so a grade silently dropping out of the pattern fails
+        as loudly as a stray value appearing. `DEFAULT_REACHABILITY` is in the
+        domain on purpose: unlike `unspecified`, `theoretical` is a real grade,
+        which is exactly why an ungraded item is invisible rather than
+        obviously wrong.
+        """
+        graded = "\n\n".join(
+            _ITEM_TEMPLATE.format(num=n, lens="component").replace(
+                "**Lens:** component",
+                f"**Lens:** component\n**Reachability:** {grade}")
+            for n, grade in enumerate(
+                vp.read_event_field_pattern("finding", "reachability"), start=1)
+        )
+        path = tmp_path / "PUNCHLIST.md"
+        path.write_text(f"# Holtz Punchlist\n\n## Items\n\n{graded}\n", encoding="utf-8")
+
+        written = {f.reachability for f in mp.justine_findings(str(path))}
+        assert written == set(vp.read_event_field_pattern("finding", "reachability"))
+        assert mp.DEFAULT_REACHABILITY in written
+
     def test_every_lens_the_merge_can_write_is_a_declared_one(self, tmp_path):
         """V6 — the field's domain enumerated, not described.
 
@@ -561,15 +658,25 @@ class _Board:
         return result
 
     def file(self, finding_id, severity="HIGH", category="bug/logic",
-             location="a.py:10"):
+             location="a.py:10", reachability="user_reachable",
+             predicted_by="none", pattern_id=None):
+        """`pattern_id` is omitted rather than passed empty: the engine's
+        `^PAT-\\d+$` refuses an empty string, so a blank one is not a
+        no-op but a rejected event."""
+        attribution = ["--field", f"pattern_id={pattern_id}"] if pattern_id else []
         self.sah("event", "finding", "--field", f"id={finding_id}",
                  "--field", f"severity={severity}", "--field", f"category={category}",
                  "--field", f"location={location}", "--field", "perspective=component",
-                 "--field", "predicted_by=none", "--field", "reachability=user_reachable",
-                 "--field", "description=holtz text", *_COMMON)
+                 "--field", f"predicted_by={predicted_by}",
+                 "--field", f"reachability={reachability}",
+                 "--field", "description=holtz text", *attribution, *_COMMON)
 
     def findings(self):
         result = self.sah("query", "--type", "finding", "--format", "jsonl")
+        return [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+
+    def deferrals(self):
+        result = self.sah("query", "--type", "finding_deferred", "--format", "jsonl")
         return [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
 
     def run_merge(self, justine_md, *extra):
@@ -645,14 +752,131 @@ class TestEndToEnd:
         assert "BJ-002" in ids
 
     def test_a_higher_justine_severity_refiles_holtz_id(self, board):
+        """V1 (item 25) — the escalation changes `severity` and **nothing else**.
+
+        The old version asserted `len(filings) == 2` and the new severity, and
+        never read the fields the re-file was destroying. Comparing the two
+        filings field by field is what makes this a guard: any field the merge
+        drops on the way through shows up here as a difference it did not
+        earn. `seq` and the merge's own provenance are excluded because they
+        are *supposed* to differ — a second filing is a second event, recorded
+        by the merge in the merge phase.
+        """
         board.file("BH-001", location="app/auth.py:47", category="bug/security",
-                   severity="LOW")
+                   severity="LOW", reachability="user_reachable",
+                   predicted_by="2", pattern_id="PAT-007")
         assert board.run_merge(_JUSTINE).returncode == 0
         filings = [f for f in board.findings()
                    if (f.get("id") or f.get("fields", {}).get("id")) == "BH-001"]
         assert len(filings) == 2, "the higher severity was not re-filed"
-        last = filings[-1]
-        assert (last.get("severity") or last["fields"]["severity"]) == "HIGH"
+
+        before, after = (_declared(f) for f in filings)
+        assert after["severity"] == "HIGH"
+        assert before["severity"] == "LOW", "the fixture did not set up an escalation"
+
+        # `phase`/`step`/`auditor` are the merge's own provenance and are
+        # *supposed* to move: a second filing is a second event, recorded by
+        # the merge in the merge phase. Everything else the finding carries is
+        # the finding's, and the escalation decides one field of it.
+        provenance = {"severity", "phase", "step", "auditor"}
+        changed = {
+            key for key in set(before) | set(after)
+            if key not in provenance and before.get(key) != after.get(key)
+        }
+        assert not changed, (
+            "the re-file altered fields the escalation does not decide: "
+            + ", ".join(
+                f"{key} {before.get(key)!r} -> {after.get(key)!r}"
+                for key in sorted(changed)
+            )
+        )
+
+    def test_the_escalation_keeps_the_grading_that_routes_it(self, board):
+        """V2 + V3 (item 25). The re-file must not re-grade reachability.
+
+        `_HOLTZ_SQL` did not select `reachability`, so every Holtz `Finding`
+        was built at `DEFAULT_REACHABILITY = "theoretical"` and the escalation
+        wrote that back. The path that exists to say *this is worse than you
+        thought* was the one path that took the finding off the board:
+        `theoretical` auto-defers, `all_critical_resolved` then reads true —
+        a fourth route to closing a CRITICAL with no fix — and `fix_commit`
+        refuses it afterwards because `item_is_user_reachable` does.
+        """
+        board.file("BH-001", location="app/auth.py:47", category="bug/security",
+                   severity="LOW", reachability="user_reachable")
+        assert board.run_merge(_JUSTINE).returncode == 0
+
+        after = _flat([f for f in board.findings()
+                       if _flat(f).get("id") == "BH-001"][-1])
+        assert after["reachability"] == "user_reachable", (
+            "the escalation re-graded the finding to "
+            f"{after['reachability']!r} — the merge destroyed the grading it "
+            "routes on"
+        )
+
+    def test_the_escalated_finding_is_not_swept_as_theoretical(self, board):
+        """V3's other half, read through the predicate that does the sweeping.
+
+        Asserting the field is one thing; asserting the *population* is what
+        says the consequence is gone. `open_theoretical_findings` is the
+        courier's own query, read from `protocol.toml` rather than restated.
+        """
+        board.file("BH-001", location="app/auth.py:47", category="bug/security",
+                   severity="LOW", reachability="user_reachable")
+        assert board.run_merge(_JUSTINE).returncode == 0
+
+        rows = json.loads(board.sah(
+            "query", _named_query("open_theoretical_findings"),
+            "--format", "json").stdout)
+        assert "BH-001" not in [r.get("id") for r in rows], (
+            "the escalated finding is in the auto-deferral population"
+        )
+        assert not [f for f in board.deferrals() if _flat(f).get("id") == "BH-001"]
+
+    def test_the_escalation_keeps_the_round_it_belongs_to(self, board):
+        """V4 (item 25). `pattern_id` survives the re-file.
+
+        D25 grades by latest filing, so a re-file without `pattern_id` takes
+        the sibling out of its round's population — and the round cap and the
+        close-as-many-as-you-open obligation both stop seeing it. An escalation
+        would silently discharge backpressure.
+        """
+        board.file("BH-001", location="app/auth.py:47", category="bug/security",
+                   severity="LOW", pattern_id="PAT-007")
+        assert board.run_merge(_JUSTINE).returncode == 0
+
+        after = _flat([f for f in board.findings()
+                       if _flat(f).get("id") == "BH-001"][-1])
+        assert after.get("pattern_id") == "PAT-007"
+
+    def test_the_escalation_keeps_the_prediction_link(self, board):
+        """V5 (item 25). `predicted_by` survives.
+
+        It was hard-coded to `"none"` in `_record`, so an escalated finding
+        lost the link `SUMMARY.md`'s prediction-accuracy table is computed
+        from — the table would silently under-count every escalated hit.
+        """
+        board.file("BH-001", location="app/auth.py:47", category="bug/security",
+                   severity="LOW", predicted_by="2")
+        assert board.run_merge(_JUSTINE).returncode == 0
+
+        after = _flat([f for f in board.findings()
+                       if _flat(f).get("id") == "BH-001"][-1])
+        assert after.get("predicted_by") == "2"
+
+    def test_a_justine_finding_is_still_recorded_as_unpredicted(self, board):
+        """Non-vacuity for V5: `predicted_by` is now carried, not ignored.
+
+        Her punchlist has no prediction link, so hers must still land as
+        `none` — a `_record` that simply echoed whatever it was handed would
+        pass the test above and write an empty field here, which the engine
+        requires to be present.
+        """
+        board.file("BH-001", location="a.py:10")
+        assert board.run_merge(_JUSTINE).returncode == 0
+        filed = _flat(next(f for f in board.findings()
+                           if _flat(f).get("id") == "BJ-001"))
+        assert filed.get("predicted_by") == "none"
 
     def test_a_lower_justine_severity_changes_nothing(self, board):
         board.file("BH-001", location="app/auth.py:47", category="bug/security",

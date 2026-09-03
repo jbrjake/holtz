@@ -28,11 +28,11 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**9 of 32 units · 10 of 51 items · 41 items across 23 units remain.**
+**10 of 32 units · 12 of 51 items · 39 items across 22 units remain.**
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
-W08 (32, 43) · W22 (27) · W06 (20) · W07 (3). Commits are in `git log`; do not
-re-summarise them here.
+W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26). Commits are in
+`git log`; do not re-summarise them here.
 
 **Two corrections to the line this replaced** (*"8 of 30 units · 7 of 49
 items"*), both made 2026-09-01 after counting the dashboard rather than
@@ -140,17 +140,16 @@ carrying the number forward:
 
 ## Do this next
 
-### 1. W09 — items 25, 26. Unblocked, and W06 built its mechanism.
+### 1. W10 — item 35, then W11 (42), W12 (34, 28), W13 (37, 17), W14 (5, 10).
 
-Do **not** write a second required-field checker: `SetValuedField` +
-`set_valued_fields()` + one loop in `validate()` is the mechanism, and
-`reachability` is a row. Read W06's *"How W09 plugs in"* box first — there is
-one genuine decision there (`reachability` has no `[sets.*]` to point at), and
-it is W09's to make, not a gap in the mechanism.
+P2's remaining five, none blocked by anything now landed. W10 and W11 both list
+W01 as their blocker and W01 is `DONE`.
 
-**W07 left a `SetValuedField`-shaped precedent W09 should not mistake for its
-own work:** it added `--lens` to `findings.py list`, which is a *read* filter,
-not a required-field check. W09's mechanism is still W06's.
+**Before starting any of them, read W09's settled decision** (the ⭐ box in its
+unit): when a field needs checking in two places, look at *which* declaration
+the engine actually enforces before picking the source. `perspective` and
+`reachability` needed different sources for the same kind of check, and the
+difference was measurable in one command against the binary.
 
 ### 2. W22 (item 27) is `DONE` in code only — see Carried debts above.
 
@@ -194,6 +193,11 @@ not a required-field check. W09's mechanism is still W06's.
   perspective" current_perspective=security`); `_Run.gate_check` now forwards
   `key=value` args for this reason. Measured 2026-09-01 while scoping the lens
   gate, on a test that had been asserting exactly that absence.
+- **`sahjhan query --format json` spells an absent optional column `"NULL"`** —
+  the four-character string, not `null` and not `""`. So
+  `str(row.get(x) or "")` keeps it and passes it straight back into a write,
+  where a pattern-constrained field refuses it. `merge_punchlists._optional()`
+  is the named handling; use it rather than re-deriving the check.
 - **Run every new test RED against the unmodified tree first** and read the
   reason, not the colour. Unchanged-behaviour tests must be green before, during
   the non-vacuity mutation, and after.

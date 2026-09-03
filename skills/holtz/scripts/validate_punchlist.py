@@ -37,6 +37,7 @@ VALID_DETERMINISM = {"deterministic", "intermittent", "theoretical"}
 # `skills/holtz/scripts/` -> plugin root -> `enforcement/protocol.toml`, the
 # same derivation `boundary_check.py` uses to reach `enforcement/hooks/`.
 PROTOCOL_TOML = Path(__file__).resolve().parents[3] / "enforcement" / "protocol.toml"
+EVENTS_TOML = Path(__file__).resolve().parents[3] / "enforcement" / "events.toml"
 
 
 def _array_body(text: str) -> tuple[str, bool]:
@@ -110,6 +111,66 @@ def read_protocol_set(name: str, protocol_path: str | Path | None = None) -> tup
     return tuple(values)
 
 
+def read_event_field_pattern(
+    event: str,
+    field_name: str,
+    events_path: str | Path | None = None,
+) -> tuple[str, ...]:
+    """The alternatives in `[events.<event>]`'s `<field_name>` `pattern`.
+
+    The second kind of source `set_valued_fields` reads from, and it exists
+    because the two fields are enforced in different places — measured against
+    the pinned engine, not assumed:
+
+    * `perspective` carries **no** `pattern`, and no field can reference a
+      declared `[sets.*]`, so `sahjhan event finding --field
+      perspective=not-a-lens` exits 0 and the row lands. The validator is the
+      only thing refusing it, so `[sets.perspective]` is the right source.
+    * `reachability` carries `^(user_reachable|fault_injected|theoretical)$`
+      and the engine **does** refuse a non-member (exit 4, no row). So the
+      pattern is the fact, and a `[sets.reachability]` declared beside it
+      would be a second spelling with nothing binding the two — the validator
+      could then accept what the engine refuses.
+
+    A line scanner for the same reason as `read_protocol_set`: this module is
+    kept Python 3.9-compatible (issue #59) and `tomllib` is 3.11+.
+    `test_validate_punchlist.py` reads the same file with `tomllib` and
+    asserts the two agree.
+
+    Returns an empty tuple if the file, the event, the field or the pattern is
+    absent — the caller decides what an unreadable declaration means.
+    """
+    path = EVENTS_TOML if events_path is None else events_path
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except OSError:
+        return ()
+
+    wanted = f"[events.{event}]"
+    in_event = False
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("["):
+            in_event = line == wanted
+            continue
+        if not in_event or "name" not in line:
+            continue
+        # One field per line, which is how `events.toml` is written. Matching
+        # the name first keeps a neighbouring field's pattern from answering
+        # for this one — `reachability` sits directly under `pattern_id`, and
+        # both carry a pattern.
+        if not re.search(rf'name[ \t]*=[ \t]*"{re.escape(field_name)}"', line):
+            continue
+        pattern = re.search(r'pattern[ \t]*=[ \t]*"([^"]*)"', line)
+        if not pattern:
+            return ()
+        alternation = re.fullmatch(r"\^\\?\((.*)\)\$", pattern.group(1))
+        if not alternation:
+            return ()
+        return tuple(part for part in alternation.group(1).split("|") if part)
+    return ()
+
+
 @dataclass(frozen=True)
 class SetValuedField:
     """A punchlist field that must be stated, naming a member of a declared set.
@@ -118,28 +179,41 @@ class SetValuedField:
     field of this kind is a row here rather than a second checker.
     """
 
-    label: str      # how the punchlist spells it: `**Lens:**`
-    attr: str       # the `PunchlistItem` attribute it parses into
-    set_name: str   # the `[sets.<name>]` its values come from
+    label: str        # how the punchlist spells it: `**Lens:**`
+    attr: str         # the `PunchlistItem` attribute it parses into
+    declaration: str  # where its values are declared, as a reader would cite it
     values: tuple[str, ...]
-    source: str     # the file those values were read from, for the message
+    source: str       # the file those values were read from, for the message
 
 
-def set_valued_fields(protocol_path: str | Path | None = None) -> tuple[SetValuedField, ...]:
+def set_valued_fields(
+    protocol_path: str | Path | None = None,
+    events_path: str | Path | None = None,
+) -> tuple[SetValuedField, ...]:
     """The fields checked against a declared set, with their values read in.
 
-    Values are read here rather than restated: `[sets.perspective]` is the one
-    place the lenses are declared for the engine, and a copy in this file would
-    be a second thing to keep right.
+    Values are read here rather than restated, and each row reads from
+    whichever declaration actually *governs* its field — see
+    `read_event_field_pattern` for why those are two different files. A copy in
+    this module would be a second thing to keep right; a copy pointed at the
+    wrong one of the two would be worse, because it would agree with nothing.
     """
-    path = PROTOCOL_TOML if protocol_path is None else protocol_path
+    protocol = PROTOCOL_TOML if protocol_path is None else protocol_path
+    events = EVENTS_TOML if events_path is None else events_path
     return (
         SetValuedField(
             label="Lens",
             attr="perspective",
-            set_name="perspective",
-            values=read_protocol_set("perspective", path),
-            source=str(path),
+            declaration="[sets.perspective]",
+            values=read_protocol_set("perspective", protocol),
+            source=str(protocol),
+        ),
+        SetValuedField(
+            label="Reachability",
+            attr="reachability",
+            declaration="[events.finding]'s reachability pattern",
+            values=read_event_field_pattern("finding", "reachability", events),
+            source=str(events),
         ),
     )
 
@@ -281,7 +355,13 @@ def parse_punchlist(content: str, *, _masked: tuple[str, str] | None = None) -> 
         if rcc:
             item.root_cause_confidence = rcc.group(1).strip()
 
-        reach = re.search(r'\*\*Reachability:\*\*[ \t]*(\w+)', masked_block)
+        # `\S+`, not `\w+`, for the reason the `**Lens:**` line below uses it:
+        # `\w` stops at a hyphen, so `user-reachable` — one character from the
+        # real grade — parsed as `user` and the agent was told its Reachability
+        # was `'user'`, a string it never wrote. The three real grades are
+        # underscored, so this only ever changes what a *misgrading* reports;
+        # that is the case where the message has to be right.
+        reach = re.search(r'\*\*Reachability:\*\*[ \t]*(\S+)', masked_block)
         if reach:
             item.reachability = reach.group(1).strip()
 
@@ -565,7 +645,7 @@ def validate(
             checkable.append(spec)
         else:
             result.errors.append(
-                f"cannot validate {spec.label}: [sets.{spec.set_name}] "
+                f"cannot validate {spec.label}: {spec.declaration} "
                 f"not readable from {spec.source}"
             )
 

@@ -32,7 +32,7 @@ import re
 import subprocess
 import sys
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from typing import NamedTuple
 
@@ -115,6 +115,17 @@ class Finding:
     description: str
     reachability: str = DEFAULT_REACHABILITY
     perspective: str = DEFAULT_PERSPECTIVE
+    # Carried, not re-derived. Both are facts about a finding that only its
+    # filing knows, and the merge re-files on escalation: dropping them here
+    # meant the one path that says "this is worse than you thought" was the
+    # path that took the finding out of its round (`pattern_id`) and off the
+    # prediction-accuracy table (`predicted_by`).
+    #
+    # `pattern_id` defaults empty and is *omitted* at the write rather than
+    # sent blank — the engine's `^PAT-\d+$` refuses an empty string, so a
+    # blank one is a rejected event, not an absent field.
+    pattern_id: str = ""
+    predicted_by: str = "none"
 
 
 @dataclass
@@ -343,8 +354,14 @@ def justine_findings(path: str) -> list[Finding]:
     return findings
 
 
+# Every field the merge can re-file, not just the ones it compares. A column
+# missing here does not read as absent downstream — it reads as the dataclass
+# default, and `apply_merge` then writes that default back over a graded row.
+# `reachability` is the one that cost: absent from this list, every Holtz
+# finding was built `theoretical`, and escalation re-filed it that way.
 _HOLTZ_SQL = """
-SELECT id, severity, category, location, perspective, description, seq
+SELECT id, severity, category, location, perspective, description,
+       reachability, pattern_id, predicted_by, seq
 FROM events WHERE type='finding' ORDER BY seq
 """
 
@@ -352,6 +369,19 @@ _CONTEXT_SQL = """
 SELECT project, run FROM events
 WHERE project IS NOT NULL AND run IS NOT NULL ORDER BY seq DESC LIMIT 1
 """
+
+
+def _optional(value: object) -> str:
+    """An optional ledger column as a string, with SQL's absent spelled "".
+
+    `sahjhan query --format json` renders an absent optional column as the
+    **string** ``"NULL"``, not as ``null`` and not as ``""`` — so
+    ``str(row.get(...) or "")`` keeps it, and the merge would then re-file
+    ``pattern_id=NULL``, which the engine's ``^PAT-\\d+$`` refuses outright.
+    The whole escalation fails on a finding that simply had no pattern.
+    """
+    text = "" if value is None else str(value)
+    return "" if text.upper() == "NULL" else text
 
 
 def holtz_findings(binary: str, config_dir: str, cwd: str) -> tuple[list[Finding], str]:
@@ -371,6 +401,14 @@ def holtz_findings(binary: str, config_dir: str, cwd: str) -> tuple[list[Finding
             location=str(row.get("location") or ""),
             description=str(row.get("description") or ""),
             perspective=str(row.get("perspective") or DEFAULT_PERSPECTIVE),
+            # `DEFAULT_REACHABILITY` is Justine's fail-safe, not this side's:
+            # `reachability` is a required, pattern-enforced field on
+            # `[events.finding]`, so a row on this board always states one and
+            # the fallback is unreachable here. Defaulting a *stated* grading
+            # is what item 25 was.
+            reachability=str(row.get("reachability") or DEFAULT_REACHABILITY),
+            pattern_id=_optional(row.get("pattern_id")),
+            predicted_by=str(row.get("predicted_by") or "none"),
         )
     return list(by_id.values()), ""
 
@@ -408,8 +446,13 @@ def _record(
          "--field", f"location={finding.location}",
          "--field", f"perspective={finding.perspective}",
          "--field", f"reachability={finding.reachability}",
-         "--field", "predicted_by=none",
-         "--field", f"description={finding.description}"],
+         "--field", f"predicted_by={finding.predicted_by}",
+         "--field", f"description={finding.description}",
+         # Omitted when the finding has none: `pattern_id` is `optional` in
+         # `[events.finding]` but pattern-constrained, so a blank one is a
+         # refused event rather than an unset field.
+         *(["--field", f"pattern_id={finding.pattern_id}"]
+           if finding.pattern_id else [])],
         cwd=cwd, capture_output=True, text=True, timeout=60,
     )
     if result.returncode != 0:
@@ -434,15 +477,11 @@ def apply_merge(
     for holtz_finding, justine_finding in merge.severity_disagreements:
         if _severity_rank(justine_finding.severity) >= _severity_rank(holtz_finding.severity):
             continue
-        raised = Finding(
-            id=holtz_finding.id,
-            severity=justine_finding.severity.upper(),
-            category=holtz_finding.category,
-            location=holtz_finding.location,
-            description=holtz_finding.description,
-            reachability=holtz_finding.reachability,
-            perspective=holtz_finding.perspective,
-        )
+        # Her severity, and Holtz's everything-else. The escalation decides
+        # exactly one field; every other value is the finding's own and is
+        # carried through rather than re-derived — item 25 was three of them
+        # being silently re-derived as defaults.
+        raised = replace(holtz_finding, severity=justine_finding.severity.upper())
         if problem := _record(binary, config_dir, cwd, raised, "holtz", project, run):
             problems.append(problem)
     return problems
