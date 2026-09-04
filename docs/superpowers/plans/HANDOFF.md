@@ -28,13 +28,14 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**13 of 32 units · 17 of 51 items · 34 items across 19 units remain.**
+**14 of 32 units · 19 of 51 items · 32 items across 18 units remain.**
 W13 is `WIP`, not done: it closed item 37 and left item 17 open, so it moves
 the item count and not the unit count.
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
-W12 (34, 28) · W11 (42). Commits are in `git log`; do not re-summarise them here.
+W12 (34, 28) · W11 (42) · W14 (5, 10). Commits are in `git log`; do not
+re-summarise them here.
 
 **W11 landed 2026-09-04** — `0605ed2` (the pin move to 0.27.0) and `3697e31`
 (the unit). Read `3697e31`'s message before building on it: it names three
@@ -42,9 +43,18 @@ things W11 does **not** close, and the first is load-bearing —
 **an actor racing itself is still exposed on the merge paths**, deliberately,
 and `test_a_merge_is_not_made_conditional` pins that it is deliberate.
 
-**W13 landed item 37 the same day** — `9555fce`. **Item 17 is open and is a
-question for Jon**, below. Do not re-run its measurement before reading it:
-the flake did not reproduce on *either* arm, and the reason is recorded.
+**W13 landed item 37 the same day** — `9555fce`. Item 17 is open **by
+ruling**, below. Do not re-run its measurement before reading it: the flake did
+not reproduce on *either* arm, and the reason is recorded.
+
+**W14 landed complete** — `7d69854`, all seven validations ticked. One thing
+from it a later session will otherwise re-derive the hard way:
+`amplification_diverging` joins `f.seq <= r.seq`, so **each round counts only
+what had happened by that round**. A deferral after the last round moves no
+round's window. `defer batch` reaches `converge`'s conjunct through the next
+round it buys, not by acting on rounds already recorded, and
+`test_the_batch_alone_does_not_move_the_converge_conjunct` is the tripwire:
+if it ever passes, the window has been changed.
 
 **Two corrections to the line this replaced** (*"8 of 30 units · 7 of 49
 items"*), both made 2026-09-01 after counting the dashboard rather than
@@ -66,9 +76,13 @@ carrying the number forward:
 
 **The full suite was run locally on 2026-09-04 at `990629a`** — `pytest --cov …
 --cov-fail-under=80`, observed **exit 0**, **2893 passed, 8 skipped**, zero
-`FAILED`/`ERROR` lines, coverage **89.31%**, 21m51s. That covers the whole
-branch, including all five of that day's commits. Read from the run's own
+`FAILED`/`ERROR` lines, coverage **89.31%**, 21m51s. Read from the run's own
 output, not from the wrapper's exit code.
+
+**It covers everything up to `990629a` and NOT `7d69854` (W14),** which landed
+after it. W14 has the fast subset, ruff, mypy, the contract gate,
+`enforcement_lint` and `enforcement_contract --check` observed green, plus its
+own 26-test file — but no full-suite run has covered it.
 
 It is *not* CI: CI runs on ubuntu, and the seccomp debt below is a thing no
 local run touches. **Note also that the load-flaky hook family did not fail in
@@ -229,38 +243,28 @@ healthy path's timing.
 
 ## Do this next
 
-### 1. ⭐ W14 (items 5, 10) — start here.
+### 1. ⭐ W31 (item 50), then P3 — W15 (30) onward.
 
-P2's remainder. W10, W11 and W12 are `DONE`; W13 is `WIP` with item 37 closed
-and item 17 waiting on Jon (above) — **that is a question, not a blocker, and
-W14 does not depend on it.** W14's own ruling is already in hand ("the breaker
-gets a second seat too", Jon 2026-08-26), so it is buildable now.
+P2 is finished. W10, W11, W12 and W14 are `DONE`; W13 is `WIP` with item 37
+closed and item 17 open **by ruling** (above) — that is decided, not blocking.
 
-Read W14's V5 before writing anything: *"the breaker measures what its title
-says."* P0.1 shipped once as a detector carrying zero information about the
-thing it was named for, and V5 exists specifically to catch that recurrence —
-a converging run and a diverging run must read **differently**.
+**W31 (item 50) is the only P2 unit left**, and it depends on W08, which is
+done. After it the board is P3 (W15-W21), P4, and the two `WIP` stragglers
+(W13's item 17, W32's step 3 — the latter still a question for Jon).
 
-**W11's two commits left things worth knowing before touching the tracker or
-the cache helpers:**
+**Before touching a gate or a query, read what W14 just established:**
 
-- **`_protocol_cache` now has three write ops, not two, and they are not
-  interchangeable.** `update_cache` replaces a top-level key outright and is
-  still right wherever the caller owns the whole key. `merge_cache` is RFC 7386
-  and is what a *per-actor* write uses. `write_cache` takes `expect_version` for
-  a change that genuinely spans the blob. Picking by habit is how item 42 got
-  written in the first place.
-- **`read_cache_with_boundary` returns a 3-tuple** — `(cache, boundary,
-  version)`. The four gate call sites unpack and discard the third.
-- **Two RFC 7386 edges that are easy to get wrong and are already handled:**
-  `null` deletes at any depth (that is how a clear is spelled), and arrays
-  replace wholesale, so a merge naming an actor's commit list sends the *whole*
-  list — a per-actor write, never an append.
-- **`_actor_patch` exists for the pre-keying shape.** A bare int under `stall`
-  or a flat list under `unregistered_commits` is what an older holtz wrote;
-  RFC 7386 replaces a scalar with a patch object rather than merging into it,
-  which would drop the migration `stall_counts`/`pending_commits` perform. Any
-  new per-actor key needs the same treatment.
+- **`amplification_diverging` counts per round, up to that round.** The join is
+  `f.seq <= r.seq`. Nothing recorded after a round can change what that round
+  counted. Any escape you are tempted to describe as "clears the block" needs
+  checking against that.
+- **Two seats on one predicate is the established arrangement**, not a
+  duplication to tidy away: `round_item_cap_exceeded` and now the amplification
+  breaker each block at `pattern_done` *and* `iteration_boundary`, because the
+  taught path never reaches the first. `enforcement_lint` H8 is what keeps a
+  block naming an escape it does not gate on.
+- **`enforcement_contract.py --check` is gated and goes stale on any config
+  edit.** `--write` and commit it in the same commit.
 
 **W12 left a shared module worth knowing about before touching a courier:**
 `enforcement/scripts/_recorded_command.py`. A recognizer's `None` no longer

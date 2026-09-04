@@ -62,7 +62,7 @@ imprecision (`CLAUDE.md`).
 | W11 | 42 | B | `DONE` @ `3697e31` — V6 records an exposure it does not close | W01, ~~sahjhan#49~~ shipped |
 | W12 | 34, 28 | B | `DONE` — one shared refusal, four scripts | — |
 | W13 | 37, 17 | B | `WIP` @ `9555fce` — **37 done, 17 open**; V3 measured and does not support closing it | — |
-| W14 | 5, 10 | B | `TODO` | — |
+| W14 | 5, 10 | B | `DONE` @ `7d69854` — V5 caught P0.1's own failure under the mutation | — |
 | **P3 — before release** ||||
 | W15 | 30 | C | `TODO` | — |
 | W16 | 18 | C | `TODO` | W09 |
@@ -2886,8 +2886,25 @@ not broken; the gate is not reliably green under load.
 
 ## W14 — Items 5 + 10: the breaker's second seat, and the conjunct that reads the same predicate
 
-**Status:** `TODO`  ·  **Tier:** B  ·  **10 PROVEN**
-**Commit:** `fix(enforcement): put the amplification breaker on the path the docs teach`
+**Status:** `DONE`  ·  **Tier:** B  ·  **10 PROVEN**
+**Commit:** `7d69854` — `fix(enforcement): put the amplification breaker on the path the docs teach`
+
+### What item 10 does not do — measured, not assumed
+
+`amplification_diverging` joins `f.seq <= r.seq`, so **each round counts only
+what had happened by that round**. A deferral made *after* the last round moves
+no round's window and cannot retroactively un-diverge it. So counting deferrals
+on the retired side does **not** make `defer batch` move the `converge`
+conjunct on its own.
+
+What it does is make the *next* round count them, and the outer filter is a
+sliding window over the last three rounds — so one clean round after the batch
+drops the count below 3 and `converge` opens. V4 asserts both halves separately,
+because "the escape works" and "the escape works immediately" are different
+claims and only the second one is false. `test_the_batch_alone_does_not_move_
+the_converge_conjunct` is the honest half, and it doubles as a tripwire: if it
+ever passes, the window has been changed and the measurement no longer means
+what its comment says.
 
 ### Defect 5 · `transitions.toml:411`
 
@@ -2915,37 +2932,67 @@ amplification gate names no escape at all.
 
 ### Plan
 
-- [ ] **1.** (5) Put the same `any_of` on `iteration_boundary`, referencing the
+- [x] **1.** (5) Put the same `any_of` on `iteration_boundary`, referencing the
       **same named queries** so the two seats cannot drift — the arrangement
       `round_item_cap_exceeded` already has
-- [ ] **2.** (5) Confirm the escape is reachable from `fix_loop`: `defer_low`/
+- [x] **2.** (5) Confirm the escape is reachable from `fix_loop`: `defer_low`/
       `defer_medium` are declared `fix_loop → fix_loop`, so `sahjhan defer batch`
       works there. No new transition edges needed
-- [ ] **3.** (5) Both seats reference `medium_deferral_budget` and `open_low_count`
+- [x] **3.** (5) Both seats reference `medium_deferral_budget` and `open_low_count`
       **by name** — H8 checks that a block names the query its escape is gated on,
       and the escape now has two block sites
-- [ ] **4.** (10) Count deferrals on the resolved side of `amplification_diverging`
-- [ ] **5.** (10) Give the `converge` seat an `intent` naming a command (also item 11)
+- [x] **4.** (10) Count deferrals on the resolved side of `amplification_diverging`
+- [x] **5.** (10) Give the `converge` seat an `intent` naming a command (also item 11)
 
 ### Validation
 
-- [ ] **V1** The breaker fires on the **taught** path: drive a diverging run that
+- [x] **V1** The breaker fires on the **taught** path: drive a diverging run that
       stays in `fix_loop` and never enters `pattern_analysis`; `iteration_boundary`
       blocks. A test that enters `pattern_analysis` reproduces the old passing
-      state. Evidence: ___
-- [ ] **V2** Drive the printed escape → the block clears **at both seats**.
-      Evidence: ___
-- [ ] **V3** (10) 3 filed, 3 deferred, board empty → `amplification_diverging` reads
-      **false**. Evidence: ___
-- [ ] **V4** (10) One escape, two sites, one outcome: `defer batch` moves **both**
-      the `pattern_done` block and the `converge` conjunct. Evidence: ___
-- [ ] **V5** **The breaker measures what its title says.** A *converging* run must
+      state. Evidence: `TestTheBreakerSitsOnTheTaughtPath`. Its fixture never
+      calls `enter_pattern_analysis` — `round()` records through
+      `pattern_round.py`, which is Step 11's in-loop form. RED as the gate
+      output containing no `amplification` line at all.
+- [x] **V2** Drive the printed escape → the block clears **at both seats**.
+      Evidence: `test_the_same_escape_clears_both_blocks` drives one
+      `defer batch` and checks `iteration_boundary` **and** `pattern_done`.
+      `test_the_boundary_names_the_command_that_clears_it` pins that the new
+      seat prints the escape, not just that it blocks.
+- [x] **V3** (10) 3 filed, 3 deferred, board empty → `amplification_diverging` reads
+      **false**. Evidence:
+      `test_a_round_whose_findings_were_all_deferred_is_not_divergence`, RED as
+      `assert not True`. **Four findings across three rounds** deliberately —
+      one per round makes the two counts coincide, and a predicate reading the
+      wrong dimension would then be right by accident.
+- [x] **V4** (10) One escape, two sites, one outcome: `defer batch` moves **both**
+      the `pattern_done` block and the `converge` conjunct. Evidence:
+      `TestOneEscapeTwoSitesOneOutcome`, three tests — and read the box above
+      before citing this one. The batch **alone** does not move the converge
+      conjunct, by construction; it moves it through the next round it buys.
+      Both halves are asserted separately.
+- [x] **V5** **The breaker measures what its title says.** A *converging* run must
       not trip it. P0.1 shipped once as a detector carrying zero information about
       the thing it was named for — assert the two runs read differently.
-      Evidence: ___
-- [ ] **V6** `enforcement_lint` H7/H8 → exit 0. Evidence: ___
-- [ ] **V7 · non-vacuity** Remove the second seat → V1 red. Revert 10 → V3 red.
-      Evidence: ___
+      Evidence: `test_a_converging_run_and_a_diverging_run_read_differently`
+      drives both arms **in one test**, because two tests each asserting one
+      value can both pass while the predicate is a constant. The converging arm
+      retires by *both* spellings (one resolved, one deferred) rather than
+      filing nothing, so a detector that only told activity from silence would
+      not pass it.
+      ⚠️ **Under V7's item-10 mutation this fails as `assert True != True`** —
+      P0.1's original failure, verbatim. Before item 10, a converging run that
+      retired by deferral was indistinguishable from a diverging one.
+- [x] **V6** `enforcement_lint` H7/H8 → exit 0. Evidence: `0 error(s), 2
+      warning(s) from 10 check(s)`; both warnings are pre-existing H1s about
+      `prediction`/`prediction_outcome`. Also `enforcement_contract.py --check`
+      → current, regenerated because the config changed and the doc is gated on
+      it.
+- [x] **V7 · non-vacuity** Remove the second seat → V1 red. Revert 10 → V3 red.
+      Evidence: run as two **isolated** mutations, not one. Removing the seat
+      reds exactly the three taught-path tests and leaves item 10's green;
+      reverting item 10 reds exactly the three item-10 tests and leaves the
+      seat's green. So the two halves are separately attributable rather than
+      each other's alibi.
 
 ---
 ---
