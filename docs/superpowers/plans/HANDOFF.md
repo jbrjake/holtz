@@ -62,6 +62,12 @@ carrying the number forward:
 
 **Nothing is pushed. CI has never run on any of it.** Do not claim it has.
 
+**The full suite was run locally on 2026-09-03 at `7231035`** — `pytest --cov …
+--cov-fail-under=80`, observed **exit 0**, no `FAILED` lines, coverage 89.35%.
+That covers everything on the branch, not just this session's three commits.
+It is *not* CI: CI runs on ubuntu, and the seccomp debt below is a thing no
+local run touches.
+
 ### Open for Jon — two, both raised, neither guessed at
 
 - **W32 step 3** (above): does the hand-vendored-old-binary path still want a
@@ -135,6 +141,18 @@ carrying the number forward:
   or socket is wrong. Collapsing them is why three sessions could not falsify
   anything here.
 
+  **A third occurrence, 2026-09-03, on the W12 commit.** One test —
+  `TestPreToolHookSubagentTddParity::test_subagent_source_edit_blocked_by_tdd_
+  gate` — failed inside `pre-commit` with the same
+  `ENFORCEMENT DEGRADED: Hook eval subprocess failed`, and the **identical
+  commit retried immediately afterwards passed**. The commit touched five
+  PostToolUse couriers and no `pre_tool_hook.py`, and the regenerated manifest
+  changed only those five hashes, so the failing hook's own hash was untouched.
+  That is one more data point for "load, not this branch" and none at all for
+  which of the two exceptions fires. The **full suite run immediately after,
+  with nothing else running, failed none of this family** — consistent with
+  every previous reading and, again, not evidence about the cause.
+
   **The concrete next step, deliberately not taken yet:** split that `except`
   at each of the **five** sites that collapse it — `pre_tool_hook.py:155`,
   `bash_guard.py:78` and `:152`, `_protocol_cache.py:462`,
@@ -191,9 +209,11 @@ difference was measurable in one command against the binary.
   it.
 - **`git` prints two `[dev …]` hashes and one is orphaned** (post-commit
   amends). Confirm with `git merge-base --is-ancestor`, never `cat-file`.
-  **Which one is orphaned is not fixed** — on `0df93b0` (W07) the *second*
-  printed hash was the dead one, the reverse of the previous occurrence. Do not
-  learn the position; run the check.
+  **Which one is orphaned is not fixed.** Three occurrences, three answers: on
+  `0df93b0` (W07) the *second* printed hash was dead; on `2c50986` (W10) the
+  *first* was live; on `7231035` (W12) the live hash **was not in the tail of
+  the output at all** and the only visible one was orphaned. Do not learn the
+  position and do not trust what you can see — run `git log -1 --format=%H`.
 - **The README test badge is a gated derived number** — bump it in the same
   commit that adds tests, before the run you intend to cite.
 - **A real daemon refuses `enforcement_write` from a test process**
