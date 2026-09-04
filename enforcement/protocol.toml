@@ -264,9 +264,32 @@ intent = "no open LOW findings remain"
 # `fix_loop_start` is the run's *first* `state_transition` into fix_loop —
 # MIN(seq), not MAX — so the measurement spans the whole loop rather than
 # resetting at every lens rotation back into it.
+#
+# **A deferral retires a finding (item 10).** The denominator used to count
+# `finding_resolved` alone, so a round that filed three findings and deferred
+# all three — leaving the board empty — read as amplification. That is not a
+# rounding error, it is the two consumers pulling against each other: this same
+# predicate gates `converge`, and the escape the breaker *prescribes* is
+# `sahjhan defer batch`. Every deferral the protocol asks for moved the
+# `pattern_done` block and left the `converge` conjunct exactly as it was.
+#
+# It does not weaken the measurement, because deferral is not free: `defer_low`
+# takes LOWs only, `defer_medium` is capped at 50% by `medium_deferral_budget`,
+# and `defer_cant_reproduce` demands a written investigation. A run cannot
+# defer its way out of divergence any further than those caps allow.
+#
+# `count(DISTINCT ...)` over an `IN` list rather than a sum of two counts: a
+# finding that is both resolved and deferred is one retirement, not two.
+#
+# What this does NOT do, and what item 10's V4 turns on: the join is
+# `f.seq <= r.seq`, so each round counts only what had happened *by that
+# round*. A deferral made after the last round moves no round's window and
+# therefore does not move this predicate. `defer batch` reaches `converge`'s
+# conjunct through the next round it lets the run complete, not by acting on
+# the rounds already recorded.
 [queries.amplification_diverging]
-sql = "SELECT count(*) >= 3 FROM (SELECT r.seq FROM events r JOIN events f ON f.seq <= r.seq AND f.seq > COALESCE((SELECT MIN(s.seq) FROM events s WHERE s.type='state_transition' AND s.to='fix_loop'), 0) WHERE r.type='pattern_analysis_complete' AND r.seq >= COALESCE((SELECT MAX(a.seq) FROM events a WHERE a.type='pattern_analysis_complete' AND a.seq < (SELECT MAX(b.seq) FROM events b WHERE b.type='pattern_analysis_complete' AND b.seq < (SELECT MAX(c.seq) FROM events c WHERE c.type='pattern_analysis_complete'))), 0) GROUP BY r.seq HAVING count(DISTINCT CASE WHEN f.type='finding' THEN f.id END) > count(DISTINCT CASE WHEN f.type='finding_resolved' THEN f.id END))"
-intent = "more findings filed than resolved since fix_loop_start, for three consecutive rounds"
+sql = "SELECT count(*) >= 3 FROM (SELECT r.seq FROM events r JOIN events f ON f.seq <= r.seq AND f.seq > COALESCE((SELECT MIN(s.seq) FROM events s WHERE s.type='state_transition' AND s.to='fix_loop'), 0) WHERE r.type='pattern_analysis_complete' AND r.seq >= COALESCE((SELECT MAX(a.seq) FROM events a WHERE a.type='pattern_analysis_complete' AND a.seq < (SELECT MAX(b.seq) FROM events b WHERE b.type='pattern_analysis_complete' AND b.seq < (SELECT MAX(c.seq) FROM events c WHERE c.type='pattern_analysis_complete'))), 0) GROUP BY r.seq HAVING count(DISTINCT CASE WHEN f.type='finding' THEN f.id END) > count(DISTINCT CASE WHEN f.type IN ('finding_resolved','finding_deferred') THEN f.id END))"
+intent = "more findings filed than retired (resolved or deferred) since fix_loop_start, for three consecutive rounds"
 
 [queries.medium_deferral_budget]
 sql = "SELECT (SELECT count(DISTINCT id) FROM events WHERE type='finding_deferred' AND reason='medium_budget') < (SELECT count(DISTINCT f.id) FROM events f WHERE f.type='finding' AND f.severity='MEDIUM' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id)) / 2"

@@ -240,6 +240,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | the last round opened more findings than the run has closed since — resolve one with `fix_commit`, or merge a duplicate with `sahjhan transition merge_finding BH-NNN BH-MMM` | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| amplification: more findings filed than resolved for 3 consecutive rounds — run `sahjhan defer batch --severity low,medium` to clear every open LOW and spend the MEDIUM budget | *direct check* | — | `direct` | n/a |
 
 ### `resume` — awaiting_clear → fix_loop
 
@@ -354,7 +355,8 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | every user-reachable HIGH must be resolved or deferred — run `sweep_dirty` and work them | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
-| the run is still filing faster than it retires over the last 3 rounds | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| the run is still filing faster than it retires over the last 3 rounds — run `sweep_dirty`, then `sahjhan defer batch --severity low,medium` and work a round, so the next round retires more than it files | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | ↳ | `state_transition` | `engine:sahjhan` | `engine` | no — written by the engine, only by passing the gate |

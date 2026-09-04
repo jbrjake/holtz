@@ -345,6 +345,27 @@ gates = [
     # names a command the run can run.
     { type = "query", query = "round_item_cap_exceeded", expect = "false", intent = "the last round left more than 3 findings open — fix them, or merge a duplicate into the finding it repeats with `sahjhan transition merge_finding BH-NNN BH-MMM`" },
     { type = "query", query = "round_opens_exceed_closes", expect = "false", intent = "the last round opened more findings than the run has closed since — resolve one with `fix_commit`, or merge a duplicate with `sahjhan transition merge_finding BH-NNN BH-MMM`" },
+    # P0.1's amplification circuit-breaker, second seat (item 5). Byte-for-byte
+    # the `any_of` on `pattern_done`, referencing the same three named queries
+    # so the two seats cannot drift — the arrangement `round_item_cap_exceeded`
+    # two gates up already has, and for the same reason.
+    #
+    # The first seat alone gated the *rare* path. `pattern_done` is reachable
+    # only from `pattern_analysis`, and `phase-fix-loop.md:101` teaches staying
+    # in `fix_loop` as the usual course and entering `pattern_analysis` only
+    # when this very transition blocks. So on the taught path the breaker never
+    # evaluated, and since `pattern_done`'s escape is the only place batch
+    # deferral is taught, the run that most needed it never saw it.
+    #
+    # The escape is reachable from here without new edges: `defer_low` and
+    # `defer_medium` are both declared `fix_loop -> fix_loop`.
+    { type = "any_of", intent = "amplification: more findings filed than resolved for 3 consecutive rounds — run `sahjhan defer batch --severity low,medium` to clear every open LOW and spend the MEDIUM budget", gates = [
+        { type = "query", query = "amplification_diverging", expect = "false" },
+        { type = "all_of", gates = [
+            { type = "query", query = "open_low_count", expect = "0" },
+            { type = "query", query = "medium_deferral_budget", expect = "false" },
+        ] },
+    ] },
 ]
 
 # The filter is what makes this gate mean what it says. `context_reset` used to
@@ -583,7 +604,7 @@ gates = [
     # immediately above `transition converge` in `phase-convergence.md`.
     { type = "query", query = "no_open_fault_injected", expect = "true", intent = "every fault_injected finding must be hardened or deferred — run Step 15's hardening batch, one commit per module" },
     { type = "query", query = "all_user_reachable_high_closed", expect = "true", intent = "every user-reachable HIGH must be resolved or deferred — run `sweep_dirty` and work them" },
-    { type = "query", query = "amplification_diverging", expect = "false", intent = "the run is still filing faster than it retires over the last 3 rounds" },
+    { type = "query", query = "amplification_diverging", expect = "false", intent = "the run is still filing faster than it retires over the last 3 rounds — run `sweep_dirty`, then `sahjhan defer batch --severity low,medium` and work a round, so the next round retires more than it files" },
     { type = "file_exists", path = "docs/holtz/DEFERRED.md", intent = "docs/holtz/DEFERRED.md must exist" },
     { type = "no_violations", intent = "no unresolved protocol violations" },
     { type = "query", query = "quiz_exhaustions_resolved", expect = "true" },

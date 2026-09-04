@@ -48,6 +48,22 @@ _COMMON = ["--field", "project=t", "--field", "run=1", "--field", "auditor=holtz
            "--field", "phase=fix_loop", "--field", "step=10"]
 
 
+def _query_names(gates: list[dict]) -> set[str]:
+    """Every named query a gate tree references, at any nesting depth.
+
+    The breaker is an `any_of` wrapping an `all_of`, so a flat scan of the
+    top-level gates finds one of its three queries and misses two — which
+    would make "both seats read the same queries" pass while they disagreed
+    about the escape.
+    """
+    names: set[str] = set()
+    for gate in gates:
+        if gate.get("query"):
+            names.add(gate["query"])
+        names |= _query_names(gate.get("gates", []))
+    return names
+
+
 def _named_query(name: str) -> str:
     with open(os.path.join(CONFIG_DIR, "protocol.toml"), "rb") as fh:
         queries = tomllib.load(fh)["queries"]
@@ -58,7 +74,15 @@ def _named_query(name: str) -> str:
 class _Run:
     """A ledger in the fix loop, driven the way the skill files drive one."""
 
-    def __init__(self, real_daemon):
+    def __init__(self, real_daemon, run_number: int = 1):
+        """``run_number`` picks the ledger, so one daemon can hold two runs.
+
+        V5 needs a diverging run and a converging run compared *in one test* —
+        two tests each asserting one value can both pass while the predicate is
+        a constant, which is the failure P0.1 actually shipped. The fixture
+        yields one daemon, so the second arm gets its own ledger here rather
+        than its own daemon.
+        """
         self.d = real_daemon
         self.root = real_daemon["project_root"]
         subprocess.run(["git", "init", "-q", self.root], check=True, capture_output=True)
@@ -69,10 +93,14 @@ class _Run:
                      ["config", "user.name", "t"],
                      ["commit", "-q", "--allow-empty", "-m", "root"]):
             subprocess.run(["git", "-C", self.root, *args], check=True, capture_output=True)
-        self.sah("ledger", "create", "--from", "run", "1", "--activate")
+        self.sah("ledger", "create", "--from", "run", str(run_number), "--activate")
         self.sah("event", "state_transition", "--field", "from=merge_done",
                  "--field", "to=fix_loop", "--field", "command=fix_loop_start")
         self._pat = 0
+        # The pattern brief is a file in a shared project root, so two runs
+        # writing PAT-001 over each other would have the second arm's rounds
+        # read as a brief that shrank. Prefixing by ledger keeps them apart.
+        self._pat_prefix = f"PAT-{run_number}"
 
     def sah(self, *args, check=True):
         result = subprocess.run(
@@ -111,7 +139,7 @@ class _Run:
         """
         if pat_ids is None:
             self._pat += 1
-            pat_ids = [f"PAT-{n:03d}" for n in range(1, self._pat + 1)]
+            pat_ids = [f"{self._pat_prefix}{n:02d}" for n in range(1, self._pat + 1)]
         _write(self.root, BRIEF, "# Brief\n\n" + "".join(
             _entry(pat_id, 1) for pat_id in pat_ids))
 
@@ -474,3 +502,257 @@ class TestTheTwoLowQueriesAgree:
             f"the two spellings of the LOW population have drifted"
         )
         assert count == 1, ids
+
+
+# ── W14 / items 5 + 10 ──────────────────────────────────────────────────────
+
+
+class TestTheBreakerSitsOnTheTaughtPath:
+    """Item 5 — `pattern_done` is the rare path; `iteration_boundary` is not.
+
+    P0.1's block lands on `pattern_done`, reachable only from
+    `pattern_analysis`. But `phase-fix-loop.md:101` teaches staying in
+    `fix_loop` as the *usual* course and entering `pattern_analysis` only when
+    `iteration_boundary` blocks. On the usual path `pattern_done` never runs,
+    so the breaker never evaluates and the batch deferral it prescribes is
+    never triggered — and `pattern_done`'s escape is the only place deferral is
+    taught. The round cap was given a second seat for exactly this reason; the
+    breaker was not. RULED (Jon, 2026-08-26): it gets one too.
+    """
+
+    def _diverge_without_entering_pattern_analysis(self, run):
+        """Three diverging rounds on the taught path — `fix_loop` throughout.
+
+        `round()` records through `pattern_round.py`, which is Step 11's
+        in-loop form; nothing here calls `enter_pattern_analysis`. A test that
+        entered it would reproduce the old passing state.
+        """
+        for n in (1, 2, 3):
+            run.file(f"BH-{n}01")
+            run.file(f"BH-{n}02")
+            run.resolve(f"BH-{n}01")
+            run.round()
+        run.file("BH-401", "LOW")
+        run.file("BH-501", "MEDIUM")
+        run.file("BH-502", "MEDIUM")
+        assert run.diverging(), "the fixture must actually diverge"
+
+    def test_the_boundary_blocks_on_the_taught_path(self, run):
+        self._diverge_without_entering_pattern_analysis(run)
+        out = run.gate_check("iteration_boundary")
+        assert "amplification" in out and "✗" in out, (
+            f"a diverging run reached the boundary unblocked:\n{out}"
+        )
+
+    def test_the_boundary_names_the_command_that_clears_it(self, run):
+        self._diverge_without_entering_pattern_analysis(run)
+        assert "defer batch --severity low,medium" in run.gate_check("iteration_boundary")
+
+    def test_a_converging_run_is_not_blocked_at_the_boundary(self, run):
+        """Non-vacuity: the new seat is not simply always shut."""
+        run.file("BH-001")
+        run.resolve("BH-001")
+        run.round()
+        out = run.gate_check("iteration_boundary")
+        assert not ("amplification" in out and "✗" in out), out
+
+    def test_both_seats_read_the_same_named_queries(self):
+        """One predicate, two consumers — the arrangement the round cap has.
+
+        Asserted on the config rather than on behaviour, because drift is what
+        this guards: two seats spelling the same rule differently is how #77
+        deadlocked, and behaviour tests only catch it once they disagree.
+        """
+        with open(os.path.join(CONFIG_DIR, "transitions.toml"), "rb") as fh:
+            transitions = tomllib.load(fh)["transitions"]
+
+        def breaker_queries(command):
+            for t in transitions:
+                if t.get("command") != command:
+                    continue
+                for gate in t.get("gates", []):
+                    if gate.get("type") != "any_of":
+                        continue
+                    if "amplification" not in gate.get("intent", ""):
+                        continue
+                    return _query_names(gate["gates"])
+            return set()
+
+        assert breaker_queries("pattern_done") == breaker_queries("iteration_boundary")
+        assert breaker_queries("pattern_done") == {
+            "amplification_diverging", "open_low_count", "medium_deferral_budget",
+        }
+
+
+class TestADeferralRetiresAFinding:
+    """Item 10 — the two converge conjuncts pulled against each other.
+
+    `converge` requires `amplification_diverging` false and names no escape.
+    The breaker's prescribed escape is `defer batch`, and deferrals were not
+    counted on the resolved side — so the one command the protocol teaches for
+    a diverging run moved the `pattern_done` block and left the `converge`
+    conjunct reading the same predicate exactly as it was.
+    """
+
+    def test_a_round_whose_findings_were_all_deferred_is_not_divergence(self, run):
+        """V3 — filed, deferred, board empty.
+
+        **Four findings across three rounds**, deliberately: with one per round
+        the finding count and the round count coincide, and a predicate reading
+        the wrong dimension would give the right answer by accident. The second
+        round files two.
+        """
+        filings = [("BH-101",), ("BH-201", "BH-202"), ("BH-301",)]
+        for ids in filings:
+            for finding_id in ids:
+                run.file(finding_id, "LOW")
+                run.defer(finding_id)
+            run.round()
+        assert sum(len(ids) for ids in filings) == 4
+        assert len(filings) == 3
+        assert not run.diverging(), (
+            "every finding filed in these rounds was retired by a deferral, "
+            "and the board is empty — that is not amplification"
+        )
+
+    def test_a_round_with_neither_resolution_nor_deferral_still_diverges(self, run):
+        """The direction the change must not break: unretired filing is still
+        divergence. Green before this unit, and under its mutation."""
+        for n in (1, 2, 3):
+            run.file(f"BH-{n}01", "LOW")
+            run.round()
+        assert run.diverging()
+
+    def test_the_converge_seat_names_a_command(self):
+        """Item 11 — a block with no escape printed is a dead end."""
+        with open(os.path.join(CONFIG_DIR, "transitions.toml"), "rb") as fh:
+            transitions = tomllib.load(fh)["transitions"]
+        gate = next(
+            g for t in transitions if t.get("command") == "converge"
+            for g in t.get("gates", [])
+            if g.get("query") == "amplification_diverging"
+        )
+        assert "`" in gate.get("intent", ""), (
+            f"converge's amplification gate names no command: {gate.get('intent')!r}"
+        )
+
+
+class TestOneEscapeTwoSitesOneOutcome:
+    """V4 — `defer batch` has to move the `converge` conjunct too.
+
+    It does, but **not by acting on the rounds already recorded**, and that
+    distinction is the whole of item 10's second half. The join is
+    `f.seq <= r.seq`, so each round counts only what had happened by then: a
+    deferral made after the last round moves no round's window and cannot
+    retroactively un-diverge it. What the escape buys is the *next* round —
+    whose window does include the deferrals — and the outer filter is a
+    sliding window over the last three rounds, so one clean round drops the
+    count below 3 and `converge` opens.
+
+    Asserted in both halves, because "the escape works" and "the escape works
+    immediately" are different claims and only the second one is false.
+    """
+
+    def _trip(self, run):
+        for n in (1, 2, 3):
+            run.file(f"BH-{n}01", "LOW")
+            run.file(f"BH-{n}02", "LOW")
+            run.round()
+        assert run.diverging()
+
+    def test_the_batch_alone_does_not_move_the_converge_conjunct(self, run):
+        """The honest half. Recorded so nobody reads V4 as more than it is."""
+        self._trip(run)
+        result = run.defer_batch()
+        assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+        assert run.diverging(), (
+            "a deferral after the last round cannot change what that round "
+            "counted — if this ever passes, the window has been changed and "
+            "the measurement no longer means what its comment says"
+        )
+
+    def test_the_batch_plus_the_round_it_buys_clears_converge(self, run):
+        """And the half that makes the escape real."""
+        self._trip(run)
+        run.defer_batch()
+        run.round()
+        assert not run.diverging(), (
+            "the round after the batch counts the deferrals as retirements, "
+            "and a sliding window of three rounds needs all three diverging"
+        )
+
+    def test_the_same_escape_clears_both_blocks(self, run):
+        """One command, two block sites, one outcome."""
+        self._trip(run)
+        run.defer_batch()
+        run.round()
+        for command in ("iteration_boundary", "pattern_done"):
+            out = run.gate_check(command) if command == "iteration_boundary" else None
+            if out is None:
+                run.enter_pattern_analysis()
+                out = run.gate_check("pattern_done")
+            assert not ("amplification" in out and "✗" in out), (
+                f"{command} still blocks on amplification after the escape:\n{out}"
+            )
+
+
+class TestTheBreakerMeasuresWhatItsTitleSays:
+    """V5 — the guard against P0.1's own history.
+
+    P0.1 shipped once as a detector whose condition was true at fix-loop entry
+    on *every* run: a converging run and a diverging run read identically, so
+    it carried zero information about the thing it was named for. This asserts
+    the two runs read **differently**, which is the one claim that failure
+    would have falsified.
+    """
+
+    @staticmethod
+    def _diverging(run, prefix):
+        """Files two per round, retires none. A = infinite."""
+        for n in (1, 2, 3):
+            run.file(f"{prefix}-{n}01", "LOW")
+            run.file(f"{prefix}-{n}02", "LOW")
+            run.round()
+
+    @staticmethod
+    def _converging(run, prefix):
+        """Files two per round and retires both — one fixed, one deferred.
+
+        Deliberately not "files nothing": a run that files nothing is trivially
+        not diverging, and a detector that only distinguished activity from
+        silence would pass a weaker version of this test. Both retirement
+        spellings appear so the arm exercises the denominator item 10 widened.
+        """
+        for n in (1, 2, 3):
+            run.file(f"{prefix}-{n}01", "LOW")
+            run.file(f"{prefix}-{n}02", "LOW")
+            run.resolve(f"{prefix}-{n}01")
+            run.defer(f"{prefix}-{n}02")
+            run.round()
+
+    def test_a_converging_run_and_a_diverging_run_read_differently(self, real_daemon):
+        """Both drives in one test, so the comparison is the assertion.
+
+        Two separate tests each asserting one value can both pass while the
+        predicate is a constant — the failure mode P0.1 actually shipped. Only
+        requiring the answers to *differ* rules that out.
+        """
+        # `BH` and `BJ` rather than two free-form prefixes: `events.toml`
+        # constrains a finding id to `^B[HJ]-\d{3}$`, so those are the only two
+        # available. They land in separate ledgers, so reuse would be safe —
+        # distinct ids just make a failure readable.
+        diverging_run = _Run(real_daemon, run_number=1)
+        self._diverging(diverging_run, "BH")
+        diverged = diverging_run.diverging()
+
+        converging_run = _Run(real_daemon, run_number=2)
+        self._converging(converging_run, "BJ")
+        converged = converging_run.diverging()
+
+        assert diverged != converged, (
+            "the breaker gives the same answer for a run that files twice what "
+            "it retires and a run that retires everything it files — it "
+            "carries no information about amplification"
+        )
+        assert diverged is True
+        assert converged is False
