@@ -10,8 +10,9 @@ import os
 import re
 import shlex
 import sys
+from collections.abc import Iterable
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, NamedTuple
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -578,14 +579,17 @@ def query_named_predicate(
         return None
 
 
-# Which commits the ledger says are registered, by name. `fix_commit` and
+# What the ledger says each resolution registered, by name. `fix_commit` and
 # `merge_finding` both auto-emit `finding_resolved` with `commit_hash` stamped
 # from `git rev-parse --short=7 HEAD`, so the ledger has always been able to
 # say which commit a transition registered — the cache could not, and that is
 # the difference item 32 turned on. `hardening_batch.py` asks the same
 # question for its own reason; resolving the name rather than restating the
 # SQL is what keeps there being one of it (H7).
-REGISTERED_COMMITS_QUERY = "resolution_commit_hashes"
+#
+# The rows carry the finding id as well, for item 50: see the query's own
+# comment in `protocol.toml`, and `pending_commits_discharged` below.
+FINDING_RESOLUTIONS_QUERY = "finding_resolutions"
 
 # git's own floor for an unambiguous abbreviation, and the width the emit
 # stamps. Below it a "hash" is a prefix of everything — an empty string would
@@ -593,25 +597,47 @@ REGISTERED_COMMITS_QUERY = "resolution_commit_hashes"
 MIN_ABBREV = 7
 
 
-def registered_commit_hashes(
-    binary: str, config_dir: str, cwd: str,
-) -> list[str] | None:
-    """Every commit hash the ledger records a resolution against.
+class Resolutions(NamedTuple):
+    """The two things a `finding_resolved` row can identify a fix by.
 
-    None when the ledger could not be asked. An empty list is an answer: no
-    commit is registered, so no charge may be discharged.
+    Both come off one query and one round-trip, because they are two readings
+    of one fact — "this fix is registered" — and a caller that fetched them
+    separately could be handed a ledger that moved in between.
     """
-    rows = query_named_rows(binary, config_dir, cwd, REGISTERED_COMMITS_QUERY)
+
+    #: Hashes, as stamped at `HEAD` when the transition ran.
+    commits: list[str]
+    #: The finding ids those resolutions closed. What a rewrite preserves.
+    findings: list[str]
+
+
+def registered_resolutions(
+    binary: str, config_dir: str, cwd: str,
+) -> Resolutions | None:
+    """What the ledger records every finding resolution against.
+
+    None when the ledger could not be asked. Empty lists are an answer: nothing
+    is registered, so no charge may be discharged.
+    """
+    rows = query_named_rows(binary, config_dir, cwd, FINDING_RESOLUTIONS_QUERY)
     if rows is None:
         return None
     hashes = []
+    findings = []
     for row in rows:
         if not isinstance(row, dict):
             continue
         value = str(row.get("commit_hash") or "").strip()
         if len(value) >= MIN_ABBREV:
             hashes.append(value)
-    return hashes
+        # `sahjhan query --format json` spells an absent optional column as the
+        # four-character string "NULL", so `_optional`'s lesson applies: an id
+        # is only an id if it is one, and the empty string would be a substring
+        # of every commit message ever written.
+        finding = str(row.get("id") or "").strip()
+        if finding and finding != "NULL":
+            findings.append(finding)
+    return Resolutions(hashes, findings)
 
 
 def same_commit(left: str, right: str) -> bool:
@@ -890,26 +916,40 @@ def pending_commits_appended(
 
 
 def pending_commits_discharged(
-    cache: dict[str, Any] | None, registered: list[str]
+    cache: dict[str, Any] | None,
+    registered: list[str],
+    rewritten: Iterable[str] = (),
 ) -> dict[str, list[str]]:
-    """The buckets with every ``registered`` commit removed from whichever holds it.
+    """The buckets with every registered or rewritten commit removed.
 
     A charge is discharged by the commit it names being registered, so this
     removes commits rather than emptying buckets: an actor holding a second,
-    unregistered commit stays charged for that one.
+    unregistered commit stays charged for that one. Both arms obey that — a
+    rewrite discharges the charge it moved and not its author's others.
 
-    A registered hash that no bucket holds discharges nothing. That is the
-    answer, not a shortfall — a rebase rewrites the hash the tracker charged,
-    so the bucket keeps a charge whose commit no longer exists, and inventing
-    a nearest match would discharge a commit nobody registered.
+    ``registered`` is matched by hash. A registered hash that no bucket holds
+    discharges nothing, and inventing a nearest match would discharge a commit
+    nobody registered.
+
+    ``rewritten`` is the item-50 arm: the charges whose commits *were*
+    registered under a hash the loop then rewrote. Deciding which those are
+    needs git, so it is the caller's — see ``protocol_tracker``'s
+    ``_rewritten_charges``, which reads each charged commit's own message for a
+    finding id the ledger resolved, the relation `fix_commit`'s gate already
+    uses. Passing it as a separate argument rather than folding it into
+    ``registered`` keeps this function pure and keeps the two matches
+    distinguishable: one is a hash the ledger stamped, the other is a hash the
+    ledger never saw.
     """
+    discharged = set(rewritten)
     buckets = pending_commits(cache)
     return {
         actor: kept
         for actor, commits in buckets.items()
         if (kept := [
             c for c in commits
-            if not any(same_commit(c, r) for r in registered)
+            if c not in discharged
+            and not any(same_commit(c, r) for r in registered)
         ])
     }
 

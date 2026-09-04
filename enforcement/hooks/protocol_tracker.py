@@ -26,6 +26,7 @@ from _common import (  # noqa: E402
 from _protocol_cache import (  # noqa: E402
     ORCHESTRATOR,
     VERSION_CONFLICT,
+    Resolutions,
     contains_sahjhan_cmd,
     empty_cache,
     event_actor,
@@ -35,14 +36,16 @@ from _protocol_cache import (  # noqa: E402
     is_sahjhan_cmd,
     merge_cache,
     parse_status_text,
+    pending_commits,
     pending_commits_appended,
     pending_commits_cleared,
     pending_commits_discharged,
     pending_commits_patch,
     query_named_predicate,
     read_cache_with_boundary,
-    registered_commit_hashes,
+    registered_resolutions,
     sahjhan_segments,
+    same_commit,
     stall_bumped,
     stall_cleared,
     stall_patch,
@@ -224,8 +227,8 @@ def _stop_daemon(cwd: str) -> None:
         )
 
 
-def _registered_commits(cwd: str) -> list[str] | None:
-    """Which commits the ledger says `fix_commit` has registered, or None.
+def _registered_resolutions(cwd: str) -> Resolutions | None:
+    """What the ledger says `fix_commit` has registered, or None.
 
     Split from the discharge below because the two answer to different things:
     this is the ledger's answer and does not move when the enforcement blob
@@ -237,11 +240,79 @@ def _registered_commits(cwd: str) -> list[str] | None:
     if binary is None:
         return None
     config_dir, _ = resolve_config_dir(cwd)
-    return registered_commit_hashes(binary, config_dir, cwd)
+    return registered_resolutions(binary, config_dir, cwd)
+
+
+#: How `fix_commit`'s own gate identifies the commit it is registering:
+#: ``git log -1 --format=%B | grep -q '{{item_id}}'``. `%B` and not `%s`
+#: because `phase-fix-loop.md` passes the item id as a *second* ``-m``, so it
+#: is in the body; the trailing ``--`` because a charged hash is a bare
+#: revision and a file of the same name would otherwise make git ambiguous.
+_MESSAGE_ARGV = ("git", "log", "-1", "--format=%B")
+
+#: A charge is whatever `_parse_commit_hash` read out of `git commit`'s output,
+#: including the literal ``unknown`` it falls back to. Only something shaped
+#: like an abbreviation is worth handing to git.
+_HASH = re.compile(r"[0-9a-f]{7,40}\Z")
+
+
+def _commit_message(cwd: str, commit_hash: str) -> str:
+    """``commit_hash``'s full message, or ``""`` when git cannot say.
+
+    Every failure is the empty string, and the caller treats that as "no
+    match": no repository, a pruned object, a hash that was never one. That is
+    the safe direction here — an unanswerable question keeps the charge, and
+    keeping a charge costs a nudge while losing one loses the gate.
+
+    A rebase leaves the pre-rewrite commit unreachable, not absent, so this
+    resolves it; and a linked worktree shares the object store with the main
+    checkout, so the orchestrator's ``cwd`` can read a subagent's commit.
+    """
+    if not _HASH.match(commit_hash):
+        return ""
+    try:
+        result = subprocess.run(
+            [*_MESSAGE_ARGV, commit_hash, "--"],
+            capture_output=True, text=True, timeout=5, cwd=cwd,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return result.stdout if result.returncode == 0 else ""
+
+
+def _rewritten_charges(
+    cwd: str, cache: dict, resolutions: Resolutions
+) -> list[str]:
+    """Charges whose commit names a finding the ledger resolved (item 50).
+
+    The tracker charges the hash `git commit` printed; the ledger stamps the
+    hash at `HEAD` when the transition ran. `phase-fix-loop.md` puts a
+    `git rebase` between those two moments — and in a three-wide loop the first
+    subagent's merge moves the branch, so subagents 2 and 3 rebase every round —
+    which makes them different strings for one commit. What the rewrite does not
+    change is the message, and `fix_commit` will not register a commit whose
+    message does not name the item, so the id is a key both ends already hold.
+
+    Only the charges the hash match missed are looked up: the rest are already
+    discharged and a git call for them would buy nothing. Re-run per
+    ``version_conflict`` attempt rather than memoised, because the retry re-reads
+    the buckets and may find charges this attempt never saw.
+    """
+    if not resolutions.findings:
+        return []
+    rewritten = []
+    for commits in pending_commits(cache).values():
+        for commit_hash in commits:
+            if any(same_commit(commit_hash, r) for r in resolutions.commits):
+                continue
+            message = _commit_message(cwd, commit_hash)
+            if message and any(f in message for f in resolutions.findings):
+                rewritten.append(commit_hash)
+    return rewritten
 
 
 def _discharge_registered_commits(
-    cache: dict, registered: list[str] | None
+    cwd: str, cache: dict, resolutions: Resolutions | None
 ) -> dict[str, list[str]]:
     """The pending-commit buckets, minus whatever the ledger says is registered.
 
@@ -250,7 +321,7 @@ def _discharge_registered_commits(
     transition's caller cannot — see `_protocol_cache`'s section on the
     pending-commit block.
 
-    An unreachable ledger (``registered is None``) discharges the orchestrator's
+    An unreachable ledger (``resolutions is None``) discharges the orchestrator's
     bucket only. It ran the transition, so it is the one actor whose charge the
     command is evidence about without anything having to be looked up.
 
@@ -259,9 +330,11 @@ def _discharge_registered_commits(
     takes its safety from ``expect_version`` instead of a per-actor merge —
     there is no single actor the patch could name.
     """
-    if registered is None:
+    if resolutions is None:
         return pending_commits_cleared(cache, ORCHESTRATOR)
-    return pending_commits_discharged(cache, registered)
+    return pending_commits_discharged(
+        cache, resolutions.commits, _rewritten_charges(cwd, cache, resolutions),
+    )
 
 
 # How many times a conditional whole-blob write re-reads and re-derives before
@@ -312,9 +385,9 @@ def _apply_sahjhan_cmd(
     if refreshed.get("state", cache.get("state")) == "finalized":
         _stop_daemon(cwd)
     stamp = datetime.now(timezone.utc).isoformat()  # noqa: UP017
-    # The ledger's answer, also asked for once — see _registered_commits.
+    # The ledger's answer, also asked for once — see _registered_resolutions.
     discharging = exit_code == 0 and _runs_transition(cmd, "fix_commit")
-    registered = _registered_commits(cwd) if discharging else None
+    registered = _registered_resolutions(cwd) if discharging else None
 
     for _attempt in range(_WRITE_ATTEMPTS):
         cache.update(refreshed)
@@ -325,7 +398,9 @@ def _apply_sahjhan_cmd(
         # used to launder away a stall accrued by real unregistered work.
         cache["stall"] = stall_cleared(cache, actor)
         cache["last_sahjhan_cmd"] = stamp
-        _apply_transition_bookkeeping(cache, cmd, exit_code, discharging, registered)
+        _apply_transition_bookkeeping(
+            cwd, cache, cmd, exit_code, discharging, registered,
+        )
         try:
             write_cache(cwd, cache, expect_version=version)
             return cache
@@ -344,18 +419,21 @@ def _apply_sahjhan_cmd(
 
 
 def _apply_transition_bookkeeping(
+    cwd: str,
     cache: dict,
     cmd: str,
     exit_code: int,
     discharging: bool,
-    registered: list[str] | None,
+    registered: Resolutions | None,
 ) -> None:
     """The two cache effects a landed transition has, applied to ``cache``.
 
     Separate from the caller only so a ``version_conflict`` retry can re-apply
     them to a freshly read cache — the discharge subtracts from buckets, so it
     has to be recomputed against the ones the winner left, not the ones this
-    call read ten seconds ago.
+    call read ten seconds ago. ``cwd`` is threaded in for the same reason: the
+    item-50 arm reads the charged commits, and which those are is what the
+    retry re-derives.
     """
     # #77: pattern_analysis_overdue is DERIVED from the ledger in _refresh_fields
     # (the same query the pattern_check gate uses), not mirrored by token-matching
@@ -374,7 +452,9 @@ def _apply_transition_bookkeeping(
     # already applied, two lines from a path that ignored it. What is then
     # discharged comes from the ledger rather than from the command text.
     if discharging:
-        cache["unregistered_commits"] = _discharge_registered_commits(cache, registered)
+        cache["unregistered_commits"] = _discharge_registered_commits(
+            cwd, cache, registered,
+        )
     # P3.4: the round is over, so the obligation is discharged — say so here
     # rather than hoping the derivation above could reach the ledger. It
     # returns None on timeout or a missing binary, and None keeps the previous

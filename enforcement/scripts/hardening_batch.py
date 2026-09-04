@@ -72,8 +72,10 @@ POPULATION_QUERY = "open_fault_injected_findings"
 
 # Every commit hash a resolution already carries. Named for the same reason,
 # and it is what keeps "one hardening commit per module" from costing one
-# commit in total.
-SPENT_QUERY = "resolution_commit_hashes"
+# commit in total. The rows carry the resolved finding id too — this reads only
+# the hash, which is why the shared query is named for the row and not for
+# either column.
+SPENT_QUERY = "finding_resolutions"
 
 # Where a batch happens: `phase-convergence.md`, Step 15, immediately before
 # `transition converge`. Constants for the same reason `stale_sweep.py` carries

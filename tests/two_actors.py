@@ -297,6 +297,108 @@ class TwoActors:
         for actor, finding_id, test_name in seeding:
             self.courier(actor, finding_id, test_name)
 
+    # ── a real repository, for the charges a rewrite moves (item 50) ─────────
+    #
+    # Every accessor above charges a *synthetic* hash: the tracker only ever
+    # reads what `git commit` printed, so a fabricated stdout is the honest
+    # stimulus for anything that turns on the hash alone. Item 50 does not turn
+    # on the hash alone — it turns on the commit the hash names still being
+    # readable after the hash has moved — so its tests need commits git actually
+    # made. That is the whole reason for the two methods below, and why the
+    # existing seeding is left as it is rather than migrated onto them.
+
+    def git(self, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+        """git in the project root, under the scrubbed environment.
+
+        `git_env` explains the scrubbing: `pre-commit` runs this suite with
+        `GIT_DIR` and `GIT_INDEX_FILE` exported at *this* repository, and left
+        in place they would make every command below operate on holtz.
+        """
+        result = subprocess.run(
+            ["git", *args], capture_output=True, text=True,
+            cwd=self.project_root, timeout=30, env=self.env(),
+        )
+        if check and result.returncode != 0:
+            raise RuntimeError(
+                f"git {' '.join(args)} failed ({result.returncode})\n"
+                f"stdout: {result.stdout}\nstderr: {result.stderr}"
+            )
+        return result
+
+    def git_init(self) -> None:
+        """Make the project root a repository with one commit on `main`.
+
+        Not part of `bootstrap`: the other four files that use this fixture
+        never look at a tree, and paying `git init` per test for them would buy
+        nothing.
+        """
+        self.git("init", "-b", "main")
+        self.git("config", "user.email", "f2@holtz.test")
+        self.git("config", "user.name", "F2")
+        self.git("config", "commit.gpgsign", "false")
+        self.write("base.txt", "base\n")
+        self.git("add", "base.txt")
+        self.git("commit", "-m", "chore: base")
+
+    def write(self, name: str, body: str) -> None:
+        path = os.path.join(self.project_root, name)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(body)
+
+    def real_commit(self, actor: str, name: str, message: str) -> str:
+        """``actor`` really commits ``name``, and PostToolUse charges what git printed.
+
+        The stdout handed to the tracker is git's own, not a template: the
+        charge is a substring of that line, and a fixture that composed the
+        line itself could not fail the way production fails.
+        """
+        self.write(name, f"{name}\n")
+        self.git("add", name)
+        stdout = self.git("commit", "-m", message).stdout
+        self.hook("protocol_tracker.py", {
+            "tool_name": "Bash",
+            "tool_input": {"command": f'git add {name} && git commit -m "{message}"'},
+            "tool_response": {"exit_code": 0, "stdout": stdout, "stderr": ""},
+            "agent_id": actor,
+        })
+        return self.git("rev-parse", "--short=7", "HEAD").stdout.strip()
+
+    def rebase_onto_moved_tip(self, branch: str) -> str:
+        """Move `main` under ``branch`` and rebase, rewriting every hash on it.
+
+        This is `phase-fix-loop.md`'s own two lines and the three-wide loop's
+        own ordering: the first subagent's merge moves the branch, so the next
+        one rebases onto a tip that was not there when it committed. Returns
+        the rewritten HEAD, which is the hash `fix_commit` will stamp.
+        """
+        head_before = self.git("rev-parse", "HEAD").stdout.strip()
+        self.git("checkout", "main")
+        self.write("sibling.txt", f"merged under {branch}\n")
+        self.git("add", "sibling.txt")
+        self.git("commit", "-m", "fix(other): a sibling's fix, merged first")
+        self.git("checkout", branch)
+        self.git("rebase", "main")
+        head_after = self.git("rev-parse", "HEAD").stdout.strip()
+        assert head_after != head_before, (
+            "the rebase did not rewrite the commit, so nothing below is testing "
+            f"item 50 ({head_before} unchanged)"
+        )
+        return self.git("rev-parse", "--short=7", "HEAD").stdout.strip()
+
+    def state_line(self) -> str:
+        """The line the primer injects — the run-total item 50 drifts upward.
+
+        Read out of the primer's own output rather than by formatting a cache
+        the test fetched: the symptom is what a session is shown, and the
+        primer is the only thing that shows it.
+        """
+        output = self.hook("primer.py", {"user_prompt": "continue"})
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
+        for line in str(context).splitlines():
+            if line.startswith("Protocol:"):
+                return line
+        return ""
+
     # ── what the ledger says afterwards ─────────────────────────────────────
 
     def evidence_rows(self) -> list[dict]:

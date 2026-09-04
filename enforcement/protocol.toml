@@ -226,9 +226,20 @@ intent = "every fault_injected finding must be hardened or deferred"
 # Read by the script rather than by a gate, the way
 # `open_theoretical_findings` is: a predicate is named here so there is one of
 # it, whoever asks.
-[queries.resolution_commit_hashes]
-sql = "SELECT DISTINCT r.commit_hash FROM events r WHERE r.type='finding_resolved'"
-intent = "commit hashes already carried by a finding resolution"
+# Item 50: the `id` column is the second consumer. The pending-commit discharge
+# matches a charge against `commit_hash`, and a rewrite — `git rebase`, which
+# `phase-fix-loop.md` prescribes, or `git commit --amend` — moves that hash
+# after the tracker charged it. The finding id is what the rewrite preserves,
+# because the message does; `fix_commit`'s gate already requires the registered
+# commit's `%B` to carry it. So the two columns are the two ends of one match
+# and belong to one query rather than to two that could drift apart.
+#
+# Renamed off `resolution_commit_hashes` in the same change: a name that says
+# `commit_hashes` while the rows carry a finding id too is how a third consumer
+# ends up declaring its own query for a column that was already here.
+[queries.finding_resolutions]
+sql = "SELECT DISTINCT r.commit_hash, r.id FROM events r WHERE r.type='finding_resolved'"
+intent = "the commit hash and finding id each resolution already carries"
 
 # The escape's first conjunct. `open_low_findings` returns the ids the batch
 # transitions; a gate needs a scalar, and named queries cannot reference one

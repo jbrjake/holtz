@@ -355,9 +355,16 @@ class TestTheLedgerDecidesWhichBucketIsDischarged:
     def test_a_commit_the_ledger_never_registered_stays_charged(self, two_actors):
         """The other direction: a resolution names one commit, not any commit.
 
-        The registered hash belongs to no bucket here — the shape a rebase
-        produces, since rebasing rewrites the hash the tracker charged. The
-        answer must be "discharge nothing", not "discharge the nearest thing".
+        The registered hash belongs to no bucket here, and no charge names a
+        commit this tree contains, so the answer must be "discharge nothing"
+        rather than "discharge the nearest thing".
+
+        This used to be described as the shape a rebase produces. It is not —
+        item 50 is, and `test_rewritten_commit_discharge.py` drives it with
+        commits git really made and really rewrote. What is left here is the
+        case where nothing can be looked up at all: the charges are fabricated
+        hashes in a tree that is not a repository, so the item-50 arm can
+        establish nothing and the charge is kept for want of an answer.
         """
         self._seed_three_buckets(two_actors)
         two_actors.sibling_fix_commit("BH-101", commit_hash="9999999")
