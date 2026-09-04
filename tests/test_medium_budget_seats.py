@@ -1,4 +1,12 @@
-"""W05 / item 2 — `medium_deferral_budget` has three seats, not four.
+"""W05 / item 2 — `medium_deferral_budget` does not gate `converge`.
+
+⚠️ **This file used to say "three seats, not four".** It is four again, and the
+fourth is not the one W05 removed: W14 (item 5) gave the amplification breaker
+a second seat at `iteration_boundary`, because `pattern_done` is reachable only
+from `pattern_analysis` and the fix loop teaches staying in `fix_loop`. W05's
+ruling is untouched — `converge` still has no budget seat, which is what
+`TestTheSeatIsGoneFromConverge` asserts. The count was never the claim; the
+*set* is, and it is pinned by name below.
 
 `converge` required the MEDIUM deferral budget **spent** (`expect = "false"`).
 The denominator counts every MEDIUM ever filed, open or closed, and
@@ -9,11 +17,16 @@ MEDIUMs were fixed, so the run had to decide which half to abandon at the moment
 it was least able to judge.
 
 RULED (Jon, 2026-08-27), D-a: drop the conjunct from `converge` only. The
-predicate keeps three consumers and all three are correct:
+predicate keeps its other consumers and every one of them is correct:
 
-    defer_medium  fix_loop         :268  expect true   the cap
-    pattern_done  breaker any_of   :415  expect false  the escape's post-state
-    defer_medium  pattern_analysis :458  expect true   the cap, other state
+    defer_medium        fix_loop           expect true   the cap
+    pattern_done        breaker any_of     expect false  the escape's post-state
+    defer_medium        pattern_analysis   expect true   the cap, other state
+    iteration_boundary  breaker any_of     expect false  the same escape, on the
+                                                         taught path (W14/item 5)
+
+(Line numbers dropped: they were wrong within two commits of being written, and
+`_budget_seats()` finds the seats by query name regardless.)
 
 The breaker seat reads `expect = "false"` for a reason that does *not* transfer
 to `converge`: its block must have an escape achievable by construction, and
@@ -149,23 +162,32 @@ class TestTheSeatIsGoneFromConverge:
         _assert_budget_does_not_gate_converge(_converge_check(run))
 
 
-class TestTheOtherThreeSeatsAreUntouched:
+class TestTheOtherSeatsAreUntouched:
     """V5, V6. What distinguishes a ruling from a blanket removal.
 
     If these go green-by-absence the deletion took the cap with it, and the
     protocol would let a run defer every MEDIUM it has.
     """
 
-    def test_v5_v6_exactly_three_seats_remain_and_which(self):
+    def test_v5_v6_exactly_these_seats_remain_and_which(self):
         """The whole risk of this unit is deleting one seat too many.
 
         Pinning the exact set, not a count: a count survives a change that
         removes one seat and adds another somewhere wrong.
+
+        **Was three seats; W14 (item 5) added the fourth deliberately.** The
+        amplification breaker used to block only at `pattern_done`, reachable
+        only from `pattern_analysis` — the *rare* path, since the fix loop
+        teaches staying in `fix_loop`. It now blocks at `iteration_boundary`
+        too, referencing the same three named queries so the seats cannot
+        drift. This test failing on that addition is it working: a seat set
+        that changes silently is the thing it exists to prevent.
         """
         assert _budget_seats() == {
             ("defer_medium", "fix_loop", "true"),          # the cap
             ("defer_medium", "pattern_analysis", "true"),  # the cap, other state
             ("pattern_done", "pattern_analysis", "false"),  # the breaker's escape
+            ("iteration_boundary", "fix_loop", "false"),   # the same escape, taught path
         }
 
     def test_v5_the_cap_refuses_the_deferral_past_half(self, run):
@@ -242,6 +264,6 @@ class TestThePredicateItselfIsUnchanged:
 # config" is not expressed as a test on purpose: a test reading `git show HEAD`
 # cannot pass during the commit that introduces it, and one reading the working
 # tree stops meaning anything the moment the change lands. The standing claim it
-# would make is `test_v5_v6_exactly_three_seats_remain_and_which` above, which
+# would make is `test_v5_v6_exactly_these_seats_remain_and_which` above, which
 # pins the surviving seats by name and holds for every future commit rather than
 # for one. The diff itself is checked at commit time and recorded in the message.

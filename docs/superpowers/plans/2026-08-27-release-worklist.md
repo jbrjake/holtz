@@ -1250,7 +1250,8 @@ is handoff #1 §2a's trap in a new place.
       A first draft of this test asserted the third was refused and failed
       against correct code. Three permitted, not two — which is also exactly why
       the old `converge` seat demanded precisely `floor(N/2)` deferrals.
-      Plus `test_v5_v6_exactly_three_seats_remain_and_which`, which pins the
+      Plus `test_v5_v6_exactly_these_seats_remain_and_which`, which pins the
+      (renamed from `…_three_seats_…` when W14 added a fourth seat, item 5)
       surviving set by name rather than by count: a count survives a change that
       deletes one seat and adds another in the wrong place.
 - [x] **V6 · the breaker still holds** `pattern_done`'s `any_of` still opens on
@@ -1276,7 +1277,7 @@ is handoff #1 §2a's trap in a new place.
 commit touches exactly one line of gate config." A test reading `git show HEAD`
 cannot pass during the commit that introduces it, and one reading the working
 tree stops meaning anything once the change lands. The standing form of that
-claim is `test_v5_v6_exactly_three_seats_remain_and_which`, which holds for every
+claim is `test_v5_v6_exactly_these_seats_remain_and_which`, which holds for every
 future commit rather than for one. The diff itself is recorded under step 3.
 
 ---

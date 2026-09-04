@@ -99,8 +99,15 @@ class _Run:
         self._pat = 0
         # The pattern brief is a file in a shared project root, so two runs
         # writing PAT-001 over each other would have the second arm's rounds
-        # read as a brief that shrank. Prefixing by ledger keeps them apart.
-        self._pat_prefix = f"PAT-{run_number}"
+        # read as a brief that shrank. Each ledger gets its own hundred.
+        #
+        # **Run 1 must keep emitting PAT-001, PAT-002, …** — `_Run` is imported
+        # by `test_round_item_cap.py`, whose `_round_with_siblings` files
+        # findings against `pattern_id="PAT-001"` and needs the default round
+        # to name that pattern. Changing this default to a per-run *prefix*
+        # emptied every round's population there and turned 12 of its tests
+        # red, none of which the fast subset runs.
+        self._pat_base = (run_number - 1) * 100
 
     def sah(self, *args, check=True):
         result = subprocess.run(
@@ -139,7 +146,8 @@ class _Run:
         """
         if pat_ids is None:
             self._pat += 1
-            pat_ids = [f"{self._pat_prefix}{n:02d}" for n in range(1, self._pat + 1)]
+            pat_ids = [f"PAT-{self._pat_base + n:03d}"
+                       for n in range(1, self._pat + 1)]
         _write(self.root, BRIEF, "# Brief\n\n" + "".join(
             _entry(pat_id, 1) for pat_id in pat_ids))
 
