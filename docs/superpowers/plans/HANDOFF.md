@@ -28,7 +28,9 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**13 of 32 units · 16 of 51 items · 35 items across 19 units remain.**
+**13 of 32 units · 17 of 51 items · 34 items across 19 units remain.**
+W13 is `WIP`, not done: it closed item 37 and left item 17 open, so it moves
+the item count and not the unit count.
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
@@ -39,6 +41,10 @@ W12 (34, 28) · W11 (42). Commits are in `git log`; do not re-summarise them her
 things W11 does **not** close, and the first is load-bearing —
 **an actor racing itself is still exposed on the merge paths**, deliberately,
 and `test_a_merge_is_not_made_conditional` pins that it is deliberate.
+
+**W13 landed item 37 the same day** — `9555fce`. **Item 17 is open and is a
+question for Jon**, below. Do not re-run its measurement before reading it:
+the flake did not reproduce on *either* arm, and the reason is recorded.
 
 **Two corrections to the line this replaced** (*"8 of 30 units · 7 of 49
 items"*), both made 2026-09-01 after counting the dashboard rather than
@@ -68,7 +74,22 @@ local run touches.
 mypy and the contract gate observed green, and the `real_daemon` suites run
 rather than skipped — but **no full-suite run has covered them.**
 
-### Open for Jon — two, both raised, neither guessed at
+### Open for Jon — three, all raised, none guessed at
+
+- **W13 step 3 — can item 17 close on instrumentation alone?** The step says
+  "close item 17 against this unit"; the measurement does not support it.
+  12 full-file runs per arm in one sitting gave **0/12 failures on the fixed
+  primer and 0/12 on the unmodified control**. The 1-in-4 rate seen earlier was
+  the new test file's own fixture orphaning `sleep` children (its mock ran
+  `sleep`, a child of the shell `subprocess.run` kills on timeout); fixed with
+  `exec sleep`, and the rate went to zero on **both** arms. There is also no
+  mechanism — the delta does not touch the healthy path's timing. What it does
+  change is that a degraded run now names its cause, and one occurrence caught
+  before the fixture fix was named **`TimeoutExpired`**, which is the first
+  answer to the "which of the two exceptions fires" question below. So: does 17
+  close on the instrumentation being in place, or stay open until an occurrence
+  is caught and explained? The four other collapsed `except` sites are a
+  separate step and were deliberately not folded in.
 
 - **W32 step 3** (above): does the hand-vendored-old-binary path still want a
   diagnostic? Unit recommends no; not ruled. **Its premise moved on
@@ -166,6 +187,29 @@ rather than skipped — but **no full-suite run has covered them.**
   with nothing else running, failed none of this family** — consistent with
   every previous reading and, again, not evidence about the cause.
 
+  **✅ 2026-09-04 — the first answer to "which exception". `TimeoutExpired`.**
+  W13 (`9555fce`) split the *primer's* own collapsed `except` so its degraded
+  notice names the exception. Before that commit's fixture defect was found, an
+  occurrence was captured reading:
+
+  > `SAHJHAN PRIMER DEGRADED: \`sahjhan status\` did not complete (TimeoutExpired).`
+
+  The subprocess in question was a **three-line `/bin/sh` script that echoes and
+  exits** — so a trivial spawn exceeded the 5 s cap under load. That points at
+  machine load, and away from a wedged daemon or a wrong binary path, for this
+  occurrence. It is one data point from the primer's site, not from the five
+  below; do not generalise it to `pre_tool_hook`'s `hook eval` without catching
+  one there.
+
+  **And a caution the same session paid for.** The test file W13 added
+  *manufactured* this flake on both arms: its mock binary ran `sleep`, which is
+  a child of the shell `subprocess.run` kills on timeout, so two orphaned sleeps
+  survived every run and loaded the next test. It read as a 1-in-4 flake on the
+  unmodified primer and 0-in-3 on the fixed one — i.e. exactly like a fix. Only
+  running the control after the fixture was corrected (`exec sleep`) showed
+  0/12 on **both**. Before attributing any flake to a code change here, check
+  whether your own fixture is the load.
+
   **The concrete next step, deliberately not taken yet:** split that `except`
   at each of the **five** sites that collapse it — `pre_tool_hook.py:155`,
   `bash_guard.py:78` and `:152`, `_protocol_cache.py:462`,
@@ -181,10 +225,17 @@ rather than skipped — but **no full-suite run has covered them.**
 
 ## Do this next
 
-### 1. ⭐ W13 (items 37, 17) — start here, then W14 (5, 10).
+### 1. ⭐ W14 (items 5, 10) — start here.
 
-P2's remainder. W10, W11 and W12 are `DONE`; neither W13 nor W14 depended on
-W11, so nothing about them changed while it was blocked.
+P2's remainder. W10, W11 and W12 are `DONE`; W13 is `WIP` with item 37 closed
+and item 17 waiting on Jon (above) — **that is a question, not a blocker, and
+W14 does not depend on it.** W14's own ruling is already in hand ("the breaker
+gets a second seat too", Jon 2026-08-26), so it is buildable now.
+
+Read W14's V5 before writing anything: *"the breaker measures what its title
+says."* P0.1 shipped once as a detector carrying zero information about the
+thing it was named for, and V5 exists specifically to catch that recurrence —
+a converging run and a diverging run must read **differently**.
 
 **W11's two commits left things worth knowing before touching the tracker or
 the cache helpers:**

@@ -61,7 +61,7 @@ imprecision (`CLAUDE.md`).
 | W10 | 35 | B | `DONE` — wider than the item said: one actor is enough | W01 |
 | W11 | 42 | B | `DONE` @ `3697e31` — V6 records an exposure it does not close | W01, ~~sahjhan#49~~ shipped |
 | W12 | 34, 28 | B | `DONE` — one shared refusal, four scripts | — |
-| W13 | 37, 17 | B | `TODO` | — |
+| W13 | 37, 17 | B | `WIP` @ `9555fce` — **37 done, 17 open**; V3 measured and does not support closing it | — |
 | W14 | 5, 10 | B | `TODO` | — |
 | **P3 — before release** ||||
 | W15 | 30 | C | `TODO` | — |
@@ -2748,8 +2748,45 @@ came off.
 
 ## W13 — Items 37 + 17: the primer's silent degrade and the ordering that hides daemon death
 
-**Status:** `TODO`  ·  **Tier:** B
-**Commit:** `fix(enforcement): check daemon death before status, and say so when degraded`
+**Status:** `WIP` — **item 37 is done; item 17 is not.** Steps 1, 2 and 4 and
+V1/V2/V4 landed in `9555fce`. Step 3 and V3 are open, and not for want of
+running them: the flake **did not reproduce on either arm**, so nothing here
+supports closing item 17. See the box below.  ·  **Tier:** B
+**Commit:** `9555fce` — `fix(enforcement): check daemon death before status, and say so when degraded`
+
+### ⛔ Open for Jon — item 17 cannot be closed on this evidence
+
+Step 3 says *"Close item 17 against this unit."* The measurement says no.
+
+**What was measured, 2026-09-04, both arms in one sitting.** 12 full-file runs
+of `tests/test_primer_degrades_loudly.py` against the fixed primer, and 12
+against the **unmodified** one. Failures of the healthy-run guard: **0/12 and
+0/12.** An earlier reading of 1-in-4 on the unmodified arm turned out to be
+this test file's own fixture — its mock binary ran `sleep`, which is a *child*
+of the shell `subprocess.run` kills on timeout, so two orphaned sleeps per run
+survived and loaded the machine the control was measured on. Fixed with `exec
+sleep`, and the rate went to zero on **both** arms.
+
+Running only the fixed arm would have read as a fix. That is the trap the
+standing traps list names, and the control is the only thing that caught it.
+
+**There is also no mechanism.** This delta does not touch the healthy path's
+timing — same subprocess, same 5 s cap, same parse. What it changes is that a
+run that degrades now *says* which exception fired instead of emitting nothing.
+
+**One real datum did come out of it.** Before the fixture fix, an occurrence
+was captured with the new instrumentation and named: **`TimeoutExpired`** — a
+trivial `/bin/sh` script exceeding the 5 s cap under load. That is the first
+answer to the handoff's standing question of which of the two collapsed
+exceptions fires, and it points at machine load rather than at a wedged daemon
+or a wrong binary path.
+
+**The question:** item 17 asked for the flake to stop. The instrumentation that
+would let a future occurrence be diagnosed is now in the primer. Does item 17
+close on that, or does it stay open until an occurrence is caught and
+explained? **Not guessed at** — the four remaining collapsed `except` sites the
+handoff enumerates are a separate, deliberately-untaken step, and lumping them
+in here would be exactly the substitution this board keeps paying for.
 
 ### Defect · `primer.py`
 
@@ -2779,26 +2816,61 @@ not broken; the gate is not reliably green under load.
 
 ### Plan
 
-- [ ] **1.** Move the death check (`_read_init_pid` / `_is_process_alive` /
+- [x] **1.** Move the death check (`_read_init_pid` / `_is_process_alive` /
       `_write_terminated_marker`) and the health probe **before** the status
-      subprocess. Death detection must not depend on a call that can hang
-- [ ] **2.** Inject a short degraded-mode notice on **all three** degrade paths.
-      "Nothing to say" and "I could not find out" must not look identical
+      subprocess. Death detection must not depend on a call that can hang.
+      **Done.** One consequence taken deliberately: the death message no longer
+      names the state the daemon died during, because knowing it meant asking
+      `status` first — the exact dependency being removed. The marker route's
+      message never carried it either, so the two are now one
+      `TERMINATED_MESSAGE` constant instead of differing by which turn you saw
+      them
+- [x] **2.** Inject a short degraded-mode notice on **all three** degrade paths.
+      "Nothing to say" and "I could not find out" must not look identical.
+      **Done**, with one named marker (`primer.DEGRADED`) plus a per-path
+      reason. The status handler names *which* of its collapsed exceptions
+      fired (`TimeoutExpired` vs `OSError`) — they call for opposite responses,
+      and no timeout is changed in the same commit
 - [ ] **3.** Close item 17 against this unit. Note in `CHANGELOG` that the timeout
-      predates this delta and is not a regression from it
-- [ ] **4.** `bash scripts/hash-trusted-callers.sh` — `primer.py` is manifest-listed
+      predates this delta and is not a regression from it.
+      **CHANGELOG note done. Item 17 NOT closed** — see the box above; the
+      evidence does not support it.
+      ⚠️ `scripts/generate-changelog.py --write` **replaces** everything between
+      `## [Unreleased]` and the next version heading, so that note is dropped at
+      release time and must be re-added to the release entry by hand
+- [x] **4.** `bash scripts/hash-trusted-callers.sh` — `primer.py` is manifest-listed
 
 ### Validation
 
-- [ ] **V1** Each of the three degrade paths emits `additionalContext` containing a
-      degraded-mode marker — **three separate tests**. Evidence: ___
-- [ ] **V2** Daemon dies during a slow status → the terminated marker is **still
+- [x] **V1** Each of the three degrade paths emits `additionalContext` containing a
+      degraded-mode marker — **three separate tests**. Evidence: four, actually
+      — the status path has two arms that must be told apart.
+      `TestEachDegradePathSaysSo`, RED first as
+      `assert 'SAHJHAN PRIMER DEGRADED' in ''` on each. Each asserts the shared
+      marker **and** something only that path could have said, because the
+      marker alone would let one path's notice satisfy all three tests, which is
+      how a "fixed everywhere" claim ships covering one.
+- [x] **V2** Daemon dies during a slow status → the terminated marker is **still
       written**. This is the ordering fix and the reason 37 outranks 17.
-      Evidence: ___
+      Evidence: `TestDeathDetectionDoesNotQueueBehindStatus`, three tests — a
+      status that hangs, one that exits non-zero, and no binary at all. All
+      three RED against the unmodified primer with the marker file absent.
+      The hang case is *fast* when fixed and slow when broken, since the fixed
+      ordering returns before the subprocess is ever started.
 - [ ] **V3** The flake resolves *for the right reason*: the assertion now has
       something to match. Run the class under concurrent load **three times
-      unchanged**, not once. Evidence: run1 ___ run2 ___ run3 ___
-- [ ] **V4 · non-vacuity** Restore the ordering → V2 goes red. Evidence: ___
+      unchanged**, not once. Evidence: **run, and it does not support the
+      claim.** 12 full-file runs per arm in one sitting: **0/12 failures fixed,
+      0/12 unmodified.** The 1-in-4 rate seen earlier was this file's own
+      fixture orphaning `sleep` children (fixed with `exec sleep`), and it went
+      to zero on *both* arms — running only the fixed arm would have read as a
+      fix. There is also no mechanism: the healthy path's timing is untouched.
+      **One datum did come out**: an occurrence captured with the new
+      instrumentation named `TimeoutExpired`. See the ⛔ box above.
+- [x] **V4 · non-vacuity** Restore the ordering → V2 goes red. Evidence:
+      restoring **only** the ordering, keeping the notices, reds exactly the
+      three V2 tests and nothing else — so the ordering fix and the notices are
+      separately attributable rather than each other's alibi.
 
 ---
 
