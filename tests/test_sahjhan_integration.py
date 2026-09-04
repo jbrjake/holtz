@@ -1178,7 +1178,14 @@ class TestPrimer:
         )
 
     def test_degrades_gracefully_on_oserror(self, tmp_path):
-        """BH-015: primer degrades gracefully when binary is unexecutable."""
+        """BH-015: primer degrades gracefully when binary is unexecutable.
+
+        "Gracefully" now means *audibly*. This asserted ``continue is True``
+        with no ``additionalContext``, which is the silence item 17 is about:
+        indistinguishable from the primer having nothing to say. W13 makes the
+        degrade paths emit a notice, so the claim being kept here is that the
+        hook still exits 0 and does not block — not that it says nothing.
+        """
         (tmp_path / "docs" / "holtz" / ".sahjhan").mkdir(parents=True, exist_ok=True)
         _create_mock_binary(tmp_path, "exit 0")
         binary_path = list((tmp_path / "bin").iterdir())[0]
@@ -1189,7 +1196,8 @@ class TestPrimer:
         )
         binary_path.chmod(0o755)  # restore for cleanup
         assert code == 0, "primer should degrade gracefully on OSError"
-        assert output.get("continue") is True
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
+        assert "SAHJHAN PRIMER DEGRADED" in context
 
     def test_daemon_death_terminates_on_socket_failure(self):
         """When context_reset fails and init PID is dead, primer writes terminated marker.

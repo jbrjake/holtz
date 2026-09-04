@@ -1846,10 +1846,27 @@ class TestCommitGateFreshness:
 
 
 class TestPrimerFreshness:
-    """Tests for primer.py freshness gate."""
+    """What the primer does when it cannot read the protocol.
 
-    def test_primer_exits_early_when_stale(self, tmp_path, mock_daemon):
-        """Stale enforcement → primer does not inject context."""
+    ⚠️ **The primer has no freshness gate**, and this class asserted one. It
+    was named `test_primer_exits_early_when_stale` and wrote a year-old
+    `last_sahjhan_cmd`, but `primer.py` never calls `is_enforcement_fresh` —
+    nothing in it reads that timestamp. It passed because the real binary ran
+    `status` against a tmp directory with no ledger, exited 2, and the primer
+    silently `exit_ok()`d. So a stale cache and an unreadable ledger produced
+    the same answer, and the test could not tell which one it had measured.
+
+    That indistinguishability is item 17 itself. W13 makes the degrade path
+    say which, so the test now asserts the thing it was actually driving.
+    """
+
+    def test_a_status_the_primer_cannot_read_is_reported(self, tmp_path, mock_daemon):
+        """No ledger → `status` exits non-zero → the primer says so.
+
+        The cache below is deliberately stale, and deliberately irrelevant:
+        keeping it documents that staleness is *not* what decides this, which
+        is what the previous name got wrong.
+        """
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
@@ -1859,9 +1876,9 @@ class TestPrimerFreshness:
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("primer.py", event)
         assert code == 0
-        # Should pass through silently — no context injection
-        assert output.get("continue") is True
-        assert output.get("suppressOutput") is True
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
+        assert "SAHJHAN PRIMER DEGRADED" in context
+        assert "Protocol state is unknown" in context
 
 
 class TestRemainingHooksFreshness:

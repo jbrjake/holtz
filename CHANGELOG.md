@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Note — the primer's 5 s status timeout is unchanged
+
+W13 makes the primer's three failure paths emit a degraded notice instead of
+exiting silently, and moves daemon-death detection ahead of the `sahjhan
+status` subprocess. **It does not touch that subprocess's 5 s timeout**, which
+predates this delta: a `status` call that exceeds it is the same event it
+always was, and any occurrence after this release is not a regression from it.
+What changed is that such a run now says so, and names which exception fired
+(`TimeoutExpired` vs `OSError`) rather than collapsing both into silence.
+
+Item 17's intermittent primer-test failures are **not** claimed fixed. Measured
+2026-09-04, 12 full-file runs per arm in one sitting: 0/12 failures on the
+fixed primer *and* 0/12 on the unmodified control, after a fixture defect
+(orphaned `sleep` children from the test's own mock binary) was corrected. The
+control is what makes that readable — the earlier 1-in-4 failure rate was the
+fixture, not the hook, and a fixed-arm-only run would have read as a fix.
+
 ## [0.141.3] - 2026-07-27
 
 _Changes since v0.138.3_

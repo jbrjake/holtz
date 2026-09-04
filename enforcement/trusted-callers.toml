@@ -14,7 +14,7 @@
 "hooks/_common.py" = "sha256:3d585eaecd53149146128232d4011471e708719c63428709539ac25b7b677f19"
 "hooks/lens_quiz.py" = "sha256:ca2d84e87cb598f3f0880d706b4ad719da71a885bbf565b8011c36eb49b45e89"
 "hooks/stop_hook.py" = "sha256:d7bed734924015989212e27f7fc80deafa2435e1c439f4bd2ee156540dc152b4"
-"hooks/primer.py" = "sha256:d2b9c5b351aae2849b76a50fc7ee72e0eb5b31ca14f5766bbd55bed874ae9d84"
+"hooks/primer.py" = "sha256:ad48327a5ea98ad434789ead5cc6844986b9b16d611a38d66f1268d74cc5f893"
 "hooks/sandbox_control.py" = "sha256:0b7dde6a21ab614b274b3488a5849f105235c4086b18244989e0dfcf7b05dbc3"
 "hooks/session_start.py" = "sha256:9796960aa13d9b0209544ca151f47d952ad3b4c19f94801c7cc70d6abdc37426"
 "hooks/pre_tool_hook.py" = "sha256:c83f0531b32f8955673a3c6af76cfa56e827ca555a49f6f3c39c56e2fdeaffa6"
