@@ -99,7 +99,7 @@ def main() -> None:
     if tool_name in ("Edit", "Write", "NotebookEdit") and _tdd_gate_exempt(file_path, cwd):
         exit_ok("PreToolUse")
 
-    cache, boundary = read_cache_with_boundary(cwd)
+    cache, boundary, _version = read_cache_with_boundary(cwd)
 
     # A refusing daemon returns no cache, so the staleness check below reads
     # it as "no audit" and allows. That inverts the fuse: the moment the

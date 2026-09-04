@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
+    DaemonError,
     bash_exit_code,
     bash_output,
     exit_ok,
@@ -24,6 +25,7 @@ from _common import (  # noqa: E402
 )
 from _protocol_cache import (  # noqa: E402
     ORCHESTRATOR,
+    VERSION_CONFLICT,
     contains_sahjhan_cmd,
     empty_cache,
     event_actor,
@@ -31,17 +33,19 @@ from _protocol_cache import (  # noqa: E402
     is_git_commit,
     is_read_only_cmd,
     is_sahjhan_cmd,
+    merge_cache,
     parse_status_text,
     pending_commits_appended,
     pending_commits_cleared,
     pending_commits_discharged,
+    pending_commits_patch,
     query_named_predicate,
-    read_cache,
+    read_cache_with_boundary,
     registered_commit_hashes,
     sahjhan_segments,
     stall_bumped,
     stall_cleared,
-    update_cache,
+    stall_patch,
     write_cache,
 )
 from _resolve import ensure_sahjhan  # noqa: E402
@@ -139,8 +143,8 @@ def _query_pattern_analysis_overdue(
     return query_named_predicate(binary, config_dir, cwd, PATTERN_OVERDUE_QUERY)
 
 
-def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
-    """Query sahjhan status (text) and update cache fields.
+def _refresh_fields(cwd: str, cache: dict) -> dict:
+    """The cache fields ``sahjhan status`` decides, as a patch.
 
     --no-gates (sahjhan v0.14.0): plain status evaluates transition gates,
     which can run the project's test suite — guaranteed to blow the 5s
@@ -150,10 +154,18 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
     pattern_analysis_overdue is re-derived from the gate's own named query here
     (only while it matters — fix_loop/pattern_analysis), never mirrored by
     token-matching the command text. #77, #82.
+
+    Returned as a patch rather than applied in place because the write it feeds
+    is now conditional (item 42): a ``version_conflict`` re-reads and re-derives
+    the snapshot-dependent fields, and re-running this for the retry would cost
+    two more 5 s subprocesses to be told the same thing. Every value here is
+    the engine's answer, so it is as true of the re-read cache as of the first.
+    An empty patch means the engine could not be asked, and the previous values
+    stand — which is the pre-existing behaviour on every failure path below.
     """
     binary = ensure_sahjhan()
     if binary is None:
-        return cache
+        return {}
     config_dir, _ = resolve_config_dir(cwd)
     try:
         cmd = [binary, "--config-dir", config_dir, "status", "--no-gates"]
@@ -162,27 +174,37 @@ def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
             capture_output=True, text=True, timeout=5, cwd=cwd,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return cache
+        return {}
 
     if result.returncode != 0:
-        return cache
+        return {}
 
     status = parse_status_text(result.stdout)
-
-    cache["state"] = status.get("current_state", "")
-    cache["perspective"] = status.get("current_perspective", "?")
     perspective = status.get("sets", {}).get("perspective", {})
-    cache["perspectives_done"] = perspective.get("complete", 0)
-    cache["perspectives_total"] = perspective.get("total", 0) or cache.get("perspectives_total", 13)
-    cache["active"] = cache.get("state", "") not in ("", "idle", "finalized")
+    state = status.get("current_state", "")
+    fields = {
+        "state": state,
+        "perspective": status.get("current_perspective", "?"),
+        "perspectives_done": perspective.get("complete", 0),
+        "perspectives_total": (
+            perspective.get("total", 0) or cache.get("perspectives_total", 13)
+        ),
+        "active": state not in ("", "idle", "finalized"),
+    }
 
     # Derive the pattern-analysis backlog from the ledger, but only in the
     # states where it's consumed — avoids a subprocess on every recon/audit
     # sahjhan command. Query failure keeps the previous value.
-    if cache.get("state") in ("fix_loop", "pattern_analysis"):
+    if state in ("fix_loop", "pattern_analysis"):
         overdue = _query_pattern_analysis_overdue(binary, config_dir, cwd)
         if overdue is not None:
-            cache[PATTERN_OVERDUE_QUERY] = overdue
+            fields[PATTERN_OVERDUE_QUERY] = overdue
+    return fields
+
+
+def _refresh_from_sahjhan(cwd: str, cache: dict) -> dict:
+    """``cache`` with the status-derived fields applied."""
+    cache.update(_refresh_fields(cwd, cache))
     return cache
 
 
@@ -202,7 +224,25 @@ def _stop_daemon(cwd: str) -> None:
         )
 
 
-def _discharge_registered_commits(cwd: str, cache: dict) -> dict[str, list[str]]:
+def _registered_commits(cwd: str) -> list[str] | None:
+    """Which commits the ledger says `fix_commit` has registered, or None.
+
+    Split from the discharge below because the two answer to different things:
+    this is the ledger's answer and does not move when the enforcement blob
+    does, whereas the buckets it is subtracted from are re-read on a
+    ``version_conflict`` retry. Asking the ledger once and re-deriving the
+    buckets per attempt keeps a retry from paying for a second query.
+    """
+    binary = ensure_sahjhan()
+    if binary is None:
+        return None
+    config_dir, _ = resolve_config_dir(cwd)
+    return registered_commit_hashes(binary, config_dir, cwd)
+
+
+def _discharge_registered_commits(
+    cache: dict, registered: list[str] | None
+) -> dict[str, list[str]]:
     """The pending-commit buckets, minus whatever the ledger says is registered.
 
     `fix_commit` stamps the commit it registered onto the `finding_resolved`
@@ -210,23 +250,35 @@ def _discharge_registered_commits(cwd: str, cache: dict) -> dict[str, list[str]]
     transition's caller cannot — see `_protocol_cache`'s section on the
     pending-commit block.
 
-    An unreachable ledger discharges the orchestrator's bucket only. It ran
-    the transition, so it is the one actor whose charge the command is
-    evidence about without anything having to be looked up.
+    An unreachable ledger (``registered is None``) discharges the orchestrator's
+    bucket only. It ran the transition, so it is the one actor whose charge the
+    command is evidence about without anything having to be looked up.
+
+    Cross-actor by nature: which bucket holds a registered commit is not known
+    until it is looked for. That is why this one keeps a whole-blob write and
+    takes its safety from ``expect_version`` instead of a per-actor merge —
+    there is no single actor the patch could name.
     """
-    binary = ensure_sahjhan()
-    config_dir, _ = resolve_config_dir(cwd)
-    registered = (
-        registered_commit_hashes(binary, config_dir, cwd)
-        if binary is not None else None
-    )
     if registered is None:
         return pending_commits_cleared(cache, ORCHESTRATOR)
     return pending_commits_discharged(cache, registered)
 
 
+# How many times a conditional whole-blob write re-reads and re-derives before
+# giving up. Bounded because this is a PostToolUse hook on every Bash call: a
+# loop that retried until it won would hold the tool call open behind a
+# contended daemon. Losing the bookkeeping write costs a stall nudge; blocking
+# the session costs the session.
+_WRITE_ATTEMPTS = 3
+
+
 def _apply_sahjhan_cmd(
-    cwd: str, cache: dict | None, cmd: str, actor: str, exit_code: int
+    cwd: str,
+    cache: dict | None,
+    version: str | None,
+    cmd: str,
+    actor: str,
+    exit_code: int,
 ) -> dict:
     """Record the effects of a sahjhan enforcement command on the cache.
 
@@ -235,21 +287,77 @@ def _apply_sahjhan_cmd(
     clear the caller's stall counter, stamp last_sahjhan_cmd, tear the daemon
     down on finalization, and apply fix_commit / pattern-check bookkeeping.
     #70 item 1.
+
+    Item 42: this is the whole-blob write, and its snapshot is taken *before*
+    two 5 s subprocesses — the widest window in the tracker for a sibling to
+    land in. It stays a whole-blob write because the discharge below is
+    cross-actor and no per-actor patch could express it; what makes it safe is
+    ``version``, the token from the read that produced ``cache``. The daemon
+    compares it inside the lock that stores, so a caller that lost the race is
+    refused rather than silently overwriting the winner, and re-derives against
+    what it reads back. ``version`` of ``None`` — no daemon token, or a cache
+    this call had to invent — writes unconditionally, exactly as before.
     """
     if cache is None:
         cache = empty_cache()
-    cache = _refresh_from_sahjhan(cwd, cache)
-    # Running any sahjhan enforcement subcommand IS the protocol event the
-    # stall counter waits for — clear it deterministically, even when the
-    # status refresh above could not reach the daemon. Only for this actor:
-    # the command is evidence that *it* re-synced, and a sibling's re-sync
-    # used to launder away a stall accrued by real unregistered work.
-    cache["stall"] = stall_cleared(cache, actor)
-    cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
-    # Stop daemon after finalization (teardown safety net)
-    if cache.get("state") == "finalized":
+        version = None
+    # The engine's answers, asked for once: a retry re-derives what depends on
+    # the snapshot, and nothing here does.
+    refreshed = _refresh_fields(cwd, cache)
+    # Stop daemon after finalization (teardown safety net). Decided once, off
+    # the state this refresh found — the loop below may re-read the blob, and
+    # tearing the daemon down a second time is not a thing to decide twice.
+    # `refreshed` is empty exactly when the engine could not be asked, which is
+    # when the previous value stands.
+    if refreshed.get("state", cache.get("state")) == "finalized":
         _stop_daemon(cwd)
-    # #77: pattern_analysis_overdue is DERIVED from the ledger in _refresh_from_sahjhan
+    stamp = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+    # The ledger's answer, also asked for once — see _registered_commits.
+    discharging = exit_code == 0 and _runs_transition(cmd, "fix_commit")
+    registered = _registered_commits(cwd) if discharging else None
+
+    for _attempt in range(_WRITE_ATTEMPTS):
+        cache.update(refreshed)
+        # Running any sahjhan enforcement subcommand IS the protocol event the
+        # stall counter waits for — clear it deterministically, even when the
+        # status refresh above could not reach the daemon. Only for this actor:
+        # the command is evidence that *it* re-synced, and a sibling's re-sync
+        # used to launder away a stall accrued by real unregistered work.
+        cache["stall"] = stall_cleared(cache, actor)
+        cache["last_sahjhan_cmd"] = stamp
+        _apply_transition_bookkeeping(cache, cmd, exit_code, discharging, registered)
+        try:
+            write_cache(cwd, cache, expect_version=version)
+            return cache
+        except DaemonError as exc:
+            if exc.error != VERSION_CONFLICT:
+                return cache
+        except RuntimeError:
+            return cache
+        # Lost the race. Re-read, and re-derive against what the winner left
+        # rather than re-sending the snapshot the daemon just refused.
+        fresh, _boundary, version = read_cache_with_boundary(cwd)
+        if fresh is None:
+            return cache
+        cache = fresh
+    return cache
+
+
+def _apply_transition_bookkeeping(
+    cache: dict,
+    cmd: str,
+    exit_code: int,
+    discharging: bool,
+    registered: list[str] | None,
+) -> None:
+    """The two cache effects a landed transition has, applied to ``cache``.
+
+    Separate from the caller only so a ``version_conflict`` retry can re-apply
+    them to a freshly read cache — the discharge subtracts from buckets, so it
+    has to be recomputed against the ones the winner left, not the ones this
+    call read ten seconds ago.
+    """
+    # #77: pattern_analysis_overdue is DERIVED from the ledger in _refresh_fields
     # (the same query the pattern_check gate uses), not mirrored by token-matching
     # the command text — a read-only diagnostic that only mentions `fix_commit`/
     # `pattern_check` no longer moves it. The pending-commit registration is still
@@ -265,8 +373,8 @@ def _apply_sahjhan_cmd(
     # registered — the same `exit_code == 0` guard the git-commit branch below
     # already applied, two lines from a path that ignored it. What is then
     # discharged comes from the ledger rather than from the command text.
-    if exit_code == 0 and _runs_transition(cmd, "fix_commit"):
-        cache["unregistered_commits"] = _discharge_registered_commits(cwd, cache)
+    if discharging:
+        cache["unregistered_commits"] = _discharge_registered_commits(cache, registered)
     # P3.4: the round is over, so the obligation is discharged — say so here
     # rather than hoping the derivation above could reach the ledger. It
     # returns None on timeout or a missing binary, and None keeps the previous
@@ -283,9 +391,6 @@ def _apply_sahjhan_cmd(
     # skip the round it was blocked for.
     if exit_code == 0 and _runs_transition(cmd, "pattern_done"):
         cache[PATTERN_OVERDUE_QUERY] = False
-    with contextlib.suppress(RuntimeError):
-        write_cache(cwd, cache)
-    return cache
 
 
 def main() -> None:
@@ -303,10 +408,13 @@ def main() -> None:
     output = bash_output(event)
     actor = event_actor(event)
 
-    cache = read_cache(cwd)
+    # The version comes back with the cache because the whole-blob write below
+    # is conditional on it — a token fetched separately would name a different
+    # read than the snapshot it is meant to guard.
+    cache, _boundary, version = read_cache_with_boundary(cwd)
 
     if is_sahjhan_cmd(cmd):
-        _apply_sahjhan_cmd(cwd, cache, cmd, actor, exit_code)
+        _apply_sahjhan_cmd(cwd, cache, version, cmd, actor, exit_code)
         exit_ok()
 
     if cache is None:
@@ -318,12 +426,18 @@ def main() -> None:
 
     if is_git_commit(cmd) and exit_code == 0:
         commit_hash = _parse_commit_hash(output)
+        # One merge naming only this actor's two entries. Both facts are about
+        # the actor that ran the commit and about nobody else, so neither half
+        # of the patch mentions a sibling — and the daemon leaves the siblings
+        # as it holds them rather than as this snapshot saw them. The commit
+        # bucket goes out whole because RFC 7386 replaces arrays; a second
+        # commit from *this* actor off the same snapshot would still lose one.
         with contextlib.suppress(RuntimeError):
-            update_cache(cwd, {
-                "unregistered_commits": pending_commits_appended(
-                    cache, actor, commit_hash
+            merge_cache(cwd, {
+                **pending_commits_patch(
+                    cache, pending_commits_appended(cache, actor, commit_hash), actor,
                 ),
-                "stall": stall_cleared(cache, actor),
+                **stall_patch(cache, stall_cleared(cache, actor), actor),
             })
         exit_ok()
 
@@ -333,7 +447,7 @@ def main() -> None:
     # the stall counter. Checked after the git-commit branch so a
     # ``git commit && sahjhan status`` line still registers its commit. #70 item 1.
     if contains_sahjhan_cmd(cmd):
-        _apply_sahjhan_cmd(cwd, cache, cmd, actor, exit_code)
+        _apply_sahjhan_cmd(cwd, cache, version, cmd, actor, exit_code)
         exit_ok()
 
     # Test/lint/type-check commands are legitimate TDD activity — don't count
@@ -341,12 +455,17 @@ def main() -> None:
     # job is grep/sed -n/ls, none of which has a protocol event to emit, so
     # counting it accrues a block the reader can only escape by running a
     # protocol command for its side effect and discarding the output.
+    #
+    # A merge naming this actor's entry, not an update replacing the map: the
+    # count is computed from a snapshot, and under the old write a sibling that
+    # bumped or re-synced between the read and here was silently reset to what
+    # the snapshot remembered.
     with contextlib.suppress(RuntimeError):
         if _is_sleep_cmd(cmd):
             # Sleep to game timing gates gets double stall penalty
-            update_cache(cwd, {"stall": stall_bumped(cache, actor, 2)})
+            merge_cache(cwd, stall_patch(cache, stall_bumped(cache, actor, 2), actor))
         elif not _is_tdd_cmd(cmd) and not is_read_only_cmd(cmd):
-            update_cache(cwd, {"stall": stall_bumped(cache, actor, 1)})
+            merge_cache(cwd, stall_patch(cache, stall_bumped(cache, actor, 1), actor))
     exit_ok()
 
 

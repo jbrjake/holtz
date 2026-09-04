@@ -56,7 +56,7 @@ def main() -> None:
     cwd = event.get("cwd", os.getcwd())
     config_dir, _ = resolve_config_dir(cwd)
 
-    cache, boundary = read_cache_with_boundary(cwd)
+    cache, boundary, _version = read_cache_with_boundary(cwd)
 
     # Before the sahjhan-command allowance, not after it. Without the
     # boundary the daemon serves nothing restricted, but `transition`,

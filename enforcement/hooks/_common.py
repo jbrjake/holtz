@@ -169,7 +169,7 @@ def exit_enforcement_error(
     from _protocol_cache import is_enforcement_fresh, read_cache_with_boundary  # noqa: PLC0415
 
     if audit_active(cwd):
-        cache, boundary = read_cache_with_boundary(cwd)
+        cache, boundary, _version = read_cache_with_boundary(cwd)
         # Checked before freshness on purpose: a refusing daemon serves no
         # cache, so `is_enforcement_fresh` is False and this degrade path
         # would otherwise wave through exactly the situation it exists for.

@@ -66,13 +66,34 @@ def empty_cache() -> dict[str, Any]:
 # keeps the fail-closed path from firing outside a real audit.
 BOUNDARY_REFUSED = "sandbox_required"
 
+# The daemon's refusal when a conditional mutation's ``expect_version`` does not
+# match what it holds (sahjhan 0.27.0, #49). Named once, because the retry that
+# handles it and the writer that opts into it have to say the same word: the
+# compare runs inside the daemon's own vault lock, so this code is the only
+# signal a caller gets that it lost a race, and matching on the prose instead
+# would go quiet the day the message is reworded.
+VERSION_CONFLICT = "version_conflict"
 
-def read_cache_with_boundary(cwd: str) -> tuple[dict[str, Any] | None, str | None]:
-    """Read enforcement state, and separately report a missing boundary.
 
-    Returns ``(cache, boundary_refusal)``. The refusal is the daemon's own
-    machine-readable reason when it declined because the sandbox boundary is
-    absent, and ``None`` otherwise.
+def read_cache_with_boundary(
+    cwd: str,
+) -> tuple[dict[str, Any] | None, str | None, str | None]:
+    """Read enforcement state, its version, and a missing-boundary refusal.
+
+    Returns ``(cache, boundary_refusal, version)``. The refusal is the daemon's
+    own machine-readable reason when it declined because the sandbox boundary
+    is absent, and ``None`` otherwise.
+
+    ``version`` is the opaque CAS token for the blob as *stored*, which a
+    caller hands back as ``expect_version`` to make its write conditional on
+    nothing having changed since this read. It is third rather than second
+    because every gate here reads the first two and none of them writes.
+    ``None`` means the daemon did not offer one, and a write carrying ``None``
+    is unconditional — the pre-0.27.0 behaviour.
+
+    The token hashes the stored bytes, not the bytes this call returns: the
+    daemon overlays ``state`` from the ledger on read, so a *transition* moves
+    what you see here without invalidating the token. Only a write does that.
 
     The two have to be told apart because they mean opposite things. A cache
     of ``None`` from an unreachable daemon means "no audit here" and allowing
@@ -91,16 +112,17 @@ def read_cache_with_boundary(cwd: str) -> tuple[dict[str, Any] | None, str | Non
             resp = _daemon_request(sock_path, {"op": "enforcement_read"})
         except DaemonError as exc:
             if exc.error == BOUNDARY_REFUSED:
-                return None, exc.reason or BOUNDARY_REFUSED
+                return None, exc.reason or BOUNDARY_REFUSED, None
             raise
-        return json.loads(base64.b64decode(resp["data"])), None
+        version = resp.get("version")
+        return json.loads(base64.b64decode(resp["data"])), None, version
     except (OSError, ConnectionError, RuntimeError, KeyError, json.JSONDecodeError, ValueError):
         # OSError/ConnectionError: daemon socket unreachable
         # RuntimeError: daemon returned an error (from _daemon_request)
         # KeyError: daemon response missing "data" field (no state stored)
         # json.JSONDecodeError: daemon sent invalid/empty JSON (corrupt or dead)
         # ValueError: base64 decode failure (corrupt daemon response)
-        return None, None
+        return None, None, None
 
 
 def read_cache(cwd: str) -> dict[str, Any] | None:
@@ -116,39 +138,105 @@ def read_cache(cwd: str) -> dict[str, Any] | None:
     return read_cache_with_boundary(cwd)[0]
 
 
-def write_cache(cwd: str, cache: dict[str, Any]) -> None:
+def _mutate(cwd: str, request: dict[str, Any]) -> dict[str, Any]:
+    """Send one enforcement mutation, mapping unreachability to RuntimeError.
+
+    The three mutations differ only in their op and payload key, so the
+    connect-and-translate wrapper is here rather than three times over. A
+    ``DaemonError`` propagates unchanged: it is already a ``RuntimeError``, and
+    its ``error`` code is what a caller reads to tell ``version_conflict``
+    (re-read and retry) from every other refusal (give up).
+    """
+    from _common import _daemon_request, _get_daemon_socket_path
+    sock_path = _get_daemon_socket_path(cwd)
+    try:
+        return _daemon_request(sock_path, request)
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(f"sahjhan daemon unreachable: {exc}") from exc
+
+
+def _encoded(payload: dict[str, Any]) -> str:
+    return base64.b64encode(json.dumps(payload).encode()).decode()
+
+
+def _conditional(request: dict[str, Any], expect_version: str | None) -> dict[str, Any]:
+    """The request, made conditional only when a token was actually held.
+
+    Omitted rather than sent as ``None``: an absent ``expect_version`` is the
+    unconditional mutation, which is what a caller that never got a token from
+    its read must still be able to perform.
+    """
+    if expect_version is not None:
+        request["expect_version"] = expect_version
+    return request
+
+
+def write_cache(
+    cwd: str, cache: dict[str, Any], expect_version: str | None = None
+) -> None:
     """Write enforcement state to the sahjhan daemon.
 
     The daemon sets last_refresh to the current UTC timestamp.
     Raises RuntimeError if the daemon is unreachable.
+
+    ``expect_version`` makes the write conditional on the stored blob still
+    being the one the caller read. This is the mechanism for a change that
+    genuinely spans the whole blob — discharging a commit from whichever
+    actor's bucket holds it — where a per-actor merge cannot express what
+    changed. The compare happens inside the daemon's vault lock, so it closes
+    the race rather than moving it: a caller that lost raises ``DaemonError``
+    with ``error == VERSION_CONFLICT`` and can re-read and retry.
     """
-    from _common import _daemon_request, _get_daemon_socket_path
-    sock_path = _get_daemon_socket_path(cwd)
-    data = base64.b64encode(json.dumps(cache).encode()).decode()
-    try:
-        _daemon_request(sock_path, {"op": "enforcement_write", "data": data})
-    except RuntimeError:
-        raise
-    except Exception as exc:
-        raise RuntimeError(f"sahjhan daemon unreachable: {exc}") from exc
+    _mutate(cwd, _conditional(
+        {"op": "enforcement_write", "data": _encoded(cache)}, expect_version,
+    ))
 
 
 def update_cache(cwd: str, patch: dict[str, Any]) -> dict[str, Any]:
-    """Atomically patch enforcement state in the sahjhan daemon.
+    """Atomically replace whole top-level fields of enforcement state.
 
-    Sends a partial dict of fields to merge into current state.
-    Returns the full state after merge.
-    Raises RuntimeError if daemon unreachable or no state exists.
+    Sends a partial dict whose keys replace the stored ones outright, whatever
+    their shape. Returns the full state afterwards. Raises RuntimeError if the
+    daemon is unreachable or no state exists.
+
+    Right wherever the caller owns the entire key — a scalar like
+    ``pattern_analysis_overdue``, or a map no other actor writes. For the
+    per-actor maps (``stall``, ``unregistered_commits``) it is the defect item
+    42 is about: replacing the key means sending a whole map computed from a
+    snapshot, and a sibling's write landing in between is overwritten. Use
+    ``merge_cache`` there.
     """
-    from _common import _daemon_request, _get_daemon_socket_path
-    sock_path = _get_daemon_socket_path(cwd)
-    data = base64.b64encode(json.dumps(patch).encode()).decode()
-    try:
-        resp = _daemon_request(sock_path, {"op": "enforcement_update", "patch": data})
-    except RuntimeError:
-        raise
-    except Exception as exc:
-        raise RuntimeError(f"sahjhan daemon unreachable: {exc}") from exc
+    resp = _mutate(cwd, {"op": "enforcement_update", "patch": _encoded(patch)})
+    return json.loads(base64.b64decode(resp["data"]))
+
+
+def merge_cache(
+    cwd: str, patch: dict[str, Any], expect_version: str | None = None
+) -> dict[str, Any]:
+    """Atomically merge a patch into enforcement state, recursing into objects.
+
+    RFC 7386 (sahjhan 0.27.0, #49), which is what makes a per-actor write
+    expressible: ``{"stall": {actor: 3}}`` changes that actor's entry and
+    leaves every sibling exactly as the daemon holds it, so a caller never has
+    to send a map it computed from a snapshot. Returns the full state
+    afterwards. Raises RuntimeError if the daemon is unreachable or no state
+    exists.
+
+    Two rules decide how a patch is spelled:
+
+    - ``None`` **deletes** the key, at any depth. That is how a clear is sent;
+      a merge cannot store a JSON null, so there is no ambiguity to resolve.
+    - Arrays **replace** wholesale — they are not merged element-wise. A patch
+      naming one actor's commit list therefore carries that actor's *whole*
+      list. It is a per-actor write, not an append, so an actor racing
+      **itself** off one stale snapshot still loses a write; the merge buys
+      safety from siblings only. ``expect_version`` is what covers that case.
+    """
+    resp = _mutate(cwd, _conditional(
+        {"op": "enforcement_merge", "patch": _encoded(patch)}, expect_version,
+    ))
     return json.loads(base64.b64decode(resp["data"]))
 
 
@@ -635,6 +723,56 @@ def event_actor(event: dict[str, Any]) -> str:
     return str(event.get("agent_id") or ORCHESTRATOR)
 
 
+def _actor_patch(
+    cache: dict[str, Any] | None, key: str, whole: dict[str, Any], actor: str
+) -> dict[str, Any]:
+    """``whole`` narrowed to the single entry it changed, for a merge patch.
+
+    Item 42: the per-actor maps were read, changed and written back whole, so
+    a sibling's write landing inside that window was overwritten. The functions
+    that compute ``whole`` are honest about the *value* they return — one
+    actor's entry differs, all others are copied through — and a merge naming
+    only that entry is what makes the same true of the **write**.
+
+    ``actor`` absent from ``whole`` is a clear, which RFC 7386 spells ``null``.
+
+    The exception is the pre-keying shape: a bare int under ``stall``, a flat
+    list under ``unregistered_commits``, written by a holtz older than the
+    keying. ``stall_counts`` and ``pending_commits`` migrate it into the
+    orchestrator's bucket precisely so a run upgrading mid-flight is not handed
+    a free reset — and RFC 7386 replaces a scalar with the patch object rather
+    than merging into it, which would drop that migration silently. So when the
+    daemon still holds the old shape the patch is the whole migrated map, which
+    under the very same replace rule lands exactly what ``update_cache`` sent.
+    There is no sibling to lose in that case: the old shape has one bucket.
+    """
+    if isinstance((cache or {}).get(key), dict):
+        return {actor: whole.get(actor)}
+    return whole
+
+
+def stall_patch(
+    cache: dict[str, Any] | None, whole: dict[str, int], actor: str
+) -> dict[str, Any]:
+    """A merge patch carrying ``actor``'s stall entry and no other actor's."""
+    return {"stall": _actor_patch(cache, "stall", whole, actor)}
+
+
+def pending_commits_patch(
+    cache: dict[str, Any] | None, whole: dict[str, list[str]], actor: str
+) -> dict[str, Any]:
+    """A merge patch carrying ``actor``'s commit bucket and no other actor's.
+
+    The bucket is sent entire, because RFC 7386 replaces arrays rather than
+    concatenating them. So this is a per-actor write and not an append: two of
+    one actor's own commits racing off a single snapshot still lose one, which
+    is what ``expect_version`` exists for.
+    """
+    return {"unregistered_commits": _actor_patch(
+        cache, "unregistered_commits", whole, actor,
+    )}
+
+
 def stall_counts(cache: dict[str, Any] | None) -> dict[str, int]:
     """Per-actor stall counts, tolerating a cache written before keying.
 
@@ -669,10 +807,16 @@ def stall_bumped(cache: dict[str, Any] | None, actor: str, delta: int) -> dict[s
 
 
 def stall_cleared(cache: dict[str, Any] | None, actor: str) -> dict[str, int]:
-    """The counts with ``actor`` re-synced — every other actor untouched.
+    """The counts with ``actor`` re-synced, copying every other actor through.
 
     Clearing is per-actor for the same reason charging is: a protocol event is
     evidence about the actor that emitted it and about nobody else.
+
+    This describes the value, which is all it can describe. Whether the *write*
+    leaves the siblings alone is decided by the caller: send this through
+    ``stall_patch`` and ``merge_cache`` and it does, because the patch never
+    names them; send it as an ``update_cache`` value and it replaces the map
+    with these counts, and a sibling's bump landing since the read is gone.
     """
     counts = stall_counts(cache)
     counts.pop(actor, None)
@@ -734,7 +878,12 @@ def pending_commits_for(
 def pending_commits_appended(
     cache: dict[str, Any] | None, actor: str, commit_hash: str
 ) -> dict[str, list[str]]:
-    """The buckets with ``commit_hash`` charged to ``actor`` — others untouched."""
+    """The buckets with ``commit_hash`` charged to ``actor``, others copied through.
+
+    A statement about the value. ``pending_commits_patch`` + ``merge_cache`` is
+    what makes it a statement about the write as well — and note that even then
+    the merge sends ``actor``'s whole list, because RFC 7386 replaces arrays.
+    """
     buckets = pending_commits(cache)
     buckets.setdefault(actor, []).append(commit_hash)
     return buckets
@@ -768,7 +917,14 @@ def pending_commits_discharged(
 def pending_commits_cleared(
     cache: dict[str, Any] | None, actor: str
 ) -> dict[str, list[str]]:
-    """The buckets with ``actor``'s emptied — every other actor untouched."""
+    """The buckets with ``actor``'s emptied, copying every other actor through.
+
+    The one caller is the ledger-unreachable fallback inside the discharge,
+    which is cross-actor by nature and so goes out as a whole-blob
+    ``write_cache`` rather than a merge. What keeps that write from overwriting
+    a sibling is ``expect_version``: the daemon compares the token inside its
+    own lock and refuses a stale writer, which then re-reads and re-derives.
+    """
     buckets = pending_commits(cache)
     buckets.pop(actor, None)
     return buckets

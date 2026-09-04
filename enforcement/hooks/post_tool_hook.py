@@ -107,7 +107,7 @@ def main() -> None:
     file_path = tool_input.get("file_path", "")
     cwd = event.get("cwd", os.getcwd())
 
-    cache, boundary = read_cache_with_boundary(cwd)
+    cache, boundary, _version = read_cache_with_boundary(cwd)
 
     # A warning rather than a block: PostToolUse fires after the work is
     # done, so refusing here undoes nothing. The PreToolUse side is what

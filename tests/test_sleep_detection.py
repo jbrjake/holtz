@@ -179,16 +179,26 @@ class TestStallPenalty:
 
         captured_cache: dict = {}
 
-        def fake_write_cache(cwd: str, cache: dict) -> None:
+        def fake_write_cache(
+            cwd: str, cache: dict, expect_version: str | None = None
+        ) -> None:
             captured_cache.update(cache)
 
-        def fake_update_cache(cwd: str, patch: dict) -> dict:
+        def fake_merge_cache(
+            cwd: str, patch: dict, expect_version: str | None = None
+        ) -> dict:
             captured_cache.update(patch)
             return {**initial_cache, **patch}
 
         with (
             patch.object(_tracker, "read_event", return_value=event),
-            patch.object(_tracker, "read_cache", return_value=dict(initial_cache)),
+            # Item 42: the read hands back the version its snapshot was taken
+            # at, so a whole-blob write can be made conditional on it. `None`
+            # is the honest fixture answer — this path never writes one.
+            patch.object(
+                _tracker, "read_cache_with_boundary",
+                return_value=(dict(initial_cache), None, None),
+            ),
             # Explicit, not inherited. `_load_tracker_module` only installs its
             # always-fresh `_protocol_cache` stub when nothing has imported the
             # real module yet, so whether these tests exercised the stall
@@ -197,7 +207,7 @@ class TestStallPenalty:
             # `last_sahjhan_cmd`, silently exiting before the counter moves.
             patch.object(_tracker, "is_enforcement_fresh", return_value=True),
             patch.object(_tracker, "write_cache", side_effect=fake_write_cache),
-            patch.object(_tracker, "update_cache", side_effect=fake_update_cache),
+            patch.object(_tracker, "merge_cache", side_effect=fake_merge_cache),
             patch.object(_tracker, "is_sahjhan_cmd", return_value=False),
             patch.object(_tracker, "contains_sahjhan_cmd", return_value=False),
             patch.object(_tracker, "is_git_commit", return_value=False),
