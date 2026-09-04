@@ -34,15 +34,9 @@ Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) 
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
 W12 (34, 28). Commits are in `git log`; do not re-summarise them here.
 
-**W11 (item 42) is STOPPED on an upstream ask — do not start it.**
-`sahjhan#49`: the daemon's `enforcement_update` merges only at the top level
-(`state.extend`, `src/daemon/mod.rs:674` at the pinned 0.26.0), so a patch of
-`{"stall": {…}}` replaces the whole actor map and W11's step 1 — *"send the
-delta for one actor and let the daemon merge"* — is not expressible. W11's own
-step 2 says that is a sahjhan change; Jon ruled upstream on 2026-09-03. **No
-holtz-side workaround has been written and none should be.** The flattening
-dodge (`stall::<actor>` as top-level keys) was considered and rejected as the
-encoding trick it is. Resume W11 when the engine ships it and the pin moves.
+**W11 (item 42) is UNBLOCKED and is the first thing to do — see "Do this
+next".** `sahjhan#49` shipped in **v0.27.0** (2026-09-03/04). Both halves of
+the ask landed. The pin is still at 0.26.0, so **moving it is step 0 of W11**.
 
 **Two corrections to the line this replaced** (*"8 of 30 units · 7 of 49
 items"*), both made 2026-09-01 after counting the dashboard rather than
@@ -168,10 +162,81 @@ local run touches.
 
 ## Do this next
 
-### 1. W13 (37, 17), then W14 (5, 10).
+### 1. ⭐ W11 (item 42) — start here. Unblocked by sahjhan 0.27.0.
 
-P2's remainder. W10 and W12 are `DONE`; **W11 is stopped upstream — skip it**
-(above). Neither W13 nor W14 depends on W11 or on anything else unlanded.
+**Step 0, before any of W11's own steps: move the pin.** It is at 0.26.0 and
+`check_sahjhan_pin.py` currently passes *at that version*, so a green pin check
+is not evidence you are on 0.27.0.
+
+```bash
+bash scripts/vendor-sahjhan.sh 0.27.0
+python3 scripts/update_sahjhan_pin.py 0.27.0     # this is what actually governs
+python3 scripts/check_sahjhan_pin.py             # must exit 0
+```
+
+`_resolve.SAHJHAN_VERSION` is the pin that decides at runtime; vendoring alone
+leaves the resolver on the old version and the next hook invocation silently
+re-downloads it *and rewrites the marker back*. `update_sahjhan_pin.py` exists
+to close that by construction — use it, do not hand-edit `_resolve.py`. This
+also lights up **W11's V5**, which was unreachable while step 2 was theoretical.
+
+**What 0.27.0 gives you.** Read `gh issue view 49 --repo jbrjake/sahjhan` for
+the full writeup; these are the facts checked against the source at
+`src/daemon/enforcement.rs` and `src/daemon/mod.rs`, not read off the summary:
+
+- **`enforcement_merge` is a NEW op. `enforcement_update` is unchanged** —
+  still `PatchMode::TopLevel => state.extend(patch_obj)`, byte for byte what
+  0.26.0 did. So this is not a behaviour change to absorb; it is a second op to
+  pick per call site. `update_cache` stays and is still right wherever the
+  caller owns the whole key. Add `merge_cache` beside it; do not reroute
+  everything.
+- **RFC 7386 semantics**, and the two edges that will bite:
+  - **`null` deletes, at any depth.** That is the exact spelling for
+    `stall_cleared`. (Holtz's readers already treat `0` and `[]` as equivalent
+    to absent — `stall_count` is `.get(actor, 0)`, `pending_commits` filters
+    empty lists — so a sentinel works too. `null` is the precise one.)
+  - **Arrays REPLACE wholesale; they are not merged element-wise.**
+    `unregistered_commits` values are lists, so a merge naming one actor sends
+    *that actor's whole list*. It is a per-actor write, **not** an append. An
+    actor racing itself therefore still needs `expect_version` — the merge only
+    buys you safety from *siblings*.
+- **`expect_version` is optional on all three mutations**, and the compare runs
+  inside the same `vault.lock()` block that stores. That is why this is not the
+  client-side compare-and-swap W11's step 2 forbids: the compare is on the
+  daemon's side of the lock. A loser gets `version_conflict` with the current
+  version attached and re-reads and retries; nothing is clobbered.
+- **`enforcement_read` now returns `version` beside `data`.**
+  `read_cache_with_boundary` has to surface it, or no caller can pass
+  `expect_version`.
+- **The token hashes the blob as stored, not the bytes `enforcement_read`
+  serves** (which overlay `state` from the ledger, #57). So **a transition does
+  not invalidate your token — only a write does.** Do not build a retry loop
+  that assumes otherwise.
+
+**The four write sites, all in `protocol_tracker.py`:**
+
+| line | today | becomes |
+|---|---|---|
+| `:347` / `:349` | `update_cache({"stall": <whole map>})` | `merge_cache({"stall": {actor: n}})` |
+| `:322` | `update_cache` with both whole maps | one merge naming only this actor's two entries |
+| `:287` | full `write_cache(cache)` from a snapshot taken **before two 5 s subprocesses** | carry `expect_version` from the read that produced the snapshot; retry on `version_conflict` |
+
+`_discharge_registered_commits` → `pending_commits_discharged` is the same
+shape as `:287`: genuinely cross-actor, so it wants `expect_version` and a
+retry rather than a per-actor merge.
+
+**`protocol_tracker.py` is manifest-pinned** (`trusted-callers.toml:24`), so
+`bash scripts/hash-trusted-callers.sh` must rerun or enforcement silently fails
+open. Only the `real_daemon` tests catch that, and this session hit exactly
+that trap on W12 — five courier edits, and the failure surfaced as
+`caller not authenticated` in unrelated integration tests.
+
+**Do not write the flattening dodge.** `stall::<actor>` as top-level keys was
+considered and rejected before the ask went upstream; the unit records why.
+
+### 2. Then W13 (37, 17), then W14 (5, 10).
+
+P2's remainder. W10 and W12 are `DONE`. Neither W13 nor W14 depends on W11.
 
 **W12 left a shared module worth knowing about before touching a courier:**
 `enforcement/scripts/_recorded_command.py`. A recognizer's `None` no longer
@@ -265,6 +330,9 @@ difference was measurable in one command against the binary.
 ## Environment
 
 sahjhan pinned at **v0.26.0** (`_resolve.SAHJHAN_VERSION` governs; the marker
-and binary self-heal to it). `check_sahjhan_pin.py` exit 0.
+and binary self-heal to it). `check_sahjhan_pin.py` exit 0 — **at 0.26.0**,
+which is the point: a passing pin check says the three places agree, not that
+they agree on the version you want. **v0.27.0 is released and W11 needs it**;
+moving the pin is step 0 of "Do this next".
 `scripts/install-hooks.sh` defaults to dev mode — the plugin's enforcement hooks
 are **not** wired into this repo's own session, deliberately.

@@ -59,7 +59,7 @@ imprecision (`CLAUDE.md`).
 | W32 | **51** *(new)* | C | `WIP` — pin moved to 0.25.0, V1–V4 driven; step 3 open for Jon | — *(fixed upstream: sahjhan#47)* |
 | W09 | 25, 26 | B | `DONE` — W06's mechanism widened, not duplicated | — |
 | W10 | 35 | B | `DONE` — wider than the item said: one actor is enough | W01 |
-| W11 | 42 | B | `BLOCKED` — upstream, sahjhan#49; step 2 fired | W01, **sahjhan#49** |
+| W11 | 42 | B | `TODO` — **next**; unblocked by sahjhan 0.27.0 | W01, ~~sahjhan#49~~ shipped |
 | W12 | 34, 28 | B | `DONE` — one shared refusal, four scripts | — |
 | W13 | 37, 17 | B | `TODO` | — |
 | W14 | 5, 10 | B | `TODO` | — |
@@ -2411,34 +2411,66 @@ at, so the recovery is one command and already taught.
 
 ## W11 — Item 42: per-actor cache state is read-modify-written over the whole map
 
-**Status:** `BLOCKED` upstream  ·  **Tier:** B  ·  **Depends on:** W01 (F2),
-**sahjhan#49**
+**Status:** `TODO` — **unblocked, and next**  ·  **Tier:** B
+**Depends on:** W01 (F2) — `DONE`; ~~sahjhan#49~~ — **shipped in v0.27.0**
 **Commit:** `fix(enforcement): write the actor's own bucket, not the whole map`
 
-### ⛔ Step 2 fired. Do not start this unit; do not write a holtz-side version.
+### ✅ Step 2 fired, went upstream, and came back. Read this before starting.
 
-**Measured at the pinned 0.26.0** (`src/daemon/mod.rs:674`): the daemon merges
-an `enforcement_update` patch with `state.extend(patch_obj)` — a top-level
-insert-overwrite. A patch key whose value is an object *replaces* the stored
+**What was measured at 0.26.0** (`src/daemon/mod.rs:674`): the daemon merged an
+`enforcement_update` patch with `state.extend(patch_obj)` — a top-level
+insert-overwrite, so a patch key whose value is an object *replaces* the stored
 object. Holtz's per-actor state lives one level down (`stall`,
-`unregistered_commits`), so the only way to change one actor's entry is to send
-the whole map, which is the defect. **Step 1 as written is not expressible.**
+`unregistered_commits`), so the only way to change one actor's entry was to
+send the whole map, which is the defect. **Step 1 as written was not
+expressible**, which is exactly step 2's condition.
 
-That is exactly step 2's condition, so it went upstream: **sahjhan#49**, filed
-2026-09-03, covering both halves — the per-actor write *and* the cross-actor
-read-modify-write that `pending_commits_discharged` needs, which no per-actor
-op fixes and which wants the transform to run inside the daemon's vault lock.
+**RULED (Jon, 2026-09-03) — upstream, not holtz-side.** Filed as
+**sahjhan#49**; the alternative considered and rejected was flattening the
+actor into the top-level key (`stall::<actor>`), which would have made the
+existing shallow merge a per-actor merge with no engine change. Rejected as an
+encoding trick standing in for the mechanism: it changes the cache schema,
+makes actor ids key fragments, and leaves the cross-actor discharge racing
+anyway. **Do not rediscover it as a good idea.**
 
-**RULED (Jon, 2026-09-03) — upstream, not holtz-side.** The alternative
-considered and rejected was flattening the actor into the top-level key
-(`stall::<actor>`), which would make the *existing* shallow merge a per-actor
-merge with no engine change. Rejected as an encoding trick standing in for the
-mechanism: it changes the cache schema, makes actor ids key fragments, and
-leaves the cross-actor discharge racing anyway.
+**Shipped in sahjhan v0.27.0** (`2f3da1d` engine, `e5b99df` docs), both halves.
+Verified against the source rather than the release note:
 
-Resume when the engine ships it and the pin moves. The four write sites are all
-in `protocol_tracker.py` — `:287` (full `write_cache`), `:322`, `:347`, `:349`
-— and are enumerated in the issue.
+| | |
+|---|---|
+| **`enforcement_merge`** | a **new** op — `Request::EnforcementMerge` → `enforcement::merge_patch`, RFC 7386. `enforcement_update` is **unchanged** (`PatchMode::TopLevel => state.extend(patch_obj)`), so this is a second op to choose per call site, not a behaviour change to absorb |
+| **`expect_version`** | optional on all three mutations; `version_refusal` runs **inside the same `vault.lock()` that stores**, so it is not the client-side CAS step 2 forbids. Loser gets `version_conflict` + the current version, re-reads, retries |
+| **`version`** | returned by `enforcement_read` and every mutation; `sha256:` over the blob **as stored**, not the bytes read serves — so a *transition* does not invalidate a token, only a write does |
+
+**Two RFC 7386 edges that decide how this is written:**
+
+- **`null` deletes at any depth** — the exact spelling for `stall_cleared`.
+  (Holtz's readers already treat `0`/`[]` as absent, so a sentinel also works;
+  `null` is the precise one. A merge cannot *store* a null.)
+- **Arrays replace wholesale — they are not merged element-wise.**
+  `unregistered_commits` values are lists, so a merge naming one actor sends
+  that actor's *whole list*. Per-actor, **not** an append. So an actor racing
+  **itself** still needs `expect_version`; the merge buys safety from siblings
+  only. This is the thing most likely to be got wrong.
+
+### The four write sites, and which mechanism each wants
+
+| site | today | becomes |
+|---|---|---|
+| `protocol_tracker.py:347` / `:349` | `update_cache({"stall": <whole map>})` | `merge_cache({"stall": {actor: n}})` |
+| `:322` | `update_cache` with both whole maps | one merge naming only this actor's two entries |
+| `:287` | full `write_cache(cache)`, from a snapshot taken **before two 5 s subprocesses** | `expect_version` from the read that produced the snapshot, retry on `version_conflict` |
+| `_discharge_registered_commits` → `pending_commits_discharged` | whole-map rewrite | genuinely cross-actor, so `expect_version` + retry, **not** a per-actor merge |
+
+`read_cache_with_boundary` has to start surfacing the version, or nothing can
+pass `expect_version`. `update_cache` stays — it is still right wherever the
+caller owns the whole key; add `merge_cache` beside it rather than rerouting
+everything through one op.
+
+**`protocol_tracker.py` is manifest-pinned** (`trusted-callers.toml:24`) — rerun
+`bash scripts/hash-trusted-callers.sh` or enforcement fails open silently. Only
+the `real_daemon` tests catch it; W12 hit exactly this and it surfaced as
+`caller not authenticated` in unrelated integration tests.
 
 ### Defect · `protocol_tracker.py`
 
@@ -2452,11 +2484,27 @@ false of the write. No compare-and-swap and no concurrency test exist.
 
 ### Plan
 
+- [ ] **0.** *(new, and first)* Move the pin to **0.27.0** — the op this unit
+      needs does not exist at 0.26.0, and `check_sahjhan_pin.py` passes *at
+      0.26.0*, so a green pin check is not evidence you are on the right version:
+      ```bash
+      bash scripts/vendor-sahjhan.sh 0.27.0
+      python3 scripts/update_sahjhan_pin.py 0.27.0   # governs at runtime
+      python3 scripts/check_sahjhan_pin.py           # must exit 0
+      ```
+      Never hand-edit `_resolve.SAHJHAN_VERSION`: vendoring alone leaves the
+      resolver on the old version and the next hook silently re-downloads it and
+      rewrites the marker back
 - [ ] **1.** Make the write per-actor: send the delta for one actor and let the
-      daemon merge, instead of computing the full map client-side and overwriting
-- [ ] **2.** If the daemon's op cannot express a per-actor merge, **that is a
+      daemon merge, instead of computing the full map client-side and overwriting.
+      **`enforcement_merge` is now the op**; add `merge_cache` beside
+      `update_cache` rather than rerouting every call site through one of them
+- [x] **2.** If the daemon's op cannot express a per-actor merge, **that is a
       sahjhan change** — take it there rather than adding a client-side
-      compare-and-swap that would still race
+      compare-and-swap that would still race. **Fired.** Filed as sahjhan#49,
+      ruled upstream by Jon 2026-09-03, shipped in v0.27.0 — both halves, and
+      the compare lives inside the daemon's vault lock exactly as this clause
+      demands. No holtz-side workaround was written while it was open
 - [ ] **3.** Correct the two docstrings to describe the write, not the return value
 
 ### Validation
@@ -2465,11 +2513,27 @@ false of the write. No compare-and-swap and no concurrency test exist.
       survives.** Evidence: ___
 - [ ] **V2** Same for all three colliding writers: `stall_bumped`, `stall_cleared`,
       `pending_commits_appended`. Evidence: ___
+      ⚠️ `stall_cleared` is now a **deletion** (`null` at depth), and
+      `pending_commits_appended` writes an **array, which RFC 7386 replaces
+      wholesale** — so its merge is per-actor but is not an append. Drive each
+      through the mechanism it actually uses; one test shape will not cover all
+      three.
 - [ ] **V3** Fixture counts chosen so "buckets" and "commits" differ — a `len()`
       over the wrong dimension must not pass by coincidence. Evidence: ___
 - [ ] **V4 · non-vacuity** Restore the whole-map write → V1 goes red. Evidence: ___
+      The restoration is now cheap and exact: swap `merge_cache` back to
+      `update_cache` at the site under test. `enforcement_update` is unchanged
+      in 0.27.0, so that *is* the 0.26.0 behaviour, not an approximation of it.
 - [ ] **V5** If step 2's engine path was taken: re-pin, `check_sahjhan_pin.py` →
       exit 0. Evidence: ___
+      **Now live** — step 2's engine path *was* taken, so this is a required
+      validation rather than a conditional one, and step 0 is what satisfies it.
+- [ ] **V6** *(new — the edge the merge does not cover)* An actor racing
+      **itself** — two of its own writes from one stale snapshot — still loses
+      one without `expect_version`, because the merge is per-key and not
+      read-modify-write. Assert the `version_conflict` refusal and the retry
+      landing, so the unit does not ship believing the merge closed a race it
+      does not. Evidence: ___
 
 ---
 
