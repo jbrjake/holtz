@@ -55,7 +55,7 @@ imprecision (`CLAUDE.md`).
 | W22 | 27 | **A** | `DONE` @ `6852e0d` — code only; the seccomp functional run is owed | — *(moved from P3 by D-h)* |
 | **P2 — before trusting results** ||||
 | W08 | 32, 43 | B | `DONE` — 32 `780ba47`; 43 landed on sahjhan 0.26.0 | — |
-| W31 | **50** *(new)* | C | `TODO` | W08 |
+| W31 | **50** *(new)* | C | `DONE` — the finding id, matched as `fix_commit`'s gate matches it | W08 |
 | W32 | **51** *(new)* | C | `WIP` — pin moved to 0.25.0, V1–V4 driven; step 3 open for Jon | — *(fixed upstream: sahjhan#47)* |
 | W09 | 25, 26 | B | `DONE` — W06's mechanism widened, not duplicated | — |
 | W10 | 35 | B | `DONE` — wider than the item said: one actor is enough | W01 |
@@ -4246,7 +4246,7 @@ in its tree rides the fix commit.
 
 ## W31 — Item 50 (new, found by W08): a rewritten commit is never discharged
 
-**Status:** `TODO`  ·  **Tier:** C  ·  **PROVEN**  ·  **Depends on:** W08
+**Status:** `DONE`  ·  **Tier:** C  ·  **PROVEN**  ·  **Depends on:** W08
 **Found:** 2026-08-31, driving W08's V4. **RULED (D-j): accept and record.**
 
 ### Defect
@@ -4287,26 +4287,126 @@ so a stale bucket cannot deadlock the run or block a sibling. What it costs:
   non-empty (`overdue and not commits`), so a stale bucket silences that actor's
   nudge indefinitely.
 
-### Plan (not started)
+### Plan
 
-- [ ] **1.** Decide where the charge should follow the rewrite. Two candidates,
+- [x] **1.** Decide where the charge should follow the rewrite. Two candidates,
       and they are not equivalent: re-point the actor's pending hash from a
       PostToolUse on `git rebase`/`git commit --amend`, **or** charge something
       the rewrite preserves (patch-id, or the finding id the commit message
       already carries — `fix_commit`'s own gate greps `HEAD` for it)
-- [ ] **2.** Whichever is chosen, it must not weaken the deny direction: the
+      — **DECIDED: the second, keyed on the finding id.** Reasoning below.
+- [x] **2.** Whichever is chosen, it must not weaken the deny direction: the
       block exists to stop a second unregistered commit
-- [ ] **3.** The status line's run-total is the observable symptom; a test should
+- [x] **3.** The status line's run-total is the observable symptom; a test should
       assert it returns to zero after a rebased subagent's fix is registered
 
-### Validation (not started)
+### ⭐ Step 1, decided — the finding id, matched the way the gate matches it
 
-- [ ] **V1** F2 drives commit → rebase (hash rewritten) → register: the author's
-      bucket discharges. Evidence: ___
-- [ ] **V2** The status-line total returns to zero across a three-actor round
-      where two rebased. Evidence: ___
-- [ ] **V3** A genuinely unregistered second commit still blocks. Evidence: ___
-- [ ] **V4 · non-vacuity** Revert the fix → V1 red, V3 green. Evidence: ___
+**Rejected: re-point from a PostToolUse on `git rebase` / `git commit --amend`.**
+It has to enumerate every command that rewrites a commit, and the enumeration is
+open — `rebase`, `--amend`, `reset --soft` + commit, `cherry-pick`, `filter-branch`,
+an interactive squash. Miss one and the charge strands exactly as it does today,
+silently. It is also blind where it matters most: a rebase rewrites a *range*, so
+"the new hash" is not `HEAD` for any actor that made more than one commit, and
+`is_git_commit` excludes `--amend` **by construction** because item 43 needs amend
+to stay a route a blocked actor can run. Teaching the tracker to watch `--amend`
+puts a second reader on a command the first deliberately ignores.
+
+**Rejected within the second candidate: patch-id.** It survives a clean rebase and
+nothing else — a rebase that resolves a conflict changes the diff, and an amend
+that adds staged work changes it too. Those are the two cases the defect is *about*.
+
+**Chosen: the finding id the commit message carries.** A rewrite preserves the
+message; `fix_commit`'s gate already requires `git log -1 --format=%B | grep -q
+'{{item_id}}'` of the commit it registers, and its emit already stamps that id
+onto `finding_resolved`. So both ends of the match exist in the system already and
+neither is a new derivation.
+
+**Read at discharge time, not stored at charge time — and that is forced.**
+Capturing the id when the commit is charged would mean *extracting* it from the
+message, which needs an id pattern. Nothing in `enforcement/` defines one: the
+gate is handed the id as an argument and greps for it. Inventing `BH-\d+` in the
+tracker would be a mirror of a fact the ledger owns, which is what
+[#77](https://github.com/jbrjake/holtz/issues/77) deadlocked on. Reading it at
+discharge time *derives* the ids from the ledger — the same rows the discharge
+already fetches — and applies the gate's own substring relation to the charged
+commit. Cost: one `git log -1 --format=%B <charged hash>` per charge that the
+hash match missed, on the `fix_commit` path only, which already spends two 5 s
+subprocesses. The rewritten commit's old object is still in the store (a rebase
+leaves it unreachable, not absent), and a linked worktree shares that store, so
+the orchestrator's `cwd` can read a subagent's pre-rebase commit.
+
+**Step 2 — what this does and does not admit.** The match is per *charge*, not per
+actor: a second commit naming an unresolved finding stays charged
+(`test_a_second_commit_for_an_unresolved_finding_stays_charged`). What it does
+admit is two commits naming the *same* finding discharging on one registration —
+which is the right answer, not a leak: the fix for that finding is registered, and
+the protocol's unit is the finding. Where git cannot answer — no repo, pruned
+object, `_parse_commit_hash` returned `unknown` — nothing is discharged, so the
+failure direction is the one that keeps the charge.
+
+### What shipped
+
+`enforcement/protocol.toml` — `resolution_commit_hashes` renamed to
+`finding_resolutions` and given the `id` column, so one query and one
+round-trip carry both ends of the match. `_protocol_cache.py` — `Resolutions`,
+`registered_resolutions()`, and `pending_commits_discharged(cache, registered,
+rewritten=())`, which stays pure. `protocol_tracker.py` — `_commit_message()`
+and `_rewritten_charges()`, the half that can ask git. `hardening_batch.py` —
+the renamed constant; it reads only the hash column and is otherwise untouched.
+`tests/two_actors.py` — F2 gains a real repository (`git_init`, `real_commit`,
+`rebase_onto_moved_tip`) and `state_line()`, which reads the symptom out of the
+primer's own injected context. New file `tests/test_rewritten_commit_discharge.py`,
+9 tests.
+
+### Validation
+
+- [x] **V1** F2 drives commit → rebase (hash rewritten) → register: the author's
+      bucket discharges. Evidence:
+      `test_a_rebased_commit_discharges_when_its_finding_is_registered`, RED on
+      the unmodified tree with `assert {'agent-a': 1} == {'agent-a': None}` —
+      the charge surviving the registration — and green after. Its own
+      precondition asserts the charge landed first, so a seeding failure cannot
+      read as a discharge.
+- [x] **V2** The status-line total returns to zero across a three-actor round
+      where two rebased. Evidence: `TestTheStatusLineReturnsToZero`, read out of
+      `primer.py`'s injected context. Before: three charges, and after
+      registering all three the line still read
+      `Protocol: fix_loop | component 0/13 | 2 pending commits | pattern_check due`
+      — the orchestrator's un-rewritten commit discharged by hash and the two
+      rebased ones stranded, which is the unit's predicted drift, measured.
+      After: no `pending commits` segment. The paired precondition test asserts
+      `3 pending commits` first, so "no pending commits" cannot pass by the
+      primer having said nothing.
+- [x] **V3** A genuinely unregistered second commit still blocks. Evidence: two
+      tests, because the deny direction has two shapes.
+      `test_a_commit_naming_no_registered_finding_stays_charged` — a real,
+      really-rebased commit naming `BH-999` is not discharged by a resolution
+      for `BH-101`; green before, during both V4 mutations, and after.
+      `test_a_second_commit_for_an_unresolved_finding_stays_charged` — one actor,
+      two commits, one rebase, one registration: exactly one charge remains.
+- [x] **V4 · non-vacuity** Two mutations, because one only proves the arm fires.
+      **Mutation 1 — the arm removed** (`rewritten=[]`, i.e. hash-only, the
+      pre-fix rule): V1 red, both V2 tests behave as before the fix (`2 pending
+      commits`), and the deny-direction V3 stays **green**, which is the plan's
+      own reading. **Mutation 2 — the arm widened to per-actor**
+      (`rewritten.extend(commits)`): every other test in the file stays green and
+      `test_a_second_commit_for_an_unresolved_finding_stays_charged` alone goes
+      red — so the deny direction is pinned by a test that a too-wide fix cannot
+      satisfy, not merely by one a too-narrow fix fails.
+      Controls green throughout: `test_unregistered_commit_actor.py`,
+      `test_hardening_batch.py`, `test_per_actor_cache_writes.py`,
+      `test_enforcement_config.py` — 118 passed.
+
+### One thing a later session will otherwise re-derive
+
+**Editing these hooks silently disables enforcement until
+`scripts/hash-trusted-callers.sh` reruns**, and the failure does not look like
+authentication. The first run after the code change had *nothing* charged and an
+**empty** state line — because `freshen()` drives `protocol_tracker.py` too, so
+the refused write meant the cache was never created and the primer had nothing
+to print. It reads as "the fix broke the charge", not as "the daemon refused the
+caller". Only `real_daemon` tests see it at all.
 
 ---
 

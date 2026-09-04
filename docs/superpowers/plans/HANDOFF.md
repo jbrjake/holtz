@@ -28,14 +28,36 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**14 of 32 units · 19 of 51 items · 32 items across 18 units remain.**
+**15 of 32 units · 20 of 51 items · 31 items across 17 units remain.**
 W13 is `WIP`, not done: it closed item 37 and left item 17 open, so it moves
 the item count and not the unit count.
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
-W12 (34, 28) · W11 (42) · W14 (5, 10). Commits are in `git log`; do not
-re-summarise them here.
+W12 (34, 28) · W11 (42) · W14 (5, 10) · W31 (50). Commits are in `git log`; do
+not re-summarise them here.
+
+**W31 landed 2026-09-04** — `c12469f`, all four validations driven. **P2 is now
+finished** except W13's item 17 (open by ruling) and W32's step 3 (a question
+for Jon). The board is P3 (W15–W21) and P4.
+
+Two things from it a later session will otherwise re-derive:
+
+- **The discharge now has two arms and they are not interchangeable.** A hash
+  the ledger stamped, and — new — a charge whose own commit message names a
+  finding the ledger resolved. The second exists because `phase-fix-loop.md`
+  rebases between the two moments the hash is read, so subagents 2 and 3 strand
+  a charge every round. Anything that widens the second arm to "this actor
+  rebased, clear the bucket" is caught by
+  `test_a_second_commit_for_an_unresolved_finding_stays_charged` and by nothing
+  else in the file.
+- **The match inherits `fix_commit`'s gate's looseness, deliberately** — the
+  gate is `git log -1 --format=%B | grep -q '{{item_id}}'`, a substring, so a
+  message that *mentions* a resolved finding it is not fixing discharges. Two
+  commits naming the same finding both discharge on one registration; that is
+  judged correct (the finding's fix is registered) but it is a judgement and
+  the commit message says so. Across two actors nothing has decided it and no
+  test pins it.
 
 **W11 landed 2026-09-04** — `0605ed2` (the pin move to 0.27.0) and `3697e31`
 (the unit). Read `3697e31`'s message before building on it: it names three
@@ -74,15 +96,16 @@ carrying the number forward:
 
 **Nothing is pushed. CI has never run on any of it.** Do not claim it has.
 
-**The full suite was run locally on 2026-09-04 at `990629a`** — `pytest --cov …
---cov-fail-under=80`, observed **exit 0**, **2893 passed, 8 skipped**, zero
-`FAILED`/`ERROR` lines, coverage **89.31%**, 21m51s. Read from the run's own
-output, not from the wrapper's exit code.
+**The full suite was run locally on 2026-09-04 at W31's tree** — `pytest --cov …
+--cov-fail-under=80`, observed **exit 0**, **2921 collected, 8 skipped, zero
+`FAILED`/`ERROR`**, coverage **89.30%**. Read from the run's own output, not
+from the wrapper's exit code — and note this repo's `-q` + coverage combination
+prints **no `N passed` summary line at all**, so the reading is: every progress
+mark is `.` or `s`, and `grep -cE "^(FAILED|ERROR)"` is 0.
 
-**It covers everything up to `990629a` and NOT `7d69854` (W14),** which landed
-after it. W14 has the fast subset, ruff, mypy, the contract gate,
-`enforcement_lint` and `enforcement_contract --check` observed green, plus its
-own 26-test file — but no full-suite run has covered it.
+**It covers everything up to and including `7d69854` (W14) and W31's working
+tree**, which is what was committed as `c12469f`. The earlier gap — a full run
+that predated W14 — is closed.
 
 It is *not* CI: CI runs on ubuntu, and the seccomp debt below is a thing no
 local run touches. **Note also that the load-flaky hook family did not fail in
@@ -243,14 +266,15 @@ healthy path's timing.
 
 ## Do this next
 
-### 1. ⭐ W31 (item 50), then P3 — W15 (30) onward.
+### 1. ⭐ P3 — W15 (item 30) onward.
 
-P2 is finished. W10, W11, W12 and W14 are `DONE`; W13 is `WIP` with item 37
+P2 is finished. W10, W11, W12, W14 and W31 are `DONE`; W13 is `WIP` with item 37
 closed and item 17 open **by ruling** (above) — that is decided, not blocking.
 
-**W31 (item 50) is the only P2 unit left**, and it depends on W08, which is
-done. After it the board is P3 (W15-W21), P4, and the two `WIP` stragglers
-(W13's item 17, W32's step 3 — the latter still a question for Jon).
+**W15 (item 30) is next**, and nothing blocks it. Then W16 (18) → W17 (22),
+W18 (36, 33), W19 (40, 47), W20 (41, 38), W21 (9). After P3: P4 (W23–W30) and
+the two `WIP` stragglers (W13's item 17, W32's step 3 — the latter still a
+question for Jon).
 
 **Before touching a gate or a query, read what W14 just established:**
 
@@ -299,7 +323,13 @@ difference was measurable in one command against the binary.
   staging — one bad path makes the whole `git add` stage nothing.
 - **Editing a daemon-calling hook silently disables enforcement** until
   `bash scripts/hash-trusted-callers.sh` reruns. Only `real_daemon` tests catch
-  it.
+  it. **And it does not present as an authentication failure.** Measured on
+  W31: the first run after the code change had *nothing* charged and an
+  **empty** state line, because `two_actors.freshen()` drives
+  `protocol_tracker.py` too — so the refused write meant the cache was never
+  created and the primer had nothing to print. It reads exactly like "the change
+  broke the charge". Before debugging a real_daemon test that suddenly sees no
+  state, rerun the manifest.
 - **`git` prints two `[dev …]` hashes and one is orphaned** (post-commit
   amends). Confirm with `git merge-base --is-ancestor`, never `cat-file`.
   **Which one is orphaned is not fixed.** Three occurrences, three answers: on
