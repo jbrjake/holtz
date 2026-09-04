@@ -28,15 +28,17 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**12 of 32 units · 15 of 51 items · 36 items across 20 units remain.**
+**13 of 32 units · 16 of 51 items · 35 items across 19 units remain.**
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
-W12 (34, 28). Commits are in `git log`; do not re-summarise them here.
+W12 (34, 28) · W11 (42). Commits are in `git log`; do not re-summarise them here.
 
-**W11 (item 42) is UNBLOCKED and is the first thing to do — see "Do this
-next".** `sahjhan#49` shipped in **v0.27.0** (2026-09-03/04). Both halves of
-the ask landed. The pin is still at 0.26.0, so **moving it is step 0 of W11**.
+**W11 landed 2026-09-04** — `0605ed2` (the pin move to 0.27.0) and `3697e31`
+(the unit). Read `3697e31`'s message before building on it: it names three
+things W11 does **not** close, and the first is load-bearing —
+**an actor racing itself is still exposed on the merge paths**, deliberately,
+and `test_a_merge_is_not_made_conditional` pins that it is deliberate.
 
 **Two corrections to the line this replaced** (*"8 of 30 units · 7 of 49
 items"*), both made 2026-09-01 after counting the dashboard rather than
@@ -50,9 +52,9 @@ carrying the number forward:
   them.
 - **W32 was listed as done and is `WIP`.** Its step 3 is open and is
   [a question for Jon](2026-08-27-release-worklist.md) (*"Open for Jon"*, near
-  the end of W32): with #47 shipped and the pin at 0.26.0, does the
-  hand-vendored-old-binary path still want a diagnostic? The unit recommends
-  **no** but records it as *not ruled*, so it is not this session's to close.
+  the end of W32): with #47 shipped, does the hand-vendored-old-binary path
+  still want a diagnostic? The unit recommends **no** but records it as *not
+  ruled*, so it is not this session's to close.
 
 **Nothing is pushed. CI has never run on any of it.** Do not claim it has.
 
@@ -61,11 +63,18 @@ carrying the number forward:
 That covers everything on the branch, not just this session's three commits.
 It is *not* CI: CI runs on ubuntu, and the seccomp debt below is a thing no
 local run touches.
+**It predates `0605ed2` and `3697e31`.** Those two have the fast subset
+(`-m "not slow and not machine_specific"`, exit 0, no `FAILED` lines), ruff,
+mypy and the contract gate observed green, and the `real_daemon` suites run
+rather than skipped — but **no full-suite run has covered them.**
 
 ### Open for Jon — two, both raised, neither guessed at
 
 - **W32 step 3** (above): does the hand-vendored-old-binary path still want a
-  diagnostic now the pin is 0.26.0? Unit recommends no; not ruled.
+  diagnostic? Unit recommends no; not ruled. **Its premise moved on
+  2026-09-04** — the pin is 0.27.0, not 0.26.0. That changes nothing about the
+  question, which is about the path's existence and not about a version, so it
+  is recorded here rather than answered.
 - **W06's V8 — a sahjhan question.** `sahjhan event finding --field
   perspective=not-a-lens` exits 0 and the row lands with that value; measured
   on the pinned engine, not inferred. `events.toml` gives `perspective` no
@@ -85,6 +94,16 @@ local run touches.
   `@anthropic-ai/sandbox-runtime` one. W22's ruling makes standing up that
   session a prerequisite of the **P1 functional test** — raise it when P1 is
   `DONE`, and do not let the green suite read as having covered it.
+
+- **W11 / item 42 — nothing has driven `enforcement_merge` against a real
+  daemon.** The interleave tests run against `MockEnforcementDaemon`, whose
+  merge and version rules are a port of `sahjhan/src/daemon/enforcement.rs`
+  pinned case-by-case by `TestTheMockMergesLikeTheEngine`. That is not
+  fastidiousness — it is forced: the daemon authenticates callers by content
+  hash, so a test process is refused (`auth_failed`), and the only authenticated
+  route is a hook subprocess whose read and write are atomic end to end, leaving
+  no window to interleave into. If a functional session ever stands up (see the
+  seccomp debt below), driving one real per-actor merge belongs in it.
 
 - ~~**W06 / item 20 — V4's second half.**~~ **Discharged by W07.** The gate is
   lens-scoped now, and `test_the_gate_moves_with_the_lens_it_is_asked_about`
@@ -162,81 +181,31 @@ local run touches.
 
 ## Do this next
 
-### 1. ⭐ W11 (item 42) — start here. Unblocked by sahjhan 0.27.0.
+### 1. ⭐ W13 (items 37, 17) — start here, then W14 (5, 10).
 
-**Step 0, before any of W11's own steps: move the pin.** It is at 0.26.0 and
-`check_sahjhan_pin.py` currently passes *at that version*, so a green pin check
-is not evidence you are on 0.27.0.
+P2's remainder. W10, W11 and W12 are `DONE`; neither W13 nor W14 depended on
+W11, so nothing about them changed while it was blocked.
 
-```bash
-bash scripts/vendor-sahjhan.sh 0.27.0
-python3 scripts/update_sahjhan_pin.py 0.27.0     # this is what actually governs
-python3 scripts/check_sahjhan_pin.py             # must exit 0
-```
+**W11's two commits left things worth knowing before touching the tracker or
+the cache helpers:**
 
-`_resolve.SAHJHAN_VERSION` is the pin that decides at runtime; vendoring alone
-leaves the resolver on the old version and the next hook invocation silently
-re-downloads it *and rewrites the marker back*. `update_sahjhan_pin.py` exists
-to close that by construction — use it, do not hand-edit `_resolve.py`. This
-also lights up **W11's V5**, which was unreachable while step 2 was theoretical.
-
-**What 0.27.0 gives you.** Read `gh issue view 49 --repo jbrjake/sahjhan` for
-the full writeup; these are the facts checked against the source at
-`src/daemon/enforcement.rs` and `src/daemon/mod.rs`, not read off the summary:
-
-- **`enforcement_merge` is a NEW op. `enforcement_update` is unchanged** —
-  still `PatchMode::TopLevel => state.extend(patch_obj)`, byte for byte what
-  0.26.0 did. So this is not a behaviour change to absorb; it is a second op to
-  pick per call site. `update_cache` stays and is still right wherever the
-  caller owns the whole key. Add `merge_cache` beside it; do not reroute
-  everything.
-- **RFC 7386 semantics**, and the two edges that will bite:
-  - **`null` deletes, at any depth.** That is the exact spelling for
-    `stall_cleared`. (Holtz's readers already treat `0` and `[]` as equivalent
-    to absent — `stall_count` is `.get(actor, 0)`, `pending_commits` filters
-    empty lists — so a sentinel works too. `null` is the precise one.)
-  - **Arrays REPLACE wholesale; they are not merged element-wise.**
-    `unregistered_commits` values are lists, so a merge naming one actor sends
-    *that actor's whole list*. It is a per-actor write, **not** an append. An
-    actor racing itself therefore still needs `expect_version` — the merge only
-    buys you safety from *siblings*.
-- **`expect_version` is optional on all three mutations**, and the compare runs
-  inside the same `vault.lock()` block that stores. That is why this is not the
-  client-side compare-and-swap W11's step 2 forbids: the compare is on the
-  daemon's side of the lock. A loser gets `version_conflict` with the current
-  version attached and re-reads and retries; nothing is clobbered.
-- **`enforcement_read` now returns `version` beside `data`.**
-  `read_cache_with_boundary` has to surface it, or no caller can pass
-  `expect_version`.
-- **The token hashes the blob as stored, not the bytes `enforcement_read`
-  serves** (which overlay `state` from the ledger, #57). So **a transition does
-  not invalidate your token — only a write does.** Do not build a retry loop
-  that assumes otherwise.
-
-**The four write sites, all in `protocol_tracker.py`:**
-
-| line | today | becomes |
-|---|---|---|
-| `:347` / `:349` | `update_cache({"stall": <whole map>})` | `merge_cache({"stall": {actor: n}})` |
-| `:322` | `update_cache` with both whole maps | one merge naming only this actor's two entries |
-| `:287` | full `write_cache(cache)` from a snapshot taken **before two 5 s subprocesses** | carry `expect_version` from the read that produced the snapshot; retry on `version_conflict` |
-
-`_discharge_registered_commits` → `pending_commits_discharged` is the same
-shape as `:287`: genuinely cross-actor, so it wants `expect_version` and a
-retry rather than a per-actor merge.
-
-**`protocol_tracker.py` is manifest-pinned** (`trusted-callers.toml:24`), so
-`bash scripts/hash-trusted-callers.sh` must rerun or enforcement silently fails
-open. Only the `real_daemon` tests catch that, and this session hit exactly
-that trap on W12 — five courier edits, and the failure surfaced as
-`caller not authenticated` in unrelated integration tests.
-
-**Do not write the flattening dodge.** `stall::<actor>` as top-level keys was
-considered and rejected before the ask went upstream; the unit records why.
-
-### 2. Then W13 (37, 17), then W14 (5, 10).
-
-P2's remainder. W10 and W12 are `DONE`. Neither W13 nor W14 depends on W11.
+- **`_protocol_cache` now has three write ops, not two, and they are not
+  interchangeable.** `update_cache` replaces a top-level key outright and is
+  still right wherever the caller owns the whole key. `merge_cache` is RFC 7386
+  and is what a *per-actor* write uses. `write_cache` takes `expect_version` for
+  a change that genuinely spans the blob. Picking by habit is how item 42 got
+  written in the first place.
+- **`read_cache_with_boundary` returns a 3-tuple** — `(cache, boundary,
+  version)`. The four gate call sites unpack and discard the third.
+- **Two RFC 7386 edges that are easy to get wrong and are already handled:**
+  `null` deletes at any depth (that is how a clear is spelled), and arrays
+  replace wholesale, so a merge naming an actor's commit list sends the *whole*
+  list — a per-actor write, never an append.
+- **`_actor_patch` exists for the pre-keying shape.** A bare int under `stall`
+  or a flat list under `unregistered_commits` is what an older holtz wrote;
+  RFC 7386 replaces a scalar with a patch object rather than merging into it,
+  which would drop the migration `stall_counts`/`pending_commits` perform. Any
+  new per-actor key needs the same treatment.
 
 **W12 left a shared module worth knowing about before touching a courier:**
 `enforcement/scripts/_recorded_command.py`. A recognizer's `None` no longer
@@ -250,7 +219,7 @@ the engine actually enforces before picking the source. `perspective` and
 `reachability` needed different sources for the same kind of check, and the
 difference was measurable in one command against the binary.
 
-### 2. W22 (item 27) is `DONE` in code only — see Carried debts above.
+### 2. W22 (item 27) and W11 (item 42) are `DONE` with debts — see Carried debts above.
 
 ---
 
@@ -329,10 +298,11 @@ difference was measurable in one command against the binary.
 
 ## Environment
 
-sahjhan pinned at **v0.26.0** (`_resolve.SAHJHAN_VERSION` governs; the marker
-and binary self-heal to it). `check_sahjhan_pin.py` exit 0 — **at 0.26.0**,
-which is the point: a passing pin check says the three places agree, not that
-they agree on the version you want. **v0.27.0 is released and W11 needs it**;
-moving the pin is step 0 of "Do this next".
+sahjhan pinned at **v0.27.0** since `0605ed2` (`_resolve.SAHJHAN_VERSION`
+governs; the marker and binary self-heal to it). `check_sahjhan_pin.py` exit 0,
+`bin/sahjhan --version` → `sahjhan 0.27.0`, and all four vendored binaries match
+the release's published `SHA256SUMS`. Keep in mind what a green pin check does
+and does not say: it says the three places agree, not that they agree on the
+version you want — check the binary itself.
 `scripts/install-hooks.sh` defaults to dev mode — the plugin's enforcement hooks
 are **not** wired into this repo's own session, deliberately.

@@ -59,7 +59,7 @@ imprecision (`CLAUDE.md`).
 | W32 | **51** *(new)* | C | `WIP` — pin moved to 0.25.0, V1–V4 driven; step 3 open for Jon | — *(fixed upstream: sahjhan#47)* |
 | W09 | 25, 26 | B | `DONE` — W06's mechanism widened, not duplicated | — |
 | W10 | 35 | B | `DONE` — wider than the item said: one actor is enough | W01 |
-| W11 | 42 | B | `TODO` — **next**; unblocked by sahjhan 0.27.0 | W01, ~~sahjhan#49~~ shipped |
+| W11 | 42 | B | `DONE` @ `3697e31` — V6 records an exposure it does not close | W01, ~~sahjhan#49~~ shipped |
 | W12 | 34, 28 | B | `DONE` — one shared refusal, four scripts | — |
 | W13 | 37, 17 | B | `TODO` | — |
 | W14 | 5, 10 | B | `TODO` | — |
@@ -2411,9 +2411,10 @@ at, so the recovery is one command and already taught.
 
 ## W11 — Item 42: per-actor cache state is read-modify-written over the whole map
 
-**Status:** `TODO` — **unblocked, and next**  ·  **Tier:** B
+**Status:** `DONE`  ·  **Tier:** B
 **Depends on:** W01 (F2) — `DONE`; ~~sahjhan#49~~ — **shipped in v0.27.0**
-**Commit:** `fix(enforcement): write the actor's own bucket, not the whole map`
+**Commit:** `3697e31` — `fix(enforcement): write the actor's own bucket, not the whole map`
+(step 0 landed separately as `0605ed2`, the pin move)
 
 ### ✅ Step 2 fired, went upstream, and came back. Read this before starting.
 
@@ -2484,7 +2485,7 @@ false of the write. No compare-and-swap and no concurrency test exist.
 
 ### Plan
 
-- [ ] **0.** *(new, and first)* Move the pin to **0.27.0** — the op this unit
+- [x] **0.** *(new, and first)* Move the pin to **0.27.0** — the op this unit
       needs does not exist at 0.26.0, and `check_sahjhan_pin.py` passes *at
       0.26.0*, so a green pin check is not evidence you are on the right version:
       ```bash
@@ -2494,46 +2495,119 @@ false of the write. No compare-and-swap and no concurrency test exist.
       ```
       Never hand-edit `_resolve.SAHJHAN_VERSION`: vendoring alone leaves the
       resolver on the old version and the next hook silently re-downloads it and
-      rewrites the marker back
-- [ ] **1.** Make the write per-actor: send the delta for one actor and let the
+      rewrites the marker back.
+      **Done** in `0605ed2`. All four vendored binaries verified against the
+      release's published `SHA256SUMS` asset, not just against each other
+- [x] **1.** Make the write per-actor: send the delta for one actor and let the
       daemon merge, instead of computing the full map client-side and overwriting.
       **`enforcement_merge` is now the op**; add `merge_cache` beside
-      `update_cache` rather than rerouting every call site through one of them
+      `update_cache` rather than rerouting every call site through one of them.
+      **Done.** `merge_cache` added beside `update_cache`, which is unchanged
+      and still used wherever the caller owns the whole key. The two stall
+      sites and the commit-registration site merge; `_apply_sahjhan_cmd` keeps
+      its whole-blob write and takes `expect_version` instead, because the
+      discharge it performs is cross-actor and no per-actor patch can name the
+      bucket a registered commit turns out to be in.
+      ⚠️ **One thing the plan did not anticipate, handled rather than dropped.**
+      RFC 7386 *replaces* a scalar with an object patch instead of merging into
+      it — so over the **pre-keying shape** (a bare int under `stall`, a flat
+      list under `unregistered_commits`) a per-actor patch would have silently
+      discarded the migration `stall_counts`/`pending_commits` perform, the one
+      whose stated purpose is that an upgrading run is not handed a free reset.
+      `_actor_patch` sends the whole migrated map in exactly that case, which
+      the same replace rule lands identically to the old write. Two tests hold
+      it, green before, during and after the non-vacuity mutation
 - [x] **2.** If the daemon's op cannot express a per-actor merge, **that is a
       sahjhan change** — take it there rather than adding a client-side
       compare-and-swap that would still race. **Fired.** Filed as sahjhan#49,
       ruled upstream by Jon 2026-09-03, shipped in v0.27.0 — both halves, and
       the compare lives inside the daemon's vault lock exactly as this clause
       demands. No holtz-side workaround was written while it was open
-- [ ] **3.** Correct the two docstrings to describe the write, not the return value
+- [x] **3.** Correct the two docstrings to describe the write, not the return value.
+      **Three carried the claim, not two** — `stall_cleared`,
+      `pending_commits_appended` and `pending_commits_cleared` all said "every
+      other actor untouched". All three now state what they return and name the
+      caller-side mechanism that makes it true of the write (`stall_patch` /
+      `pending_commits_patch` + `merge_cache`, or `expect_version` for the
+      cross-actor one). Correcting two and leaving the third asserting a false
+      thing was not a reading of the clause worth taking
 
 ### Validation
 
-- [ ] **V1** Interleave: A reads → B bumps and writes → A writes. **B's bump
-      survives.** Evidence: ___
-- [ ] **V2** Same for all three colliding writers: `stall_bumped`, `stall_cleared`,
-      `pending_commits_appended`. Evidence: ___
+**How the interleave is driven, since it decides what every V below is worth.**
+A hook's read and its write are separate connections with the hook's own work
+in between, and nothing outside the hook can reliably land a sibling's write in
+that window — two racing subprocesses would pass or fail on machine load, which
+is the one shape this board has learned not to build. So
+`MockEnforcementDaemon.after_read` applies the sibling's change *at the moment
+the read is answered*: the same window, decided by the test. The hook under
+test is the real one, run as a subprocess, exactly as Claude Code runs it.
+
+- [x] **V1** Interleave: A reads → B bumps and writes → A writes. **B's bump
+      survives.** Evidence: `test_bump_leaves_a_siblings_bump_alone`. RED
+      against the unmodified tree for the defect's own reason —
+      `assert {'agent-a': 4, 'agent-b': 1, '': 2} == {'agent-a': 4,
+      'agent-b': 9, '': 2}`, i.e. b's bump reverted to what a's snapshot
+      remembered. GREEN after.
+- [x] **V2** Same for all three colliding writers: `stall_bumped`, `stall_cleared`,
+      `pending_commits_appended`. Evidence: four tests, one per mechanism —
+      `test_bump_…` and `test_double_bump_…` (merge), `test_commit_registration_
+      leaves_a_siblings_commit_alone` (merge, array replaced wholesale: RED as
+      `['bbb2222'] != ['bbb2222', 'eee5555']`), `test_commit_registration_
+      clears_only_this_actors_stall` (merge, `null` deletion — asserts the key
+      is **absent**, not zero, since the readers treat those alike), and
+      `test_a_sahjhan_resync_leaves_a_siblings_bump_alone` (whole-blob write +
+      `expect_version`). All five RED first, all GREEN after.
       ⚠️ `stall_cleared` is now a **deletion** (`null` at depth), and
       `pending_commits_appended` writes an **array, which RFC 7386 replaces
       wholesale** — so its merge is per-actor but is not an append. Drive each
       through the mechanism it actually uses; one test shape will not cover all
       three.
-- [ ] **V3** Fixture counts chosen so "buckets" and "commits" differ — a `len()`
-      over the wrong dimension must not pass by coincidence. Evidence: ___
-- [ ] **V4 · non-vacuity** Restore the whole-map write → V1 goes red. Evidence: ___
+- [x] **V3** Fixture counts chosen so "buckets" and "commits" differ — a `len()`
+      over the wrong dimension must not pass by coincidence. Evidence:
+      `SEEDED_COMMITS` is **3 actors, 4 commits**, with `agent-a` holding two.
+      `test_the_seeding_keeps_buckets_and_commits_unequal` asserts the property
+      itself, so a later edit that balanced them fails rather than quietly
+      removing the guard from every other test in the file.
+- [x] **V4 · non-vacuity** Restore the whole-map write → V1 goes red. Evidence:
+      run three ways, each observed.
+      (a) the literal swap named below (`merge_cache` → `update_cache`, same
+      narrow patch) → 5 red;
+      (b) the exact 0.26.0 restoration (whole map, top-level, no
+      `expect_version`) → reproduces the RED run's **7 failures identically**;
+      (c) dropping **only** `expect_version` → reds exactly the 2 tests that
+      turn on it and nothing else, so the merge and the version guard are
+      separately attributable rather than one alibi for the other.
+      The 5 unchanged-behaviour tests stayed green under all three.
       The restoration is now cheap and exact: swap `merge_cache` back to
       `update_cache` at the site under test. `enforcement_update` is unchanged
       in 0.27.0, so that *is* the 0.26.0 behaviour, not an approximation of it.
-- [ ] **V5** If step 2's engine path was taken: re-pin, `check_sahjhan_pin.py` →
-      exit 0. Evidence: ___
+- [x] **V5** If step 2's engine path was taken: re-pin, `check_sahjhan_pin.py` →
+      exit 0. Evidence: `PASS: sahjhan pin consistent (v0.27.0, single source of
+      truth).`, exit 0; `bin/sahjhan --version` → `sahjhan 0.27.0`; all four
+      binaries match the release's published `SHA256SUMS`.
       **Now live** — step 2's engine path *was* taken, so this is a required
       validation rather than a conditional one, and step 0 is what satisfies it.
-- [ ] **V6** *(new — the edge the merge does not cover)* An actor racing
+- [x] **V6** *(new — the edge the merge does not cover)* An actor racing
       **itself** — two of its own writes from one stale snapshot — still loses
       one without `expect_version`, because the merge is per-key and not
       read-modify-write. Assert the `version_conflict` refusal and the retry
       landing, so the unit does not ship believing the merge closed a race it
-      does not. Evidence: ___
+      does not. Evidence:
+      `test_the_conditional_write_is_refused_and_the_retry_lands` asserts the
+      daemon's own log contains `('enforcement_write', 'version_conflict')`
+      followed by an `ok` — **the refusal, not just the outcome**, because a
+      conditional write that is refused and then retried leaves exactly the
+      state an unconditional one would, so the stored value cannot tell
+      "retried" from "clobbered and got lucky". RED as
+      `daemon saw [('enforcement_read','ok'), ('enforcement_write','ok')]`.
+      ⚠️ **This records the exposure; it does not close it.** The two merge
+      paths remain unconditional by design, pinned by
+      `test_a_merge_is_not_made_conditional`: a version compare on a patch
+      naming one actor would refuse writes that could not have collided, since
+      every sibling's write moves the token. So an actor racing itself on a
+      stall bump still lands one value rather than two. **Do not read W11 as
+      having made every write race-free.**
 
 ---
 
