@@ -2748,15 +2748,28 @@ came off.
 
 ## W13 — Items 37 + 17: the primer's silent degrade and the ordering that hides daemon death
 
-**Status:** `WIP` — **item 37 is done; item 17 is not.** Steps 1, 2 and 4 and
-V1/V2/V4 landed in `9555fce`. Step 3 and V3 are open, and not for want of
-running them: the flake **did not reproduce on either arm**, so nothing here
-supports closing item 17. See the box below.  ·  **Tier:** B
+**Status:** `WIP` — **item 37 is done; item 17 is open by ruling.** Steps 1, 2
+and 4 and V1/V2/V4 landed in `9555fce`. Step 3 and V3 stay open, and not for
+want of running them: the flake **did not reproduce on either arm**. Jon ruled
+2026-09-04 that 17 closes only when an occurrence is caught and explained — see
+the box below before proposing anything here.  ·  **Tier:** B
 **Commit:** `9555fce` — `fix(enforcement): check daemon death before status, and say so when degraded`
 
-### ⛔ Open for Jon — item 17 cannot be closed on this evidence
+### ✅ RULED (Jon, 2026-09-04) — item 17 stays open until an occurrence is caught
 
-Step 3 says *"Close item 17 against this unit."* The measurement says no.
+**Item 17 closes when an occurrence is captured with a named exception AND
+explained. Not before, and not on the instrumentation merely being in place.**
+So W13 stays `WIP`, and the board reads 13 of 32 units — this unit moves the
+item count and not the unit count.
+
+The two alternatives were put and declined: closing 17 on the instrumentation
+being present, and folding in the four other collapsed `except` sites now.
+**Do not reopen either as a fresh proposal.** The next session's job is not to
+re-argue this; it is to catch an occurrence. When one appears, the primer's
+notice already names the exception — record the reading, then close.
+
+Step 3 said *"Close item 17 against this unit."* The measurement said no, and
+here is what it was:
 
 **What was measured, 2026-09-04, both arms in one sitting.** 12 full-file runs
 of `tests/test_primer_degrades_loudly.py` against the fixed primer, and 12
@@ -2781,12 +2794,9 @@ answer to the handoff's standing question of which of the two collapsed
 exceptions fires, and it points at machine load rather than at a wedged daemon
 or a wrong binary path.
 
-**The question:** item 17 asked for the flake to stop. The instrumentation that
-would let a future occurrence be diagnosed is now in the primer. Does item 17
-close on that, or does it stay open until an occurrence is caught and
-explained? **Not guessed at** — the four remaining collapsed `except` sites the
-handoff enumerates are a separate, deliberately-untaken step, and lumping them
-in here would be exactly the substitution this board keeps paying for.
+The four remaining collapsed `except` sites the handoff enumerates stay a
+separate, deliberately-untaken step. Lumping them in here would be exactly the
+substitution this board keeps paying for.
 
 ### Defect · `primer.py`
 

@@ -64,32 +64,36 @@ carrying the number forward:
 
 **Nothing is pushed. CI has never run on any of it.** Do not claim it has.
 
-**The full suite was run locally on 2026-09-03 at `7231035`** — `pytest --cov …
---cov-fail-under=80`, observed **exit 0**, no `FAILED` lines, coverage 89.35%.
-That covers everything on the branch, not just this session's three commits.
+**The full suite was run locally on 2026-09-04 at `990629a`** — `pytest --cov …
+--cov-fail-under=80`, observed **exit 0**, **2893 passed, 8 skipped**, zero
+`FAILED`/`ERROR` lines, coverage **89.31%**, 21m51s. That covers the whole
+branch, including all five of that day's commits. Read from the run's own
+output, not from the wrapper's exit code.
+
 It is *not* CI: CI runs on ubuntu, and the seccomp debt below is a thing no
-local run touches.
-**It predates `0605ed2` and `3697e31`.** Those two have the fast subset
-(`-m "not slow and not machine_specific"`, exit 0, no `FAILED` lines), ruff,
-mypy and the contract gate observed green, and the `real_daemon` suites run
-rather than skipped — but **no full-suite run has covered them.**
+local run touches. **Note also that the load-flaky hook family did not fail in
+this run.** That is consistent with every previous quiet-machine reading and is
+**not** evidence about its cause — see the flake section below before drawing
+anything from it.
 
-### Open for Jon — three, all raised, none guessed at
+### ✅ RULED 2026-09-04 — W13's item 17 stays open
 
-- **W13 step 3 — can item 17 close on instrumentation alone?** The step says
-  "close item 17 against this unit"; the measurement does not support it.
-  12 full-file runs per arm in one sitting gave **0/12 failures on the fixed
-  primer and 0/12 on the unmodified control**. The 1-in-4 rate seen earlier was
-  the new test file's own fixture orphaning `sleep` children (its mock ran
-  `sleep`, a child of the shell `subprocess.run` kills on timeout); fixed with
-  `exec sleep`, and the rate went to zero on **both** arms. There is also no
-  mechanism — the delta does not touch the healthy path's timing. What it does
-  change is that a degraded run now names its cause, and one occurrence caught
-  before the fixture fix was named **`TimeoutExpired`**, which is the first
-  answer to the "which of the two exceptions fires" question below. So: does 17
-  close on the instrumentation being in place, or stay open until an occurrence
-  is caught and explained? The four other collapsed `except` sites are a
-  separate step and were deliberately not folded in.
+**Jon: item 17 closes when an occurrence is captured with a named exception AND
+explained. Not on the instrumentation merely being in place.** Two alternatives
+were put and declined — closing on instrumentation, and folding in the four
+other collapsed `except` sites now. **Do not reopen either.** W13 therefore
+stays `WIP`, and 17 is not this board's to tick until a real occurrence is
+read. The primer's notice already names the exception, so catching one is now
+cheap; the work is catching it, not re-arguing it.
+
+Why the evidence pointed this way: 12 full-file runs per arm in one sitting
+gave **0/12 failures on the fixed primer and 0/12 on the unmodified control**.
+The 1-in-4 rate seen earlier was the new test file's own fixture orphaning
+`sleep` children; fixed with `exec sleep`, and the rate went to zero on
+**both** arms. There is also no mechanism — the delta does not touch the
+healthy path's timing.
+
+### Open for Jon — two, both raised, neither guessed at
 
 - **W32 step 3** (above): does the hand-vendored-old-binary path still want a
   diagnostic? Unit recommends no; not ruled. **Its premise moved on
