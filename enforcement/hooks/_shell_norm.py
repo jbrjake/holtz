@@ -23,6 +23,12 @@ command the hooks already parse is returned byte-identical.
 Owned in one place on purpose. Two hooks answering "is this sahjhan?" from
 two parsers is PAT-001 (dual-parser-divergence), and this is precisely the
 question where a disagreement between them is a hole rather than a nuisance.
+
+The same ownership covers *segmentation* — deciding where one command ends
+and the next begins. Eight sites used to answer that themselves, in two
+different spellings of one regex, and every one of them omitted a single
+``&``. ``A & B`` is two commands, so a guard reading the first token of the
+whole line inspected ``A`` and let ``B`` through unread.
 """
 from __future__ import annotations
 
@@ -36,8 +42,16 @@ _ASSIGN_RE = re.compile(
 
 # ``eval "…"`` / ``eval '…'`` / ``bash -c "…"``. The payload is the command
 # that actually runs, so the wrapper is replaced by its own argument.
+#
+# The lookbehind rejects a preceding ``-``, so an interpreter *flag* that
+# ends in the same letters is not read as the shell builtin. ``\b`` matched
+# inside ``node --eval "…"``, which rewrote it to ``node --require(…)`` —
+# the flag eaten, the payload unquoted. That is not academic: the
+# protected-path guard identifies an inline interpreter write by finding
+# ``--eval`` on the line, so the rewrite turned a block into an allow.
+# A word character is rejected for the same reason ``\b`` did.
 _WRAPPER_RE = re.compile(
-    r"""\b(?:eval|(?:ba|z|k|d?a)?sh\s+-c)\s+("(?:[^"]*)"|'(?:[^']*)')""",
+    r"""(?<![-\w])(?:eval|(?:ba|z|k|d?a)?sh\s+-c)\s+("(?:[^"]*)"|'(?:[^']*)')""",
 )
 
 _VAR_RE = re.compile(r"\$\{(\w+)\}|\$(\w+)")
@@ -87,3 +101,47 @@ def resolve_indirection(cmd: str) -> str:
             break
         resolved = nxt
     return resolved
+
+
+# Operators that end one command and begin the next. ``&&`` and ``||`` are
+# listed before the single-character class so the two-character operators
+# still win the alternation. ``\n`` is here because Claude Code sends
+# newline-separated commands in a single Bash call.
+_SEGMENT_RE = re.compile(r"\s*(?:&&|\|\||[;&|\n])\s*")
+
+# The ``&`` characters that belong to a *redirection* rather than separating
+# two commands: fd duplication and closing (``2>&1``, ``>&2``, ``2>&-``) on
+# one side, bash's combined-stream redirect (``&>file``, ``&>>file``) on the
+# other. Both are one token to the shell, and both appear in commands the
+# skill files teach, so splitting inside them would turn ``sahjhan status
+# 2>&1`` into ``sahjhan status 2>`` and ``1``.
+#
+# They are *masked* rather than stripped: a caller that scans a segment for
+# redirect targets (``_check_bash_write``) must still see the bytes that were
+# written. The mask is NUL, which cannot occur in a JSON tool-input string.
+_REDIRECT_AMP_RE = re.compile(r"\d*>>?&|&>>?")
+_AMP_MASK = "\x00"
+
+
+def _mask_redirect_amps(cmd: str) -> str:
+    return _REDIRECT_AMP_RE.sub(lambda m: m.group(0).replace("&", _AMP_MASK), cmd)
+
+
+def shell_segments(cmd: str, *, resolve: bool = True) -> list[str]:
+    """Split ``cmd`` into the commands the shell would run, in order.
+
+    The one place segmentation is decided. Resolves indirection first, so
+    every caller keys on the command that runs rather than the spelling it
+    was written in, then splits on ``&&``, ``||``, ``;``, ``|``, ``&`` and
+    newline. Empty segments are dropped, which is what makes a *trailing*
+    ``&`` — backgrounding, one command, not two — segment as one command.
+
+    Operators inside quotes are split on, as they always have been here:
+    ``git commit -m "a; b"`` yields two segments. That is the fail-closed
+    direction for the guards (more segments get read, not fewer) and adding
+    ``&`` does not change the class of the imprecision.
+    """
+    if resolve:
+        cmd = resolve_indirection(cmd)
+    parts = _SEGMENT_RE.split(_mask_redirect_amps(cmd))
+    return [s for s in (p.replace(_AMP_MASK, "&").strip() for p in parts) if s]

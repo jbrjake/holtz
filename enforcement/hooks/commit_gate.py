@@ -34,20 +34,19 @@ from _protocol_cache import (  # noqa: E402
     pending_commits_for,
     read_cache_with_boundary,
 )
+from _shell_norm import shell_segments  # noqa: E402
 
 
 def _is_test_cmd(cmd: str) -> bool:
     """Detect test/pytest commands that should always be allowed.
 
-    Checks each segment of chained commands (split on &&, ||, ;, |, newline)
-    so that ``cd /project && pytest`` is recognized.
+    Checks each segment of a chained command so that ``cd /project &&
+    pytest`` is recognized. Segmentation is ``_shell_norm``'s.
     """
-    import re as _re
-    for segment in _re.split(r'&&|\|\||[;|\n]', cmd):
-        seg = segment.strip()
-        if seg.startswith("pytest") or seg.startswith("python -m pytest"):
-            return True
-    return False
+    return any(
+        seg.startswith(("pytest", "python -m pytest"))
+        for seg in shell_segments(cmd)
+    )
 
 
 def main() -> None:

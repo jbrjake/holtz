@@ -16,7 +16,7 @@ from typing import Any, NamedTuple
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _shell_norm import resolve_indirection  # noqa: E402
+from _shell_norm import shell_segments  # noqa: E402
 
 _ENFORCEMENT_FRESHNESS_MINUTES = 30
 
@@ -359,29 +359,24 @@ def parse_status_text(text: str) -> dict[str, Any]:
 
 
 def _split_shell_segments(cmd: str) -> list[str]:
-    """Split a shell command on operators (&&, ||, ;, |) but not redirects.
+    """Split a shell command on operators (&&, ||, ;, |, &) but not redirects.
 
-    Strips shell redirections like 2>&1, >&2, 2>/dev/null before splitting,
-    so they don't produce spurious segments. Also strips leading export
-    statements and variable assignments from each segment.
+    Segmentation and indirection are ``_shell_norm``'s — this used to hold
+    its own ``re.split``, with a comment that argued for the hole and for
+    single ownership in the same breath ("avoid splitting on single &" …
+    "Must match _sahjhan_bootstrap.py's split pattern to avoid divergence").
 
-    Same-line variables and ``eval``/``sh -c`` wrappers are resolved first,
-    so every predicate built on these segments sees the command that runs
-    rather than the spelling it was written in.
+    What stays here is what only this caller wants: the redirect strip and
+    the leading export/assignment strip, applied per segment.
     """
-    cmd = resolve_indirection(cmd)
-    # Strip shell redirections: 2>&1, >&2, 2>/dev/null, etc.
-    cleaned = re.sub(r'\d*>&?\d+', '', cmd)
-    cleaned = re.sub(r'\d*>/dev/null', '', cleaned)
-    # Split on actual shell operators: &&, ||, ;, |, newline
-    # Use specific multi-char operators first to avoid splitting on single &
-    # Include \n: Claude Code can send newline-separated commands in a single
-    # Bash call. Without \n, commands like "echo\ngit commit" bypass detection.
-    # Must match _sahjhan_bootstrap.py's split pattern to avoid divergence.
-    segments = re.split(r'&&|\|\||[;|\n]', cleaned)
     result = []
-    for seg in segments:
-        seg = seg.strip()
+    for seg in shell_segments(cmd):
+        # Strip shell redirections: 2>&1, >&2, 2>/dev/null, etc. The shared
+        # splitter keeps them (a redirect target is evidence to another
+        # caller); the predicates built on these segments only want the
+        # command, so they come off here.
+        seg = re.sub(r'\d*>&?\d+', '', seg)
+        seg = re.sub(r'\d*>/dev/null', '', seg).strip()
         if not seg:
             continue
         # Strip all leading env var assignments (FOO=bar, export X=1, etc.)

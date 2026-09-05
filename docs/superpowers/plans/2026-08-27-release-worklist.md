@@ -3007,8 +3007,27 @@ will.
 
 ## W15 — Item 30: a single `&`, and `eval`/`$VAR` indirection, bypass every command-keyed guard
 
-**Status:** `TODO`  ·  **Tier:** C  ·  **PROVEN**
+**Status:** `DONE`  ·  **Tier:** C  ·  **PROVEN**
 **Commit:** `fix(enforcement): one segmentation owner, splitting on & and on the resolved command`
+
+> **Landed 2026-09-04.** All eight sites converted; V1–V7 driven. The eight
+> were re-enumerated against the current tree first — the line numbers in the
+> table below are from `48c72fd` and had all drifted, but the **count, the
+> files and the two literals were exactly as recorded**.
+>
+> **One thing the unit did not predict, found by its own regression run.**
+> Step 4 puts `resolve_indirection` on `_check_bash_write`, and doing so
+> turned an existing block into an **allow**:
+> `test_blocks_node_eval_write_to_enforcement` went red. `_WRAPPER_RE`
+> matched `eval` *inside node's `--eval` flag* — `\b` sits between `-` and
+> `e` — so `node --eval "…writeFileSync('enforcement/…')"` was rewritten to
+> `node --require(…)`, deleting the very flag `_INTERP_INLINE_FLAGS` looks
+> for to recognise an inline interpreter write. Fixed at the root, in
+> `_shell_norm`: the wrapper match now takes `(?<![-\w])`, so a flag ending
+> in the same letters is not read as the shell builtin. This was a *latent*
+> defect — `_bash_references_blocked_sahjhan` and `_split_shell_segments`
+> already resolved, so both were already mangling `node --eval`; it took
+> putting the resolver on the protected-path guard to make it cost a block.
 
 ### Defect · eight call sites, not four
 
@@ -3084,63 +3103,116 @@ avoid divergence."*
 
 ### Plan
 
-- [ ] **1.** **One owner for segmentation**, in `_shell_norm.py` beside
+- [x] **1.** **One owner for segmentation**, in `_shell_norm.py` beside
       `resolve_indirection` — the module whose docstring already claims this
       ownership ("Two hooks answering 'is this sahjhan?' from two parsers is
-      PAT-001")
-- [ ] **2.** Split on `&` too: `\s*(?:&&|\|\||[;&|\n])\s*`. `&&` precedes `&` in
+      PAT-001"). `shell_segments(cmd, *, resolve=True)`
+- [x] **2.** Split on `&` too: `\s*(?:&&|\|\||[;&|\n])\s*`. `&&` precedes `&` in
       the alternation, so the two-character operator still wins
-- [ ] **3.** ⚠️ **Hazard not named in the review, and it is load-bearing.** Adding
+- [x] **3.** ⚠️ **Hazard not named in the review, and it is load-bearing.** Adding
       `&` to the class breaks `2>&1`, which would split into `foo 2>` and `1`.
-      `_protocol_cache.py:285-286` already strips fd-duplication and `/dev/null`
-      redirects **before** splitting; the shared splitter must do the strip
-      **first**, and the other three call sites must adopt that order
-- [ ] **3b.** ⚠️ **Convert all eight sites, not the four the review named.** The
-      table above is the checklist. `_daemon_lifecycle.py:67` and
-      `protocol_tracker.py:67` are guards and go first; `protocol_tracker.py:52`
-      and `_sahjhan_bootstrap.py:1128` lose signal rather than open a hole
-- [ ] **4.** Every guard parses `resolve_indirection(cmd)` — including
-      `_check_bash_write`, which today parses the raw string
-- [ ] **5.** Rebuild the command-keyed branches to scan the **whole segment**, the
+      **Solved by masking, not by stripping**, and the difference matters:
+      `_check_bash_write` scans each segment for redirect *targets*, so a
+      segment handed back with its redirect removed would hide a real write.
+      The redirect-operator `&`s (`\d*>>?&` and `&>>?` — covering `2>&1`,
+      `>&2`, `2>&-`, `&>f`, `&>>f`) are replaced with NUL, the split runs, and
+      the NULs are restored, so every segment keeps the bytes it was written
+      with. `_protocol_cache` keeps its own redirect strip, now applied
+      per-segment; the order is provably equivalent since stripping can only
+      remove text and never manufacture an operator
+- [x] **3b.** ⚠️ **Convert all eight sites, not the four the review named.**
+      All eight converted. Re-enumerated at the current tree (line numbers had
+      drifted from `48c72fd`; the count, files and both literals had not):
+      `_daemon_lifecycle.py:68`, `protocol_tracker.py:64` + `:79`,
+      `commit_gate.py:46`, `_protocol_cache.py:381`,
+      `_sahjhan_bootstrap.py:442` + `:702` + `:1162`
+- [x] **4.** Every guard parses `resolve_indirection(cmd)` — including
+      `_check_bash_write`, which resolves **once at the top** so the
+      pre-split interpreter check and the `p in command` scans read the same
+      string the segment loop does. See the `node --eval` note above: this
+      step is what exposed the latent `_WRAPPER_RE` defect
+- [x] **5.** Rebuild the command-keyed branches to scan the **whole segment**, the
       way the surviving redirect/`tee` branches already do
-- [ ] **6.** `bash scripts/hash-trusted-callers.sh`. **The expanded scope adds
-      `protocol_tracker.py`, which _is_ manifest-listed** (verified: 18 entries,
-      `commit_gate.py` and `protocol_tracker.py` among them;
-      `_daemon_lifecycle.py`, `_protocol_cache.py`, `_sahjhan_bootstrap.py` and
-      `_shell_norm.py` are not). Regenerate **before** any `real_daemon` run, or a
-      RED is a stale-hash artifact rather than the thing under test
+- [x] **6.** `bash scripts/hash-trusted-callers.sh` — run; `commit_gate.py`
+      and `protocol_tracker.py` rehashed (2-line diff), and
+      `test_trusted_callers_hashes_match_files` was the first thing to go red
+      without it. **Note for the trust boundary:** the manifest hashes only
+      the script that *directly holds the socket*, so moving segmentation into
+      `_shell_norm.py` puts it outside the manifest — exactly where
+      `_protocol_cache.py` and `_sahjhan_bootstrap.py` already are. The anchor
+      for those library modules is `_check_bash_write`'s own PROTECTED guard
+      on `enforcement/`, which is one of the holes this unit closed
 
 ### Validation
 
-- [ ] **V1** The five driven lines become the regression fixture:
+All seven driven. The regression file is `tests/test_shell_segmentation.py`
+(45 tests); V4 lives in `test_contract_commands.py`. Every ✗→✓ line below was
+**observed on the unmodified tree first**, by a probe over the eight functions,
+before a line of the fix was written.
+
+- [x] **V1** The five driven lines become the regression fixture. Measured
+      before (left) and after (right):
       ```
-      deny   sahjhan reseal --proof X
-      deny   true & sahjhan reseal --proof X                (was: allow)
-      deny   true & sahjhan event quiz_exhausted_resolved …
-      deny   true & rm -rf enforcement/hooks                (was: allow)
+      deny  → deny   sahjhan reseal --proof X                       (baseline)
+      ALLOW → deny   true & sahjhan reseal --proof X
+      deny  → deny   sahjhan event quiz_exhausted_resolved …        (baseline)
+      ALLOW → deny   true & sahjhan event quiz_exhausted_resolved …
+      ALLOW → deny   true & rm -rf enforcement/hooks
       ```
-      Evidence: ___
-- [ ] **V2** `eval "rm -rf enforcement/hooks"` and `T=docs/holtz/.sahjhan; rm -rf $T`
-      are denied. Evidence: ___
-- [ ] **V3** `is_git_commit` sees `true & git commit` — visible to both the gate and
-      `protocol_tracker`. Evidence: ___
-- [ ] **V4** **Add `&` as a separator to the combinatorial matrix in
-      `test_contract_commands.py`.** It carries `&` today only as a trailing
-      suffix, never as a separator — which is exactly why this survived.
-      Evidence: ___
-- [ ] **V5** `foo 2>&1 & bar` splits into two segments; `foo 2>&1` alone stays one.
-      Evidence: ___
-- [ ] **V6** ⚠️ **Grep for the _construct_, not for a literal.** There are **two**
-      literals in the tree (`\s*(?:…)\s*` and the bare form), so a grep for one
-      reads zero while four sites survive — which is how this stayed at four sites.
-      The check is: **zero `re.split` calls containing `&&` outside
-      `_shell_norm.py`**. Evidence: ___
-- [ ] **V6b** `sahjhan daemon start & rm -rf x` is **not** classified as daemon
-      recovery, and `true & sleep 600` **is** detected as a long sleep. These are
-      the two unnamed guards; without them V1–V3 can all pass with the allowlist
-      still open. Evidence: ___
-- [ ] **V7 · non-vacuity** Revert the character class → V1–V3 **and V6b** go red.
-      Evidence: ___
+      Evidence: `TestAmpersandDoesNotReachBlockedSubcommands`,
+      `TestAmpersandDoesNotReachProtectedPaths`, driven through the real
+      `_sahjhan_bootstrap.py` subprocess via the canonical `hook_runner`.
+      Both classes assert the **baseline** deny as well as the bypass, so a
+      hook that denied everything would not pass them; each also holds a
+      positive (`true & sahjhan status`, `true & grep -rn TODO src/` stay
+      allowed) so the fix cannot be "deny more"
+- [x] **V2** `eval "rm -rf enforcement/hooks"` and `T=docs/holtz/.sahjhan;
+      rm -rf $T` are denied — both measured **ALLOW** before.
+      Evidence: `TestIndirectionDoesNotReachProtectedPaths`, 5 spellings.
+      Non-vacuity is its own arm: deleting only step 4's one line takes
+      exactly 4 of the 5 red. The fifth (`bash -c "rm -rf …"`) stays green
+      because `_INTERP_INLINE_FLAGS` already caught it by another route — a
+      reminder that a green line in this class does not say which guard held
+- [x] **V3** `is_git_commit` sees `true & git commit` — was **False**.
+      Evidence: `test_a_commit_behind_an_ampersand_is_visible`, which asserts
+      the direct and `&&` forms too so the ✓ is not "always True"
+- [x] **V4** `&` added as a **separator** to `_SHELL_CHAIN_IDIOMS`
+      (`("& echo done", "ampersand chain")`) — the matrix carried it only as
+      the trailing suffix in `_SHELL_IDIOMS`. +7 tests (7 representative
+      subcommands × 1 idiom). Evidence: `test_contract_commands.py`
+- [x] **V5** `foo 2>&1 & bar` → `['foo 2>&1', 'bar']`; `foo 2>&1` alone stays
+      one segment. Evidence: `TestARedirectIsNotASeparator` — 7 redirect
+      spellings including `&>`/`&>>`/`2>&-`, plus
+      `test_a_detached_ampersand_after_a_redirect_still_separates`
+      (`foo > bar & baz` **is** two: `>` then space then `&` is a separator),
+      plus `test_the_segment_keeps_the_bytes_it_was_written_with` which is
+      what pins masking-not-stripping
+- [x] **V6** ⚠️ **Grep for the _construct_, not for a literal.** Done as a
+      test rather than a grep, so it holds for the next site too:
+      `TestSegmentationHasOneOwner` walks `enforcement/` and `hooks/` and
+      fails on any `re.split`/`_re.split` line containing `&&` outside
+      `_shell_norm.py`. Observed 8 offenders before, 0 after
+- [x] **V6b** `sahjhan daemon start & rm -rf x` is no longer classified as
+      daemon recovery (was **True**), and `true & sleep 600` is detected (was
+      **False**). Evidence: `TestTheTwoGuardsTheReviewDidNotName`, which also
+      pins `nohup sahjhan daemon start &` and
+      `nohup … > /dev/null 2>&1 &` as **still exempt** — the fix must not
+      deny the recovery the primer tells a user to run — and `true & sleep 1`
+      as still allowed
+- [x] **V7 · non-vacuity** Three mutations, each run in the same sitting:
+      1. **the character class** `[;&|\n]` → `[;|\n]`: **11 red** — V1 (both
+         guards), V3, V6b (both), the bootstrap trigger, the TDD detectors
+         and V5's separator half. The redirect and trailing-`&` tests stayed
+         **green**, which is the unchanged-behaviour arm
+      2. **step 4's `resolve_indirection` line** in `_check_bash_write`:
+         **4 red**, all V2, nothing else
+      3. **the `(?<![-\w])` lookbehind** → `\b`: **2 red** —
+         `test_an_interpreter_flag_is_not_the_shell_builtin` and the
+         pre-existing `test_blocks_node_eval_write_to_enforcement`
+      A fourth arm — stashing the whole fix — is **not** evidence: the test
+      module imports `shell_segments` at module level, so it errors at
+      collection and every assertion is skipped. Red for the wrong reason.
+      That is why the three targeted mutations above are the control
 
 ---
 

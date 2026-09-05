@@ -52,31 +52,32 @@ from _protocol_cache import (  # noqa: E402
     write_cache,
 )
 from _resolve import ensure_sahjhan  # noqa: E402
+from _shell_norm import shell_segments  # noqa: E402
 
 
 def _is_tdd_cmd(cmd: str) -> bool:
     """Detect test, lint, and type-check commands (TDD workflow).
 
-    Checks each segment of chained commands (split on &&, ||, ;, |, newline)
-    so that ``cd /project && python -m pytest`` is recognized.
+    Checks each segment of a chained command so that ``cd /project &&
+    python -m pytest`` is recognized. Segmentation is ``_shell_norm``'s;
+    reading only the first token of ``true & pytest`` loses the evidence
+    that the suite ran rather than opening a hole.
     """
     _TDD_PREFIXES = ("pytest", "python -m pytest", "ruff check", "ruff format", "mypy")
-    for segment in re.split(r'&&|\|\||[;|\n]', cmd):
-        seg = segment.strip()
-        if any(seg.startswith(p) for p in _TDD_PREFIXES):
-            return True
-    return False
+    return any(seg.startswith(_TDD_PREFIXES) for seg in shell_segments(cmd))
 
 
 def _is_sleep_cmd(cmd: str) -> bool:
     """Detect sleep commands used to game timing gates.
 
     Returns True for sleep >5 seconds. Short sleeps (<=5s) are allowed
-    for legitimate polling. Checks each segment of chained commands
-    (split on &&, ;, ||, |, newline). Handles bash sleep suffixes (s/m/h/d).
+    for legitimate polling. Checks each segment of a chained command,
+    using ``_shell_norm``'s segmentation — ``true & sleep 600`` is the
+    spelling that defeated this guard while ``true && sleep 600`` did
+    not. Handles bash sleep suffixes (s/m/h/d).
     """
     _SUFFIX_MULTIPLIER = {"s": 1, "m": 60, "h": 3600, "d": 86400}
-    for segment in re.split(r'&&|\|\||[;|\n]', cmd):
+    for segment in shell_segments(cmd):
         m = re.match(r"^\s*sleep\s+(\d+(?:\.\d+)?)([smhd])?", segment)
         if m:
             value = float(m.group(1))

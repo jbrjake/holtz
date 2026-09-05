@@ -561,6 +561,12 @@ _SHELL_CHAIN_IDIOMS = [
     ("; echo done", "semicolon chain"),
     ("&& echo ok", "and-chain"),
     ("|| echo fail", "or-chain"),
+    # W15 / item 30. The matrix carried ``&`` only as a trailing suffix
+    # (``_SHELL_IDIOMS``, "trailing ampersand") — never as the separator it
+    # also is. That gap is precisely why a split pattern omitting single
+    # ``&`` passed this file for the whole life of the guard: every guard
+    # keyed on a first token was reading ``A`` in ``A & B``.
+    ("& echo done", "ampersand chain"),
 ]
 
 # Idioms that put another command *before* the sahjhan one (W12 / item 34).

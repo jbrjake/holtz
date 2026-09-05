@@ -20,7 +20,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _shell_norm import resolve_indirection  # noqa: E402
+from _shell_norm import resolve_indirection, shell_segments  # noqa: E402
 
 PROTECTED = [
     "enforcement/",
@@ -428,24 +428,19 @@ def _daemon_stop_permitted(cwd: str) -> tuple[bool, str]:
 def _bash_references_blocked_sahjhan(command: str, cwd: str) -> str | None:
     """Check if a Bash command invokes a blocked sahjhan subcommand.
 
-    Splits on shell operators (&&, ||, ;, |, newline), checks each segment.
+    Splits on shell operators (&&, ||, ;, |, &, newline), checks each segment.
     Returns block reason string if blocked, None if allowed.
 
     Same-line variables and ``eval``/``sh -c`` wrappers are resolved first.
     Without that, the block is a check on how the command was spelled: this
     guard is what makes ``event quiz_exhausted_resolved`` a human-only
     channel, and a channel that ``"$SAH" event quiz_exhausted_resolved``
-    walks through is not closed to the party it exists to exclude.
+    walks through is not closed to the party it exists to exclude. A
+    channel that ``true & sahjhan event quiz_exhausted_resolved`` walks
+    through is not closed either, which is why segmentation is
+    ``_shell_norm``'s too and not this function's own regex.
     """
-    import re
-
-    segments = re.split(r'\s*(?:&&|\|\||[;|\n])\s*', resolve_indirection(command))
-
-    for seg in segments:
-        seg = seg.strip()
-        if not seg:
-            continue
-
+    for seg in shell_segments(command):
         result = _extract_sahjhan_subcmd(seg)
         if result is None:
             # Not a sahjhan command — allow
@@ -650,14 +645,25 @@ def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
     """Check if a bash command writes to any protected or managed path.
 
     Returns a block reason string if blocked, None if allowed.
-    Splits on shell operators (&&, ||, ;, |, newline) and checks each segment.
+    Splits on shell operators (&&, ||, ;, |, &, newline) and checks each
+    segment.
 
     ``cwd`` determines whether plugin-relative PROTECTED paths are enforced:
     only when the agent is operating inside the plugin tree itself. Managed
     paths (MANAGED_DOCS, MANAGED_DATA) are always cwd-relative and always
     enforced — they live inside the target project's docs/holtz/.
+
+    Every check below reads the *resolved* command. This guard used to parse
+    the raw string while the sahjhan guard above it parsed
+    ``resolve_indirection(...)``, so one module claimed ownership of
+    indirection and the other module protecting ``enforcement/`` — the
+    directory holding both of them — did not consult it. ``eval "rm -rf
+    enforcement/hooks"`` and ``T=docs/holtz/.sahjhan; rm -rf $T`` walked
+    past on that difference alone.
     """
     import re
+
+    command = resolve_indirection(command)
 
     # Default cwd=None preserves legacy test/dev behavior (check all paths).
     # Hook callers pass the real cwd so PROTECTED isn't enforced against
@@ -697,15 +703,10 @@ def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
                     )
             break
 
-    # Split on shell operators to handle chained commands (BH-004 run 27)
-    # BH-005 run 28: bare newline is a valid shell command separator — include \n
-    segments = re.split(r'\s*(?:&&|\|\||[;|\n])\s*', command)
-
-    for seg in segments:
-        seg = seg.strip()
-        if not seg:
-            continue
-
+    # Split on shell operators to handle chained commands (BH-004 run 27).
+    # ``resolve=False``: the command was resolved once at the top, and every
+    # check in this function reads that same string.
+    for seg in shell_segments(command, resolve=False):
         # Protocol-setup exemption: the SKILL-prescribed daemon-init-pid
         # copy is a one-shot setup step that must be allowed to land
         # inside the managed data dir. See _is_daemon_init_pid_setup.
@@ -1158,12 +1159,7 @@ def _maybe_bootstrap_binary(command: str) -> None:
     checksum mismatch) the Bash command fails naturally with a clear
     error Claude can surface to the user.
     """
-    import re as _re
-    segments = _re.split(r'\s*(?:&&|\|\||[;|\n])\s*', command)
-    for seg in segments:
-        seg = seg.strip()
-        if not seg:
-            continue
+    for seg in shell_segments(command):
         if _extract_sahjhan_subcmd(seg) is None:
             continue
         try:

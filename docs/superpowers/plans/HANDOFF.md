@@ -28,18 +28,46 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**15 of 32 units · 20 of 51 items · 31 items across 17 units remain.**
+**16 of 32 units · 21 of 51 items · 30 items across 16 units remain.**
 W13 is `WIP`, not done: it closed item 37 and left item 17 open, so it moves
 the item count and not the unit count.
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
-W12 (34, 28) · W11 (42) · W14 (5, 10) · W31 (50). Commits are in `git log`; do
-not re-summarise them here.
+W12 (34, 28) · W11 (42) · W14 (5, 10) · W31 (50) · W15 (30). Commits are in
+`git log`; do not re-summarise them here.
 
-**W31 landed 2026-09-04** — `c12469f`, all four validations driven. **P2 is now
+**W15 landed 2026-09-04** — the first P3 unit. All eight sites converted to
+one segmentation owner, V1–V7 driven. Four things a later session will
+otherwise re-derive:
+
+- **The redirect hazard is solved by masking, not stripping**, and the
+  difference is load-bearing. `_check_bash_write` scans each segment for
+  redirect *targets*, so a segment handed back with `2>&1` removed would hide
+  a real write. The redirect-operator `&`s become NUL for the split and are
+  restored after. `test_the_segment_keeps_the_bytes_it_was_written_with` is
+  the only thing pinning that choice — anything that "simplifies" it to a
+  strip re-opens a write channel.
+- **A trailing `&` is a terminator, not a separator.** `A &` is one command,
+  and that falls out of dropping empty segments. It is not cosmetic:
+  `_is_recovery_command` requires *every* segment to be recovery, so getting
+  it wrong denies `nohup sahjhan daemon start &` — the recovery the primer
+  tells a user to run.
+- **`node --eval` is not the shell builtin `eval`.** `_WRAPPER_RE`'s `\b` sat
+  between `-` and `e`, so `resolve_indirection` ate the flag and rewrote the
+  command to `node --require(…)` — deleting the token
+  `_INTERP_INLINE_FLAGS` keys on to spot an inline interpreter write. Latent
+  in two callers already; it only *cost* a block once the resolver went on
+  `_check_bash_write`. Now `(?<![-\w])`.
+- **Stashing the whole fix is not a valid control here.** The test module
+  imports `shell_segments` at module level, so the unmodified tree gives a
+  *collection error* — red with every assertion skipped. The three targeted
+  single-line mutations recorded in the unit are the evidence; a whole-fix
+  stash is not.
+
+**W31 landed 2026-09-04** — `c12469f`, all four validations driven. **P2 is
 finished** except W13's item 17 (open by ruling) and W32's step 3 (a question
-for Jon). The board is P3 (W15–W21) and P4.
+for Jon). The board is P3 (W16–W21, W15 now done) and P4.
 
 Two things from it a later session will otherwise re-derive:
 
@@ -96,16 +124,21 @@ carrying the number forward:
 
 **Nothing is pushed. CI has never run on any of it.** Do not claim it has.
 
-**The full suite was run locally on 2026-09-04 at W31's tree** — `pytest --cov …
---cov-fail-under=80`, observed **exit 0**, **2921 collected, 8 skipped, zero
-`FAILED`/`ERROR`**, coverage **89.30%**. Read from the run's own output, not
-from the wrapper's exit code — and note this repo's `-q` + coverage combination
-prints **no `N passed` summary line at all**, so the reading is: every progress
-mark is `.` or `s`, and `grep -cE "^(FAILED|ERROR)"` is 0.
+**The full suite was run locally on 2026-09-04 at W15's tree** — `pytest --cov …
+--cov-fail-under=80`, observed **exit 0**, **2965 passed, 8 skipped, zero
+`FAILED`/`ERROR`**, coverage **89.30%**, 23m31s. 2965 + 8 = 2973, which is the
+README badge — the two numbers check each other, so read both.
 
-**It covers everything up to and including `7d69854` (W14) and W31's working
-tree**, which is what was committed as `c12469f`. The earlier gap — a full run
-that predated W14 — is closed.
+**Read from the run's own output, not from the wrapper's exit code.** One
+correction to how the previous handoff said to do that: it claimed this repo's
+coverage run prints *no* `N passed` summary line. It does — what suppresses it
+is **`-q`**, which the earlier session had in its command and which is not in
+`addopts`. Drop `-q` and you get the summary line directly. The fallback
+reading (every progress mark is `.` or `s`, and `grep -cE "^(FAILED|ERROR)"`
+is 0) is still correct, and is what to use if you do pass `-q`.
+
+**It covers everything up to and including `c12469f` (W31) and W15's working
+tree.** No gap.
 
 It is *not* CI: CI runs on ubuntu, and the seccomp debt below is a thing no
 local run touches. **Note also that the load-flaky hook family did not fail in
@@ -266,15 +299,30 @@ healthy path's timing.
 
 ## Do this next
 
-### 1. ⭐ P3 — W15 (item 30) onward.
+### 1. ⭐ P3 — W16 (item 18) onward.
 
-P2 is finished. W10, W11, W12, W14 and W31 are `DONE`; W13 is `WIP` with item 37
+P2 is finished and P3 has started: W15 is `DONE`. W13 is `WIP` with item 37
 closed and item 17 open **by ruling** (above) — that is decided, not blocking.
 
-**W15 (item 30) is next**, and nothing blocks it. Then W16 (18) → W17 (22),
-W18 (36, 33), W19 (40, 47), W20 (41, 38), W21 (9). After P3: P4 (W23–W30) and
-the two `WIP` stragglers (W13's item 17, W32's step 3 — the latter still a
-question for Jon).
+**W16 (item 18) is next.** The unit records `Depends on: W09`, and W09 is
+`DONE` — confirm that against the unit rather than against this line. Then
+W17 (22), W18 (36, 33), W19 (40, 47), W20 (41, 38), W21 (9). After P3:
+P4 (W23–W30) and the two `WIP` stragglers (W13's item 17, W32's step 3 — the
+latter still a question for Jon).
+
+**Two things W15 leaves on the table.** Neither is a W15 gap — both are
+recorded so they are found by reading rather than by surprise:
+
+- **Quoted operators still split.** `git commit -m "a & b"` yields two
+  segments, exactly as `"a; b"` always has. Uniform and pre-existing, and
+  fail-closed for the guards (more segments read, not fewer). The one shape it
+  bites is an *allowlist*, where over-segmentation denies:
+  `sahjhan daemon start --config-dir "a & b"` would be refused recovery. No
+  test pins the quoted case in either direction.
+- **`>|` (noclobber override) splits on its `|`** — `foo >| bar` becomes
+  `foo >` and `bar`. Measured identical before and after W15, so it is
+  untouched, but it is the same defect class as the `&` W15 fixed. It wants
+  its own unit, not a silent widening of a closed one.
 
 **Before touching a gate or a query, read what W14 just established:**
 
@@ -369,6 +417,15 @@ difference was measurable in one command against the binary.
 - **Run every new test RED against the unmodified tree first** and read the
   reason, not the colour. Unchanged-behaviour tests must be green before, during
   the non-vacuity mutation, and after.
+- **A whole-fix stash is usually NOT that control.** If the new test module
+  imports the function the fix adds, the unmodified tree gives an
+  `ImportError` at *collection* — pytest reports one `ERROR`, zero `FAILED`,
+  and every assertion in the file is skipped. It looks like a strong RED and
+  says nothing about which guard was holed. Measured on W15. The control that
+  works is a **targeted single-line mutation per claim**, run in the same
+  sitting: revert the character class, revert the one `resolve_indirection`
+  line, revert the one lookbehind — and read *which* tests go red each time.
+  If a mutation takes down a test you did not predict, that is a finding.
 - **A green run after a change is not evidence when the failure is load-flaky.
   Run the control.** 2026-09-01: raising the primer's status timeout made four
   failing tests pass, three times running — and then the **unchanged 5s passed
