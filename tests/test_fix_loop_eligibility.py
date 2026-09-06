@@ -199,11 +199,20 @@ class TestEveryCriticalHasARoute:
 
     def test_an_ordinary_deferral_still_does_not_converge(self, board):
         """The counterweight, and it must not be an empty set: the exclusion
-        is scoped to one reason word. `low_priority`, `medium_budget` and
-        `cant_reproduce` still refuse to close a CRITICAL, which is what D4's
-        conjunct is for."""
+        is scoped to one reason word **and to the finding's own grade**.
+        `low_priority`, `medium_budget` and `cant_reproduce` still refuse to
+        close a CRITICAL, which is what D4's conjunct is for.
+
+        W16 / item 18 adds the fourth word. Every finding here is filed
+        `user_reachable`, so `theoretical` belongs in this list too: on a
+        finding the run graded as reachable, the reason word is a claim the
+        board contradicts, and it must refuse exactly like the other three.
+        Before the correlation it did not — it was the one word that closed
+        any CRITICAL, whatever the board said about it.
+        """
         for index, reason in enumerate(
-                ("low_priority", "medium_budget", "cant_reproduce"), start=1):
+                ("low_priority", "medium_budget", "cant_reproduce",
+                 "theoretical"), start=1):
             finding = f"BH-{index:03d}"
             board.file(finding, "a.py:1", severity="CRITICAL",
                        reachability="user_reachable")
@@ -226,6 +235,119 @@ class TestEveryCriticalHasARoute:
         sql = _named_query("all_user_reachable_high_closed")
         out = board.sah("query", sql, "--format", "json").stdout
         assert str(list(json.loads(out)[0].values())[0]) == "true"
+
+
+class TestTheReasonWordDoesNotOutrankTheBoard:
+    """W16 / item 18. The exclusion excuses a finding graded `theoretical`,
+    not any finding carrying the word.
+
+    Before the correlation, one agent-typed word closed **any** CRITICAL —
+    including one the run had itself filed `user_reachable` — with no fix, no
+    re-grade and no courier involved. Driven against a real ledger:
+
+        file BH-001 severity=CRITICAL reachability=user_reachable
+          all_critical_resolved -> false
+        event finding_deferred id=BH-001 reason=theoretical    (exit 0)
+          all_critical_resolved -> true
+
+    The deferral is still *accepted* — `finding_deferred` is
+    `attestation = "agent"` and `event` is on the bootstrap allowlist, so
+    nothing refuses the write. What changed is that it no longer counts.
+
+    **This class covers half of item 18.** A finding genuinely graded
+    `theoretical` can still have its deferral typed by the agent instead of
+    written by `theoretical_courier.py`, and no test here can tell those
+    apart, because the ledger row is identical. That is the provenance half,
+    and it is open — see `test_the_provenance_half_is_not_closed_here`.
+    """
+
+    def _all_critical_resolved(self, board):
+        sql = _named_query("all_critical_resolved")
+        out = board.sah("query", sql, "--format", "json").stdout
+        return str(list(json.loads(out)[0].values())[0])
+
+    def test_the_word_does_not_close_a_user_reachable_critical(self, board):
+        """V1. The forged path, and the whole point of the unit."""
+        board.file("BH-001", "a.py:1", severity="CRITICAL",
+                   reachability="user_reachable")
+        assert self._all_critical_resolved(board) == "false", "baseline"
+        board.defer("BH-001", reason="theoretical")
+        assert self._all_critical_resolved(board) == "false", (
+            "a CRITICAL the run filed as user_reachable was closed by typing "
+            "reason=theoretical — no fix, no re-grade, no courier"
+        )
+
+    def test_the_deferral_is_accepted_and_simply_does_not_count(self, board):
+        """Assert *which*, as the unit requires. The write is not refused.
+
+        Refusing it would be the other design, and it is not this one: the
+        row lands, and the conjunct declines to read it as a closure. A test
+        that only checked the conjunct could not tell the two apart, and the
+        difference decides where the next fix goes.
+        """
+        board.file("BH-001", "a.py:1", severity="CRITICAL",
+                   reachability="user_reachable")
+        # `_Board.defer` asserts exit 0 itself, so reaching the query below is
+        # already the acceptance half; the row is what proves it landed rather
+        # than being accepted and dropped.
+        board.defer("BH-001", reason="theoretical")
+        out = board.sah("query", "--type", "finding_deferred",
+                        "--format", "jsonl").stdout
+        rows = [json.loads(line) for line in out.splitlines() if line.strip()]
+        assert [r for r in rows if r["id"] == "BH-001"
+                and r["reason"] == "theoretical"], (
+            "the deferral row is missing — it must land in the ledger and "
+            "simply not count toward the conjunct"
+        )
+
+    def test_the_courier_route_still_converges(self, board):
+        """V2. A provenance fix that breaks the courier trades #79 for #73.
+
+        The same guarantee for the correlation: a genuinely theoretical
+        CRITICAL is auto-deferred at filing and must still close, or a run
+        that files one has no route left at all.
+        """
+        board.file("BH-001", "a.py:1", severity="CRITICAL",
+                   reachability="theoretical")
+        board.defer("BH-001", reason="theoretical")
+        assert self._all_critical_resolved(board) == "true"
+
+    def test_a_regrade_to_user_reachable_reopens_the_critical(self, board):
+        """V5. The contradictory row is now noticed, and it is noticed late.
+
+        A probe that establishes a path re-files the finding `user_reachable`.
+        The deferral row does not move — it cannot, the ledger is append-only —
+        so before the correlation the CRITICAL stayed closed on the strength of
+        a grade the board no longer held. The conjunct reads the *latest*
+        filing, so the re-grade puts it back on the board.
+        """
+        board.file("BH-001", "a.py:1", severity="CRITICAL",
+                   reachability="theoretical")
+        board.defer("BH-001", reason="theoretical")
+        assert self._all_critical_resolved(board) == "true", "baseline"
+        board.file("BH-001", "a.py:1", severity="CRITICAL",
+                   reachability="user_reachable")
+        assert self._all_critical_resolved(board) == "false", (
+            "a probe established a path to a CRITICAL and it stayed closed on "
+            "a deferral filed against the grade it no longer has"
+        )
+
+    def test_the_provenance_half_is_not_closed_here(self, board):
+        """The honest limit of this fix, asserted rather than left to prose.
+
+        On a finding graded `theoretical`, an agent-typed deferral and the
+        courier's are the same ledger row, so the conjunct cannot distinguish
+        them and this one closes the CRITICAL. That is item 18's second half.
+        If this test ever fails, provenance has landed and this file should
+        say so — do not delete it, invert it.
+        """
+        board.file("BH-001", "a.py:1", severity="CRITICAL",
+                   reachability="theoretical")
+        board.defer("BH-001", reason="theoretical")
+        assert self._all_critical_resolved(board) == "true", (
+            "provenance appears to have landed — item 18's second half is "
+            "closed, so invert this test rather than removing it"
+        )
 
 
 class TestEveryCriticalHasARouteAtTheLensGate:

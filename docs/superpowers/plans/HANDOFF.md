@@ -29,8 +29,10 @@ any phrasing where one unit closing reads as the work closing.
 ## Status
 
 **16 of 32 units · 21 of 51 items · 30 items across 16 units remain.**
-W13 is `WIP`, not done: it closed item 37 and left item 17 open, so it moves
-the item count and not the unit count.
+W13 and W16 are both `WIP`, not done. W13 closed item 37 and left item 17
+open; W16 landed step 2 and left step 1 open on a question. **Neither moves
+the unit count, and W16 does not move the item count either** — item 18 is
+half closed, and a half-closed item is an open item.
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
@@ -163,7 +165,40 @@ The 1-in-4 rate seen earlier was the new test file's own fixture orphaning
 **both** arms. There is also no mechanism — the delta does not touch the
 healthy path's timing.
 
-### Open for Jon — two, both raised, neither guessed at
+### ⛔ Open for Jon — W16 step 1 is STOPPED, and it is the newest
+
+**Item 18's provenance half cannot be built as the unit writes it, either
+way.** Measured against the engine and the pinned binary, not inferred:
+
+- **`restricted` is per-event, not per-field** (`sahjhan/src/config/events.rs:45`).
+  So "a provenance field only `record_authed_event` can set" has nothing to
+  attach to.
+- **A restricted event cannot be a transition emit** — the engine refuses the
+  config. `finding_deferred` carries three emits (`defer_cant_reproduce`,
+  `defer_low`, `defer_medium`), so marking it `restricted` yields
+  *"Configuration validation failed … restricted events require 'authed-event'
+  with an HMAC proof, not a transition emit"*, five times.
+
+`context_reset` is a clean model precisely because it has **no emits**. The
+only no-engine-change shape is a **separate restricted event type** for the
+courier's deferral, which ripples into every query keyed on
+`type='finding_deferred'` — eight of them, and a named query cannot reference
+another one, so it is eight inline copies of one fact: the #77/#82 drift shape
+two units were spent removing.
+
+**✅ RULED (Jon, 2026-09-05): file the upstream ask and stop.** Done —
+**[sahjhan#50](https://github.com/jbrjake/sahjhan/issues/50)**, *"events:
+provenance is all-or-nothing at the event level, so an event with emits can
+carry none"*. **Read that issue before doing anything further on item 18** —
+it carries the measured engine facts, the four `finding_deferred` write paths
+that must survive, and two decisions (refuse-vs-overwrite a caller-supplied
+provenance; the lint that keeps the filter from being unsatisfiable or
+decorative) that the answer will settle. Do **not** build the event split in
+the meantime; that is the workaround this ruling declined.
+
+W16's step 2 landed without it and is independent of the answer.
+
+### Open for Jon — two more, both raised, neither guessed at
 
 - **W32 step 3** (above): does the hand-vendored-old-binary path still want a
   diagnostic? Unit recommends no; not ruled. **Its premise moved on
@@ -299,16 +334,22 @@ healthy path's timing.
 
 ## Do this next
 
-### 1. ⭐ P3 — W16 (item 18) onward.
+### 1. ⭐ P3 — W17 (item 22), because W16 is half-blocked.
 
-P2 is finished and P3 has started: W15 is `DONE`. W13 is `WIP` with item 37
-closed and item 17 open **by ruling** (above) — that is decided, not blocking.
+P2 is finished and P3 has started: W15 is `DONE`. **W16 is `WIP`** — step 2
+(the correlation) landed, step 1 (provenance) is stopped on the question
+above, and V3 is blocked with it. W13 is `WIP` with item 37 closed and item 17
+open **by ruling** — that is decided, not blocking.
 
-**W16 (item 18) is next.** The unit records `Depends on: W09`, and W09 is
-`DONE` — confirm that against the unit rather than against this line. Then
-W17 (22), W18 (36, 33), W19 (40, 47), W20 (41, 38), W21 (9). After P3:
-P4 (W23–W30) and the two `WIP` stragglers (W13's item 17, W32's step 3 — the
-latter still a question for Jon).
+⚠️ **W17 records `Depends on: W16`.** Read that dependency before starting:
+W17 is the H11 lint rule binding "a gate filters on this value" to "only a
+hook may write it", and item 18 is its worked example. It may be doable
+against the *shape* of the rule with item 18's second half still open — or it
+may need the answer first. **Check, do not assume**, and if it needs W16's
+answer then P3's next startable unit is W18 (36, 33).
+
+Then W19 (40, 47), W20 (41, 38), W21 (9). After P3: P4 (W23–W30) and the
+`WIP` stragglers (W16's step 1, W13's item 17, W32's step 3).
 
 **Two things W15 leaves on the table.** Neither is a W15 gap — both are
 recorded so they are found by reading rather than by surprise:

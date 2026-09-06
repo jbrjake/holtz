@@ -456,8 +456,7 @@ intent = "a pattern round must close or merge at least as many findings as it op
 # One exclusion beyond `finding_resolved`, and it is the escape the fix-loop
 # eligibility gate needs rather than a softening of this conjunct.
 #
-# `theoretical` is written by `theoretical_courier.py`, not chosen by the
-# agent, and it says no path to the defect has been found — reachability itself
+# `theoretical` says no path to the defect has been found — reachability itself
 # unestablished. With `item_is_user_reachable` on `fix_commit`, a theoretical
 # CRITICAL is auto-deferred at filing and then has no route left at all:
 # measured against a real daemon, this conjunct refused the deferral,
@@ -465,13 +464,45 @@ intent = "a pattern round must close or merge at least as many findings as it op
 # population is `fault_injected` **and open**. Re-grading was the only exit,
 # and re-grading to clear a gate is a forgery.
 #
+# ⚠️ W16 / item 18. **This comment used to open with "`theoretical` is written
+# by `theoretical_courier.py`, not chosen by the agent". That was false, and
+# it is what hid the hole for the life of the conjunct.** `finding_deferred`
+# is `attestation = "agent"`, carries no `restricted`, and declares `agent:cli`
+# as a producer — `events.toml` says so in as many words two lines below the
+# declaration ("attestation is the strength of the *weakest* available path,
+# not the intended one"). `event` is on the bootstrap allowlist and
+# `finding_deferred` is not in `BLOCKED_SAHJHAN_SUBSUB`. So the agent could
+# always type the word. Measured against a real daemon at this tree:
+#
+#     file BH-001 severity=CRITICAL reachability=user_reachable
+#       all_critical_resolved -> false
+#     event finding_deferred id=BH-001 reason=theoretical     (exit 0)
+#       all_critical_resolved -> true
+#
+# The correlation below is what refuses that: the exclusion now excuses a
+# finding only if its **own latest filing grades it `theoretical`**, so a
+# CRITICAL the run filed as `user_reachable` is not closed by typing the
+# reason word. `f` is already pinned to the latest filing by the max-seq
+# clause above, so the grade is read off that row rather than through a second
+# correlated subquery — same predicate, and it stays inside the shape this
+# file notes the planner accepts.
+#
+# **This is half of item 18 and the config should not be read as claiming
+# otherwise.** The remaining half is provenance: a finding *graded*
+# `theoretical` can still have its deferral typed by the agent rather than
+# written by the courier. Closing that needs a decision that is not this
+# query's to make — `restricted` is per-event, and a restricted event cannot
+# be a transition emit (the engine refuses the config, and `finding_deferred`
+# carries three), so it would mean splitting the courier's deferral into its
+# own event type. Open for Jon; see the worklist's W16.
+#
 # Every other reason word still refuses. `low_priority`, `medium_budget` and
 # `cant_reproduce` are discretionary acts, and refusing them is what this
 # conjunct is for; `test_an_ordinary_deferral_still_does_not_converge` fails
 # the build if the exclusion ever widens past the one machine-written word.
 [queries.all_critical_resolved]
-sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred' AND d.reason='theoretical'))"
-intent = "every CRITICAL finding must be resolved — only a theoretical auto-deferral closes one without a fix"
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND NOT (f.reachability='theoretical' AND f.id IN (SELECT d.id FROM events d WHERE d.type='finding_deferred' AND d.reason='theoretical')))"
+intent = "every CRITICAL finding must be resolved — only a theoretical auto-deferral of a finding graded theoretical closes one without a fix"
 
 [queries.all_user_reachable_high_closed]
 sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='HIGH' AND f.reachability='user_reachable' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"

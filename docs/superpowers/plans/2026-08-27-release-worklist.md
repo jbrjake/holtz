@@ -3218,8 +3218,38 @@ before a line of the fix was written.
 
 ## W16 — Item 18: any CRITICAL can be closed with `reason=theoretical`
 
-**Status:** `TODO`  ·  **Tier:** C  ·  **PROVEN**  ·  **Depends on:** W09
+**Status:** `WIP` — **step 2 landed, step 1 is a question for Jon**
+**Tier:** C  ·  **PROVEN**  ·  **Depends on:** W09
 **Commit:** `fix(enforcement): give the theoretical deferral provenance and a reachability correlation`
+
+> **2026-09-05: step 2 (the correlation) landed. Step 1 (provenance) is
+> STOPPED on a question — neither of the two shapes the unit offers is
+> buildable as written.** Measured against the engine, not inferred:
+>
+> - **`restricted` is per-event, not per-field** (`sahjhan/src/config/events.rs:45`
+>   — `pub restricted: Option<bool>`). So option (b), *"a provenance field on
+>   `finding_deferred` that only `record_authed_event` can set"*, has nothing
+>   to attach to.
+> - **A restricted event cannot be a transition emit.** `finding_deferred`
+>   carries three (`defer_cant_reproduce`, `defer_low`, `defer_medium`), so
+>   option (a) makes the protocol **invalid**. Driven against the pinned
+>   binary on a copy of `enforcement/`:
+>   ```
+>   $ bin/sahjhan --config-dir <copy-with-restricted=true> status
+>   error: Configuration validation failed:
+>     - transition 'defer_cant_reproduce' emits restricted event
+>       'finding_deferred' — restricted events require 'authed-event' with an
+>       HMAC proof, not a transition emit
+>     … 5 errors
+>   ```
+>
+> The only shape that works with no engine change is a **separate restricted
+> event type** for the courier's deferral — which ripples into every query
+> keyed on `type='finding_deferred'` (`open_theoretical_findings`,
+> `open_fault_injected_findings`, `no_open_fault_injected`,
+> `round_item_cap_exceeded`, `round_opens_exceed_closes`, `all_findings_closed`,
+> `item_open`, and this conjunct). That is a design decision and an upstream
+> question, not a spelling — **put to Jon, not chosen here.**
 
 Sequence after W09 — both end in an unearned `finding_deferred` carrying
 `reason=theoretical`, and 25 tells you what the provenance field must survive.
@@ -3259,7 +3289,13 @@ saying "machine-written" while their bodies type it by hand.
       that only `record_authed_event` can set — with the conjunct filtering on
       **that**. `context_reset`'s `trigger='session_start'` (`restricted` + `host` +
       a hash-pinned writer) is the pattern done right and is the model to copy
-- [ ] **2. Correlation.** The exclusion never checks that the finding it excuses is
+      — ⛔ **STOPPED upstream.** Both branches are unbuildable as written (see
+      the box above). `context_reset` is a clean model precisely because it has
+      **no transition emits**; `finding_deferred` has three, which is the whole
+      difference. **RULED (Jon, 2026-09-05): file the ask and wait** —
+      [sahjhan#50](https://github.com/jbrjake/sahjhan/issues/50). The event
+      split was put and declined; do not build it as an interim
+- [x] **2. Correlation.** The exclusion never checks that the finding it excuses is
       *graded* `theoretical`. Add the latest-filing correlation the other conjuncts
       carry:
       ```sql
@@ -3267,24 +3303,70 @@ saying "machine-written" while their bodies type it by hand.
                   AND f2.reachability='theoretical'
                   AND f2.seq = MAX(seq for that id))
       ```
+      **Built as `AND NOT (f.reachability='theoretical' AND f.id IN (…))`.**
+      Same predicate: `f` is *already* pinned to the finding's latest filing by
+      the `f.seq = (SELECT MAX(g.seq) …)` clause two conditions above, so the
+      grade is read off the row in hand instead of through a second correlated
+      subquery. That also keeps it inside the shape this file already records
+      the planner accepting — the comment at `all_critical_resolved` notes that
+      "the same correlation inside a comparison is rejected". Both spellings
+      were driven against a real ledger and agree on all four scenarios
 
 ### Validation
 
-- [ ] **V1** `event finding_deferred --field reason=theoretical` on a
-      `user_reachable` CRITICAL → **refused**, or accepted and **not** excluded by
-      `all_critical_resolved`. Assert which. Evidence: ___
-- [ ] **V2** The courier's own path still works end to end — a genuinely theoretical
-      finding is still auto-deferred and still excluded. **A provenance fix that
-      breaks the courier trades #79 for #73.** Evidence: ___
+Driven against a **real ledger** (`bin/sahjhan` at the pinned 0.27.0, a
+`git init` board per scenario), before any edit. The four scenarios, current
+→ with step 2:
+
+| grade | defer reason | current | step 2 |
+|---|---|---|---|
+| `user_reachable` | `theoretical` | **true** ← the hole | **false** |
+| `theoretical` | `theoretical` | true | **true** (courier route intact) |
+| `user_reachable` | `low_priority` | false | false |
+| `theoretical` | `low_priority` | false | false |
+
+- [x] **V1** Accepted, and **not** excluded — asserting *which*, as required.
+      The write is not refused: `finding_deferred` is `attestation = "agent"`,
+      `event` is on the bootstrap allowlist, and nothing in
+      `BLOCKED_SAHJHAN_SUBSUB` covers it, so the row lands and the conjunct
+      declines to read it as a closure. Evidence:
+      `TestTheReasonWordDoesNotOutrankTheBoard::test_the_word_does_not_close_a_user_reachable_critical`
+      and `::test_the_deferral_is_accepted_and_simply_does_not_count`
+- [x] **V2** The courier's route still converges a genuinely theoretical
+      CRITICAL — scenario 2 above, plus the pre-existing
+      `test_a_theoretical_critical_converges_on_its_deferral` and
+      `test_the_theoretical_finding_is_deferred` (real daemon), all green
+      before and after. Evidence: `::test_the_courier_route_still_converges`
 - [ ] **V3** Rewrite both guard tests to drive the **courier**, not the CLI.
-      Evidence: ___
-- [ ] **V4** `test_an_ordinary_deferral_still_does_not_converge` proves only that
-      the *other three* words refuse — add the fourth. Evidence: ___
-- [ ] **V5** An internally contradictory board row — `user_reachable` CRITICAL
-      carrying a `theoretical` deferral — is now noticed by something. Evidence: ___
-- [ ] **V6 · non-vacuity** Revert each of the two fixes **separately**; a *distinct*
-      test must go red for each. One test covering both means one is untested.
-      Evidence: ___
+      ⛔ **Belongs with step 1 and is blocked on it.** Right now the two paths
+      write a *byte-identical* ledger row, so a test driving the courier would
+      assert nothing the CLI test does not already assert — the rewrite only
+      becomes meaningful once provenance makes the rows distinguishable.
+      Recorded rather than done, so it is not mistaken for covered
+- [x] **V4** The fourth word added to
+      `test_an_ordinary_deferral_still_does_not_converge` — every finding
+      there is filed `user_reachable`, so `theoretical` now belongs in the
+      list beside `low_priority`, `medium_budget` and `cant_reproduce`. It was
+      the one word that closed any CRITICAL whatever the board said
+- [x] **V5** Noticed by
+      `::test_a_regrade_to_user_reachable_reopens_the_critical`. The sharper
+      form of the contradiction: a probe establishes a path and re-files the
+      finding `user_reachable`, and the append-only deferral row cannot move —
+      so before the correlation the CRITICAL stayed closed on a grade the
+      board no longer held. Reading the *latest* filing puts it back
+- [x] **V6 · non-vacuity (step 2's arm)** Reverting the correlation alone
+      takes **three distinct tests** red — `test_an_ordinary_deferral_still_
+      does_not_converge` (V4's new word), `test_the_word_does_not_close_a_
+      user_reachable_critical` (V1), `test_a_regrade_to_user_reachable_
+      reopens_the_critical` (V5) — while every courier-route test stays green,
+      which is the unchanged-behaviour arm. **Step 1's arm is owed with step 1**;
+      the unit requires a *distinct* test per fix and that cannot be shown for
+      a fix that has not been built
+- [x] **V6b · the limit, asserted rather than left to prose**
+      `::test_the_provenance_half_is_not_closed_here` records that an
+      agent-typed deferral on a finding graded `theoretical` still closes the
+      CRITICAL, and says to **invert it, not delete it**, when provenance
+      lands. Without this the file would read as if item 18 were closed
 
 ---
 
