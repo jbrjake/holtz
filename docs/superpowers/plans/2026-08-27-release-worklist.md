@@ -64,8 +64,8 @@ imprecision (`CLAUDE.md`).
 | W13 | 37, 17 | B | `WIP` @ `9555fce` — **37 done, 17 open**; V3 measured and does not support closing it | — |
 | W14 | 5, 10 | B | `DONE` @ `7d69854` — V5 caught P0.1's own failure under the mutation | — |
 | **P3 — before release** ||||
-| W15 | 30 | C | `TODO` | — |
-| W16 | 18 | C | `TODO` | W09 |
+| W15 | 30 | C | `DONE` @ `8bd7e43` — one segmentation owner; two shapes left open and recorded | — |
+| W16 | 18 | C | `DONE` — step 2 @ `b111960`, step 1 on sahjhan 0.28.0's `recorded_by`; fixed at the lens site too | W09, ~~sahjhan#50~~ shipped |
 | W17 | 22 | C | `TODO` | W16 |
 | W18 | 36, 33 | C | `TODO` | W02 |
 | W19 | 40, 47 | C | `TODO` | W02 |
@@ -3218,38 +3218,55 @@ before a line of the fix was written.
 
 ## W16 — Item 18: any CRITICAL can be closed with `reason=theoretical`
 
-**Status:** `WIP` — **step 2 landed, step 1 is a question for Jon**
+**Status:** `DONE`
 **Tier:** C  ·  **PROVEN**  ·  **Depends on:** W09
 **Commit:** `fix(enforcement): give the theoretical deferral provenance and a reachability correlation`
 
-> **2026-09-05: step 2 (the correlation) landed. Step 1 (provenance) is
-> STOPPED on a question — neither of the two shapes the unit offers is
-> buildable as written.** Measured against the engine, not inferred:
+> **The upstream ask is answered.** Neither shape this unit proposed was
+> buildable — `restricted` is per-event, not per-field
+> (`sahjhan/src/config/events.rs:45`), and a restricted event cannot be a
+> transition emit, which `finding_deferred`'s three make fatal. Filed as
+> [sahjhan#50](https://github.com/jbrjake/sahjhan/issues/50) and **shipped in
+> v0.28.0**, and not as a field at all: provenance is a ledger **entry
+> column**, `recorded_by`, beside `seq`, `ts`, `hash` and `prev`. Every entry
+> has one, nothing declares it, and nothing can supply it. The event split
+> that was put and declined is not needed — the eight queries keyed on
+> `type='finding_deferred'` are untouched.
 >
-> - **`restricted` is per-event, not per-field** (`sahjhan/src/config/events.rs:45`
->   — `pub restricted: Option<bool>`). So option (b), *"a provenance field on
->   `finding_deferred` that only `record_authed_event` can set"*, has nothing
->   to attach to.
-> - **A restricted event cannot be a transition emit.** `finding_deferred`
->   carries three (`defer_cant_reproduce`, `defer_low`, `defer_medium`), so
->   option (a) makes the protocol **invalid**. Driven against the pinned
->   binary on a copy of `enforcement/`:
->   ```
->   $ bin/sahjhan --config-dir <copy-with-restricted=true> status
->   error: Configuration validation failed:
->     - transition 'defer_cant_reproduce' emits restricted event
->       'finding_deferred' — restricted events require 'authed-event' with an
->       HMAC proof, not a transition emit
->     … 5 errors
->   ```
+> Measured on the pinned 0.28.0 binary against a real ledger:
 >
-> The only shape that works with no engine change is a **separate restricted
-> event type** for the courier's deferral — which ripples into every query
-> keyed on `type='finding_deferred'` (`open_theoretical_findings`,
-> `open_fault_injected_findings`, `no_open_fault_injected`,
-> `round_item_cap_exceeded`, `round_opens_exceed_closes`, `all_findings_closed`,
-> `item_open`, and this conjunct). That is a design decision and an upstream
-> question, not a spelling — **put to Jon, not chosen here.**
+> ```
+> sahjhan event finding_deferred …          recorded_by = agent:cli
+> the courier, over the daemon socket       recorded_by =
+>                                             hook:hooks/theoretical_courier.py
+> the CLI write with --field recorded_by=…  the value lands in fields as
+>                                             ordinary data; column unchanged
+> ```
+>
+> ⚠️ **The literal is `hook:hooks/…`, config-dir-relative — the manifest key
+> the daemon verified the peer against.** `events.toml` declares the same
+> writer as `hook:enforcement/hooks/theoretical_courier.py`, plugin-root
+> relative, and `ENFORCEMENT-CONTRACT.md` prints that spelling. The two are
+> not interchangeable and only one matches a row. `sahjhan lint` L8 is what
+> catches the wrong one: measured, substituting a non-manifest path makes L8
+> error on **both** queries and exit 3. **W17's H11 should hold the declared
+> producer ids and the engine's `recorded_by` values to one spelling** —
+> `engine:emits:defer_low` vs the engine's `engine:emit:defer_low` is the same
+> mismatch one row up.
+
+> **RULED (Jon, 2026-09-07): fix both sites in this unit.**
+> `lens_critical_resolved` carries the same exclusion and step 2 corrected only
+> the run-wide query, so item 18's defect was still live at the thirteen lens
+> doors. Measured before the fix, on 0.28.0:
+>
+> ```
+> file BH-001 CRITICAL user_reachable, lens=component
+>   lens_critical_resolved -> false     all_critical_resolved -> false
+> event finding_deferred id=BH-001 reason=theoretical    (exit 0)
+>   lens_critical_resolved -> TRUE      all_critical_resolved -> false
+> ```
+>
+> Both clauses came to the lens site, and both are separately pinned — see V7.
 
 Sequence after W09 — both end in an unearned `finding_deferred` carrying
 `reason=theoretical`, and 25 tells you what the provenance field must survive.
@@ -3284,17 +3301,15 @@ saying "machine-written" while their bodies type it by hand.
 
 ### Plan
 
-- [ ] **1. Provenance.** Either `restricted = true` on the courier's path with a
-      separate agent-writable spelling, or a provenance field on `finding_deferred`
-      that only `record_authed_event` can set — with the conjunct filtering on
-      **that**. `context_reset`'s `trigger='session_start'` (`restricted` + `host` +
-      a hash-pinned writer) is the pattern done right and is the model to copy
-      — ⛔ **STOPPED upstream.** Both branches are unbuildable as written (see
-      the box above). `context_reset` is a clean model precisely because it has
-      **no transition emits**; `finding_deferred` has three, which is the whole
-      difference. **RULED (Jon, 2026-09-05): file the ask and wait** —
-      [sahjhan#50](https://github.com/jbrjake/sahjhan/issues/50). The event
-      split was put and declined; do not build it as an interim
+- [x] **1. Provenance.** Neither branch the unit proposed exists to build.
+      What shipped instead is `AND d.recorded_by =
+      'hook:hooks/theoretical_courier.py'` on the exclusion in **both**
+      queries — no `events.toml` edit, no new event type, no `restricted`.
+      The courier already records through the daemon's `record_event` rather
+      than by shelling out to the CLI (`_common.record_authed_event`), and
+      `hooks/theoretical_courier.py` was already in `trusted-callers.toml`, so
+      the identity the daemon verifies and the identity it stamps are one
+      fact. **Nothing about the write path changed; only what the gate counts.**
 - [x] **2. Correlation.** The exclusion never checks that the finding it excuses is
       *graded* `theoretical`. Add the latest-filing correlation the other conjuncts
       carry:
@@ -3337,12 +3352,20 @@ Driven against a **real ledger** (`bin/sahjhan` at the pinned 0.27.0, a
       `test_a_theoretical_critical_converges_on_its_deferral` and
       `test_the_theoretical_finding_is_deferred` (real daemon), all green
       before and after. Evidence: `::test_the_courier_route_still_converges`
-- [ ] **V3** Rewrite both guard tests to drive the **courier**, not the CLI.
-      ⛔ **Belongs with step 1 and is blocked on it.** Right now the two paths
-      write a *byte-identical* ledger row, so a test driving the courier would
-      assert nothing the CLI test does not already assert — the rewrite only
-      becomes meaningful once provenance makes the rows distinguishable.
-      Recorded rather than done, so it is not mistaken for covered
+- [x] **V3** Both guard tests now drive the **courier**, and the rewrite means
+      something because the rows are no longer identical.
+      `test_fix_loop_eligibility.py`'s `TestEveryCriticalHasARoute::test_a_
+      theoretical_critical_converges_on_its_deferral` and the lens class's
+      counterpart fire `theoretical_courier.py` against a real daemon through
+      the new `_Board.defer_by_courier()`; `test_theoretical_defer.py`'s
+      `test_a_theoretical_deferral_converges_a_critical` split in two — the
+      earned half moved to `TestTheCourierWritesForReal::test_the_deferral_it_
+      writes_converges_a_critical`, and what stays on the no-daemon board is
+      `test_an_agent_typed_deferral_does_not_converge_a_critical`.
+      `::test_the_row_it_writes_names_it_as_the_writer` and
+      `::test_the_two_writers_are_distinguishable_in_the_ledger` pin the
+      mechanism at the row, so none of the gate assertions can go vacuous
+      without a named test saying so
 - [x] **V4** The fourth word added to
       `test_an_ordinary_deferral_still_does_not_converge` — every finding
       there is filed `user_reachable`, so `theoretical` now belongs in the
@@ -3362,11 +3385,39 @@ Driven against a **real ledger** (`bin/sahjhan` at the pinned 0.27.0, a
       which is the unchanged-behaviour arm. **Step 1's arm is owed with step 1**;
       the unit requires a *distinct* test per fix and that cannot be shown for
       a fix that has not been built
-- [x] **V6b · the limit, asserted rather than left to prose**
-      `::test_the_provenance_half_is_not_closed_here` records that an
-      agent-typed deferral on a finding graded `theoretical` still closes the
-      CRITICAL, and says to **invert it, not delete it**, when provenance
-      lands. Without this the file would read as if item 18 were closed
+- [x] **V6b · the limit, inverted rather than deleted, as it asked to be**
+      `::test_the_provenance_half_is_not_closed_here` asserted that an
+      agent-typed deferral on a finding graded `theoretical` closed the
+      CRITICAL. It is now
+      `::test_an_agent_typed_deferral_does_not_close_a_theoretical_critical`
+      and requires the opposite, with
+      `::test_the_agent_typed_deferral_is_still_accepted` beside it asserting
+      **which** — the row lands and simply does not count, exactly as step 2's
+      arm does. It runs on `board`, not `live`: the agent's route is the CLI
+      and no daemon is needed to show it no longer counts
+- [x] **V7 · non-vacuity, step 1's arm and the lens site's** Three targeted
+      single-line mutations, all run in one sitting against the same tree, each
+      caught by a **distinct** test and none taking down an unpredicted one:
+
+      | mutation | red |
+      |---|---|
+      | drop `recorded_by` from `all_critical_resolved` | `::test_an_agent_typed_deferral_does_not_close_a_theoretical_critical` + `test_theoretical_defer.py::…::test_an_agent_typed_deferral_does_not_converge_a_critical` |
+      | drop `recorded_by` from `lens_critical_resolved` | `::test_no_agent_typed_deferral_closes_a_lens_critical[theoretical-theoretical]` |
+      | revert the lens site's correlation | `::test_the_courier_does_not_close_one_the_board_calls_reachable` |
+
+      The second and third rows are the finding worth carrying: at the lens
+      gate the two clauses **do not overlap**. Provenance alone already
+      refuses `[user_reachable-theoretical]`, so the correlation's whole
+      remaining job there is the case where a probe re-grades a finding
+      **after** the courier deferred it — the one row a courier-written
+      deferral cannot answer for. Neither clause is redundant and neither
+      covers the other
+- [x] **V8 · the lens site drives the whole matrix**
+      `TestTheLensGateHoldsTheSameExclusionToTheSameTerms` parametrises all
+      four grade x reason combinations against the agent's CLI route (all
+      four must refuse), then runs the courier's route to `true` so the
+      matrix cannot be satisfied by a query that refuses everything, then
+      re-grades after a courier deferral
 
 ---
 

@@ -53,6 +53,7 @@ _COMMON = ["--field", "project=t", "--field", "run=1", "--field", "auditor=holtz
 
 _SCRIPT = os.path.join(SCRIPTS_DIR, "hardening_batch.py")
 _COURIER = os.path.join(HOOKS_DIR, "hardening_batch_courier.py")
+_THEORETICAL_COURIER = os.path.join(HOOKS_DIR, "theoretical_courier.py")
 
 _CONVERGENCE_DOC = os.path.join(
     REPO_ROOT, "skills", "holtz", "references", "phase-convergence.md")
@@ -231,6 +232,31 @@ class _Board:
                 "tool_name": "Bash",
                 "tool_input": {"command": command},
                 "tool_response": {"output": output, "exit_code": exit_code},
+                "cwd": self.root,
+            }),
+            capture_output=True, text=True, timeout=60, env=self.env,
+            cwd=self.root,
+        )
+
+    def defer_by_courier(self):
+        """Fire `theoretical_courier.py`, which is the only writer of a
+        deferral the theoretical exclusion counts.
+
+        `defer(id, reason="theoretical")` types the same field values through
+        the CLI, and the two rows are identical in `fields`. They differ in
+        `recorded_by`: the engine stamps the CLI write `agent:cli` and stamps
+        this one `hook:hooks/theoretical_courier.py`, because the daemon
+        verified the peer against `trusted-callers.toml` before appending.
+
+        Needs a real daemon — `record_event` from an unverified caller is
+        refused — so callers use the `live` board, not `board`.
+        """
+        return subprocess.run(
+            [sys.executable, _THEORETICAL_COURIER],
+            input=json.dumps({
+                "tool_name": "Bash",
+                "tool_input": {"command": "sahjhan event finding --field id=x"},
+                "tool_response": {"output": "", "exit_code": 0},
                 "cwd": self.root,
             }),
             capture_output=True, text=True, timeout=60, env=self.env,

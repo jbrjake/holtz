@@ -269,17 +269,25 @@ class TestAnAutoDeferredCriticalIsStillFixable:
                 "after re-filing, so the only route back onto the board closes"
             )
 
-    def test_a_theoretical_deferral_converges_a_critical(self, board):
-        """The other half of the pair. This is the escape D34's eligibility
-        gate rests on; `test_fix_loop_eligibility.py` drives the whole set of
-        routes, and this one pins the reason word."""
+    def test_an_agent_typed_deferral_does_not_converge_a_critical(self, board):
+        """The escape belongs to the courier, and to nothing else.
+
+        Typing the deferral through the CLI is the forged path, not the route:
+        the CLI write is stamped `agent:cli` and the exclusion counts only
+        `hook:hooks/theoretical_courier.py`. The earned half is in
+        `TestTheCourierWritesForReal`, which is where a daemon exists to
+        produce that row.
+        """
         from _protocol_cache import named_query_sql  # noqa: PLC0415
 
         board.file("BH-001", severity="CRITICAL")
         sql = named_query_sql(CONFIG_DIR, "all_critical_resolved")
         assert "false" in board.sah("query", sql, "--format", "json").stdout.lower()
         board.defer("BH-001", reason="theoretical")
-        assert "true" in board.sah("query", sql, "--format", "json").stdout.lower()
+        assert "false" in board.sah("query", sql, "--format", "json").stdout.lower(), (
+            "an agent-typed finding_deferred closed a CRITICAL — the exclusion "
+            "is not reading recorded_by"
+        )
 
     def test_a_discretionary_deferral_does_not(self, board):
         """The exclusion is one word wide. A CRITICAL deferred `low_priority`
@@ -359,10 +367,10 @@ class TestTheCourierWritesForReal:
             cwd=real_daemon["project_root"], capture_output=True, text=True, timeout=60,
         )
 
-    def _file(self, real_daemon, finding_id, reachability):
+    def _file(self, real_daemon, finding_id, reachability, severity="HIGH"):
         result = self._sah(
             real_daemon, "event", "finding", "--field", f"id={finding_id}",
-            "--field", "severity=HIGH", "--field", "category=bug/logic",
+            "--field", f"severity={severity}", "--field", "category=bug/logic",
             "--field", "location=a.py:1", "--field", "perspective=component",
             "--field", "predicted_by=none", "--field", f"reachability={reachability}",
             "--field", "description=x", *_COMMON)
@@ -402,6 +410,45 @@ class TestTheCourierWritesForReal:
         self._fire(real_daemon)
         self._fire(real_daemon)
         assert self._deferred(real_daemon) == ["BH-001"]
+
+    def test_the_row_it_writes_names_it_as_the_writer(self, real_daemon):
+        """The mechanism the exclusion rests on, read at the row.
+
+        `all_critical_resolved` and `lens_critical_resolved` both require this
+        exact literal. It is the manifest key the daemon verified the peer
+        against — the identity it checks and the identity it stamps are one
+        fact — so a rename of this file, or its removal from
+        `trusted-callers.toml`, silently empties both exclusions.
+        """
+        self._file(real_daemon, "BH-001", "theoretical")
+        assert self._fire(real_daemon).returncode == 0
+        rows = self._sah(
+            real_daemon, "query",
+            "SELECT recorded_by FROM events WHERE type='finding_deferred'",
+            "--format", "json").stdout
+        assert [r["recorded_by"] for r in json.loads(rows)] == [
+            "hook:hooks/theoretical_courier.py"
+        ]
+
+    def test_the_deferral_it_writes_converges_a_critical(self, real_daemon):
+        """The escape D34's eligibility gate rests on, driven end to end.
+
+        A `theoretical` CRITICAL has no other route: `fix_commit` refuses the
+        grade, `merge_finding` refuses an already-closed finding, and the
+        hardening batch's population is `fault_injected` and open. If the
+        courier's own row stops satisfying the conjunct, a run that files one
+        cannot converge at all.
+        """
+        from _protocol_cache import named_query_sql  # noqa: PLC0415
+
+        self._file(real_daemon, "BH-001", "theoretical", severity="CRITICAL")
+        sql = named_query_sql(CONFIG_DIR, "all_critical_resolved")
+        before = self._sah(real_daemon, "query", sql, "--format", "json").stdout
+        assert "false" in before.lower(), before
+
+        assert self._fire(real_daemon).returncode == 0
+        after = self._sah(real_daemon, "query", sql, "--format", "json").stdout
+        assert "true" in after.lower(), after
 
 
 # ── Registration ─────────────────────────────────────────────────────────────

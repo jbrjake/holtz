@@ -187,15 +187,25 @@ class TestEveryCriticalHasARoute:
         live.batch("tqdm", ["tqdm/std.py"])
         assert self._all_critical_resolved(live) == "true"
 
-    def test_a_theoretical_critical_converges_on_its_deferral(self, board):
+    def test_a_theoretical_critical_converges_on_its_deferral(self, live):
         """Route 3, and the one D34's ruling did not cover. A `theoretical`
         deferral is machine-written and says no path was found; it is not the
-        discretionary act `all_critical_resolved` refuses."""
-        board.file("BH-001", "a.py:1", severity="CRITICAL",
-                   reachability="theoretical")
-        assert self._all_critical_resolved(board) == "false"
-        board.defer("BH-001", reason="theoretical")
-        assert self._all_critical_resolved(board) == "true"
+        discretionary act `all_critical_resolved` refuses.
+
+        **V3 — driven through the courier, not the CLI.** This is one of the
+        two guard tests item 18 named: it asserted the escape while typing the
+        deferral by hand, so it demonstrated the forged path and called it the
+        route. Now that the exclusion filters on `recorded_by`, the two are no
+        longer interchangeable and this test would pass for the wrong reason
+        if it kept typing the row.
+        """
+        live.file("BH-001", "a.py:1", severity="CRITICAL",
+                  reachability="theoretical")
+        assert self._all_critical_resolved(live) == "false"
+        courier = live.defer_by_courier()
+        assert courier.returncode == 0, courier.stderr
+        assert "NOT recorded" not in courier.stdout, courier.stdout
+        assert self._all_critical_resolved(live) == "true"
 
     def test_an_ordinary_deferral_still_does_not_converge(self, board):
         """The counterweight, and it must not be an empty set: the exclusion
@@ -254,11 +264,20 @@ class TestTheReasonWordDoesNotOutrankTheBoard:
     `attestation = "agent"` and `event` is on the bootstrap allowlist, so
     nothing refuses the write. What changed is that it no longer counts.
 
-    **This class covers half of item 18.** A finding genuinely graded
-    `theoretical` can still have its deferral typed by the agent instead of
-    written by `theoretical_courier.py`, and no test here can tell those
-    apart, because the ledger row is identical. That is the provenance half,
-    and it is open — see `test_the_provenance_half_is_not_closed_here`.
+    **The class covers both halves of item 18.** The second is provenance: on
+    a finding genuinely graded `theoretical`, the courier's deferral and an
+    agent-typed one were a byte-identical ledger row, so no query could tell
+    them apart. sahjhan 0.28.0 (#50) gives every ledger entry a `recorded_by`
+    column the engine writes about the append — `agent:cli` for a CLI write,
+    `hook:hooks/theoretical_courier.py` for a `record_event` from a peer the
+    daemon verified against `trusted-callers.toml`. Nothing declares it and no
+    `--field recorded_by=…` can supply it, so the exclusion can key on the
+    writer directly.
+
+    The two arms therefore need different fixtures, and that asymmetry is the
+    point rather than an inconvenience: the negative runs on any board, and
+    the positive **cannot be reached without a real daemon**. A test process
+    asking for a `hook:` row is refused.
     """
 
     def _all_critical_resolved(self, board):
@@ -300,19 +319,50 @@ class TestTheReasonWordDoesNotOutrankTheBoard:
             "simply not count toward the conjunct"
         )
 
-    def test_the_courier_route_still_converges(self, board):
+    def test_the_courier_route_still_converges(self, live):
         """V2. A provenance fix that breaks the courier trades #79 for #73.
 
         The same guarantee for the correlation: a genuinely theoretical
         CRITICAL is auto-deferred at filing and must still close, or a run
-        that files one has no route left at all.
+        that files one has no route left at all. Now driven through the
+        courier, which is the only thing that makes this claim mean anything
+        once the exclusion reads `recorded_by`.
         """
-        board.file("BH-001", "a.py:1", severity="CRITICAL",
-                   reachability="theoretical")
-        board.defer("BH-001", reason="theoretical")
-        assert self._all_critical_resolved(board) == "true"
+        live.file("BH-001", "a.py:1", severity="CRITICAL",
+                  reachability="theoretical")
+        courier = live.defer_by_courier()
+        assert courier.returncode == 0, courier.stderr
+        assert self._all_critical_resolved(live) == "true"
 
-    def test_a_regrade_to_user_reachable_reopens_the_critical(self, board):
+    def test_the_two_writers_are_distinguishable_in_the_ledger(self, live):
+        """The mechanism, asserted at the row rather than only at the gate.
+
+        Both deferrals carry `reason='theoretical'` and identical fields; if
+        they ever again agree on `recorded_by`, every provenance assertion in
+        this file starts passing vacuously and the gate below it means nothing.
+
+        Two findings rather than one, because the courier is idempotent by
+        construction: `open_theoretical_findings` drops any id that already
+        carries a deferral, so a second row for BH-001 is not something the
+        courier can be made to write.
+        """
+        live.file("BH-001", "a.py:1", severity="CRITICAL",
+                  reachability="theoretical")
+        live.file("BH-002", "a.py:2", severity="CRITICAL",
+                  reachability="theoretical")
+        live.defer("BH-001", reason="theoretical")
+        assert live.defer_by_courier().returncode == 0
+
+        out = live.sah("query", "SELECT id, recorded_by FROM events "
+                       "WHERE type='finding_deferred' ORDER BY seq",
+                       "--format", "json").stdout
+        writers = {row["id"]: row["recorded_by"] for row in json.loads(out)}
+        assert writers == {
+            "BH-001": "agent:cli",
+            "BH-002": "hook:hooks/theoretical_courier.py",
+        }, f"the two writers are no longer distinguishable: {writers}"
+
+    def test_a_regrade_to_user_reachable_reopens_the_critical(self, live):
         """V5. The contradictory row is now noticed, and it is noticed late.
 
         A probe that establishes a path re-files the finding `user_reachable`.
@@ -320,33 +370,61 @@ class TestTheReasonWordDoesNotOutrankTheBoard:
         so before the correlation the CRITICAL stayed closed on the strength of
         a grade the board no longer held. The conjunct reads the *latest*
         filing, so the re-grade puts it back on the board.
+
+        The baseline is the courier's row now, or the test would open on a
+        `false` that the provenance filter produced and prove nothing about
+        the correlation it is here for.
         """
-        board.file("BH-001", "a.py:1", severity="CRITICAL",
-                   reachability="theoretical")
-        board.defer("BH-001", reason="theoretical")
-        assert self._all_critical_resolved(board) == "true", "baseline"
-        board.file("BH-001", "a.py:1", severity="CRITICAL",
-                   reachability="user_reachable")
-        assert self._all_critical_resolved(board) == "false", (
+        live.file("BH-001", "a.py:1", severity="CRITICAL",
+                  reachability="theoretical")
+        assert live.defer_by_courier().returncode == 0
+        assert self._all_critical_resolved(live) == "true", "baseline"
+        live.file("BH-001", "a.py:1", severity="CRITICAL",
+                  reachability="user_reachable")
+        assert self._all_critical_resolved(live) == "false", (
             "a probe established a path to a CRITICAL and it stayed closed on "
             "a deferral filed against the grade it no longer has"
         )
 
-    def test_the_provenance_half_is_not_closed_here(self, board):
-        """The honest limit of this fix, asserted rather than left to prose.
+    def test_an_agent_typed_deferral_does_not_close_a_theoretical_critical(self, board):
+        """Item 18's second half — the inversion of the limit this file used
+        to record as open, kept in place rather than deleted.
 
-        On a finding graded `theoretical`, an agent-typed deferral and the
-        courier's are the same ledger row, so the conjunct cannot distinguish
-        them and this one closes the CRITICAL. That is item 18's second half.
-        If this test ever fails, provenance has landed and this file should
-        say so — do not delete it, invert it.
+        The correlation shut the case where the *board* contradicts the reason
+        word. This is the case where it agrees: the finding really is graded
+        `theoretical`, and the only thing separating an earned closure from a
+        typed one is who wrote the deferral. Before `recorded_by` the two rows
+        were identical and this assertion read `true`.
+
+        `board`, not `live`, on purpose — the agent's route is the CLI, and no
+        daemon is needed to demonstrate that it no longer counts.
         """
         board.file("BH-001", "a.py:1", severity="CRITICAL",
                    reachability="theoretical")
         board.defer("BH-001", reason="theoretical")
-        assert self._all_critical_resolved(board) == "true", (
-            "provenance appears to have landed — item 18's second half is "
-            "closed, so invert this test rather than removing it"
+        assert self._all_critical_resolved(board) == "false", (
+            "a CRITICAL was closed by an agent-typed finding_deferred that no "
+            "courier wrote — the exclusion is not reading recorded_by"
+        )
+
+    def test_the_agent_typed_deferral_is_still_accepted(self, board):
+        """Assert *which*, the same way step 2's arm does.
+
+        The write is not refused and must not become refused: `finding_deferred`
+        stays `attestation = "agent"` so the three discretionary reasons keep
+        working, and the row lands. What the provenance filter changes is what
+        the conjunct counts, not what the ledger accepts.
+        """
+        board.file("BH-001", "a.py:1", severity="CRITICAL",
+                   reachability="theoretical")
+        board.defer("BH-001", reason="theoretical")
+        out = board.sah("query", "--type", "finding_deferred",
+                        "--format", "jsonl").stdout
+        rows = [json.loads(line) for line in out.splitlines() if line.strip()]
+        assert [r for r in rows if r["id"] == "BH-001"
+                and r["reason"] == "theoretical"], (
+            "the deferral row is missing — it must land in the ledger and "
+            "simply not count toward the conjunct"
         )
 
 
@@ -398,14 +476,16 @@ class TestEveryCriticalHasARouteAtTheLensGate:
         live.batch("tqdm", ["tqdm/std.py"])
         assert self._resolved(live) == "true"
 
-    def test_a_theoretical_critical_converges_on_its_deferral(self, board):
+    def test_a_theoretical_critical_converges_on_its_deferral(self, live):
         """Route 3 — the machine-written deferral, inherited from
-        `all_critical_resolved` along with the rest of the predicate."""
-        board.file("BH-001", "a.py:1", severity="CRITICAL",
-                   reachability="theoretical", perspective=self.LENS)
-        assert self._resolved(board) == "false"
-        board.defer("BH-001", reason="theoretical")
-        assert self._resolved(board) == "true"
+        `all_critical_resolved` along with the rest of the predicate, and
+        driven through the courier for the same reason the run-wide one is."""
+        live.file("BH-001", "a.py:1", severity="CRITICAL",
+                  reachability="theoretical", perspective=self.LENS)
+        assert self._resolved(live) == "false"
+        courier = live.defer_by_courier()
+        assert courier.returncode == 0, courier.stderr
+        assert self._resolved(live) == "true"
 
     def test_an_ordinary_deferral_still_does_not_close_one(self, board):
         """Non-vacuity for the exclusion: it is scoped to the one machine
@@ -414,6 +494,96 @@ class TestEveryCriticalHasARouteAtTheLensGate:
                    reachability="user_reachable", perspective=self.LENS)
         board.defer("BH-001", reason="low_priority")
         assert self._resolved(board) == "false"
+
+
+class TestTheLensGateHoldsTheSameExclusionToTheSameTerms:
+    """The lens door is the same conjunct thirteen times, and it was not.
+
+    `lens_critical_resolved` is `all_critical_resolved` with the lens bound,
+    and its comment said so — but W16 step 2 corrected only the run-wide one,
+    so for a day the correlation existed at `converge` and not at the door the
+    run passes thirteen times. Measured on the pinned engine before this fix:
+
+        file BH-001 severity=CRITICAL reachability=user_reachable
+          lens_critical_resolved  -> false      all_critical_resolved -> false
+        event finding_deferred id=BH-001 reason=theoretical      (exit 0)
+          lens_critical_resolved  -> TRUE       all_critical_resolved -> false
+
+    The consequence was bounded — `converge` still refused the run — but it is
+    item 18's own defect, at a door reached twelve times before that one, and
+    the comment claiming parity is what would have kept it hidden.
+
+    The whole grade x reason matrix, so neither half can be reverted quietly.
+    """
+
+    LENS = "security"
+
+    def _resolved(self, board):
+        sql = _named_query("lens_critical_resolved").replace(
+            "{{current_perspective}}", self.LENS)
+        assert "{{" not in sql, sql
+        out = board.sah("query", sql, "--format", "json").stdout
+        return str(list(json.loads(out)[0].values())[0])
+
+    @pytest.mark.parametrize("grade,reason", [
+        ("user_reachable", "theoretical"),
+        ("user_reachable", "low_priority"),
+        ("theoretical", "low_priority"),
+        ("theoretical", "theoretical"),
+    ])
+    def test_no_agent_typed_deferral_closes_a_lens_critical(self, board, grade, reason):
+        """Four combinations, one answer: an agent-typed deferral closes none
+        of them. Row 1 is the correlation's arm (the board contradicts the
+        word), row 4 is provenance's (the board agrees and the writer is still
+        wrong), and rows 2-3 are the conjunct doing what it always did.
+        """
+        board.file("BH-001", "a.py:1", severity="CRITICAL",
+                   reachability=grade, perspective=self.LENS)
+        assert self._resolved(board) == "false", "baseline"
+        board.defer("BH-001", reason=reason)
+        assert self._resolved(board) == "false", (
+            f"a CRITICAL graded {grade} was closed at the lens gate by an "
+            f"agent-typed deferral reading reason={reason}"
+        )
+
+    def test_the_courier_still_closes_a_theoretical_lens_critical(self, live):
+        """The escape, which the matrix above would otherwise let a broken
+        query satisfy by refusing everything. A lens carrying a theoretical
+        CRITICAL must still be completable: `fix_commit` refuses the grade
+        (`item_is_user_reachable`), the hardening batch's population is
+        `fault_injected`, and re-grading to clear a gate is the forgery D34
+        names — so with this closed the run wedges at the first such lens with
+        twelve still to go.
+        """
+        live.file("BH-001", "a.py:1", severity="CRITICAL",
+                  reachability="theoretical", perspective=self.LENS)
+        assert self._resolved(live) == "false", "baseline"
+        courier = live.defer_by_courier()
+        assert courier.returncode == 0, courier.stderr
+        assert "NOT recorded" not in courier.stdout, courier.stdout
+        assert self._resolved(live) == "true", (
+            "the courier deferred a theoretical CRITICAL and the lens gate "
+            "still refuses — the block names an act that does not clear it"
+        )
+
+    def test_the_courier_does_not_close_one_the_board_calls_reachable(self, live):
+        """The correlation, at the lens door, with the *right* writer.
+
+        Provenance alone would let a courier row close a CRITICAL the run has
+        since re-filed `user_reachable` — the row cannot move, so only reading
+        the latest filing catches it. This is why both clauses came here and
+        not just the one the plan named.
+        """
+        live.file("BH-001", "a.py:1", severity="CRITICAL",
+                  reachability="theoretical", perspective=self.LENS)
+        assert live.defer_by_courier().returncode == 0
+        assert self._resolved(live) == "true", "baseline"
+        live.file("BH-001", "a.py:1", severity="CRITICAL",
+                  reachability="user_reachable", perspective=self.LENS)
+        assert self._resolved(live) == "false", (
+            "a probe established a path and the lens gate stayed closed on a "
+            "deferral filed against the grade the board no longer holds"
+        )
 
 
 # ── The worklist has to show what is workable ────────────────────────────────

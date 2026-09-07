@@ -487,22 +487,61 @@ intent = "a pattern round must close or merge at least as many findings as it op
 # correlated subquery — same predicate, and it stays inside the shape this
 # file notes the planner accepts.
 #
-# **This is half of item 18 and the config should not be read as claiming
-# otherwise.** The remaining half is provenance: a finding *graded*
-# `theoretical` can still have its deferral typed by the agent rather than
-# written by the courier. Closing that needs a decision that is not this
-# query's to make — `restricted` is per-event, and a restricted event cannot
-# be a transition emit (the engine refuses the config, and `finding_deferred`
-# carries three), so it would mean splitting the courier's deferral into its
-# own event type. Open for Jon; see the worklist's W16.
+# The second half is provenance, and `d.recorded_by` is what carries it. The
+# grade agreeing with the reason word is not enough on its own: on a finding
+# genuinely graded `theoretical`, the courier's deferral and one the agent
+# typed are identical in every declared field, so the exclusion has to key on
+# the writer.
+#
+# `recorded_by` is a ledger *entry* column (sahjhan 0.28.0, #50), not a
+# declared field — it sits beside `seq`, `ts`, `hash` and `prev`, the engine
+# writes it about the append, and `events.toml` declares nothing to get it.
+# `--field recorded_by=…` lands in the event's fields as ordinary data and
+# leaves the column alone; measured, not inferred. `Ledger::append` takes the
+# recorder as a required argument, so a new route to the ledger cannot appear
+# without naming itself.
+#
+# The literal is the manifest key the daemon verified the peer against, so the
+# identity it checks and the identity it stamps are one fact. Renaming
+# `theoretical_courier.py`, or dropping it from `trusted-callers.toml`, empties
+# this exclusion — `sahjhan lint` L8 errors on a `recorded_by` filter naming a
+# script no writer can be, which is what keeps that from being silent.
+#
+# The whole domain of the field at this filter, so no value is stranded
+# unexamined:
+#
+#     hook:hooks/theoretical_courier.py  the courier over the daemon socket
+#                                        — excluded, and the only thing that is
+#     agent:cli                          `sahjhan event finding_deferred`
+#                                        — counts, which is the fix
+#     agent:hook-eval                    a hook rule's `auto_record`; no rule
+#                                        here records `finding_deferred`
+#     authed:cli                         `authed-event`, which refuses any
+#                                        event that is not `restricted`
+#     engine:emit:defer_{cant_reproduce, the three transition emits, all of
+#       low,medium}                      which carry another `reason` word
+#     import:<source>                    `ledger import`, which validates
+#                                        nothing — deliberately not excluded
+#     daemon:unverified                  `record_event` with no manifest
+#                                        configured; enforcement is already
+#                                        degraded there and this fails closed
+#
+# ⚠️ An entry written before 0.28.0 has no `recorded_by` and reads as the empty
+# string, so its deferral stops counting. That is fail-closed and there is no
+# shim for it: the empty value cannot tell the courier's old row from the
+# agent's, so tolerating it would re-open exactly this hole for those ledgers.
+# A run that crosses the upgrade already carrying a deferred `theoretical`
+# CRITICAL cannot re-earn the closure — the courier is idempotent through
+# `open_theoretical_findings`, which drops any id that carries a deferral — and
+# has to be re-run.
 #
 # Every other reason word still refuses. `low_priority`, `medium_budget` and
 # `cant_reproduce` are discretionary acts, and refusing them is what this
 # conjunct is for; `test_an_ordinary_deferral_still_does_not_converge` fails
 # the build if the exclusion ever widens past the one machine-written word.
 [queries.all_critical_resolved]
-sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND NOT (f.reachability='theoretical' AND f.id IN (SELECT d.id FROM events d WHERE d.type='finding_deferred' AND d.reason='theoretical')))"
-intent = "every CRITICAL finding must be resolved — only a theoretical auto-deferral of a finding graded theoretical closes one without a fix"
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND NOT (f.reachability='theoretical' AND f.id IN (SELECT d.id FROM events d WHERE d.type='finding_deferred' AND d.reason='theoretical' AND d.recorded_by='hook:hooks/theoretical_courier.py')))"
+intent = "every CRITICAL finding must be resolved — only the courier's theoretical deferral of a finding graded theoretical closes one without a fix"
 
 [queries.all_user_reachable_high_closed]
 sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='HIGH' AND f.reachability='user_reachable' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"
@@ -538,15 +577,27 @@ intent = "every user-reachable HIGH finding must be resolved or deferred"
 # it (Jon, 2026-09-01). The `perspective` *column* is the event field's
 # spelling and is an implementation identifier, unchanged by that ruling.
 
-# `all_critical_resolved` with the lens bound, `reason='theoretical'` exclusion
-# and all. Dropping the exclusion here would strand a theoretical CRITICAL at
-# every one of the thirteen doors: `fix_commit` refuses it
-# (`item_is_user_reachable`), the hardening batch's population is
-# `fault_injected`, and re-grading to clear a gate is a forgery — the wedge D34
-# ruled out at `converge`, thirteen times over.
+# `all_critical_resolved` with the lens bound, and the exclusion held to the
+# same two terms — the finding's own latest filing must grade it `theoretical`,
+# and the courier must be the writer. This is the door a run passes thirteen
+# times, so a term that holds only at `converge` is a term that holds after
+# twelve chances to have mattered.
+#
+# Dropping the exclusion here would strand a theoretical CRITICAL at every one
+# of the thirteen doors: `fix_commit` refuses it (`item_is_user_reachable`),
+# the hardening batch's population is `fault_injected`, and re-grading to clear
+# a gate is a forgery — the wedge D34 ruled out at `converge`, thirteen times
+# over. `TestTheLensGateHoldsTheSameExclusionToTheSameTerms` drives the whole
+# grade x reason matrix plus the courier's route, so neither term can be
+# reverted quietly and the escape cannot be closed by mistake.
+#
+# The two predicates cannot be one named query — `{{current_perspective}}`
+# binds only here, and a named query cannot reference another — so they are
+# two texts deciding one fact, which is what `sahjhan lint` L6 reports and
+# `enforcement_lint` H7 governs. Change one, change both.
 [queries.lens_critical_resolved]
-sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.perspective='{{current_perspective}}' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred' AND d.reason='theoretical'))"
-intent = "every CRITICAL filed under this lens must be resolved — only a theoretical auto-deferral closes one without a fix"
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.perspective='{{current_perspective}}' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND NOT (f.reachability='theoretical' AND f.id IN (SELECT d.id FROM events d WHERE d.type='finding_deferred' AND d.reason='theoretical' AND d.recorded_by='hook:hooks/theoretical_courier.py')))"
+intent = "every CRITICAL filed under this lens must be resolved — only the courier's theoretical deferral of a finding graded theoretical closes one without a fix"
 
 # `all_user_reachable_high_closed` with the lens bound. The reachability filter
 # is what item 3's second consequence needs: under the run-wide gate one open

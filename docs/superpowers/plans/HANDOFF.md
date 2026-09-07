@@ -28,16 +28,19 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**16 of 32 units · 21 of 51 items · 30 items across 16 units remain.**
-W13 and W16 are both `WIP`, not done. W13 closed item 37 and left item 17
-open; W16 landed step 2 and left step 1 open on a question. **Neither moves
-the unit count, and W16 does not move the item count either** — item 18 is
-half closed, and a half-closed item is an open item.
+**17 of 32 units · 22 of 51 items · 29 items across 15 units remain.**
+W13 is `WIP`, not done: it closed item 37 and left item 17 open **by ruling**,
+so it moves the item count and not the unit count.
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
-W12 (34, 28) · W11 (42) · W14 (5, 10) · W31 (50) · W15 (30). Commits are in
-`git log`; do not re-summarise them here.
+W12 (34, 28) · W11 (42) · W14 (5, 10) · W31 (50) · W15 (30) · W16 (18).
+Commits are in `git log`; do not re-summarise them here.
+
+**The dashboard rows lag the unit sections.** W15 and W16 both sat at `TODO`
+in the table while their sections read `DONE`/`WIP`. Corrected — but the rule
+that matters is the one that catches it: **count the dashboard *and* read the
+sections, and reconcile them, before writing any number here.**
 
 **W15 landed 2026-09-04** — the first P3 unit. All eight sites converted to
 one segmentation owner, V1–V7 driven. Four things a later session will
@@ -165,38 +168,44 @@ The 1-in-4 rate seen earlier was the new test file's own fixture orphaning
 **both** arms. There is also no mechanism — the delta does not touch the
 healthy path's timing.
 
-### ⛔ Open for Jon — W16 step 1 is STOPPED, and it is the newest
+### ✅ W16 is closed — sahjhan#50 shipped, and the answer was not a field
 
-**Item 18's provenance half cannot be built as the unit writes it, either
-way.** Measured against the engine and the pinned binary, not inferred:
+**Provenance is a ledger entry column, `recorded_by`** (sahjhan 0.28.0). It
+sits beside `seq`, `ts`, `hash` and `prev`; every entry has one, `events.toml`
+declares nothing to get it, and `--field recorded_by=…` lands in the event's
+fields as inert data while the column keeps its own answer. So the event split
+that was put and declined is not merely unwanted — it is unnecessary, and the
+eight queries keyed on `type='finding_deferred'` were never touched.
 
-- **`restricted` is per-event, not per-field** (`sahjhan/src/config/events.rs:45`).
-  So "a provenance field only `record_authed_event` can set" has nothing to
-  attach to.
-- **A restricted event cannot be a transition emit** — the engine refuses the
-  config. `finding_deferred` carries three emits (`defer_cant_reproduce`,
-  `defer_low`, `defer_medium`), so marking it `restricted` yields
-  *"Configuration validation failed … restricted events require 'authed-event'
-  with an HMAC proof, not a transition emit"*, five times.
+**The four things a later session would otherwise re-derive:**
 
-`context_reset` is a clean model precisely because it has **no emits**. The
-only no-engine-change shape is a **separate restricted event type** for the
-courier's deferral, which ripples into every query keyed on
-`type='finding_deferred'` — eight of them, and a named query cannot reference
-another one, so it is eight inline copies of one fact: the #77/#82 drift shape
-two units were spent removing.
-
-**✅ RULED (Jon, 2026-09-05): file the upstream ask and stop.** Done —
-**[sahjhan#50](https://github.com/jbrjake/sahjhan/issues/50)**, *"events:
-provenance is all-or-nothing at the event level, so an event with emits can
-carry none"*. **Read that issue before doing anything further on item 18** —
-it carries the measured engine facts, the four `finding_deferred` write paths
-that must survive, and two decisions (refuse-vs-overwrite a caller-supplied
-provenance; the lint that keeps the filter from being unsatisfiable or
-decorative) that the answer will settle. Do **not** build the event split in
-the meantime; that is the workaround this ruling declined.
-
-W16's step 2 landed without it and is independent of the answer.
+- **The literal in the gate is `hook:hooks/theoretical_courier.py`** —
+  config-dir-relative, because it is the `trusted-callers.toml` key the daemon
+  verified the peer against. **`events.toml` declares the same writer as
+  `hook:enforcement/hooks/theoretical_courier.py`** and
+  `ENFORCEMENT-CONTRACT.md` prints *that* spelling, which matches no row.
+  `engine:emits:defer_low` (declared) vs `engine:emit:defer_low` (real) is the
+  same mismatch. **The declared producer ids are documentation and nothing
+  cross-checks them against the engine's values** — that is W17's H11 to fix,
+  and it is now the most concrete thing H11 could catch.
+- **`sahjhan lint` L8 is the guard on that literal, and it is real.**
+  Substituting a non-manifest path made L8 error on **both** queries and exit
+  3. Renaming the courier or dropping it from the manifest empties the
+  exclusion, and L8 is what refuses to let that be silent.
+- **At the lens gate the two clauses do not overlap.** Provenance alone
+  already refuses an agent-typed deferral on a `user_reachable` finding, so
+  the correlation's whole remaining job there is the re-grade *after* a
+  courier deferral. Reverting either one takes a different single test red.
+- ⚠️ **An entry written before 0.28.0 has no `recorded_by` and reads as the
+  empty string** — measured by writing a ledger with the 0.27.0 binary and
+  querying it with 0.28.0. Its deferral stops counting. **There is no shim:**
+  the empty value cannot tell the courier's old row from the agent's, so
+  tolerating it would re-open exactly this hole for those ledgers. A run that
+  crosses the upgrade already carrying a deferred `theoretical` CRITICAL
+  cannot re-earn the closure — `open_theoretical_findings` drops any id that
+  carries a deferral, so the courier will not re-fire — and has to be re-run.
+  Fail-closed and deliberate; recorded here because it is a real upgrade
+  consequence and nothing in the suite can show it.
 
 ### Open for Jon — two more, both raised, neither guessed at
 
@@ -334,19 +343,21 @@ W16's step 2 landed without it and is independent of the answer.
 
 ## Do this next
 
-### 1. ⭐ P3 — W17 (item 22), because W16 is half-blocked.
+### 1. ⭐ P3 — W17 (item 22). Its dependency is satisfied.
 
-P2 is finished and P3 has started: W15 is `DONE`. **W16 is `WIP`** — step 2
-(the correlation) landed, step 1 (provenance) is stopped on the question
-above, and V3 is blocked with it. W13 is `WIP` with item 37 closed and item 17
-open **by ruling** — that is decided, not blocking.
+P2 is finished and P3 is running: W15 and W16 are both `DONE`. W13 is `WIP`
+with item 37 closed and item 17 open **by ruling** — that is decided, not
+blocking.
 
-⚠️ **W17 records `Depends on: W16`.** Read that dependency before starting:
-W17 is the H11 lint rule binding "a gate filters on this value" to "only a
-hook may write it", and item 18 is its worked example. It may be doable
-against the *shape* of the rule with item 18's second half still open — or it
-may need the answer first. **Check, do not assume**, and if it needs W16's
-answer then P3's next startable unit is W18 (36, 33).
+**W17 records `Depends on: W16`, and W16 is now its worked example rather than
+its blocker.** W17 is the H11 lint rule binding "a gate filters on this value"
+to "only a hook may write it". Item 18's fix gives it three concrete things to
+be right about, all listed above: the `hook:hooks/…` vs
+`hook:enforcement/hooks/…` split between the gate and the declared producer,
+the `emit`/`emits` one beside it, and the fact that `sahjhan lint` L8 already
+covers the *gate* side — so H11's job is the side L8 cannot see, which is the
+declaration. **Read V1 before writing the rule: a new lint rule that passes on
+the code that motivated it is not a rule.**
 
 Then W19 (40, 47), W20 (41, 38), W21 (9). After P3: P4 (W23–W30) and the
 `WIP` stragglers (W16's step 1, W13's item 17, W32's step 3).
@@ -485,11 +496,17 @@ difference was measurable in one command against the binary.
 
 ## Environment
 
-sahjhan pinned at **v0.27.0** since `0605ed2` (`_resolve.SAHJHAN_VERSION`
-governs; the marker and binary self-heal to it). `check_sahjhan_pin.py` exit 0,
-`bin/sahjhan --version` → `sahjhan 0.27.0`, and all four vendored binaries match
-the release's published `SHA256SUMS`. Keep in mind what a green pin check does
-and does not say: it says the three places agree, not that they agree on the
+sahjhan pinned at **v0.28.0** (`_resolve.SAHJHAN_VERSION` governs; the marker
+and binary self-heal to it). `check_sahjhan_pin.py` exit 0, `bin/sahjhan
+--version` → `sahjhan 0.28.0`, and all four vendored binaries match the
+release's published `SHA256SUMS`. Keep in mind what a green pin check does and
+does not say: it says the three places agree, not that they agree on the
 version you want — check the binary itself.
+
+**0.28.0 makes the ledger entry's own column names reserved** — `recorded_by`,
+`seq`, `ts`, `type`, `hash`, `prev`, `schema`, `engine`, `protocol`. A config
+declaring a field with one of those now fails validation instead of breaking
+every query at runtime with a duplicate column. `events.toml` declares none of
+them; `validate` is `valid.` and `lint` is 0 errors / 7 warnings from 8 checks.
 `scripts/install-hooks.sh` defaults to dev mode — the plugin's enforcement hooks
 are **not** wired into this repo's own session, deliberately.
