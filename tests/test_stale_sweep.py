@@ -484,7 +484,43 @@ class TestTheCourierIsTrusted:
             callers = tomllib.load(fh)["callers"]
         assert "hooks/stale_sweep_courier.py" in callers
 
-    def test_every_registered_authed_writer_is_in_the_manifest(self):
+    def _daemon_reaching_helpers(self):
+        """Every helper in the shared modules that ends at `_daemon_request`.
+
+        Derived, not listed. A hand-kept set here would be a second copy of the
+        fact `_common.py` and `_protocol_cache.py` already state, and it would
+        go stale exactly the way `TRUSTED_SCRIPTS` does — which is the defect
+        this test exists to catch, reproduced inside the test that catches it.
+
+        A fixpoint rather than one hop: `read_cache` reaches the daemon through
+        `read_cache_with_boundary`, so a one-hop scan would call a hook that
+        only reads the cache untrusted-but-fine, and item 47 is precisely such
+        a hook.
+        """
+        import ast
+
+        defs = {}
+        for module in ("_common.py", "_protocol_cache.py"):
+            with open(os.path.join(HOOKS_DIR, module), encoding="utf-8") as fh:
+                tree = ast.parse(fh.read())
+            for node in tree.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    defs[node.name] = ast.dump(node)
+
+        reaching = {"_daemon_request"}
+        changed = True
+        while changed:
+            changed = False
+            for name, dumped in defs.items():
+                if name in reaching:
+                    continue
+                if any(f"id='{r}'" in dumped or f"attr='{r}'" in dumped
+                       for r in reaching):
+                    reaching.add(name)
+                    changed = True
+        return reaching
+
+    def test_every_registered_daemon_caller_is_in_the_manifest(self):
         """Generalised, because this is how the gap arrives: the generator's
         `TRUSTED_SCRIPTS` is hand-kept, so regenerating after adding a hook
         changes nothing and everything still looks fine.
@@ -494,25 +530,45 @@ class TestTheCourierIsTrusted:
         module like `quiz_vault.py` calls `record_authed_event` but is only
         ever imported — `lens_quiz.py` and `quiz_capture.py` are the processes,
         and they are the ones that must be pinned.
+
+        **Every peer-gated op, not only `record_authed_event`.** Item 47:
+        `_sahjhan_bootstrap.py` is a registered PreToolUse entrypoint that
+        calls `_daemon_request({"op": "enforcement_read"})` and never writes an
+        event, so a check keyed on the *write* helper skipped it for the three
+        months it sat unpinned. A read that is refused is worse than a write
+        that is refused, because one of its two uses fails **open**:
+        `is_enforcement_fresh(None)` returns falsey and the TDD gate for
+        Bash-based source writes is simply not applied.
         """
         import tomllib
         with open(os.path.join(CONFIG_DIR, "trusted-callers.toml"), "rb") as fh:
             callers = tomllib.load(fh)["callers"]
         with open(os.path.join(REPO_ROOT, "hooks", "hooks.json"), encoding="utf-8") as fh:
             registered = fh.read()
+        helpers = self._daemon_reaching_helpers()
 
         for name in sorted(os.listdir(HOOKS_DIR)):
             if not name.endswith(".py") or f"/{name}" not in registered:
                 continue
             with open(os.path.join(HOOKS_DIR, name), encoding="utf-8") as fh:
                 source = fh.read()
-            if "record_authed_event(" not in source:
+            reached = sorted(h for h in helpers if f"{h}(" in source)
+            if not reached:
                 continue
             assert f"hooks/{name}" in callers, (
-                f"{name} is a registered hook that writes a restricted event "
-                f"but is not in trusted-callers.toml — the daemon will refuse "
-                f"it and the event will silently never be recorded"
+                f"{name} is a registered hook that reaches the daemon via "
+                f"{reached} but is not in trusted-callers.toml — the daemon "
+                f"refuses it, and the op it needed silently does nothing"
             )
+
+    def test_the_derivation_finds_the_read_path_and_not_only_the_write(self):
+        """Non-vacuity for the helper set itself.
+
+        If the fixpoint ever collapses to `record_authed_event`, the test above
+        goes back to passing on item 47's exact shape while looking unchanged.
+        """
+        helpers = self._daemon_reaching_helpers()
+        assert {"read_cache", "record_authed_event"} <= helpers, sorted(helpers)
 
     def test_the_courier_is_registered_as_a_posttooluse_hook(self):
         with open(os.path.join(REPO_ROOT, "hooks", "hooks.json"), encoding="utf-8") as fh:

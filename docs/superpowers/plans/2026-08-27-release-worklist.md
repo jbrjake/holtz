@@ -68,7 +68,7 @@ imprecision (`CLAUDE.md`).
 | W16 | 18 | C | `DONE` — step 2 @ `b111960`, step 1 on sahjhan 0.28.0's `recorded_by`; fixed at the lens site too | W09, ~~sahjhan#50~~ shipped |
 | W17 | 22 | C | `DONE` — H11, driven red at `48c72fd` before it was trusted | W16 |
 | W18 | 36, 33 | C | `WIP` — **36 done, 33 open**; 33 is a design choice, see the unit | W02 |
-| W19 | 40, 47 | C | `TODO` | W02 |
+| W19 | 40, 47 | C | `DONE` — plus a 4th disagreement: NotebookEdit sends `notebook_path` | W02 |
 | W20 | 41, 38 | C | `TODO` | — |
 | W21 | 9 | C | `TODO` | ~~D-c~~ ruled |
 | ~~W22~~ | 27 | — | — | *moved to P1 above (D-h)* |
@@ -3663,8 +3663,23 @@ is passed straight through.
 
 ## W19 — Items 40 + 47: NotebookEdit registration, and the missing manifest entry
 
-**Status:** `TODO`  ·  **Tier:** C  ·  **Depends on:** W02
+**Status:** `DONE`  ·  **Tier:** C  ·  **Depends on:** W02
 **Commit:** `fix(enforcement): register NotebookEdit consistently and trust the bootstrap caller`
+
+> **A FOURTH disagreement, which this unit did not name and which makes
+> steps 1-2 a no-op on their own.** `NotebookEdit`'s tool input carries
+> **`notebook_path`**, not `file_path` — confirmed in the installed
+> `claude` binary (2.1.259), which destructures that key by name, rather
+> than inferred from the tool description. `pre_tool_hook.py:73` read
+> `tool_input["file_path"]` alone, so a correctly registered and
+> correctly gated `NotebookEdit` still arrived with an empty path.
+>
+> That is not one failure but two, in opposite directions, and the
+> mutation run shows both: the managed-path guard has nothing to match
+> and **allows**, while `hook eval` runs with no `--file` so the TDD
+> gate's `tests/**` exemption cannot apply and it **denies** the very
+> test file the gate demands. `_write_target()` now reads either key,
+> `file_path` winning when both are present.
 
 ### Defect 40 · three files disagree · verified
 
@@ -3696,37 +3711,64 @@ not already in its own list.
 
 ### Plan
 
-- [ ] **1.** (40) Pick one answer and make all three files say it. **Recommended:**
-      `NotebookEdit` **is** a source edit — add it to the `hooks.json` matcher for
-      `pre_tool_hook.py` and to the TDD gate's `tools`, matching the auto-record
-      rule that already counts it
-- [ ] **2.** (40) If instead it is deliberately exempt: remove it from the
-      auto-record rule too, so it stops counting toward gates it cannot satisfy,
-      and delete the dead branch at `pre_tool_hook.py:99`
-- [ ] **3.** (47) Add `enforcement/hooks/_sahjhan_bootstrap.py` to `TRUSTED_SCRIPTS`
-- [ ] **4.** (47) `bash scripts/hash-trusted-callers.sh`; commit the regenerated
-      `enforcement/trusted-callers.toml` **in the same commit**
+- [x] **1.** (40) Took the recommended answer: `NotebookEdit` **is** a source
+      edit. `hooks.json`'s matcher for `pre_tool_hook.py` is
+      `Write|Edit|NotebookEdit`, the TDD gate's `tools` gains it, and the
+      hook's own branch already named it — so the three now agree with the
+      auto-record rule that always counted it
+- [x] **1b.** (40) **Not in the plan, and required for 1 to mean anything:**
+      `_write_target()` reads `notebook_path` as well as `file_path`. Without
+      it the registration is decorative — see the box above
+- [ ] **2.** (40) The exempt branch, not taken
+- [x] **3.** (47) `enforcement/hooks/_sahjhan_bootstrap.py` added to
+      `TRUSTED_SCRIPTS`
+- [x] **4.** (47) Manifest regenerated and committed in the same commit
 
 ### Validation
 
-- [ ] **V1** (40) `hook_e2e`: a `NotebookEdit` in `fix_loop` with no failing test
-      recorded is **blocked**. Driven through the subprocess — this is a
-      registration bug, and an in-process call would not see it. Evidence: ___
-- [ ] **V2** (40) A `NotebookEdit` to a managed doc is blocked by the managed-path
-      guard. Evidence: ___
-- [ ] **V3** (40) A consistency test over the three files: the tool list in
-      `hooks.json`, in `hooks.toml`'s gate, and in `pre_tool_hook.py`'s branch must
-      agree. Evidence: ___
-- [ ] **V4** (47) `real_daemon` `hook_e2e`: drive a **Bash source-write** with no
-      failing test recorded → **blocked**. This is the fail-open half and the only
-      check that distinguishes the fix from a no-op. Evidence: ___
-- [ ] **V5** (47) `test_stale_sweep.py::test_every_registered_authed_writer_is_in_the_manifest`
-      now covers this entrypoint. If it does not, extend it — it exists to fail the
-      build for exactly this, and did not. Evidence: ___
-- [ ] **V6 · non-vacuity** (40) Revert the matcher → V1 **and** V3 go red.
-      (47) Remove the entry, **regenerate**, re-run V4 → flips to allow.
-      **Regenerate before mutating**, or the RED is a stale-hash artifact.
-      Evidence: ___
+- [x] **V1** (40) `TestTheTddGateCoversNotebooks::test_a_notebook_edit_is_
+      blocked_with_no_failing_test`, against a **real** daemon in `fix_loop`
+      with a fresh cache (`two_actors`). Its partner
+      `::test_a_notebook_edit_under_tests_stays_exempt` is the non-vacuity
+      arm — a gate that denied everything would pass the first alone
+- [x] **V2** (40) `TestTheManagedPathGuardCoversNotebooks`, driven as a
+      subprocess. This is the assertion the fourth disagreement fails, and it
+      fails by **allowing**
+- [x] **V3** (40) `TestTheFourFilesAgree` — three tests, one per pair:
+      auto-record vs the gate's `tools`; the gate's `tools` vs `hooks.json`'s
+      matcher; the gate's `tools` vs `pre_tool_hook.py`'s own branch
+- [x] **V4** (47) `TestTheGateSurvivesRealAuthentication::test_a_bash_source_
+      write_is_blocked_with_no_failing_test`, on `two_actors`. Every other test
+      in `test_bash_source_write_gate.py` uses `mock_daemon`, which reimplements
+      the ops **without hash auth** and therefore passes whether or not the
+      caller is pinned — that is the blind spot item 47 lived in.
+      `::test_the_daemon_actually_authenticates_this_caller` pins the mechanism
+      separately, so a `deny` produced by some other error cannot stand in
+- [x] **V5** (47) The test existed and **had a hole**: its filter was
+      `if "record_authed_event(" not in source: continue`, and this entrypoint
+      only *reads*. Renamed to
+      `test_every_registered_daemon_caller_is_in_the_manifest` and widened to
+      any helper that reaches `_daemon_request` — **derived by fixpoint over
+      `_common.py` and `_protocol_cache.py`, not listed**, because a hand-kept
+      set inside the test would go stale exactly the way `TRUSTED_SCRIPTS`
+      does. One hop is not enough: `read_cache` reaches the daemon through
+      `read_cache_with_boundary`. Measured: the widening flags exactly one
+      entrypoint, `_sahjhan_bootstrap.py`, and nothing spurious.
+      `::test_the_derivation_finds_the_read_path_and_not_only_the_write` keeps
+      the set from collapsing back
+- [x] **V6 · non-vacuity** Four mutations, one sitting, restored after:
+      | mutation | red |
+      |---|---|
+      | revert the `hooks.json` matcher | the registration test, **alone** |
+      | revert the gate's `tools` | both consistency tests + V1 |
+      | revert `_write_target` | V2, the path test, and the `tests/**` exemption |
+      | remove the manifest entry **and regenerate** | both V4 tests flip to allow |
+
+      **Correction to this unit's V6 as written:** reverting the matcher does
+      **not** take V1 red, and cannot. V1 drives the hook as a subprocess, and
+      a subprocess cannot see `hooks.json` — Claude Code does the matching.
+      That is exactly why V3's registration test has to exist, and it is the
+      only thing that catches the matcher
 
 ---
 

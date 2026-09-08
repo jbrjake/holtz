@@ -66,11 +66,30 @@ def _tdd_gate_exempt(file_path: str, cwd: str) -> bool:
     return rel.split(os.sep, 1)[0] == "docs"
 
 
+def _write_target(tool_input: dict) -> str:
+    """The path a write tool is about to touch, whatever it calls the key.
+
+    `NotebookEdit` sends `notebook_path`; `Edit` and `Write` send `file_path`.
+    Confirmed against the installed `claude` binary, which destructures
+    `notebook_path` by name — not inferred from the tool's description.
+
+    Reading only `file_path` is not a missing feature, it is a silent exemption:
+    the managed-path guard has nothing to match, and `hook eval` is invoked with
+    no `--file`, which is the argument every path filter in the TDD gate is
+    written against. So the gate's `tests/**` exemption and its `src/**` scope
+    both stop applying, and each does so by *allowing*.
+
+    `file_path` wins when both are present, so no notebook key can shadow the
+    path an Edit actually named.
+    """
+    return str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
+
+
 def main() -> None:
     event = read_event()
     tool_name = event.get("tool_name", event.get("tool", ""))
     tool_input = event.get("tool_input", {})
-    file_path = tool_input.get("file_path", "")
+    file_path = _write_target(tool_input)
     cwd = event.get("cwd", os.getcwd())
 
     # ── Managed-path guard (no binary required) ──

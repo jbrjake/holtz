@@ -22,6 +22,7 @@ MANIFEST="$REPO_ROOT/enforcement/trusted-callers.toml"
 # socket in the first place; it only warns about missing files.
 TRUSTED_SCRIPTS=(
     "enforcement/hooks/_common.py"
+    "enforcement/hooks/_sahjhan_bootstrap.py"
     "enforcement/hooks/lens_quiz.py"
     "enforcement/hooks/stop_hook.py"
     "enforcement/hooks/primer.py"

@@ -387,7 +387,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fires on | States | Action | Fact required | Evidence | Attests | Forgeable |
 |---|---|---|---|---|---|---|
-| `PreToolUse` (Edit, Write) | fix_loop | `block` | ledger_has_event_since `tdd_evidence` | `finding_resolved`, `tdd_evidence` | `agent`, `tool` | **yes** — `sahjhan event`, no — daemon refuses unauthenticated callers |
+| `PreToolUse` (Edit, Write, NotebookEdit) | fix_loop | `block` | ledger_has_event_since `tdd_evidence` | `finding_resolved`, `tdd_evidence` | `agent`, `tool` | **yes** — `sahjhan event`, no — daemon refuses unauthenticated callers |
 | `Stop` | any except converged, finalized | `block` | the agent's output claims none of 13 completion phrases | *direct check* | `direct` | n/a |
 | `PostToolUse` (Edit) | fix_loop | `warn` | fewer than 8 source_edit since the last transition | `source_edit` | `agent` | **yes** — `sahjhan event` |
 | monitor `fix_loop_stall` | fix_loop | `warn` | fewer than 12 source_edit since the last transition | `source_edit` | — | — |

@@ -49,7 +49,7 @@
 
 [[hooks]]
 event = "PreToolUse"
-tools = ["Edit", "Write"]
+tools = ["Edit", "Write", "NotebookEdit"]
 states = ["fix_loop"]
 action = "block"
 message = "TDD violation: write and run a failing test before editing source files. Record with: sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" event test_failed_before_fix --field project=holtz --field run=N --field auditor=holtz --field finding_id=BH-NNN --field test_name=..."

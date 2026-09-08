@@ -352,3 +352,67 @@ class TestBashSourceWriteTddBlockUnit:
         monkeypatch.setattr(bootstrap.subprocess, "run",
                             lambda *a, **k: self._FakeProc('{"data":{"decision":"allow"}}'))
         assert bootstrap._bash_source_write_tdd_block("cat > src/a.py", "/repo") is None
+
+
+# ── W19 / item 47: the same gate, against a daemon that authenticates ────────
+
+
+@pytest.mark.slow
+@pytest.mark.integration
+class TestTheGateSurvivesRealAuthentication:
+    """Every test above uses `mock_daemon`, which reimplements the daemon's ops
+    **without hash auth** — so all of them pass whether or not the calling hook
+    is in `trusted-callers.toml`. That is not an oversight in them; it is the
+    exact blind spot item 47 lived in for three months.
+
+    `_sahjhan_bootstrap.py` is a registered PreToolUse entrypoint that calls
+    `_daemon_request({"op": "enforcement_read"})`. Unpinned, a real daemon
+    refuses it, `read_cache` returns `None`, and
+    `if not is_enforcement_fresh(read_cache(cwd)): return None` **skips the
+    gate** — the one direction of failure that costs enforcement rather than
+    availability.
+    """
+
+    def _write_event(self, root):
+        return {
+            "tool_name": "Bash",
+            "tool_input": {"command": "cat > src/a.py <<'EOF'\nx = 1\nEOF"},
+        }
+
+    def test_a_bash_source_write_is_blocked_with_no_failing_test(self, two_actors):
+        """V4. The end the fix exists for, driven rather than reasoned about.
+
+        `two_actors.bootstrap()` leaves the run in `fix_loop` with a fresh
+        enforcement cache and no `test_failed_before_fix` on the ledger, which
+        is the state the TDD gate is written for.
+        """
+        out = two_actors.hook(
+            "_sahjhan_bootstrap.py", self._write_event(two_actors.project_root)
+        )
+        decision = out.get("hookSpecificOutput", {}).get("permissionDecision")
+        assert decision == "deny", out
+
+    def test_the_daemon_actually_authenticates_this_caller(self, two_actors):
+        """The mechanism, asserted separately from the decision it produces.
+
+        A `deny` above could also come from a hook that denies on any error, so
+        this pins the thing the manifest entry buys: the read *succeeds*. If it
+        ever returns `None` again, the test above starts passing for the wrong
+        reason and the gate is off.
+        """
+        out = two_actors.hook("_sahjhan_bootstrap.py", {
+            "tool_name": "Bash",
+            "tool_input": {"command": "echo hello"},
+        })
+        assert out.get("hookSpecificOutput", {}).get("permissionDecision") != "deny", out
+        assert "hooks/_sahjhan_bootstrap.py" in _manifest_callers(), (
+            "the entrypoint is not pinned — a real daemon refuses its "
+            "enforcement_read and the bash TDD gate silently does nothing"
+        )
+
+
+def _manifest_callers() -> dict:
+    import tomllib
+    path = os.path.join(REPO_ROOT, "enforcement", "trusted-callers.toml")
+    with open(path, "rb") as fh:
+        return tomllib.load(fh)["callers"]

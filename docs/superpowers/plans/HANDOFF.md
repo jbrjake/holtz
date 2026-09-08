@@ -20,7 +20,10 @@ Jon's own worklist, unattributed, and every report for a week read against it �
 truthfully saying "blocked only on item 43" while **44 items sat open behind
 it**. It is struck (`26406af`). Do not reconstruct it.
 
-**Report as `N of 30 units, M of 49 items`, naming what remains.** Banned:
+**Report as `N of 32 units, M of 51 items`, naming what remains** — the board's
+own numbers. Jon's ruling says 49 because that was the list when he made it;
+items 50 and 51 were found later, while doing W08, and sit on the dashboard
+under the same rule. Do not quietly report 49, and do not drop them. Banned:
 "the release gate is closed"; "blocked only on X" when a pile sits behind X;
 any phrasing where one unit closing reads as the work closing.
 
@@ -28,7 +31,7 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**18 of 32 units · 24 of 51 items · 27 items across 14 units remain.**
+**19 of 32 units · 26 of 51 items · 25 items across 13 units remain.**
 Two units are `WIP` and neither moves the unit count. **W13** closed item 37
 and left item 17 open **by ruling**. **W18** closed item 36 and left item 33
 open — a design choice, not a spelling, and the unit now carries the two
@@ -37,7 +40,7 @@ measurements that decide it.
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
 W12 (34, 28) · W11 (42) · W14 (5, 10) · W31 (50) · W15 (30) · W16 (18) ·
-W17 (22). Commits are in `git log`; do not re-summarise them here.
+W17 (22) · W19 (40, 47). Commits are in `git log`; do not re-summarise them here.
 
 **The dashboard rows lag the unit sections.** W15 and W16 both sat at `TODO`
 in the table while their sections read `DONE`/`WIP`. Corrected — but the rule
@@ -131,10 +134,27 @@ carrying the number forward:
 
 **Nothing is pushed. CI has never run on any of it.** Do not claim it has.
 
-**The full suite was run locally on 2026-09-04 at W15's tree** — `pytest --cov …
---cov-fail-under=80`, observed **exit 0**, **2965 passed, 8 skipped, zero
-`FAILED`/`ERROR`**, coverage **89.30%**, 23m31s. 2965 + 8 = 2973, which is the
-README badge — the two numbers check each other, so read both.
+## ⛔ The full suite runs ONCE, AT THE END. Not per unit.
+
+**RULED (Jon, 2026-09-08).** A session ran it **four times** — once per unit,
+as a commit gate — burning ~75 minutes and generating the machine load that
+trips the flaky family below, which then cost further runs to control against.
+
+Per-unit evidence is **the fast subset + the targeted `slow`/`integration`
+files for what the change touched + the gates** (ruff, mypy, contract gate,
+`enforcement_lint`, `sahjhan lint`, `enforcement_contract --check`). Those
+targeted files are cheap — 26 s for a courier's `real_daemon` set, 1.2 s for
+the lint's. Commit on that, and **say in the message that the full suite has
+not run and CI has not either.** Naming the gap is the correct move; a local
+substitute for CI is not.
+
+`fast-subset-cannot-see-slow-tests` justifies running **the slow tests that can
+see your change**. It does not justify running all of them.
+
+**Last full run: 2026-09-08 at `489e84d` (W18/item 36)** — observed **exit 0**,
+**2998 passed, 8 skipped**, zero `FAILED`/`ERROR`, coverage **89.29%**, 24m44s.
+2998 + 8 = 3006 = the README badge at that commit; the two numbers check each
+other, so read both. **W19 has had no full run** and its commit says so.
 
 **Read from the run's own output, not from the wrapper's exit code.** One
 correction to how the previous handoff said to do that: it claimed this repo's
@@ -144,8 +164,8 @@ is **`-q`**, which the earlier session had in its command and which is not in
 reading (every progress mark is `.` or `s`, and `grep -cE "^(FAILED|ERROR)"`
 is 0) is still correct, and is what to use if you do pass `-q`.
 
-**It covers everything up to and including `c12469f` (W31) and W15's working
-tree.** No gap.
+**It covers everything up to and including `489e84d` (W18 / item 36).** W19 is
+the gap, deliberately.
 
 It is *not* CI: CI runs on ubuntu, and the seccomp debt below is a thing no
 local run touches. **Note also that the load-flaky hook family did not fail in
@@ -345,11 +365,23 @@ eight queries keyed on `type='finding_deferred'` were never touched.
 
 ## Do this next
 
-### 1. ⭐ P3 — W18's item 33, or W19 (40, 47).
+### 1. ⭐ P3 — W20 (41, 38), then W21 (9). W18's item 33 is the other open one.
 
-W15, W16, W17 are `DONE`; **W18 landed item 36 and item 33 is open.** Then
-W19 (40, 47), W20 (41, 38), W21 (9). After P3: P4 (W23–W30) and the `WIP`
-stragglers (W18's item 33, W13's item 17, W32's step 3).
+W15, W16, W17, W19 are `DONE`; **W18 landed item 36 and item 33 is open.**
+After P3: P4 (W23–W30) and the `WIP` stragglers (W18's item 33, W13's item 17,
+W32's step 3).
+
+**W19 turned up a fourth disagreement its own unit did not name, and the shape
+generalises: a tool's input key is a harness fact, not a guess.**
+`NotebookEdit` sends **`notebook_path`**, not `file_path` — confirmed by
+grepping the installed `claude` binary, which destructures that key by name.
+`pre_tool_hook.py` read `file_path` alone, so registering the tool and widening
+the gate would both have been decorative. Worse, the empty path fails in
+**opposite directions at two sites**: the managed-path guard has nothing to
+match and *allows*, while `hook eval` runs with no `--file` so the TDD gate's
+`tests/**` exemption cannot apply and it *denies* the test file the gate is
+demanding. Both are pinned now. **Before adding a tool to any guard, check what
+key that tool's input actually uses.**
 
 **Item 33 needs a decision before code, and the unit now carries the two
 measurements that shape it.** Step 3 offers "re-run the real check **or** bind
