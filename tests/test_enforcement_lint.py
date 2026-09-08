@@ -1381,6 +1381,230 @@ class TestH10DelegatedGateEvidence:
         assert findings_for(tree, "H10") == []
 
 
+# ── H11: an escape word the agent can type ───────────────────────────────────
+
+
+class TestH11LiteralProvenance:
+    """Item 22, whose worked example is item 18.
+
+    A gate that excuses itself when some row reads `reason='theoretical'` is
+    trusting a word. Whether that trust is earned depends on who can write the
+    word, and the config knows — it just was not being asked.
+    """
+
+    DEFERRAL = """
+        [events.finding_deferred]
+        description = "a finding taken off the board"
+        attestation = "agent"
+        fields = [
+            { name = "id", type = "string" },
+            { name = "reason", type = "string" },
+        ]
+
+        [[events.finding_deferred.producers]]
+        id = "agent:cli"
+        """
+
+    def _tree(self, root: Path, sql: str, *, events: str = "") -> el.Tree:
+        return build_tree(
+            root,
+            events=events or self.DEFERRAL,
+            protocol=f"""
+            [protocol]
+            name = "fixture"
+            version = "1.0.0"
+
+            [queries.all_closed]
+            sql = "{sql}"
+            intent = "every finding is closed"
+            """,
+            transitions="""
+            [[transitions]]
+            command = "converge"
+            from = "fix_loop"
+            to = "done"
+            gates = [
+                { type = "query", query = "all_closed", expect = "true", intent = "close the board" },
+            ]
+            """,
+        )
+
+    # The predicate under test, in the two shapes that matter. `f` is the
+    # finding, `d` the deferral it is excused by — the same two aliases the
+    # real query uses, because the discharge is alias-scoped.
+    FORGEABLE = (
+        "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE "
+        "f.type='finding' AND f.id NOT IN (SELECT d.id FROM events d WHERE "
+        "d.type='finding_deferred' AND d.reason='theoretical'))"
+    )
+    PINNED = FORGEABLE.replace(
+        "d.reason='theoretical'",
+        "d.reason='theoretical' AND d.recorded_by='hook:hooks/courier.py'",
+    )
+
+    def test_fires_when_the_agent_can_type_the_escape_word(
+        self, tmp_path: Path
+    ) -> None:
+        """Item 18, reduced. The event is `attestation = "agent"` and carries
+        no `restricted`, so `sahjhan event finding_deferred --field
+        reason=theoretical` closes the board."""
+        findings = findings_for(self._tree(tmp_path, self.FORGEABLE), "H11")
+        assert len(findings) == 1, [f.render() for f in findings]
+        assert "reason='theoretical'" in findings[0].message
+        assert "the escape is a word the agent types" in findings[0].message
+
+    def test_silent_once_the_predicate_pins_the_writer(self, tmp_path: Path) -> None:
+        """The discharge, and the fix item 18 shipped."""
+        assert findings_for(self._tree(tmp_path, self.PINNED), "H11") == []
+
+    def test_a_forgeable_writer_literal_does_not_discharge(
+        self, tmp_path: Path
+    ) -> None:
+        """`recorded_by='agent:cli'` names a writer the agent *is*.
+
+        Pinning the column is not the point; pinning it to somebody the agent
+        cannot be is. Without this the rule would accept the very row it
+        exists to refuse, and would do it while looking rigorous.
+        """
+        sql = self.PINNED.replace("hook:hooks/courier.py", "agent:cli")
+        assert len(findings_for(self._tree(tmp_path, sql), "H11")) == 1
+
+    def test_a_writer_on_another_row_does_not_discharge(self, tmp_path: Path) -> None:
+        """Alias scoping. The `recorded_by` here constrains the *finding*, not
+        the deferral that excuses it — a different row making a different
+        claim. Reading it as vouching for the deferral is how a check becomes
+        a formality."""
+        sql = self.FORGEABLE.replace(
+            "f.type='finding'", "f.type='finding' AND f.recorded_by='hook:hooks/x.py'"
+        )
+        assert len(findings_for(self._tree(tmp_path, sql), "H11")) == 1
+
+    def test_silent_when_the_event_is_restricted(self, tmp_path: Path) -> None:
+        """`context_reset`'s shape: the agent cannot write the row at all, so
+        there is no word for it to type."""
+        events = self.DEFERRAL.replace(
+            'attestation = "agent"', 'attestation = "host"\nrestricted = true'
+        )
+        tree = self._tree(tmp_path, self.FORGEABLE, events=events)
+        assert findings_for(tree, "H11") == []
+
+    def test_silent_when_the_bootstrap_denies_the_agent_the_event(
+        self, tmp_path: Path
+    ) -> None:
+        """The other way an event becomes agent-unwritable, and the rule has to
+        know both — a human-only channel is `restricted = false` by design."""
+        tree = build_tree(
+            tmp_path,
+            events=self.DEFERRAL,
+            protocol=f"""
+            [protocol]
+            name = "fixture"
+            version = "1.0.0"
+
+            [queries.all_closed]
+            sql = "{self.FORGEABLE}"
+            intent = "every finding is closed"
+            """,
+            transitions="""
+            [[transitions]]
+            command = "converge"
+            from = "fix_loop"
+            to = "done"
+            gates = [
+                { type = "query", query = "all_closed", expect = "true", intent = "close the board" },
+            ]
+            """,
+            hook_scripts={
+                "_sahjhan_bootstrap.py": """
+                BLOCKED_SAHJHAN_SUBSUB = {
+                    "daemon": {"stop"},
+                    "event": {"finding_deferred"},
+                }
+                """
+            },
+        )
+        assert findings_for(tree, "H11") == []
+
+    def test_the_audits_own_grades_are_not_in_scope(self, tmp_path: Path) -> None:
+        """`severity` and `reachability` are the subject matter, not the
+        excuse. The agent grading its own findings is the design, and a wrong
+        grade is answered by re-reading the latest filing — there is no writer
+        such a filter could name. A rule that fired here would have to be
+        switched off, and a lint nobody can leave on is not a lint.
+        """
+        sql = self.FORGEABLE.replace(
+            "d.reason='theoretical'", "d.severity='LOW' AND d.reachability='theoretical'"
+        )
+        assert findings_for(self._tree(tmp_path, sql), "H11") == []
+
+    def test_a_bound_argument_is_not_a_literal(self, tmp_path: Path) -> None:
+        """`{{item_id}}` is filled at gate time by the transition's own
+        argument, so there is no value here for anyone to have typed."""
+        sql = self.FORGEABLE.replace("d.reason='theoretical'", "d.reason='{{reason}}'")
+        assert findings_for(self._tree(tmp_path, sql), "H11") == []
+
+    def test_it_reads_the_structured_filter_shape_too(self, tmp_path: Path) -> None:
+        """`ledger_has_event_since` names its event and carries `filter = {…}`.
+
+        Same claim as the SQL, written in TOML. A rule that read only SQL would
+        pronounce the config's own model answer clean while never having looked
+        at it — and `context_reset` is exactly that gate.
+        """
+        tree = build_tree(
+            tmp_path,
+            events=self.DEFERRAL,
+            transitions="""
+            [[transitions]]
+            command = "resume"
+            from = "paused"
+            to = "fix_loop"
+            gates = [
+                { type = "ledger_has_event_since", event = "finding_deferred", since = "last_transition", filter = { reason = "theoretical" }, intent = "resume after a deferral" },
+            ]
+            """,
+        )
+        findings = findings_for(tree, "H11")
+        assert len(findings) == 1, [f.render() for f in findings]
+        assert "reason='theoretical'" in findings[0].message
+
+    def test_one_report_per_predicate_not_per_caller(self, tmp_path: Path) -> None:
+        """A named query reached from three transitions is one defect in one
+        place. Reporting it three times inflates the count the release reads."""
+        tree = build_tree(
+            tmp_path,
+            events=self.DEFERRAL,
+            protocol=f"""
+            [protocol]
+            name = "fixture"
+            version = "1.0.0"
+
+            [queries.all_closed]
+            sql = "{self.FORGEABLE}"
+            intent = "every finding is closed"
+            """,
+            transitions="""
+            [[transitions]]
+            command = "converge"
+            from = "fix_loop"
+            to = "done"
+            gates = [
+                { type = "query", query = "all_closed", expect = "true", intent = "close the board" },
+            ]
+
+            [[transitions]]
+            command = "lens_rotate"
+            from = "fix_loop"
+            to = "audit"
+            gates = [
+                { type = "query", query = "all_closed", expect = "true", intent = "close the lens" },
+            ]
+            """,
+        )
+        findings = findings_for(tree, "H11")
+        assert len(findings) == 1, [f.render() for f in findings]
+        assert "'converge', 'lens_rotate'" in findings[0].subject
+
+
 # ── Discovery soundness ──────────────────────────────────────────────────────
 
 

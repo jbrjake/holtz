@@ -28,14 +28,14 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**17 of 32 units · 22 of 51 items · 29 items across 15 units remain.**
+**18 of 32 units · 23 of 51 items · 28 items across 14 units remain.**
 W13 is `WIP`, not done: it closed item 37 and left item 17 open **by ruling**,
 so it moves the item count and not the unit count.
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
-W12 (34, 28) · W11 (42) · W14 (5, 10) · W31 (50) · W15 (30) · W16 (18).
-Commits are in `git log`; do not re-summarise them here.
+W12 (34, 28) · W11 (42) · W14 (5, 10) · W31 (50) · W15 (30) · W16 (18) ·
+W17 (22). Commits are in `git log`; do not re-summarise them here.
 
 **The dashboard rows lag the unit sections.** W15 and W16 both sat at `TODO`
 in the table while their sections read `DONE`/`WIP`. Corrected — but the rule
@@ -343,21 +343,30 @@ eight queries keyed on `type='finding_deferred'` were never touched.
 
 ## Do this next
 
-### 1. ⭐ P3 — W17 (item 22). Its dependency is satisfied.
+### 1. ⭐ P3 — W18 (items 36, 33). W15, W16 and W17 are all `DONE`.
 
-P2 is finished and P3 is running: W15 and W16 are both `DONE`. W13 is `WIP`
-with item 37 closed and item 17 open **by ruling** — that is decided, not
-blocking.
+P2 is finished and P3 is running. W13 is `WIP` with item 37 closed and item 17
+open **by ruling** — that is decided, not blocking.
 
-**W17 records `Depends on: W16`, and W16 is now its worked example rather than
-its blocker.** W17 is the H11 lint rule binding "a gate filters on this value"
-to "only a hook may write it". Item 18's fix gives it three concrete things to
-be right about, all listed above: the `hook:hooks/…` vs
-`hook:enforcement/hooks/…` split between the gate and the declared producer,
-the `emit`/`emits` one beside it, and the fact that `sahjhan lint` L8 already
-covers the *gate* side — so H11's job is the side L8 cannot see, which is the
-declaration. **Read V1 before writing the rule: a new lint rule that passes on
-the code that motivated it is not a rule.**
+Then W19 (40, 47), W20 (41, 38), W21 (9). After P3: P4 (W23–W30) and the `WIP`
+stragglers (W13's item 17, W32's step 3).
+
+**What H11 does and does not cover — read before assuming item 22 closed the
+class.** H11 asks whether a gate excusing itself on an escape-qualifier
+literal (`reason`, `trigger`, `scope`) names a writer it may trust: the event
+is agent-unwritable, or the same alias's `recorded_by` is pinned to somebody
+the agent cannot be. It is *not* a check on how writers are spelled.
+
+- **`sahjhan lint` L8 covers the gate side of the spelling** — a `recorded_by`
+  filter naming a script the manifest does not list is an error, so writing
+  the declared `hook:enforcement/hooks/…` form into a gate fails the build.
+- **Nothing covers the declaration side.** `events.toml` will happily declare
+  `hook:enforcement/hooks/theoretical_courier.py` and `engine:emits:defer_low`
+  while the engine stamps `hook:hooks/theoretical_courier.py` and
+  `engine:emit:defer_low`. H2 checks the declared path against the
+  *filesystem*, which is why the repo-root form is right there and wrong
+  everywhere a `recorded_by` value is compared. **This is a live gap, not a
+  closed one** — a candidate item, unruled, recorded rather than fixed.
 
 Then W19 (40, 47), W20 (41, 38), W21 (9). After P3: P4 (W23–W30) and the
 `WIP` stragglers (W16's step 1, W13's item 17, W32's step 3).

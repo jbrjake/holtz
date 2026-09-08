@@ -1655,6 +1655,194 @@ def check_h10_delegated_gate_evidence(model: Model) -> list[Finding]:
     return findings
 
 
+# Fields that qualify *why* a row exists rather than what it says. A gate
+# filtering one of these is not reading the finding — it is reading the config's
+# account of how the row came to be, which is a claim about the writer.
+#
+# `severity` and `reachability` are deliberately out, and the reason is not
+# squeamishness: they are the audit's subject matter. The agent grading its own
+# findings is the design, and a wrong grade is governed by D25's latest-filing
+# rule (`f.seq = (SELECT MAX(g.seq) …)`), which re-reads the grade rather than
+# trusting the first one. There is no writer a `severity='CRITICAL'` filter
+# could name.
+#
+# `provenance` is the name item 22 gave to what shipped as the ledger entry
+# column `recorded_by` (sahjhan#50). It is the *discharge* below, not a thing
+# needing one — a rule demanding that a `recorded_by` filter carry a
+# `recorded_by` filter is either vacuous or infinite.
+_ESCAPE_QUALIFIER_FIELDS = frozenset({"reason", "trigger", "scope"})
+
+# `recorded_by` values the agent can produce, so naming one discharges nothing.
+# `import:<source>` is a path someone imported and validates nothing;
+# `daemon:unverified` is `record_event` with no manifest configured, which is
+# enforcement already degraded. The rest — `hook:`, `authed:`, `engine:` — are
+# writers the agent cannot be. (sahjhan 0.28.0 `src/provenance.rs`.)
+_FORGEABLE_WRITER_PREFIXES = ("agent:", "import:", "daemon:unverified")
+
+_SQL_ALIAS_TYPE = re.compile(r"\b(\w+)\.type\s*=\s*'([a-z_][a-z0-9_]*)'")
+_SQL_ALIAS_FIELD = re.compile(r"\b(\w+)\.(\w+)\s*=\s*'([^']*)'")
+
+
+def _sql_field_literals(sql: str) -> list[tuple[str, str, str, str]]:
+    """Every ``<alias>.<field> = '<literal>'`` filter, with the alias's type.
+
+    Returns ``(event_type, alias, field, literal)``. The alias is carried
+    because the discharge has to be scoped to the same one: a `recorded_by`
+    term somewhere else in the query constrains a different row and must not
+    be read as vouching for this one.
+    """
+    aliases = dict(_SQL_ALIAS_TYPE.findall(sql))
+    out = []
+    for alias, column, literal in _SQL_ALIAS_FIELD.findall(sql):
+        if column == "type" or alias not in aliases:
+            continue
+        out.append((aliases[alias], alias, column, literal))
+    return out
+
+
+def _agent_can_write(model: Model, event: str) -> bool:
+    """Whether `sahjhan event <type>` puts this row on the ledger.
+
+    Not "does it declare `agent:cli`" — `event` is on the bootstrap allowlist,
+    so the agent's path is open for any event that is neither `restricted` nor
+    denied by name. `events.toml` says it in as many words: attestation is the
+    strength of the *weakest* available path, not the intended one.
+    """
+    spec = model.events.get(event, {})
+    if spec.get("restricted"):
+        return False
+    return event not in model.agent_denied_events
+
+
+def _writer_constrained(sql: str, alias: str) -> bool:
+    """Does the predicate pin this alias's row to a writer the agent is not?"""
+    for _type, other, column, literal in _sql_field_literals(sql):
+        if (
+            other == alias
+            and column == "recorded_by"
+            and not literal.startswith(_FORGEABLE_WRITER_PREFIXES)
+        ):
+            return True
+    return False
+
+
+def _gate_predicates(model: Model, gate: dict) -> Iterator[tuple[str, str]]:
+    """(source, sql) for every predicate one gate decides on, branches included."""
+    if isinstance(gate.get("sql"), str):
+        yield "inline sql", gate["sql"]
+    for name in _gate_query_names(gate):
+        sql = model.queries.get(name, {}).get("sql")
+        if isinstance(sql, str):
+            yield f"[queries.{name}]", sql
+    for sub in _gate_branches(gate):
+        yield from _gate_predicates(model, sub)
+
+
+def check_h11_literal_provenance(model: Model) -> list[Finding]:
+    """A gate excusing itself on one word must say who is allowed to type it.
+
+    Item 18 is the bug; this is why it shipped. `all_critical_resolved` excused
+    a CRITICAL carrying a `finding_deferred` that read `reason='theoretical'`,
+    on the strength of a comment saying the courier wrote that word. The comment
+    was wrong — `finding_deferred` is `attestation = "agent"`, `event` is on the
+    bootstrap allowlist, and the `reason` pattern admits `theoretical` — so one
+    agent-typed word closed any CRITICAL. Nothing in H1–H10 asks that question:
+    H5 asks whether an event claiming *above* `agent` has an agent-writable
+    path, and this one claims `agent`, so H5 is satisfied by the very fact that
+    is the defect.
+
+    The rule: **when a gate filters an escape-qualifier field to a literal, the
+    value must be reachable only by a writer the gate is entitled to trust.**
+    Two ways to satisfy it, and they are the two the config already uses:
+
+    - the event is one the agent cannot write at all — `restricted`, or denied
+      by name in the bootstrap hook. `context_reset`'s
+      `trigger='session_start'` is this, and passes here with no special-casing
+      because `restricted = true` is a fact about the event, not a name this
+      rule knows;
+    - or the predicate pins the same row's `recorded_by` to a writer the agent
+      cannot be. That column is the engine's record of the append (sahjhan
+      0.28.0, #50); nothing declares it and no `--field` can supply it.
+
+    Scoped to the same SQL alias on purpose. A `recorded_by` term elsewhere in
+    the query constrains a different row, and reading it as vouching for this
+    one is how a check becomes a formality.
+    """
+    # claim -> the transitions that reach it. A named query reached from
+    # several transitions is one defect in one place; reporting it once per
+    # caller buries the count that matters.
+    claims: dict[tuple[str, ...], list[str]] = {}
+
+    for transition in model.transitions:
+        command = transition.get("command", "?")
+        stack = list(transition.get("gates", []) or [])
+        while stack:
+            gate = stack.pop()
+            stack.extend(_gate_branches(gate))
+
+            # The structured shape: `ledger_has_event_since` and its kin name
+            # the event outright and carry `filter = { field = "value" }`. Same
+            # claim as the SQL below, written in TOML instead, and a rule that
+            # read only SQL would call the config's own model answer clean
+            # while never having looked at it.
+            event = gate.get("event")
+            gate_filter = gate.get("filter")
+            if isinstance(event, str) and isinstance(gate_filter, dict):
+                for column, literal in sorted(gate_filter.items()):
+                    if column in _ESCAPE_QUALIFIER_FIELDS and _agent_can_write(
+                        model, event
+                    ):
+                        key = ("filter", event, "", column, str(literal))
+                        claims.setdefault(key, []).append(command)
+
+            for source, sql in _gate_predicates(model, gate):
+                for event_type, alias, column, literal in _sql_field_literals(sql):
+                    if column not in _ESCAPE_QUALIFIER_FIELDS:
+                        continue
+                    if "{{" in literal:  # a bound argument, not a literal
+                        continue
+                    if not _agent_can_write(model, event_type):
+                        continue
+                    if _writer_constrained(sql, alias):
+                        continue
+                    key = (source, event_type, alias, column, literal)
+                    claims.setdefault(key, []).append(command)
+
+    findings = []
+    for (source, event_type, alias, column, literal), commands in sorted(
+        claims.items()
+    ):
+        reached = ", ".join(f"'{c}'" for c in sorted(set(commands)))
+        if source == "filter":
+            findings.append(
+                Finding(
+                    "H11",
+                    "error",
+                    f"transitions.toml: gate on '{event_type}', "
+                    f"reached from {reached}",
+                    f"excuses itself when {column}='{literal}', and the agent "
+                    f"can record '{event_type}' with `sahjhan event` — so the "
+                    "escape is a word the agent types",
+                    f"make '{event_type}' restricted, deny it in "
+                    "BLOCKED_SAHJHAN_SUBSUB, or filter on the writer",
+                )
+            )
+            continue
+        findings.append(
+            Finding(
+                "H11",
+                "error",
+                f"protocol.toml: {source}, reached from {reached}",
+                f"excuses a row when {column}='{literal}', but the agent can "
+                f"record '{event_type}' with `sahjhan event` and nothing pins "
+                "who wrote it — the escape is a word the agent types",
+                f"add {alias}.recorded_by = '<hook:…>' to the predicate, or "
+                f"make '{event_type}' unwritable by the agent",
+            )
+        )
+    return findings
+
+
 CHECKS = {
     "H1": check_h1_unsatisfiable,
     "H2": check_h2_false_declarations,
@@ -1666,6 +1854,7 @@ CHECKS = {
     "H8": check_h8_escape_identity,
     "H9": check_h9_transition_state_decoupling,
     "H10": check_h10_delegated_gate_evidence,
+    "H11": check_h11_literal_provenance,
 }
 
 

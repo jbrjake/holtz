@@ -66,7 +66,7 @@ imprecision (`CLAUDE.md`).
 | **P3 — before release** ||||
 | W15 | 30 | C | `DONE` @ `8bd7e43` — one segmentation owner; two shapes left open and recorded | — |
 | W16 | 18 | C | `DONE` — step 2 @ `b111960`, step 1 on sahjhan 0.28.0's `recorded_by`; fixed at the lens site too | W09, ~~sahjhan#50~~ shipped |
-| W17 | 22 | C | `TODO` | W16 |
+| W17 | 22 | C | `DONE` — H11, driven red at `48c72fd` before it was trusted | W16 |
 | W18 | 36, 33 | C | `TODO` | W02 |
 | W19 | 40, 47 | C | `TODO` | W02 |
 | W20 | 41, 38 | C | `TODO` | — |
@@ -3423,8 +3423,33 @@ Driven against a **real ledger** (`bin/sahjhan` at the pinned 0.27.0, a
 
 ## W17 — Item 22: no lint rule binds "a gate filters on this value" to "only a hook may write it"
 
-**Status:** `TODO`  ·  **Tier:** C  ·  **Depends on:** W16
+**Status:** `DONE`  ·  **Tier:** C  ·  **Depends on:** W16
 **Commit:** `feat(enforcement): H11 — a gate's literal must be reachable only by the path its prose claims`
+
+> **RULED (Jon, 2026-09-07): escape-word fields, discharged by a writer term.**
+> The plan's first sentence reads as "every field literal", and its second
+> narrows to "`reason=`, `trigger=`, `scope=`, `provenance=` or similar" —
+> which ships materially different rules. The whole domain was enumerated
+> first, across every gate predicate in the config:
+>
+> | field | sites | values |
+> |---|---|---|
+> | `severity` | 8 | CRITICAL, HIGH, LOW, MEDIUM |
+> | `reachability` | 7 | fault_injected, theoretical, user_reachable |
+> | `reason` | 2 | theoretical |
+> | `recorded_by` | 2 | `hook:hooks/theoretical_courier.py` |
+> | `to` | 1 | fix_loop |
+> | `id`, `perspective` | 5 | `{{bindings}}`, not literals |
+>
+> `severity` and `reachability` are out **by a stated reason, not by omission**:
+> they are the audit's subject matter, the agent grading its own findings is
+> the design, and a wrong grade is answered by D25's latest-filing re-read.
+> There is no writer such a filter could name, so a rule that fired there would
+> have to be switched off — and a lint nobody can leave on is not a lint.
+>
+> `provenance` is the name this item gave to what shipped as `recorded_by`. It
+> is the **discharge**, not a thing needing one; a rule demanding that a
+> `recorded_by` filter carry a `recorded_by` filter is vacuous or infinite.
 
 Do this while 18 and 25 are fresh: it is the check that would have failed the
 build, and it puts items 9 and 21 under machine audit rather than under the next
@@ -3446,28 +3471,59 @@ Without it, the class recurs. #79 was this; item 18 is this; the next one will b
 
 ### Plan
 
-- [ ] **1.** Add `check_h11_literal_provenance(model)` following the file's rule
-      shape (`check_h10_delegated_gate_evidence` at `:1540` is the closest sibling)
-- [ ] **2.** The rule: **when a gate's SQL constrains a field to a literal value,
-      that value must be reachable only by a path the gate's own prose claims.**
-      Every conjunct filtering on `reason=`, `trigger=`, `scope=`, `provenance=` or
-      similar is in scope. The config already names both halves, so this is
-      mechanically checkable
-- [ ] **3.** Hold the others to `context_reset`'s `trigger='session_start'`
+- [x] **1.** `check_h11_literal_provenance(model)` added beside H10, in the same
+      rule shape, and registered in `CHECKS`
+- [x] **2.** The rule: **a gate that excuses itself on an escape-qualifier
+      literal must name a writer it is entitled to trust.** Two discharges,
+      and they are the two the config already uses — the event is one the
+      agent cannot write (`restricted`, or denied by name in
+      `BLOCKED_SAHJHAN_SUBSUB`), or the predicate pins that row's
+      `recorded_by` to a writer the agent cannot be. **Scoped to the same SQL
+      alias**: a `recorded_by` term elsewhere in the query constrains a
+      different row, and reading it as vouching for this one is how a check
+      becomes a formality
+- [x] **3.** `context_reset` passes because `restricted = true` is a *fact
+      about the event*, not a name the rule knows — V3 below drives that both
+      ways. The rule also reads the structured `filter = { … }` gate shape,
+      without which it would have pronounced `context_reset` clean while never
+      having looked at it: that gate carries no SQL at all
 
 ### Validation
 
-- [ ] **V1** ⭐ **H11 fails on the tree as it stands at `48c72fd`** (before item 18's
-      fix). **A new lint rule that passes on the code that motivated it is not a
-      rule.** This is the most important check in this unit. Evidence: ___
-- [ ] **V2** H11 passes after W16 lands. Evidence: ___
-- [ ] **V3** H11 passes on `context_reset` — the correct pattern — with no
-      special-casing. Evidence: ___
-- [ ] **V4** `.venv/bin/python scripts/enforcement_lint.py` → exit 0 overall (the 2
-      pre-existing warnings stay warnings). Evidence: ___
-- [ ] **V5** Unit test for the rule itself in `test_enforcement_lint.py`, with a
-      synthetic config exhibiting the violation — the rule is tested, not just run.
-      Evidence: ___
+- [x] **V1** ⭐ **H11 fails on the tree as it stands at `48c72fd`.** Driven by
+      extracting that commit with `git archive` and pointing `el.Tree` at it —
+      the current rule against the old config. One finding, naming the query
+      and the word:
+      ```
+      H11 error: protocol.toml: [queries.all_critical_resolved], reached from 'converge'
+          excuses a row when reason='theoretical', but the agent can record
+          'finding_deferred' with `sahjhan event` and nothing pins who wrote it
+      ```
+      One and not two is correct: `lens_critical_resolved` did not exist at
+      `48c72fd` — W07 added it — which was checked rather than assumed, because
+      an under-firing rule looks exactly like a passing one
+- [x] **V2** H11 → 0 findings on the tree with W16 landed. Non-vacuous, and
+      **both sites are reached**: dropping `recorded_by` from
+      `all_critical_resolved` fires on it (via `converge`), dropping it from
+      `lens_critical_resolved` fires on that (via `set complete perspective`),
+      one finding each, restored after
+- [x] **V3** `context_reset` passes with no special-casing, driven both ways.
+      It is clean as declared; flipping its `restricted = true` to `false` in
+      an extracted copy of HEAD makes H11 report the structured-filter gate:
+      *"excuses itself when trigger='session_start', and the agent can record
+      'context_reset' with `sahjhan event`"*. So it passes on the fact, not on
+      its name
+- [x] **V4** `scripts/enforcement_lint.py` → **exit 0**, `0 error(s), 2
+      warning(s) from 11 check(s): H1 … H11`. The two pre-existing H1 warnings
+      (`prediction`, `prediction_outcome`) are unchanged
+- [x] **V5** `TestH11LiteralProvenance` — 10 tests on synthetic configs. Beyond
+      the fires/silent pair: a `recorded_by='agent:cli'` literal **does not**
+      discharge (naming a writer the agent *is* would let the rule accept the
+      row it exists to refuse, while looking rigorous); a `recorded_by` on
+      another alias does not discharge; the bootstrap denylist discharges as
+      well as `restricted`; `severity`/`reachability` stay out of scope;
+      `{{bound}}` arguments are not literals; the structured filter shape
+      fires; and one predicate reached from two transitions reports **once**
 
 ---
 
