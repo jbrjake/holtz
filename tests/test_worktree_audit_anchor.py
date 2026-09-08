@@ -86,6 +86,41 @@ class TestV1ManifestVerification:
         worktree_cwd.run_hook("bash_guard.py", _bash_event(), cwd=worktree_cwd.worktree)
         assert worktree_cwd.binary_calls() == []
 
+    def test_the_theoretical_courier_pays_nothing_either(
+        self, worktree_cwd, mock_daemon
+    ):
+        """W18 / item 36. The same ordering, at the hook that lacked it.
+
+        `pending()` reached `ensure_sahjhan()` with no audit probe in front of
+        it, so any Bash line naming `merge_punchlists.py` in **any**
+        plugin-installed project bought a ~100 MB download and an injected
+        protocol warning about a sweep that project never asked for.
+
+        This is invisible to a test run inside this repo, which always has an
+        audit dir — which is why it is here, on the fixture that can take one
+        away, rather than beside the courier's own tests.
+        """
+        mock_daemon.state = fresh_enforcement_state()
+        import shutil
+
+        shutil.rmtree(worktree_cwd.sahjhan_dir)
+        worktree_cwd.reset_binary_calls()
+        out = worktree_cwd.run_hook(
+            "theoretical_courier.py",
+            _bash_event(
+                'python3 "${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/'
+                'merge_punchlists.py" --justine docs/holtz/justine/PUNCHLIST.md'
+            ),
+            cwd=worktree_cwd.worktree,
+        )
+        assert worktree_cwd.binary_calls() == []
+        # And no warning: a project with no audit has no findings to sweep, so
+        # there is nothing that should have happened and did not. The warning
+        # channel exists for a board left dirty, and spending it here would
+        # teach every consumer to ignore it.
+        context = json.dumps(out)
+        assert "NOT auto-deferred" not in context, context
+
 
 class TestV2AndV5TheDegradePathFailsClosed:
     """V2/V5 — `exit_enforcement_error` denies at a worktree cwd.

@@ -25,11 +25,18 @@ auditor, phase and step of the filing it defers, all read off that filing.
 from __future__ import annotations
 
 import os
+import shlex
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+)
+
+from _recorded_command import INTERPRETERS  # noqa: E402
 
 from _common import (  # noqa: E402
+    audit_active,
     bash_exit_code,
     exit_ok,
     exit_warn,
@@ -39,6 +46,13 @@ from _common import (  # noqa: E402
 )
 from _protocol_cache import _split_shell_segments, named_query_sql  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
+
+# Imported rather than re-derived. Deciding "is this line a sahjhan invocation,
+# and which subcommand" is one fact with one owner: that parser already handles
+# `nohup`, `env`, a leading `!`, env-var assignments, quoted and path-prefixed
+# spellings, and redirect stripping. A second recognizer here would be a second
+# answer, and the shapes it missed would be the ones that reach this hook.
+from _sahjhan_bootstrap import _extract_sahjhan_subcmd  # noqa: E402
 
 # The predicate, by name. Resolved out of `protocol.toml` at runtime rather
 # than restated here — H7 exists because a hook carrying its own copy of a
@@ -54,6 +68,31 @@ DEFER_REASON = "theoretical"
 _MERGE_SCRIPT = "merge_punchlists.py"
 
 
+def _runs_the_merge_script(segment: str) -> bool:
+    """True if this segment *executes* `merge_punchlists.py`.
+
+    `record_scope_of`'s shape: an interpreter in command position and the
+    script as its argument. Naming the file is not running it — `grep`, `cat`
+    and `git log --` all carry the token, and any of them waking the sweep
+    hands the agent a way to time the auto-deferral on demand.
+
+    The path is matched by tail rather than resolved. A PostToolUse hook sees
+    the command as typed, so `${CLAUDE_PLUGIN_ROOT}` is still a literal here
+    and there is no expansion this hook could do the way the shell did.
+    """
+    try:
+        tokens = shlex.split(segment)
+    except ValueError:
+        tokens = segment.split()
+    for index, token in enumerate(tokens[:-1]):
+        if (
+            os.path.basename(token) in INTERPRETERS
+            and os.path.basename(tokens[index + 1]) == _MERGE_SCRIPT
+        ):
+            return True
+    return False
+
+
 def files_a_finding(command: str) -> bool:
     """True if this Bash line could have put a finding on the ledger.
 
@@ -61,16 +100,16 @@ def files_a_finding(command: str) -> bool:
     every Justine-only finding through a subprocess, so the outer command is
     the only signal a PostToolUse hook ever gets for those.
 
-    Read-only commands carrying the same tokens are the #77 shape — a `query`
-    naming ``type='finding'`` must not wake anything — so the sahjhan branch
-    requires the ``event finding`` verb pair, not the word.
+    Both require the command to have been *run*. Read-only lines carrying the
+    same tokens are the #77 shape — a `query` naming ``type='finding'``, an
+    `echo` of the verb pair, a `grep` of the merge script — and the population
+    being re-derived from the ledger does not make waking on them harmless:
+    the sweep's *timing* is the thing the agent gains.
     """
     for segment in _split_shell_segments(command):
-        tokens = segment.split()
-        for index, token in enumerate(tokens[:-1]):
-            if token == "event" and tokens[index + 1] == "finding":
-                return True
-        if any(_MERGE_SCRIPT in token for token in tokens):
+        if _extract_sahjhan_subcmd(segment) == ("event", "finding"):
+            return True
+        if _runs_the_merge_script(segment):
             return True
     return False
 
@@ -82,6 +121,18 @@ def pending(cwd: str) -> tuple[list[dict], str]:
     context of the filing it came from, so the courier writes nothing it had
     to make up.
     """
+    # Before `ensure_sahjhan()`, and the ordering is the whole point — the same
+    # one `bash_guard.py` and `primer.py` document. `ensure_sahjhan()` fetches a
+    # ~100 MB binary on first use, so a Bash line naming the merge script in any
+    # plugin-installed project would pay for it and then be told, in an injected
+    # protocol warning, that a sweep it never asked for could not run.
+    #
+    # An empty population rather than a problem: there is no audit, so there are
+    # no theoretical findings, and the caller's `problem` channel is for a sweep
+    # that should have happened and did not.
+    if not audit_active(cwd):
+        return [], ""
+
     binary = ensure_sahjhan()
     config_dir, found = resolve_config_dir(cwd)
     if binary is None or not found:

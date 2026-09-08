@@ -28,9 +28,11 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**18 of 32 units · 23 of 51 items · 28 items across 14 units remain.**
-W13 is `WIP`, not done: it closed item 37 and left item 17 open **by ruling**,
-so it moves the item count and not the unit count.
+**18 of 32 units · 24 of 51 items · 27 items across 14 units remain.**
+Two units are `WIP` and neither moves the unit count. **W13** closed item 37
+and left item 17 open **by ruling**. **W18** closed item 36 and left item 33
+open — a design choice, not a spelling, and the unit now carries the two
+measurements that decide it.
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
@@ -343,13 +345,34 @@ eight queries keyed on `type='finding_deferred'` were never touched.
 
 ## Do this next
 
-### 1. ⭐ P3 — W18 (items 36, 33). W15, W16 and W17 are all `DONE`.
+### 1. ⭐ P3 — W18's item 33, or W19 (40, 47).
 
-P2 is finished and P3 is running. W13 is `WIP` with item 37 closed and item 17
-open **by ruling** — that is decided, not blocking.
+W15, W16, W17 are `DONE`; **W18 landed item 36 and item 33 is open.** Then
+W19 (40, 47), W20 (41, 38), W21 (9). After P3: P4 (W23–W30) and the `WIP`
+stragglers (W18's item 33, W13's item 17, W32's step 3).
 
-Then W19 (40, 47), W20 (41, 38), W21 (9). After P3: P4 (W23–W30) and the `WIP`
-stragglers (W13's item 17, W32's step 3).
+**Item 33 needs a decision before code, and the unit now carries the two
+measurements that shape it.** Step 3 offers "re-run the real check **or** bind
+the marker to a host-derived signal it cannot echo"; re-running is not open to
+a PostToolUse hook at ~24 minutes, so it is the second. Both halves were
+measured while doing item 36:
+
+- **`trusted-callers.toml` has no `scripts/` entries** — `grep -c '^"scripts/'`
+  is 0. The obvious binding (resolve the executed path, check its content hash
+  the way the daemon checks a hook's) has no row to check against yet, and
+  `TRUSTED_SCRIPTS` is hand-kept, so nothing will discover it for you.
+- **`verify_suite.py:323` runs the suite through `os.environ.get(
+  "HOLTZ_PYTEST") or DEFAULT_PYTEST`.** So verifying the script's identity
+  does **not** satisfy V6: a genuine script, an honest `--scope full`, and a
+  `HOLTZ_PYTEST` that collects nothing still records `full`. Whatever binds
+  the marker has to reach that seam or say plainly that it does not.
+
+**And item 36 has a trap worth reading before touching the courier again.**
+`theoretical_courier.py` is a daemon-calling hook. Editing it and not rerunning
+`scripts/hash-trusted-callers.sh` turns the four `TestTheCourierWritesForReal`
+tests red with the deferral simply **absent** — which reads exactly like a
+broken trigger, and the trigger was fine. Hit and diagnosed here; only
+`real_daemon` tests can see it.
 
 **What H11 does and does not cover — read before assuming item 22 closed the
 class.** H11 asks whether a gate excusing itself on an escape-qualifier

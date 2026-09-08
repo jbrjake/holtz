@@ -67,7 +67,7 @@ imprecision (`CLAUDE.md`).
 | W15 | 30 | C | `DONE` @ `8bd7e43` — one segmentation owner; two shapes left open and recorded | — |
 | W16 | 18 | C | `DONE` — step 2 @ `b111960`, step 1 on sahjhan 0.28.0's `recorded_by`; fixed at the lens site too | W09, ~~sahjhan#50~~ shipped |
 | W17 | 22 | C | `DONE` — H11, driven red at `48c72fd` before it was trusted | W16 |
-| W18 | 36, 33 | C | `TODO` | W02 |
+| W18 | 36, 33 | C | `WIP` — **36 done, 33 open**; 33 is a design choice, see the unit | W02 |
 | W19 | 40, 47 | C | `TODO` | W02 |
 | W20 | 41, 38 | C | `TODO` | — |
 | W21 | 9 | C | `TODO` | ~~D-c~~ ruled |
@@ -3529,8 +3529,31 @@ Without it, the class recurs. #79 was this; item 18 is this; the next one will b
 
 ## W18 — Items 36 + 33: courier triggers and the suite marker
 
-**Status:** `TODO`  ·  **Tier:** C  ·  **33 PROVEN**  ·  **Depends on:** W02
+**Status:** `WIP` — **item 36 landed; item 33 is open**
+**Tier:** C  ·  **33 PROVEN**  ·  **Depends on:** W02
 **Commit:** `fix(enforcement): couriers fire on execution, not on mention, and re-derive what they record`
+
+> **Item 33 is not started, and it is a design choice rather than a spelling.**
+> Step 3 offers "re-run the real check **or** bind the marker to a host-derived
+> signal it cannot echo". Re-running is not available to a PostToolUse hook —
+> this suite is ~24 minutes — so it is the second, and two facts measured while
+> doing item 36 decide how:
+>
+> - **`trusted-callers.toml` has no `scripts/` entries at all** (`grep -c
+>   '^"scripts/'` → 0). The natural binding — resolve the executed path and
+>   check its content hash the way the daemon checks a hook's — has no manifest
+>   row to check against yet. Adding one is part of the work, and
+>   `TRUSTED_SCRIPTS` is hand-kept, so the generator will not discover it.
+> - **`verify_suite.py:323` runs the suite through `os.environ.get(
+>   "HOLTZ_PYTEST") or DEFAULT_PYTEST`.** That is the seam step 4 is really
+>   about: with a genuine script and an honest `--scope full`, `HOLTZ_PYTEST`
+>   pointed at something that collects nothing still yields a green and records
+>   `full`. So V6 ("a run claiming `full` that ran a subset does not record
+>   `full`") is not satisfied by verifying the script's identity alone.
+>
+> V4 also requires a **live daemon** — the original observation was limited by
+> an absent one, so a mock-daemon test would reproduce the limitation, not the
+> fix.
 
 Land after W02 so item 36's new guard uses the anchored probe rather than adding a
 sixth `cwd`-relative one.
@@ -3572,12 +3595,23 @@ is passed straight through.
 
 ### Plan
 
-- [ ] **1.** (36) Give the merge branch the same verb discipline the sahjhan branch
-      has: require the token be **executed** (interpreter in the recognizer's set,
-      script path in argument position), not merely mentioned.
-      `verify_suite.record_scope_of` is the shape to copy
-- [ ] **2.** (36) Add the active-audit guard before `ensure_sahjhan()`, ordered as
-      `bash_guard.py:46-51` and `primer.py:80-83` do — using W02's `audit_active()`
+- [x] **1.** (36) Both branches now require the command to have been **run**,
+      not merely to carry the token. The merge branch takes
+      `record_scope_of`'s shape (an interpreter in command position, the script
+      as its argument, matched by tail because a PostToolUse hook sees
+      `${CLAUDE_PLUGIN_ROOT}` unexpanded). The sahjhan branch **imports
+      `_extract_sahjhan_subcmd`** rather than keeping its own token loop — V1
+      requires `echo event finding` not to fire, which the loop could not tell
+      from a real invocation. That parser already handles `nohup`, `env`, a
+      leading `!`, env assignments, quoted and path-prefixed spellings and
+      redirect stripping; a second recognizer here would be a second answer,
+      and its gaps would be this hook's
+- [x] **2.** (36) `audit_active(cwd)` guards `pending()` before
+      `ensure_sahjhan()`, ordered as `bash_guard.py:54` does. Returns an empty
+      population rather than a problem: with no audit there are no theoretical
+      findings, and the `problem` channel is for a sweep that should have
+      happened and did not — spending it here would teach every consumer to
+      ignore it
 - [ ] **3.** (33) Have the courier re-run the real check (as the other four do),
       **or** bind the marker to a host-derived signal it cannot echo
 - [ ] **4.** (33) Re-derive `--scope full` rather than trusting command text. The
@@ -3585,15 +3619,25 @@ is passed straight through.
 
 ### Validation
 
-- [ ] **V1** (36) `grep -n reachability …merge_punchlists.py`, `cat …`,
-      `git log -- …` and `echo event finding` → courier does **not** fire. Four
-      separate cases; they reach the branch by different routes. Evidence: ___
-- [ ] **V2** (36) A real `python3 …/merge_punchlists.py …` → courier fires as
-      before. Evidence: ___
-- [ ] **V3** (36) In a project with **no** audit, a Bash line naming the merge
-      script triggers **no** binary download and **no** injected warning. This is
-      invisible to any test run inside this repo, which always has an audit dir.
-      Evidence: ___
+- [x] **V1** (36) All four refuse, driven against the recognizer:
+      `test_naming_the_merge_script_is_not_running_it` parametrises `grep -n`,
+      `cat`, `git log --` and — added, same class — `git add`, and
+      `test_echoing_the_verb_pair_does_not_wake_it` covers the sibling branch.
+      A fifth, `test_a_deferral_does_not_wake_it`, pins that
+      `event finding_deferred` is a different subcommand and not a prefix:
+      the courier's own writes must not re-wake it
+- [x] **V2** (36) `test_the_merge_script_wakes_it` and
+      `test_a_finding_filing_wakes_it` are unchanged and green before and
+      after, plus `test_the_merge_script_wakes_it_through_a_wrapper` for
+      `nohup` — the spelling the shared recognizer handles and a hand-rolled
+      one would have missed
+- [x] **V3** (36) `test_worktree_audit_anchor.py::test_the_theoretical_courier_
+      pays_nothing_either`: with the audit dir removed, firing the courier on a
+      real merge-script command leaves `binary_calls() == []` and emits no
+      `NOT auto-deferred` warning. **It lives on the worktree fixture, not
+      beside the courier's own tests**, because that fixture is the only thing
+      in the suite that can take the audit dir away — every test run inside
+      this repo has one
 - [ ] **V4** (33) The throwaway-repo reproduction: a two-line fake `verify_suite.py`
       that only prints the marker must **not** produce a `suite_green`. **Run it
       with a live daemon** — the original observation was limited by an absent one,
@@ -3603,8 +3647,17 @@ is passed straight through.
       subset does not record `full`. Evidence: ___
 - [ ] **V7** (33) The recorded green still satisfies `verify_suite.py --check` and
       the `fix_commit` suite gate — end to end, not just the write. Evidence: ___
-- [ ] **V8 · non-vacuity** Revert 36 step 1 → V1 red; revert step 2 → V3 red;
-      revert 33 → V4 red. Evidence: ___
+- [ ] **V8 · non-vacuity** Item 36's two arms are driven; **33's is owed with
+      33.** Reverting step 1 (the merge branch back to "mentioned", the sahjhan
+      branch back to its token loop) takes **five** tests red — the four
+      parametrised naming cases and the `echo` one — and nothing else in the
+      class. Reverting step 2 takes V3's test red, alone. Both mutations run in
+      one sitting against the same tree, restored after
+- [ ] **V9 · the manifest** (36) `theoretical_courier.py` is a daemon-calling
+      hook, so `scripts/hash-trusted-callers.sh` had to rerun — and this is the
+      failure it produces if you forget: the four `TestTheCourierWritesForReal`
+      tests go red with the deferral simply absent, which reads exactly like a
+      broken trigger. The trigger was fine. Only `real_daemon` tests see it
 
 ---
 

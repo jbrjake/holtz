@@ -99,6 +99,42 @@ class TestTrigger:
             "sahjhan query \"SELECT id FROM events WHERE type='finding'\" --format json"
         )
 
+    def test_the_merge_script_wakes_it_through_a_wrapper(self):
+        """`nohup`, `env`, a leading `!` and a path-prefixed binary are the
+        spellings the shared recognizer already handles. Re-deriving that here
+        would mean a second answer, and its gaps would be this hook's."""
+        assert tc.files_a_finding("nohup sahjhan event finding --field id=x")
+
+    @pytest.mark.parametrize("command", [
+        'grep -n reachability "${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/merge_punchlists.py"',
+        'cat "${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/merge_punchlists.py"',
+        "git log -- enforcement/scripts/merge_punchlists.py",
+        "git add enforcement/scripts/merge_punchlists.py",
+    ])
+    def test_naming_the_merge_script_is_not_running_it(self, command):
+        """Item 36. Four routes to the same token, none of them an execution.
+
+        The population is re-derived from the ledger, so none of these could
+        forge a finding — and that is not the exposure. Waking the sweep is a
+        *timing* primitive: with item 25 re-filing Justine's escalations as
+        `theoretical`, `grep`-ing this file auto-defers them, on demand, at a
+        moment of the agent's choosing.
+        """
+        assert not tc.files_a_finding(command)
+
+    def test_echoing_the_verb_pair_does_not_wake_it(self):
+        """The sibling branch, and the same class. `event finding` as two bare
+        words is not a sahjhan invocation, and the shared recognizer says so
+        without this hook having to know what `echo` is."""
+        assert not tc.files_a_finding("echo event finding")
+
+    def test_a_deferral_does_not_wake_it(self):
+        """`event finding_deferred` is a different subcommand, not a prefix of
+        this one — and the courier's own writes must not re-wake it."""
+        assert not tc.files_a_finding(
+            "sahjhan event finding_deferred --field id=BH-001 --field reason=theoretical"
+        )
+
 
 # ── The population ───────────────────────────────────────────────────────────
 
