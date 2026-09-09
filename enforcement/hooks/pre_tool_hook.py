@@ -19,6 +19,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
+    audit_abandoned,
     exit_block,
     exit_boundary_missing,
     exit_enforcement_error,
@@ -123,7 +124,12 @@ def main() -> None:
     # A refusing daemon returns no cache, so the staleness check below reads
     # it as "no audit" and allows. That inverts the fuse: the moment the
     # boundary goes missing, every gate it protects would stop applying.
-    if boundary:
+    #
+    # Which is why the release for an abandoned audit is a separate question
+    # and not a reordering. The daemon outlives the session that started it,
+    # so its refusal reaches sessions with no audit to protect; those are the
+    # ones `audit_abandoned` lets past, and a live audit still blocks (41).
+    if boundary and not audit_abandoned(cwd):
         exit_boundary_missing(boundary)
 
     # Stale enforcement: skip hook eval for abandoned audits

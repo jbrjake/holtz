@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,6 +22,13 @@ import pytest
 from hook_runner import run_hook as _run_hook
 
 REPO_ROOT = Path(__file__).parent.parent
+
+# `enforcement/hooks` otherwise reaches sys.path only through the `real_daemon`
+# fixture, which this file's mock-daemon tests never request — so
+# `from _protocol_cache import stall_count` resolved or raised depending on
+# whether some *other* module had run first. Under `-k` it raised for all 35,
+# which is a collection failure wearing the costume of a RED control.
+sys.path.insert(0, str(REPO_ROOT / "enforcement" / "hooks"))
 
 # Hook paths in chain order (as defined in hooks.json)
 PRE_TOOL_LIFECYCLE = str(REPO_ROOT / "enforcement" / "hooks" / "_daemon_lifecycle.py")
@@ -527,6 +535,18 @@ class TestReadOnlyCommandsDoNotStall:
         # In-place edit wears a read-only command's name.
         "sed -i 's/a/b/' src/module.py",
         "sed -i.bak 's/a/b/' src/module.py",
+        # And its long spelling, which the prefix match does not reach:
+        # `"--in-place".startswith("-i")` is False, because the second dash
+        # comes first. Same write, same disguise, one extra character.
+        "sed --in-place 's/a/b/' src/module.py",
+        "sed --in-place=.bak 's/a/b/' src/module.py",
+        # A read-only git subcommand still writes a file when told to.
+        "git diff --output=/tmp/x HEAD",
+        # The same gap elsewhere in the read-only list: both of these take a
+        # destination and had no writing-flag entry at all.
+        "sort -o sorted.txt in.txt",
+        "sort --output=sorted.txt in.txt",
+        "tree -o listing.txt",
         # find can execute and delete.
         "find . -name '*.pyc' -delete",
         "find . -name '*.py' -exec rm {} ;",

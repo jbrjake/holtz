@@ -15,6 +15,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
+    audit_abandoned,
     exit_block,
     exit_boundary_missing,
     exit_ok,
@@ -63,7 +64,15 @@ def main() -> None:
     # through would let the run keep advancing while the enforcement that is
     # supposed to be gating it does nothing. The escape is not a command:
     # the user types `holtz-stop`, which is a prompt, not a tool call.
-    if boundary:
+    #
+    # Unless the run is already over. Then that ordering costs what it was
+    # buying: `_daemon_lifecycle` runs ahead of this hook, blocks a terminated
+    # audit with a message that names the situation, and exempts `sahjhan
+    # daemon start`/`stop` so the human can recover — and this gate revoked
+    # the exemption. `audit_abandoned` is checked here rather than the
+    # ordering being swapped, because freshness is False for a live audit too
+    # (item 41).
+    if boundary and not audit_abandoned(cwd):
         exit_boundary_missing(boundary)
 
     # Sahjhan commands are always allowed

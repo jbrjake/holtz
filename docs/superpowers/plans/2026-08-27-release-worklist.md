@@ -69,7 +69,7 @@ imprecision (`CLAUDE.md`).
 | W17 | 22 | C | `DONE` — H11, driven red at `48c72fd` before it was trusted | W16 |
 | W18 | 36, 33 | C | `WIP` — **36 done, 33 open**; 33 is a design choice, see the unit | W02 |
 | W19 | 40, 47 | C | `DONE` — plus a 4th disagreement: NotebookEdit sends `notebook_path` | W02 |
-| W20 | 41, 38 | C | `TODO` | — |
+| W20 | 41, 38 | C | `DONE` — an abandoned audit is released by name, not by freshness; both flag spellings listed | — |
 | W21 | 9 | C | `TODO` | ~~D-c~~ ruled |
 | ~~W22~~ | 27 | — | — | *moved to P1 above (D-h)* |
 | **P4 — hygiene and record** ||||
@@ -3774,7 +3774,7 @@ not already in its own list.
 
 ## W20 — Items 41 + 38: boundary ordering, and long-flag writes classified read-only
 
-**Status:** `TODO`  ·  **Tier:** C
+**Status:** `DONE`  ·  **Tier:** C
 **Commit:** `fix(enforcement): release an abandoned audit, and stop reading --in-place as read-only`
 
 ### Defect 41 · `pre_tool_hook.py:102-111` / `commit_gate.py:59-76`
@@ -3806,42 +3806,109 @@ counter"*). Separately, `git` is whitelisted with no writing-flag table, so
 
 ### Plan
 
-- [ ] **1.** (41) ⚠️ **Do not simply swap the two checks.** The ordering is
+- [x] **1.** (41) ⚠️ **Do not simply swap the two checks.** The ordering is
       deliberate and documented in both files (*"a refusing daemon serves no cache,
       so `is_enforcement_fresh` is False and this degrade path would otherwise wave
       through exactly the situation it exists for"*) — swapping reopens the fuse
       inversion
-- [ ] **2.** (41) Distinguish the two cases the single ordering conflates:
+      → not swapped; the release is a separate predicate ahead of the same call.
+- [x] **2.** (41) Distinguish the two cases the single ordering conflates:
       *boundary missing during a live audit* (block — correct today) from *boundary
       missing with an abandoned audit* (release). Freshness alone is not the
       discriminator; the terminated marker and the init-pid liveness check are, and
       both already exist in `_common.py`
-- [ ] **3.** (41) Correct the docstring either way
-- [ ] **4.** (38) Add `--in-place` to `sed`'s writing flags (prefix match then
+      → `_common.audit_abandoned(cwd)`: `terminated` marker **or** a recorded init
+      PID whose process is gone. Both, not just the marker — the marker is written
+      by whichever hook notices first, so a marker-only read would still deny the
+      call that was about to produce it. Two absences answer *not* abandoned: no
+      audit dir (a daemon answering for a project whose state is gone) and no init
+      PID recorded (pre-init/legacy). Called from `commit_gate.py` and
+      `pre_tool_hook.py`, the two sites this item names.
+- [x] **3.** (41) Correct the docstring either way
+      → `exit_boundary_missing`'s *"cannot fire in a project that simply is not
+      being audited"* was false: the daemon is `nohup`'d and outlives its session,
+      and the socket is anchored at the project, so the refusal reaches every
+      session and every linked worktree.
+- [x] **4.** (38) Add `--in-place` to `sed`'s writing flags (prefix match then
       covers `--in-place=.bak`), and fix the comment claiming it was already covered
-- [ ] **5.** (38) Add a writing-flag entry for `git`: `--output`, and any other
+- [x] **5.** (38) Add a writing-flag entry for `git`: `--output`, and any other
       `git diff` flag that writes
-- [ ] **6.** (38) Audit the rest of `_READ_ONLY_COMMANDS` for the same long-flag
+      → `--output` only. The prefix match also catches `--output-indicator-*`,
+      which reads — the cheap direction, per the function's own docstring.
+- [x] **6.** (38) Audit the rest of `_READ_ONLY_COMMANDS` for the same long-flag
       gap — **the bug is the `--`/`-` asymmetry, not the specific word**
+      → two commands had no writing-flag entry at all and take a destination:
+      `sort` (`-o`, `--output=`, both in sort(1) on this machine) and `tree`
+      (`-o`). Both spellings are listed for every entry now, and the table says
+      why: an unlisted spelling reopens the bypass, a listed one the tool does not
+      have costs a nudge.
 
 ### Validation
 
-- [ ] **V1** (41) A session killed mid-`fix_loop` with a surviving daemon, past the
+- [x] **V1** (41) A session killed mid-`fix_loop` with a surviving daemon, past the
       freshness window: an unrelated session's Bash is **allowed** (or blocked with
-      a message naming a working escape — assert which, and run it). Evidence: ___
-- [ ] **V2** (41) A live audit with the boundary genuinely down still **blocks**.
-      This is the fuse and must not regress. Evidence: ___
-- [ ] **V3** (41) A linked worktree behaves as the main checkout does. Evidence: ___
-- [ ] **V4** (38) `sed --in-place 's/a/b/' src.py` → **not** read-only; the stall
-      counter charges it. Evidence: ___
-- [ ] **V5** (38) `git diff --output=/tmp/x HEAD` → not read-only. Evidence: ___
-- [ ] **V6** (38) `sed -i`, `sed -i.bak`, `git diff HEAD` keep their current
-      classifications — `test_hook_chains.py:527` must not move. Evidence: ___
-- [ ] **V7** (38) All three long-flag forms added to `test_hook_chains.py` beside
-      the short forms. Evidence: ___
-- [ ] **V8 · non-vacuity** (41) Apply the naive swap instead of the fix → **V2 must
+      a message naming a working escape — assert which, and run it).
+      Evidence: **blocked**, and correctly — a surviving daemon means a live init
+      PID, so the audit is not abandoned. `TestTheEscapeTheBlockNamesIsRunnable::
+      test_holtz_start_lifts_the_block_it_tells_the_human_to_lift` asserts which
+      and runs it against a **real** daemon: remove the project's
+      `settings.local.json` under the running daemon → `commit_gate` denies with
+      `holtz-start` in the reason → call `sandbox_control._apply_settings`, the
+      settings step `arm()` performs → the same call is no longer denied. A mock
+      cannot settle this: its refusal is a flag the test sets, the real one is a
+      verdict on the file the escape writes.
+- [x] **V2** (41) A live audit with the boundary genuinely down still **blocks**.
+      This is the fuse and must not regress.
+      Evidence: `test_a_live_init_pid_still_blocks` (deny, message still names
+      `holtz-start`) and `test_an_audit_with_no_init_pid_recorded_still_blocks`,
+      plus all four pre-existing `TestPreToolUseFailsClosed` tests and
+      `test_stale_enforcement_still_blocks` — green before, during the V8
+      mutation and after. `tests/test_boundary_fail_closed.py` exit 0, 17 passed.
+- [x] **V3** (41) A linked worktree behaves as the main checkout does.
+      Evidence: `test_a_linked_worktree_gets_the_same_answer` drives `commit_gate`
+      in both checkouts of the `worktree_cwd` fixture: `['deny','deny']` while the
+      audit is live, neither denied once the `terminated` marker is written. The
+      first half is what stops it passing against a hook that simply allows.
+- [x] **V4** (38) `sed --in-place 's/a/b/' src.py` → **not** read-only; the stall
+      counter charges it.
+      Evidence: `test_mutating_commands_still_tick[sed --in-place …]` and
+      `[sed --in-place=.bak …]`. RED on the unmodified table read
+      `assert 5 == 6` — the counter did not tick.
+- [x] **V5** (38) `git diff --output=/tmp/x HEAD` → not read-only.
+      Evidence: `test_mutating_commands_still_tick[git diff --output=/tmp/x HEAD]`,
+      RED `assert 5 == 6` before the `git` entry existed.
+- [x] **V6** (38) `sed -i`, `sed -i.bak`, `git diff HEAD` keep their current
+      classifications — `test_hook_chains.py:527` must not move.
+      Evidence: those rows were not edited; all 29 pre-existing cases in
+      `TestReadOnlyCommandsDoNotStall` passed in the RED run and in the green one
+      (35 passed, exit 0).
+- [x] **V7** (38) All three long-flag forms added to `test_hook_chains.py` beside
+      the short forms.
+      Evidence: six rows added inside the existing `test_mutating_commands_still_
+      tick` parametrization — `sed --in-place`, `sed --in-place=.bak`,
+      `git diff --output=`, `sort -o`, `sort --output=`, `tree -o`.
+- [x] **V8 · non-vacuity** (41) Apply the naive swap instead of the fix → **V2 must
       go red**, demonstrating why the swap is wrong. (38) Revert → V4, V5 red.
-      Evidence: ___
+      Evidence: (41) freshness moved above the boundary check in `commit_gate.py`
+      → **8 failed, 9 passed**, and the eight include both V2 tests and all four
+      `TestPreToolUseFailsClosed` — a refusing daemon serves no cache, so
+      `is_enforcement_fresh(None)` exits ok and the boundary check never runs.
+      Reverted, 17 passed. (38) the unmodified `_WRITING_FLAGS` is the RED run:
+      exactly the six new rows failed and nothing else did.
+
+### Left open, recorded rather than widened
+
+- **Bundled short flags escape the same table.** `sed -ni 's/a/b/' f` writes, and
+  `"-ni".startswith("-i")` is False, so it is still classified read-only. It is
+  the same *defect* (a write wearing a read's name) but not the same *bug* the
+  item names, and closing it means a real flag parser rather than another table
+  row. No test pins it in either direction.
+- **Two other sites read the boundary and were left alone.**
+  `post_tool_hook.py:117` warns rather than blocks, so an abandoned audit costs
+  noise and not a wedge; `_common.exit_enforcement_error` re-reads it on a
+  degrade path that is only reached *past* a caller's own boundary check. Both
+  are named here so the next reader finds them by reading rather than by
+  surprise.
 
 ---
 

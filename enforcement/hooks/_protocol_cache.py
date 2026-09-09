@@ -439,12 +439,26 @@ _READ_ONLY_GIT_SUBCOMMANDS = frozenset({
 })
 
 # Flags that turn a read-only command into a writing one.
+#
+# Every spelling a flag has must be listed. Matching is `p == flag or
+# p.startswith(flag)`, which reaches a flag's *argument* (`-i.bak`,
+# `--output=x`) but not its other name: `"--in-place".startswith("-i")` is
+# False, because the second dash comes before the letter. So a table carrying
+# only the short form classifies the long form as read-only, and the direction
+# that costs something is exactly this one — a write that accrues no stall.
+# The reverse, listing a spelling a given tool does not have, costs a nudge.
 _WRITING_FLAGS = {
-    "sed": ("-i",),           # also covers -i.bak / --in-place via prefix match
+    "sed": ("-i", "--in-place"),
     "find": (
         "-delete", "-exec", "-execdir", "-ok", "-okdir",
         "-fprint", "-fprintf", "-fls",
     ),
+    # `git diff --output=<file>` writes the diff to a path, and `diff` is on
+    # the read-only subcommand list. The prefix match also catches
+    # `--output-indicator-*`, which only reads — the cheap direction.
+    "git": ("--output",),
+    "sort": ("-o", "--output"),
+    "tree": ("-o", "--output"),
 }
 
 # Redirections that produce no file: fd duplication (2>&1, >&2) and the

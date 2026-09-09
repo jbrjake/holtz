@@ -144,9 +144,15 @@ def exit_boundary_missing(reason: str, hook_type: str = "PreToolUse") -> NoRetur
 
     Reached only when a *live* daemon answered with sahjhan's `sandbox_required`
     refusal, which is a fact rather than an inference: the daemon read the
-    project's settings and could not confirm the agent is confined. That is
-    self-limiting — no daemon, no refusal — so this cannot fire in a project
-    that simply is not being audited.
+    project's settings and could not confirm the agent is confined.
+
+    What that fact does *not* say is that an audit is still running. The
+    daemon is `nohup`'d and torn down only on `finalized`/`idle`, so it
+    outlives the session that started it, and its refusal then reaches every
+    session in the project and every linked worktree — the socket is anchored
+    at the project, not the cwd. Callers therefore ask `audit_abandoned` first
+    and let those sessions past; what remains here is a live audit whose
+    boundary came down, which is the case this exists for.
     """
     message = BOUNDARY_MESSAGE.format(reason=reason)
     if hook_type == "PreToolUse":
@@ -273,6 +279,37 @@ def audit_active(cwd: str) -> bool:
     deciding this same question.
     """
     return os.path.isdir(audit_data_dir(cwd))
+
+
+def audit_abandoned(cwd: str) -> bool:
+    """Whether this project's audit is over, whatever a daemon still answers.
+
+    Two facts settle it, and death detection already writes both: the
+    ``terminated`` marker, and a recorded init PID whose process is gone.
+    Either one means the session key the ledger is signed with is lost, so
+    there is no run left for a gate to protect. Both are read, not just the
+    marker: the marker is written by whichever hook notices first, so a gate
+    reading only the marker would still refuse the call that was about to
+    produce it.
+
+    Freshness cannot answer this question, which is why it is asked
+    separately. ``is_enforcement_fresh`` reads the enforcement cache, and the
+    caller here has just been refused one — so at exactly this moment
+    freshness is False for a live audit and an abandoned one alike.
+
+    Two absences are deliberately answered "not abandoned". No audit directory
+    at all means a daemon is answering for a project whose state is gone, and
+    no init PID recorded means pre-init or legacy — neither is evidence of
+    death, and reading either as death would hand the release to the audits
+    death detection cannot see.
+    """
+    data_dir = audit_data_dir(cwd)
+    if not os.path.isdir(data_dir):
+        return False
+    if os.path.isfile(os.path.join(data_dir, "terminated")):
+        return True
+    init_pid = _read_init_pid(cwd)
+    return init_pid is not None and not _is_process_alive(init_pid)
 
 
 def boundary_dir(cwd: str | None = None) -> str:
