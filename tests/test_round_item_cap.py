@@ -241,13 +241,25 @@ class TestMergeFinding:
         result = run.merge("BH-102", "BH-101", check=False)
         assert result.returncode != 0, result.stdout
 
-    def test_the_target_may_already_be_closed(self, run):
-        """The common case: the duplicate is not reproducible *because* the
-        finding it repeats was already fixed."""
+    def test_the_target_must_still_be_open(self, run):
+        """The escape the cap rests on is a merge into a finding still carrying
+        work (item 9, D-c). A closed target carries none, so merging into one
+        closes for free — and it is how a round empties its own board: merge
+        the siblings pairwise, then merge the last one into a sibling already
+        merged away. A duplicate of something already fixed goes through
+        `defer cant-reproduce` and its investigation file instead.
+
+        The severity floor is the same clause's other term and is driven in
+        `test_merge_target_constraints.py`; what this asserts is that the
+        cap's escape still works, which is this file's subject.
+        """
         run.file("BH-101")
         run.file("BH-102")
         run.resolve("BH-101")
-        result = run.merge("BH-102", "BH-101", check=False)
+        assert run.merge("BH-102", "BH-101", check=False).returncode != 0
+
+        run.file("BH-103")
+        result = run.merge("BH-102", "BH-103", check=False)
         assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
 
 
@@ -357,13 +369,19 @@ class TestDeferralDoesNotPayTheObligation:
     def test_the_run_still_has_a_door(self, run):
         """Escape by construction, checked where it is thinnest.
 
-        Every one of the round's items is deferred, so none of them is a
-        `merge_finding` argument any more, and merging the last open finding
-        empties the board. That is the one state in which the obligation has
-        no escape left at `iteration_boundary` — and the run is not wedged,
-        because `set complete perspective` is a different door and no *ledger*
-        gate on it is shut by any of this: deferred findings count as closed
-        for the lens conjuncts, and the round just run is not owed again.
+        Every one of the round's items is deferred, so none of them is a legal
+        `merge_finding` target — the target must still be open (item 9, D-c) —
+        and closing the last open finding empties the board. That is the one
+        state in which the obligation has no escape left at
+        `iteration_boundary` — and the run is not wedged, because `set complete
+        perspective` is a different door and no *ledger* gate on it is shut by
+        any of this: deferred findings count as closed for the lens conjuncts,
+        and the round just run is not owed again.
+
+        The close is `resolve` rather than a merge for the same reason: with
+        every sibling deferred there is no target left to merge into, so the
+        route to this board state is the standalone `finding_resolved` the
+        skill files teach.
 
         What is still ✗ there — the suite, the linter, a lens sweep — is the
         run's ordinary work, not a consequence of the deferral, so this asserts
@@ -376,7 +394,7 @@ class TestDeferralDoesNotPayTheObligation:
         which is what keeps the assertion about a lens with a board.
         """
         self._round_of_lows(run)
-        run.merge("BH-001", "BH-101")           # the last open finding
+        run.resolve("BH-001")                   # the last open finding
         assert run.answer("all_findings_closed") == "0"
         assert _blocked_on(run.gate_check("iteration_boundary"),
                            "round_opens_exceed_closes")

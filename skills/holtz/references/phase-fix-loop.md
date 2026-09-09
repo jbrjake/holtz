@@ -124,11 +124,13 @@ sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer batch --severity lo
      --field predicted_by=none --field pattern_id=PAT-NNN
    ```
 
-   `pattern_id` is what charges the sibling to this round — an untagged sibling is invisible to the round cap. At most 3 of a round's siblings may still be open when the round ends. Merge a sibling that repeats a finding already on the board — `BH-MMM` is that finding, open or already fixed:
+   `pattern_id` is what charges the sibling to this round — an untagged sibling is invisible to the round cap. At most 3 of a round's siblings may still be open when the round ends. Merge a sibling that repeats a finding already on the board — `BH-MMM` is that finding, still open and at least as severe as `BH-NNN`:
 
    ```bash
    sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition merge_finding BH-NNN BH-MMM
    ```
+
+   When `BH-MMM` is already resolved or deferred, close `BH-NNN` through `defer cant-reproduce` and its investigation file (Step 10). When `BH-MMM` deserves the higher grade, re-file it at that severity first — severity is the latest filing.
 
    `iteration_boundary` also requires the run to have closed or merged at least as many findings as the round opened. Past 25 open findings carrying a `pattern_id`, no round is owed until they are closed.
 3. **Update impact graph:** Add `shares_pattern` edges between all instances of the same pattern (e.g., if BH-003 and BH-007 are both PAT-001 instances, link the functions they involve with `shares_pattern` edges including the pattern ID in the note).

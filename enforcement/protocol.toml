@@ -91,22 +91,47 @@ intent = "all findings must be resolved or deferred"
 sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'"
 intent = "finding must not already be resolved or deferred"
 
-# `merge_finding`'s other end (P0.2, D7). The target has to be a finding this
-# run actually filed, or a merge would close an item into a typo and the work
-# would be tracked nowhere.
+# `merge_finding`'s other end (P0.2, D7). A merge emits `finding_resolved`, so
+# every term here is a way that close would otherwise be had for nothing.
+#
+# The target has to be a finding this run actually filed, or a merge closes an
+# item into a typo and the work is tracked nowhere.
 #
 # `id <> '{{item_id}}'` is the load-bearing half: without it a finding merges
 # into itself, which satisfies every gate, emits a `finding_resolved`, and
 # closes the item for free. That is the whole cap defeated by one command, so
 # the exclusion belongs in the predicate rather than in the skill file's prose.
 #
-# The target is *not* required to be open. Merging a duplicate into a finding
-# that has already been fixed is the common case — the fix is why the
-# duplicate is not reproducible — and requiring openness there would refuse
-# the escape exactly when the round most needs it.
+# The target must still be **open** and must be **at least as severe** (RULED
+# Jon, 2026-08-27, D-c). A closed target tracks no work, so a merge into one is
+# the same free close by a longer route — and it is the route by which a
+# pattern round can discharge `round_opens_exceed_closes` without fixing
+# anything: merge the siblings pairwise, then merge the last open one into a
+# sibling already merged away. The floor is what stops a CRITICAL being closed
+# into an unrelated LOW, which clears `all_critical_resolved`.
+#
+# What those two terms refuse has a route, which is the condition on adding
+# them at all (#77). A sibling repeating a finding that is already closed goes
+# through `defer cant-reproduce`, whose gate demands the investigation file
+# saying why it does not reproduce — evidence a merge never produced. A target
+# that deserves the higher grade is re-filed at it: severity is the latest
+# filing (D25), so the correction moves this predicate, which is what
+# `test_severity_is_the_latest_filing_on_both_sides` drives.
+#
+# Severity is ranked by CASE because the ledger stores the word. An
+# unrecognised value refuses from either side — 0 for the target, 99 for the
+# item — though `events.toml` pattern-constrains the field, so no written row
+# reaches either branch.
+#
+# Openness is spelled as the two NOT INs rather than by calling `item_open`:
+# a named query cannot reference another, and a gate resolving `query =
+# "item_open"` interpolates *this* transition's vars, so there is no way to
+# rebind its `{{item_id}}` to `{{merged_into}}` (`gates/query.rs`,
+# `resolve_gate_sql`). `all_findings_closed` and the two batch populations
+# carry the identical pair for the same reason.
 [queries.merge_target_exists]
-sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{merged_into}}' AND id <> '{{item_id}}'"
-intent = "the finding merged into must exist and must not be the finding being merged"
+sql = "SELECT count(*) >= 1 FROM events t WHERE t.type='finding' AND t.id='{{merged_into}}' AND t.id <> '{{item_id}}' AND t.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id='{{merged_into}}') AND t.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND t.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred') AND (CASE t.severity WHEN 'CRITICAL' THEN 4 WHEN 'HIGH' THEN 3 WHEN 'MEDIUM' THEN 2 WHEN 'LOW' THEN 1 ELSE 0 END) >= (SELECT CASE s.severity WHEN 'CRITICAL' THEN 4 WHEN 'HIGH' THEN 3 WHEN 'MEDIUM' THEN 2 WHEN 'LOW' THEN 1 ELSE 99 END FROM events s WHERE s.type='finding' AND s.id='{{item_id}}' AND s.seq = (SELECT MAX(h.seq) FROM events h WHERE h.type='finding' AND h.id='{{item_id}}'))"
+intent = "the finding merged into must exist, must not be the finding being merged, must still be open, and must be at least as severe"
 
 # A finding's severity is its *latest* filing. The ledger holds every filing,
 # `punchlist.md.tera` and `findings.py` both render the last one, and the

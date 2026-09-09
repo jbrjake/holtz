@@ -1095,7 +1095,9 @@ field in an example.
    to close a CRITICAL without a fix, next to the one the gate's intent says
    is the only one." That baseline is wrong, and the error matters because it
    over-rates this item and under-rates two others. Measured against a real
-   daemon, three commands close a CRITICAL with no fix:
+   daemon, four commands close a CRITICAL with no fix — the count corrected
+   here to match the table under it, which the third pass grew and this
+   sentence did not:
 
    | Command | Blocked? | Status |
    |---|---|---|

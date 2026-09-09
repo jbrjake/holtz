@@ -70,7 +70,7 @@ imprecision (`CLAUDE.md`).
 | W18 | 36, 33 | C | `WIP` — **36 done, 33 open**; 33 is a design choice, see the unit | W02 |
 | W19 | 40, 47 | C | `DONE` — plus a 4th disagreement: NotebookEdit sends `notebook_path` | W02 |
 | W20 | 41, 38 | C | `DONE` — an abandoned audit is released by name, not by freshness; both flag spellings listed | — |
-| W21 | 9 | C | `TODO` | ~~D-c~~ ruled |
+| W21 | 9 | C | `DONE` — both D-c terms; step 2's mechanism does not exist and the substitute is raised in the unit | ~~D-c~~ ruled |
 | ~~W22~~ | 27 | — | — | *moved to P1 above (D-h)* |
 | **P4 — hygiene and record** ||||
 | W23 | 4, 7, 8, 13, 14 | D | `TODO` | — |
@@ -3914,7 +3914,7 @@ counter"*). Separately, `git` is whitelisted with no writing-flag table, so
 
 ## W21 — Item 9: `merge_finding` has no relatedness or severity constraint
 
-**Status:** `TODO`  ·  **Tier:** C  ·  **PROVEN**  ·  **D-c RULED**
+**Status:** `DONE`  ·  **Tier:** C  ·  **PROVEN**  ·  **D-c RULED**
 **Commit:** `fix(enforcement): merge_finding requires an open target of at least equal severity`
 
 ### Defect
@@ -3945,33 +3945,107 @@ events are the agent's own word"* — so row 1 is a deliberate choice, not a def
 Both terms. The target's severity must be ≥ the merged item's, **and** the target
 must still be open — so a finding cannot be merged into something already closed.
 
-- [ ] **1.** Add **both** terms to `merge_target_exists` in `protocol.toml`. Grade
+- [x] **1.** Add **both** terms to `merge_target_exists` in `protocol.toml`. Grade
       severity by **latest filing** with the same max-seq correlation the other
       predicates use (D25), or a re-filed correction silently changes the answer
-- [ ] **2.** Reuse the existing `item_open` predicate for the openness term rather
+      → both terms are in the predicate. Severity is ranked by `CASE` over the
+      word the ledger stores, both sides pinned to `MAX(seq)` for their own id.
+- [x] **2.** Reuse the existing `item_open` predicate for the openness term rather
       than writing a second expression of it — one named fact, two consumers
-- [ ] **3.** Update the item-9 table to four rows wherever it is restated, keeping
+      → ⚠️ **not done as written — the mechanism does not exist, and the
+      substitute is the one this file already uses five times.** `item_open` is
+      written against `{{item_id}}`; the openness needed here is the *target's*,
+      `{{merged_into}}`. A named-query gate resolves `queries.<name>.sql` and
+      interpolates **this transition's** vars (`sahjhan/src/gates/query.rs`,
+      `resolve_gate_sql` + `eval_query_gate`), so there is no argument
+      rebinding, and a query's SQL cannot reference another query. Spelled as
+      the two `NOT IN`s inline — which `all_findings_closed`,
+      `open_low_findings`, `open_medium_findings` and
+      `open_theoretical_findings` already do, and which `protocol.toml`'s own
+      comment at `[queries.all_findings_closed]` records as forced for exactly
+      this reason. **Raised rather than decided:** if the intent was a new named
+      query (`merge_target_open`) consumed by both `merge_finding` seats, say so
+      and it is a rename.
+- [x] **3.** Update the item-9 table to four rows wherever it is restated, keeping
       the row-1 distinction (documented choice, not defect)
-- [ ] **4.** ⚠️ **Enumerate what the openness term refuses.** It removes a route
+      → the restatement is `2026-08-26-release-review-punchlist.md`, whose prose
+      said *"three commands close a CRITICAL with no fix"* above a four-row
+      table. Corrected there, and said to be a correction.
+- [x] **4.** ⚠️ **Enumerate what the openness term refuses.** It removes a route
       that exists today; if a legitimate late merge into a closed duplicate is a
       real workflow, it now needs a named escape. A gate whose refused cases have
       no route is #77 at the end of the run
+      → **three refused shapes, each with a route that already exists:**
+      **(a) target resolved or deferred** — `defer cant-reproduce BH-NNN`, whose
+      gate demands `docs/holtz/investigations/BH-NNN.md` be non-empty. That is
+      the honest form of the claim the merge was making (*"it does not
+      reproduce, because the other fix landed"*) and it produces the evidence a
+      merge never did. **(b) target of lower severity** — re-file the target at
+      the grade it deserves; severity is the latest filing, so the correction
+      moves the predicate (driven by
+      `test_severity_is_the_latest_filing_on_both_sides`). **(c) every other
+      finding deferred, so no legal target exists at all** — close the item:
+      `fix_commit` at `iteration_boundary`, or the standalone `sahjhan resolve`
+      the skill files teach. `test_the_run_still_has_a_door` drives that board
+      and asserts `set complete perspective` is still open on every ledger gate.
+      **The skill file moved with the gate:** `phase-fix-loop.md` taught
+      *"`BH-MMM` is that finding, open or already fixed"*, and now states the
+      constraint and routes (a) and (b).
 
 ### Validation
 
-- [ ] **V1** `merge_finding BH-010(CRITICAL) → BH-011(LOW)` → refused. Evidence: ___
-- [ ] **V2** `merge_finding BH-010 → BH-012(already closed)` → refused. Evidence: ___
-- [ ] **V3** A legitimate sibling merge into an **open** target of equal severity
-      still works — the transition has a real use and must survive. Evidence: ___
-- [ ] **V4** Merge into an open target of **higher** severity still works — the
-      floor is `>=`, not `==`. Evidence: ___
-- [ ] **V5** A round cannot discharge `round_opens_exceed_closes` by merging away
-      its own siblings. Drive the round, not just the predicate. Evidence: ___
-- [ ] **V6** Severity is graded by latest filing: a LOW re-filed as CRITICAL is a
-      valid target for a CRITICAL. Evidence: ___
-- [ ] **V7 · non-vacuity** Revert each term **separately**; a distinct check goes
+- [x] **V1** `merge_finding BH-010(CRITICAL) → BH-011(LOW)` → refused.
+      Evidence: `test_a_critical_cannot_be_merged_into_a_low`, driven against a
+      real daemon. RED on the unmodified predicate: `returncode=0`.
+- [x] **V2** `merge_finding BH-010 → BH-012(already closed)` → refused.
+      Evidence: `test_a_merge_into_a_resolved_target_is_refused` and
+      `test_a_merge_into_a_deferred_target_is_refused_too` — deferred is the
+      other half of closed, and a term reading only `finding_resolved` would
+      leave the cheaper route open.
+- [x] **V3** A legitimate sibling merge into an **open** target of equal severity
+      still works — the transition has a real use and must survive.
+      Evidence: `test_a_merge_into_an_open_target_of_equal_severity_still_works`,
+      green before the change, during both V7 mutations, and after; plus
+      `test_the_target_must_still_be_open`'s second half in
+      `test_round_item_cap.py`, which is the cap's own escape.
+- [x] **V4** Merge into an open target of **higher** severity still works — the
+      floor is `>=`, not `==`.
+      Evidence: `test_a_merge_into_a_higher_target_still_works`.
+- [x] **V5** A round cannot discharge `round_opens_exceed_closes` by merging away
+      its own siblings. Drive the round, not just the predicate.
+      Evidence: `test_the_last_sibling_has_nowhere_to_go` runs a real round of
+      four siblings, merges three into the fourth (all allowed — merges count as
+      closes on purpose), and then finds every remaining target closed, so the
+      fourth cannot go anywhere and the obligation still reads `true`. **The RED
+      is the item itself:** on the unmodified predicate `merge_finding BH-101
+      BH-102` into an already-merged-away sibling returned `0`.
+- [x] **V6** Severity is graded by latest filing: a LOW re-filed as CRITICAL is a
+      valid target for a CRITICAL.
+      Evidence: `test_severity_is_the_latest_filing_on_both_sides`, and
+      `test_a_downgrade_of_the_target_takes_it_off_the_list` for the other
+      direction — without it, filing one high row and re-grading down would
+      still pass.
+- [x] **V7 · non-vacuity** Revert each term **separately**; a distinct check goes
       red for each (V1 for the floor, V2 for openness). One check covering both
-      means one term is untested. Evidence: ___
+      means one term is untested.
+      Evidence: removing **only** the two `NOT IN`s → 3 red, all three openness
+      tests, severity tests green. Removing **only** the `CASE … >= …` → 2 red,
+      both severity tests, openness tests green. No check covers both terms.
+      Restored, 9 passed.
+
+### Two existing tests asserted the property this reverses
+
+Both are in `test_round_item_cap.py` and both were driven, not guessed:
+
+- `test_the_target_may_already_be_closed` asserted the merge succeeds into a
+  resolved target. It is now `test_the_target_must_still_be_open` and asserts
+  the refusal **plus** that the cap's escape still works against an open one —
+  the second half is what stops it passing against a gate that refuses
+  everything.
+- `test_the_run_still_has_a_door` reached its board state by merging a HIGH into
+  a deferred LOW, which the new terms refuse twice over. Its *claim* is that the
+  run is not wedged, not that a merge is the way out, so the vehicle is now
+  `resolve` — which is route (c) above, and the docstring says so.
 
 ---
 

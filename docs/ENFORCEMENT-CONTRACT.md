@@ -185,7 +185,9 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
-| the finding merged into must exist and must not be the finding being merged | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| the finding merged into must exist, must not be the finding being merged, must still be open, and must be at least as severe | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
 
 ### `merge_finding` — pattern_analysis → pattern_analysis
 
@@ -193,7 +195,9 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 |---|---|---|---|---|
 | finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
-| the finding merged into must exist and must not be the finding being merged | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| the finding merged into must exist, must not be the finding being merged, must still be open, and must be at least as severe | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
 
 ### `defer_cant_reproduce` — fix_loop → fix_loop
 
