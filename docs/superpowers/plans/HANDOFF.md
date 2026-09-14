@@ -31,11 +31,11 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**21 of 32 units · 29 of 51 items · 22 items across 11 units remain.**
-Counted off the dashboard on 2026-09-09, not carried forward. **P3 is finished
-except W18's item 33.** What is left is that item, W13's item 17 (open by
-ruling), W32's step 3 (a question for Jon), and the whole of **P4 — W23 through
-W30, 19 items, none started.**
+**23 of 32 units · 36 of 51 items · 15 items across 9 units remain.**
+Counted off the dashboard, not carried forward. **P3 is finished except W18's
+item 33**, and **P4 has started**: W23 and W24 are `DONE`. What is left is
+W25–W30 (13 items), W18's item 33, W13's item 17 (open by ruling), and W32's
+step 3 (a question for Jon).
 
 Three units are `WIP` and none moves the unit count. **W13** closed item 37 and
 left item 17 open **by ruling**. **W18** closed item 36 and left item 33 open —
@@ -45,8 +45,8 @@ decide it. **W32** closed everything but step 3.
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
 W12 (34, 28) · W11 (42) · W14 (5, 10) · W31 (50) · W15 (30) · W16 (18) ·
-W17 (22) · W19 (40, 47) · W20 (41, 38) · W21 (9). Commits are in `git log`; do
-not re-summarise them here.
+W17 (22) · W19 (40, 47) · W20 (41, 38) · W21 (9) · W23 (4, 7, 8, 13, 14) ·
+W24 (6, 44). Commits are in `git log`; do not re-summarise them here.
 
 ### ⛔ W21 left a question for Jon that a later session must not answer for him
 
@@ -170,11 +170,15 @@ substitute for CI is not.
 `fast-subset-cannot-see-slow-tests` justifies running **the slow tests that can
 see your change**. It does not justify running all of them.
 
+⚠️ **The full suite has not run since `489e84d`. W19, W20, W21, W23 and W24
+are all unrun, and CI has never seen any of them — nothing is pushed.** Each
+commit says so. Running it wants a quiet machine; see the flake section.
+
 **Last full run: 2026-09-08 at `489e84d` (W18/item 36)** — observed **exit 0**,
 **2998 passed, 8 skipped**, zero `FAILED`/`ERROR`, coverage **89.29%**, 24m44s.
 2998 + 8 = 3006 = the README badge at that commit; the two numbers check each
 other, so read both. **W19, W20 and W21 have had no full run** and each commit
-says so. Badge is **3040** at `6092c79`.
+says so. Badge is **3069** at `224355d`.
 
 **Read from the run's own output, not from the wrapper's exit code.** ⚠️ **Two
 corrections, both measured 2026-09-09 against `pyproject.toml` and against real
@@ -186,7 +190,7 @@ per-test names, not the summary. So: read the last line, and cross-check with
 `grep -cE "^(FAILED|ERROR)"` being 0. There is nothing to drop.
 
 **It covers everything up to and including `489e84d` (W18 / item 36).** W19,
-W20 and W21 are the gap, deliberately.
+W20, W21, W23 and W24 are the gap, deliberately.
 
 It is *not* CI: CI runs on ubuntu, and the seccomp debt below is a thing no
 local run touches. **Note also that the load-flaky hook family did not fail in
@@ -414,12 +418,28 @@ eight queries keyed on `type='finding_deferred'` were never touched.
 
 ## Do this next
 
-### 1. ⭐ P4 — W23 through W30, 19 items, none started. Then the three stragglers.
+### 1. ⭐ P4 — W25 next, then W26–W30. Then the three stragglers.
 
-**P3 is finished except W18's item 33.** W15, W16, W17, W19, W20, W21 are all
-`DONE`. What remains, in the board's own order: **P4 (W23–W30)**, then W18's
-item 33, W13's item 17 (open by ruling — do not reopen), and W32's step 3 (a
-question for Jon).
+W23 and W24 are `DONE`. What remains, in the board's own order: **W25 (11, 39,
+49), W26 (48), W27 (15, 45, 46), W28 (12, 16), W29 (21, 24), W30 (23)**, then
+W18's item 33, W13's item 17 (open by ruling — do not reopen), and W32's step 3
+(a question for Jon).
+
+**Three plan steps in a row have named a mechanism that does not exist, and the
+pattern is worth expecting rather than rediscovering.** W20 step 1 warned
+against a swap (so the release became a separate predicate ahead of it); W21
+step 2 named a query-reuse the engine cannot express; W24's proposed predicate
+included a clause `events.toml` already enforces at write time, and its V1 asks
+for two things that cannot both hold. In every case the *behaviour* was right
+and implementable — build that, and raise the mechanism gap in the unit and the
+commit rather than quietly substituting or quietly dropping. All four are
+recorded in their units under the step they belong to.
+
+**W23 built two config-derived doc tests, and one of them fired on W24 at the
+commit gate** — `test_the_doc_names_every_converge_query` reads `converge`'s
+conjuncts out of `transitions.toml`, so swapping one took
+`phase-convergence.md` red immediately. Expect it to fire again on any gate-list
+change, and fix the doc rather than the test.
 
 **W20 and W21 both turned up the same shape, and it is worth expecting.** Each
 had a plan step whose *mechanism* was unavailable while its *behaviour* was
