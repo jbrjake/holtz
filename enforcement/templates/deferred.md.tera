@@ -27,13 +27,19 @@ Findings deferred out of this run's scope. Open work is in `PUNCHLIST.md`.
 {% set findings = events | where_eq(attribute="event_type", value="finding") | unique_by(attribute="fields.id") -%}
 {% set deferrals = events | where_eq(attribute="event_type", value="finding_deferred") | unique_by(attribute="fields.id") -%}
 {% set deferred_ids = deferrals | map(attribute="fields.id") -%}
+{# Resolved takes precedence over deferred, the same way `punchlist.md.tera`
+   gives it precedence — one expression, copied, rather than a second one.
+   `fix_commit` carries no `item_open` gate, so deferring a finding and fixing
+   it anyway is a legal path, and this list is the only place it showed up as
+   still deferred. #}
+{% set resolved_ids = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
 
 | ID | Severity | Location | Reason | Summary |
 |----|----------|----------|--------|---------|
 {% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
 {% set sev_findings = findings | where_eq(attribute="fields.severity", value=severity) -%}
 {% for e in sev_findings -%}
-{% if deferred_ids is containing(e.fields.id) -%}
+{% if deferred_ids is containing(e.fields.id) and resolved_ids is not containing(e.fields.id) -%}
 {% set deferral = deferrals | where_eq(attribute="fields.id", value=e.fields.id) | last -%}
 | {{ e.fields.id }} | {{ severity }} | {{ e.fields.location | replace(from="|", to="\|") }} | {{ deferral.fields.reason | default(value="unspecified") }} | {{ e.fields.description | replace(from="|", to="\|") | replace(from="
 ", to=" ") | split(pat=" ") | slice(end=12) | join(sep=" ") }} |

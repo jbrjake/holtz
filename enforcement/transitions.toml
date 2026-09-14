@@ -605,7 +605,7 @@ gates = [
     { type = "query", query = "no_open_fault_injected", expect = "true", intent = "every fault_injected finding must be hardened or deferred — run Step 15's hardening batch, one commit per module" },
     { type = "query", query = "all_user_reachable_high_closed", expect = "true", intent = "every user-reachable HIGH must be resolved or deferred — run `sweep_dirty` and work them" },
     { type = "query", query = "amplification_diverging", expect = "false", intent = "the run is still filing faster than it retires over the last 3 rounds — run `sweep_dirty`, then `sahjhan defer batch --severity low,medium` and work a round, so the next round retires more than it files" },
-    { type = "file_exists", path = "docs/holtz/DEFERRED.md", intent = "docs/holtz/DEFERRED.md must exist" },
+    { type = "query", query = "deferral_record_complete", expect = "true", intent = "every deferral must name a finding this run filed — file it, or re-file under the id the deferral means" },
     { type = "no_violations", intent = "no unresolved protocol violations" },
     { type = "query", query = "quiz_exhaustions_resolved", expect = "true" },
 ]

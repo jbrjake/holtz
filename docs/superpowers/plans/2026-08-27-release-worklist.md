@@ -74,7 +74,7 @@ imprecision (`CLAUDE.md`).
 | ~~W22~~ | 27 | — | — | *moved to P1 above (D-h)* |
 | **P4 — hygiene and record** ||||
 | W23 | 4, 7, 8, 13, 14 | D | `DONE` — the three files agree; two config-derived doc tests replace prose-vs-prose | — |
-| W24 | 6, 44 | D | `TODO` | ~~D-b, D-g~~ ruled |
+| W24 | 6, 44 | D | `DONE` — the conjunct is a ledger predicate; V1's two clauses conflict and the unit says which one it kept | ~~D-b, D-g~~ ruled |
 | W25 | 11, 39, 49 | D | `TODO` | W05, W14 |
 | W26 | 48 | D | `TODO` | — |
 | W27 | 15, 45, 46 | D | `TODO` | — |
@@ -4299,7 +4299,7 @@ Hardening #3 was edited to say "Do not run the suite here."
 
 ## W24 — Items 6 + 44: render triggers and templates
 
-**Status:** `TODO`  ·  **Tier:** D  ·  **D-b + D-g RULED**
+**Status:** `DONE`  ·  **Tier:** D  ·  **D-b + D-g RULED**
 **Commit:** `fix(enforcement): gate converge on the deferral record, not on a file that always exists`
 
 Both edit the same `renders.toml` entry.
@@ -4360,16 +4360,31 @@ property 2.**
 
 ### Plan
 
-- [ ] **1.** (6) Drop `finding` from `DEFERRED.md`'s render trigger, leaving
+- [x] **1.** (6) Drop `finding` from `DEFERRED.md`'s render trigger, leaving
       `finding_deferred`
-- [ ] **2.** (6) Replace the `file_exists` conjunct at `transitions.toml:552` with
+- [x] **2.** (6) Replace the `file_exists` conjunct at `transitions.toml:552` with
       the ledger predicate, as a named query in `protocol.toml` with an `intent`
-- [ ] **3.** (44) Compute `resolved_ids` in `deferred.md.tera` and give it
+      → `[queries.deferral_record_complete]`: every `finding_deferred` names a
+      `finding` this run filed. ⚠️ **Half the proposed shape is deliberately
+      absent.** *"carries a `reason` from the allowed set"* is unrefusable —
+      `events.toml` pattern-constrains `reason` to
+      `^(cant_reproduce|low_priority|medium_budget|theoretical)$`, so the engine
+      rejects a bad one at write time and no reachable ledger fails it. Property
+      1 (meaningful) would have been decoration, which is what P0.1 removed from
+      this transition to begin with. Raised here rather than papered over, as
+      the unit's own instruction says.
+- [x] **3.** (44) Compute `resolved_ids` in `deferred.md.tera` and give it
       precedence — **copy `punchlist.md.tera:21,40`'s expression** rather than
       writing a second one
-- [ ] **4.** (44) Add `finding_resolved` to `DEFERRED.md`'s render trigger
-- [ ] **5.** (44/D-g) Add `on_event` for `finding`, `finding_resolved`,
+      → copied verbatim.
+- [x] **4.** (44) Add `finding_resolved` to `DEFERRED.md`'s render trigger
+- [x] **5.** (44/D-g) Add `on_event` for `finding`, `finding_resolved`,
       `finding_deferred` to the `STATUS.md` render entry
+      → as a **second `[[renders]]` entry** for the same target. `trigger` is
+      one string per entry (`config/renders.rs`, `RenderConfig`) and the engine
+      loops every entry with no uniqueness constraint on `target`
+      (`render/engine.rs`, `render_triggered`), so two entries is how a target
+      answers to both triggers. Read in the Rust, not inferred.
 - [ ] **6.** Note the churn: `STATUS.md` is a managed file, so every finding event
       now re-renders and re-tracks it. Confirm the manifest absorbs the extra
       writes without a `protocol_violation` — that is the failure mode this
@@ -4377,32 +4392,69 @@ property 2.**
 
 ### Validation
 
-- [ ] **V1** ⭐ **THE TRAP — check this first.** A run that files findings, fixes
+- [x] **V1** ⭐ **THE TRAP — check this first.** A run that files findings, fixes
       **all** of them and defers **nothing**: `DEFERRED.md` does not exist, and
-      **`converge` still passes**. If this is red, the unit has traded one strand
-      for another and must not ship. Evidence: ___
-- [ ] **V2** (6) A run with one deferral: the file renders and the predicate reads
-      true. Evidence: ___
-- [ ] **V3** (6) The predicate is **meaningful** — construct an incomplete deferral
-      record and assert it reads false. A predicate that is true in every reachable
-      state is decoration, which is what P0.1 removed from `converge` in the first
-      place. Evidence: ___
-- [ ] **V4** (6) Escape reachability: for the state V3 refuses, drive the named
-      command and assert the predicate flips. Evidence: ___
-- [ ] **V5** (6) `test_it_is_written_once_the_run_has_findings` rewritten — it
-      asserts the defect. Evidence: ___
-- [ ] **V6** (44) File → defer → resolve: `DEFERRED.md` does **not** list it.
-      Evidence: ___
-- [ ] **V7** (44) A finding deferred and not resolved **is** still listed.
-      Evidence: ___
-- [ ] **V8** (44) All four templates agree on resolved-takes-precedence — assert
-      across the family, since three had it and one did not. Evidence: ___
-- [ ] **V9** (D-g) `STATUS.md` counts change on a finding event **without** a
-      transition. Evidence: ___
-- [ ] **V10** (D-g) The extra renders produce **no** `protocol_violation` — the
-      manifest tracks the re-renders cleanly. Evidence: ___
-- [ ] **V11 · non-vacuity** Revert the trigger → V2 red; revert the template → V6
-      red; revert the `STATUS.md` trigger → V9 red. Evidence: ___
+      **`converge` still passes**.
+      ⚠️ **V1's two clauses cannot both hold, and the unit kept the second.**
+      Step 4 puts `finding_resolved` on the trigger so a deferred-then-fixed
+      finding leaves the list, and that render fires whether or not anything was
+      ever deferred — so a virtuous run writes an *empty* `DEFERRED.md`. There is
+      no conditional-render mechanism to reconcile them: `trigger` is a string
+      and the engine writes whatever the template produces. **Harmless as built,
+      because nothing gates on the file any more** — which is the entire point of
+      the swap. Split into two tests, each asserting one real thing:
+      `test_filing_a_finding_no_longer_writes_it` (step 1: `finding` is off the
+      trigger) and `test_a_run_that_defers_nothing_still_converges`, which reads
+      `deferral_record_complete` as `true` **and** drives the run to
+      `final_sweep` so `gate check converge` prints the conjunct's line, then
+      asserts it carries no ✗. Recorded, not resolved by dropping step 4.
+- [x] **V2** (6) A run with one deferral: the file renders and the predicate reads
+      true.
+      Evidence: `test_a_deferral_writes_it`.
+- [x] **V3** (6) The predicate is **meaningful** — construct an incomplete deferral
+      record and assert it reads false.
+      Evidence: `test_a_deferral_naming_no_filed_finding_reads_false` — `defer
+      BH-999` with no `BH-999` filed. It satisfies every write-time check (`id`'s
+      pattern fixes the shape, nothing fixes the referent) and the predicate
+      reads `false`.
+- [x] **V4** (6) Escape reachability: for the state V3 refuses, drive the named
+      command and assert the predicate flips.
+      Evidence: `test_filing_the_finding_the_deferral_names_flips_it` — `false`,
+      then `event finding` for `BH-999`, then `true`.
+- [x] **V5** (6) `test_it_is_written_once_the_run_has_findings` rewritten — it
+      asserts the defect.
+      Evidence: replaced by the six tests above; its assertion (the file exists
+      after one `finding`) is now `test_filing_a_finding_no_longer_writes_it`
+      inverted.
+- [x] **V6** (44) File → defer → resolve: `DEFERRED.md` does **not** list it.
+      Evidence: `test_a_deferred_then_fixed_finding_leaves_the_file`.
+- [x] **V7** (44) A finding deferred and not resolved **is** still listed.
+      Evidence: `test_a_deferred_finding_that_was_not_fixed_is_still_listed` —
+      two findings, both deferred, one resolved; the unfixed one must stay. This
+      is what stops V6 passing against a template that lists nothing.
+- [x] **V8** (44) All four templates agree on resolved-takes-precedence — assert
+      across the family, since three had it and one did not.
+      Evidence: parametrized over all **five** `.tera` files (the family is
+      punchlist, punchlist-archive, deferred, status, summary); each must compute
+      `resolved_ids`.
+- [x] **V9** (D-g) `STATUS.md` counts change on a finding event **without** a
+      transition.
+      Evidence: `test_status_counts_move_on_a_finding_event_with_no_transition`
+      compares the rendered bytes across two `event finding` calls.
+- [x] **V10** (D-g) The extra renders produce **no** `protocol_violation` — the
+      manifest tracks the re-renders cleanly.
+      Evidence: `test_the_extra_renders_record_no_protocol_violation` drives
+      three findings, a deferral and a resolution — six finding-family renders of
+      a managed file — and queries the ledger for `protocol_violation`: **0**.
+- [x] **V11 · non-vacuity** Revert the trigger → V2 red; revert the template → V6
+      red; revert the `STATUS.md` trigger → V9 red.
+      Evidence: three separate single-change mutations in one sitting, three
+      distinct failure sets. **(a)** trigger back to `["finding",
+      "finding_deferred"]` → 3 red (`filing_a_finding_no_longer_writes_it`, V6,
+      V7). **(b)** template precedence removed → 2 red (V6, V7 only — the
+      trigger test stays green, so the two are independently pinned).
+      **(c)** the `STATUS.md` `on_event` entry deleted → 1 red (V9 alone).
+      Restored, 33 passed.
 
 ---
 

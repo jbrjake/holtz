@@ -87,6 +87,32 @@ path = "docs/holtz/project.jsonl"
 sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
 intent = "all findings must be resolved or deferred"
 
+# `converge`'s deferral conjunct (D-b). It asks the thing P0.1's clause meant —
+# *the deferral record is complete* — of the ledger, rather than asking whether
+# a file exists that the engine wrote on the run's first finding.
+#
+# Three properties, and the third is what makes the swap safe:
+#
+# 1. **Meaningful.** A `finding_deferred` whose id was never filed satisfies
+#    every write-time check — `id`'s pattern fixes the shape and nothing fixes
+#    the referent — and closes a finding that does not exist. This refuses it.
+# 2. **Vacuously true at zero deferrals.** `DEFERRED.md` is no longer written
+#    by a run that defers nothing, so a conjunct that needed rows would stop a
+#    run that fixed everything from converging — item 2's strand rebuilt at a
+#    new gate. `count(*) = 0` over the violating set is true on an empty ledger.
+# 3. **Achievable.** The refused state is escaped by filing the finding the
+#    deferral names, or re-filing under the id that was meant.
+#
+# The other half of the proposed shape — *"carries a `reason` from the allowed
+# set"* — is deliberately **not** here. `events.toml` pattern-constrains
+# `reason` to `^(cant_reproduce|low_priority|medium_budget|theoretical)$`, so
+# the engine refuses a bad one at write time and no reachable ledger can fail
+# it. A conjunct true in every reachable state is decoration, which is what
+# P0.1 removed from this transition to begin with.
+[queries.deferral_record_complete]
+sql = "SELECT count(*) = 0 FROM events d WHERE d.type='finding_deferred' AND d.id NOT IN (SELECT f.id FROM events f WHERE f.type='finding')"
+intent = "every deferral must name a finding this run filed — file it, or re-file under the id the deferral means"
+
 [queries.item_open]
 sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'"
 intent = "finding must not already be resolved or deferred"

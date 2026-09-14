@@ -364,7 +364,8 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 | ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
 | ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 | ↳ | `state_transition` | `engine:sahjhan` | `engine` | no — written by the engine, only by passing the gate |
-| docs/holtz/DEFERRED.md must exist | *direct check* | — | `direct` | n/a |
+| every deferral must name a finding this run filed — file it, or re-file under the id the deferral means | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
 | no unresolved protocol violations | `protocol_violation` | `hook:enforcement/hooks/bash_guard.py` | `agent` | **yes** — `sahjhan event` |
 | no unresolved quiz exhaustions | `quiz_exhausted` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
 | ↳ | `quiz_exhausted_resolved` | `human:skills/holtz/references/phase-convergence.md` | `human` | no — bootstrap denies `sahjhan event` |
