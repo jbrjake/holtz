@@ -73,7 +73,7 @@ imprecision (`CLAUDE.md`).
 | W21 | 9 | C | `DONE` — both D-c terms; step 2's mechanism does not exist and the substitute is raised in the unit | ~~D-c~~ ruled |
 | ~~W22~~ | 27 | — | — | *moved to P1 above (D-h)* |
 | **P4 — hygiene and record** ||||
-| W23 | 4, 7, 8, 13, 14 | D | `TODO` | — |
+| W23 | 4, 7, 8, 13, 14 | D | `DONE` — the three files agree; two config-derived doc tests replace prose-vs-prose | — |
 | W24 | 6, 44 | D | `TODO` | ~~D-b, D-g~~ ruled |
 | W25 | 11, 39, 49 | D | `TODO` | W05, W14 |
 | W26 | 48 | D | `TODO` | — |
@@ -4160,7 +4160,7 @@ functional test.
 
 ## W23 — Items 4 + 7 + 8 + 13 + 14: the doc sweep
 
-**Status:** `TODO`  ·  **Tier:** D
+**Status:** `DONE`  ·  **Tier:** D
 **Commit:** `fix(skills): bring the fix-loop and convergence docs to the shipped protocol`
 
 One commit — it is what a real run reads.
@@ -4208,44 +4208,92 @@ Hardening #3 was edited to say "Do not run the suite here."
 
 ### Plan
 
-- [ ] **1.** (4) Rewrite `SKILL.md:233` and `step-10-fix-loop.md:5` to the shipped
+- [x] **1.** (4) Rewrite `SKILL.md:233` and `step-10-fix-loop.md:5` to the shipped
       contract
-- [ ] **2.** (4) Give `test_subagent_contract_consistency.py` a **positive**
+- [x] **2.** (4) Give `test_subagent_contract_consistency.py` a **positive**
       assertion — worktree, actor-scoped gate, subagent commits — rather than a
       denylist of last year's wording
-- [ ] **3.** (7) Replace the "zero open items" clause with the shipped conjuncts
-- [ ] **4.** (8) State the reachability routing where the deferral rules are stated.
+      → `_SHIPPED_CONTRACT`, a 3×3 table parametrized into nine separate tests.
+      **Note on this item's own premise:** the file was described as *"only greps
+      five retired phrases"*, which was true when the item was written and is not
+      now — later units added a dozen positive assertions. What was missing is
+      narrower and is what the nine cover: every one of those assertions reads
+      `phase-fix-loop.md`, the file that was already right.
+- [x] **3.** (7) Replace the "zero open items" clause with the shipped conjuncts
+- [x] **4.** (8) State the reachability routing where the deferral rules are stated.
       **Action only — no rationale**; reasoning goes in the commit message. Do not
       write a prohibition the reader only learns about from the prohibition itself
       ("any more")
-- [ ] **5.** (13) Remove the line; check the rest of the layout block in the same
+      → three bullets, one per grade, each naming the route and nothing else.
+- [x] **5.** (13) Remove the line; check the rest of the layout block in the same
       pass — one stale entry suggests others
-- [ ] **6.** (14) Bring the Fast Path in line with the hardening step
+      → it did: the block also **omitted** `PUNCHLIST-ARCHIVE.md` and
+      `DEFERRED.md`, both in `MANAGED_DOCS`. Found by the test, not by reading.
+- [x] **6.** (14) Bring the Fast Path in line with the hardening step
 
 ### Validation
 
-- [ ] **V1** (4) The rewritten consistency test **fails against the tree as it
-      stands**, then passes after the edits. A denylist-to-positive rewrite that
-      passes both before and after has changed nothing. Evidence: ___
-- [ ] **V2** (4) All three claims asserted **separately**, so a future drift on one
-      does not hide behind the other two. Evidence: ___
-- [ ] **V3** (4/14) Where step ordering matters, assert on the **document's own line
-      order**, not just on the gate. Evidence: ___
-- [ ] **V4** (7) Grep the phrase across `skills/**` → zero hits. Evidence: ___
-- [ ] **V5** (7) A test asserts the doc's gate list matches `transitions.toml`'s
+- [x] **V1** (4) The rewritten consistency test **fails against the tree as it
+      stands**, then passes after the edits.
+      Evidence: **6 failed** before the doc edits — all three claims in both
+      `SKILL.md` and `step-10-fix-loop.md` — with `phase-fix-loop.md` green on
+      all three, which is the shipped contract and the control. 31 passed after.
+- [x] **V2** (4) All three claims asserted **separately**, so a future drift on one
+      does not hide behind the other two.
+      Evidence: `test_every_file_states_the_shipped_contract` is parametrized
+      over (claim × file) → nine test ids, named for the claim and the file.
+- [x] **V3** (4/14) Where step ordering matters, assert on the **document's own line
+      order**, not just on the gate.
+      Evidence: the pre-existing order assertions (`..._rebases_before_it_records
+      _and_commits_before_that`, `..._records_the_green_last`) still pass, and
+      item 14's `test_the_fast_path_does_not_mandate_its_own_suite_run` reads the
+      Fast Path **section** — heading to next heading — rather than the file.
+- [x] **V4** (7) Grep the phrase across `skills/**` → zero hits.
+      Evidence: `grep -rn "zero open items" skills/ | wc -l` → `0`.
+- [x] **V5** (7) A test asserts the doc's gate list matches `transitions.toml`'s
       `converge` conjuncts **by name**. Prose that restates a gate list drifts.
-      Evidence: ___
-- [ ] **V6** (8) A doc-consistency test: the three reachability grades named in
-      `SKILL.md` match `events.toml`'s pattern for the field. Evidence: ___
-- [ ] **V7** (13) Grep `PUNCHLIST-MERGED` across `docs/**` and `skills/**` → only
+      Evidence: `tests/test_taught_gate_lists.py::test_the_doc_names_every_
+      converge_query` reads the conjuncts out of the config. RED named all five:
+      `all_critical_resolved`, `no_open_fault_injected`,
+      `all_user_reachable_high_closed`, `amplification_diverging`,
+      `quiz_exhaustions_resolved`.
+- [x] **V6** (8) A doc-consistency test: the three reachability grades named in
+      `SKILL.md` match `events.toml`'s pattern for the field.
+      Evidence: `test_skill_md_routes_exactly_the_grades_the_engine_accepts`
+      parses the alternatives out of `^(user_reachable|fault_injected|
+      theoretical)$` and requires **set equality** with the doc's list.
+      Mutation-proved in the same sitting: renaming the doc's `theoretical` to
+      `hypothetical` takes it red, so a grade the doc invents is caught as well
+      as one it omits.
+- [x] **V7** (13) Grep `PUNCHLIST-MERGED` across `docs/**` and `skills/**` → only
       unambiguously historical references remain. Extend
       `test_managed_docs_consistency.py` to assert the layout block matches the
-      managed-docs list. Evidence: ___
-- [ ] **V8** (14) The two sections of `step-10-fix-loop.md` agree, and the taught
-      scope matches what `fix_commit`'s suite gate requires. Evidence: ___
-- [ ] **V9** `pytest -m contract` and `contract_gate.py` → exit 0. Evidence: ___
-- [ ] **V10** Audit the whole 24-hour edit window for rationale creep, not just this
-      diff. Evidence: ___
+      managed-docs list.
+      Evidence: `skills/**` has none; `docs/**` keeps it only in case studies,
+      design records, and `ENFORCEMENT-CONTRACT.md`'s generated line for the
+      deletion gate — all of which are about the retirement itself. The two new
+      tests derive **both** directions from config rather than a hand-kept list:
+      every `MANAGED_DOCS` basename must appear in the block, and no path a
+      `not(file_exists)` gate requires absent may appear in it. The second walks
+      the gate tree tracking negation, mirroring `_file_exists_gate_paths`.
+- [x] **V8** (14) The two sections of `step-10-fix-loop.md` agree, and the taught
+      scope matches what `fix_commit`'s suite gate requires.
+      Evidence: the Fast Path no longer names a suite run at all — Per-Fix
+      Hardening #3 already says A.9 owns it — and
+      `test_the_taught_per_fix_scope_is_the_one_fix_commit_gates_on` pulls
+      `--scope affected` out of `fix_commit`'s `verify_suite.py --check` gate and
+      requires `phase-fix-loop.md` to teach `--record` at that same scope.
+- [x] **V9** `pytest -m contract` and `contract_gate.py` → exit 0.
+      Evidence: 144 passed; gate `101 commands tested … PASS`.
+- [x] **V10** Audit the whole 24-hour edit window for rationale creep, not just this
+      diff.
+      Evidence: every skill file touched by the last seven commits, grepped for
+      `no longer|any more|anymore|formerly|previously|used to|was changed|
+      retired`. Three hits, all legitimate and none changelog prose:
+      `stale_sweep.py --retired` is a CLI flag, *"the previously-failing tests"*
+      describes what `--lf` does, and *"used to work"* is quoted symptom
+      language in the git-bisect step. My own additions grep clean for the same
+      set plus `because`.
 
 ---
 

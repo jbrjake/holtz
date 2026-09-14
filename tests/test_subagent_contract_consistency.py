@@ -45,6 +45,59 @@ _FORBIDDEN = (
 )
 
 
+# Item 4 — the three claims the three files disagreed on, each asserted in each
+# file *separately*. A single test covering all three lets a drift on one hide
+# behind the other two, and a denylist of last year's wording cannot see wording
+# nobody has written yet. `phase-fix-loop.md` is the shipped contract and
+# already satisfies all three; the other two files are what this catches.
+_SHIPPED_CONTRACT: dict[str, dict[str, str]] = {
+    "where the subagent works": {
+        "SKILL.md": "its own worktree",
+        "phase-fix-loop.md": "its own worktree",
+        "step-10-fix-loop.md": "its own worktree",
+    },
+    "what the TDD gate keys on": {
+        "SKILL.md": "keyed on the actor",
+        "phase-fix-loop.md": "keyed on the actor",
+        "step-10-fix-loop.md": "keyed on the actor",
+    },
+    "who commits": {
+        "SKILL.md": "commits once in its own worktree",
+        "phase-fix-loop.md": "commit exactly once",
+        "step-10-fix-loop.md": "commits once in its own worktree",
+    },
+}
+
+
+@pytest.mark.parametrize(
+    ("claim", "filename", "required"),
+    [
+        (claim, filename, phrase)
+        for claim, per_file in _SHIPPED_CONTRACT.items()
+        for filename, phrase in per_file.items()
+    ],
+    ids=lambda v: v if isinstance(v, str) else str(v),
+)
+def test_every_file_states_the_shipped_contract(claim: str, filename: str, required: str) -> None:
+    """One claim, one file, one assertion (item 4).
+
+    `phase-fix-loop.md` was rewritten for P0.3 and the other two were not, so
+    the three files disagreed about where the subagent works, what the pre-edit
+    gate keys on, and whether the subagent may commit. Each was stated
+    confidently in both directions, which is the `800624f` shape: a contract
+    that contradicts itself and no test that can see it.
+    """
+    path = next(p for p in _CONTRACT_FILES if p.name == filename)
+    text = path.read_text(encoding="utf-8").lower()
+    assert required in text, (
+        f"{filename} does not state the shipped contract for {claim!r} — "
+        f"expected {required!r}. The subagent works in its own worktree "
+        f"(`isolation: \"worktree\"`), the TDD pre-edit gate is keyed on the "
+        f"actor that recorded the failing test, and the subagent commits once "
+        f"and rebases. See references/phase-fix-loop.md Step A."
+    )
+
+
 @pytest.mark.parametrize("path", _CONTRACT_FILES, ids=lambda p: p.name)
 def test_no_artifact_only_contract(path: Path) -> None:
     text = path.read_text(encoding="utf-8").lower()
@@ -486,3 +539,57 @@ def test_the_stale_sweep_triages_every_open_finding() -> None:
             f"Step 11b narrows its population with {narrowing!r}. Every open "
             f"finding is re-triaged at each sweep, all severities."
         )
+
+
+def _section(path: Path, heading: str) -> str:
+    """One `## ` section's text, heading through the line before the next one."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    starts = [i for i, line in enumerate(lines) if line.strip() == heading]
+    assert len(starts) == 1, f"expected one {heading!r} in {path.name}, found {len(starts)}"
+    ends = [i for i, line in enumerate(lines) if line.startswith("## ") and i > starts[0]]
+    return "\n".join(lines[starts[0]: ends[0] if ends else len(lines)])
+
+
+def test_the_fast_path_does_not_mandate_its_own_suite_run() -> None:
+    """Item 14 — the two sections of step-10-fix-loop.md contradicted each other.
+
+    Fast Path step 1 read *"Write failing test. Verify it fails. Minimal fix.
+    Full suite. Commit."* — a mandated run, at full scope, in the file whose
+    Per-Fix Hardening #3 says *"Do not run the suite here."* The recorded run
+    is `phase-fix-loop.md` A.9's, and it comes after the hardening writes;
+    anything earlier is both duplicated and ordered wrong.
+    """
+    fast_path = _section(SKILL_DIR / "references" / "step-10-fix-loop.md", "## Fast Path")
+    assert "suite" not in fast_path.lower(), (
+        "the Fast Path mandates a suite run. A.9 owns the one recorded run, "
+        f"after the last write to the tree:\n{fast_path}"
+    )
+
+
+def test_the_taught_per_fix_scope_is_the_one_fix_commit_gates_on() -> None:
+    """The docs teach a scope; the gate checks a scope. They must be one scope.
+
+    Read out of `transitions.toml` rather than restated, so narrowing or
+    widening the gate takes this red instead of leaving the skill files
+    teaching a run that cannot satisfy it.
+    """
+    import re as _re
+    import tomllib as _tomllib
+
+    cfg = _tomllib.loads((REPO_ROOT / "enforcement" / "transitions.toml").read_text())
+    fix_commit = [t for t in cfg["transitions"] if t.get("command") == "fix_commit"]
+    assert len(fix_commit) == 1, f"expected one fix_commit, found {len(fix_commit)}"
+    checks = [
+        g["cmd"] for g in fix_commit[0]["gates"]
+        if "verify_suite.py" in str(g.get("cmd", "")) and "--check" in str(g.get("cmd", ""))
+    ]
+    assert len(checks) == 1, f"expected one verify_suite check gate, found {len(checks)}"
+    scope = _re.search(r"--scope\s+(\w+)", checks[0])
+    assert scope, f"fix_commit's suite gate names no scope: {checks[0]}"
+
+    text = (SKILL_DIR / "references" / "phase-fix-loop.md").read_text(encoding="utf-8")
+    assert f"--record --scope {scope.group(1)}" in text, (
+        f"`fix_commit` checks `--scope {scope.group(1)}`, but phase-fix-loop.md "
+        f"does not teach recording at that scope — the gate would find no green "
+        f"naming the tree"
+    )

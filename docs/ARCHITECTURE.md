@@ -269,13 +269,14 @@ docs/holtz/
 ├── patterns-brief.md         # Compact pattern summary
 ├── STATUS.md                 # Current run state (rendered by Sahjhan)
 ├── PUNCHLIST.md              # Current run findings (rendered by Sahjhan)
-├── PUNCHLIST-MERGED.md       # Post-merge unified worklist
-├── MERGE-REPORT.md           # Merge statistics
-├── SUMMARY.md                # Final audit report
+├── PUNCHLIST-ARCHIVE.md      # Closed findings (rendered by Sahjhan)
+├── DEFERRED.md               # Deferred findings (rendered by Sahjhan)
+├── MERGE-REPORT.md           # Merge statistics (written by the merge agent)
+├── SUMMARY.md                # Final audit report (rendered by Sahjhan)
 └── archive/                  # Historical runs (JSONL ledgers)
 ```
 
-STATUS.md and PUNCHLIST.md are **read-only** — rendered from the Sahjhan ledger. Direct writes are blocked.
+The five rendered files above are **read-only** — produced from the Sahjhan ledger, and direct writes are blocked. `MERGE-REPORT.md` is the merge agent's own judgment-based analysis, so it is written by hand and deliberately not guarded.
 
 ---
 
