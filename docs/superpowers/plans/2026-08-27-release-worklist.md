@@ -75,7 +75,7 @@ imprecision (`CLAUDE.md`).
 | **P4 — hygiene and record** ||||
 | W23 | 4, 7, 8, 13, 14 | D | `DONE` — the three files agree; two config-derived doc tests replace prose-vs-prose | — |
 | W24 | 6, 44 | D | `DONE` — the conjunct is a ledger predicate; V1's two clauses conflict and the unit says which one it kept | ~~D-b, D-g~~ ruled |
-| W25 | 11, 39, 49 | D | `TODO` | W05, W14 |
+| W25 | 11, 39, 49 | D | `WIP` — D-l…D-o ruled; a sahjhan ask raised for item 39's config-fault half | W05, W14 |
 | W26 | 48 | D | `TODO` | — |
 | W27 | 15, 45, 46 | D | `TODO` | — |
 | W28 | 12, 16 | D | `TODO` | all above |
@@ -4460,8 +4460,32 @@ property 2.**
 
 ## W25 — Items 11 + 39 + 49: escapes, the PostToolUse fall-through, and the lower tail
 
-**Status:** `TODO`  ·  **Tier:** D  ·  **Depends on:** W05, W14 (they fix two of item 11's four gates)
+**Status:** `WIP`  ·  **Tier:** D  ·  **Depends on:** W05, W14 (they fix two of item 11's four gates)
 **Commit:** `fix(enforcement): every gate names an escape, and no hook degrades in silence`
+
+### Four rulings — RULED (Jon, 2026-09-23)
+
+Put before any code, because checking the plan against the tree turned up four
+places where a clause could not be implemented as written or named a decision
+nobody had made.
+
+| ID | Where | Question | **RULED** |
+|---|---|---|---|
+| **D-l** | Item 11 step 2 | *"Every gate carries an `intent`"* cannot fail at `48c72fd` as V1 requires: sahjhan resolves a gate's intent as its own → its named query's → a per-type default (`src/gates/types.rs`, `eval`; since `751ef0b`, 2026-07-25), and **0 of 75** top-level gates reach the default, then or now. The two gates the punchlist calls "no `intent`" printed their query's — a condition, not a command | **The check is "every gate's printed intent names an escape."** Argument-scoped gates are exempt the way H8's `_run_wide` exempts them. A first-pass matcher flags ~60 of 75 today, so this unit rewrites most intents in `transitions.toml` |
+| **D-m** | Item 49 row a | Fail closed, or correct the comment | **Fail closed when an audit is active** — `audit_active(cwd)`, so a project with no audit is not bricked; the message names `HOME`, since `holtz-start` cannot fix it |
+| **D-n** | Item 49 row c | Migrate vs discard a pre-keying scalar stall | **Migrate** — today's behaviour; the orchestrator's escape (any `sahjhan` command) clears only its own bucket |
+| **D-o** | Item 49 row g | *"Derive the auditor"* names no source: a `protocol_violation` has no filing to read it off, and every courier hardcodes `"holtz"`. The same write hardcodes `project=holtz` and `run=0`, which are wrong in any consumer project and have sources | **Derive `project` and `run`** as `suite_courier` does, **and derive `auditor` from the acting agent** |
+
+**Raised upstream at the same sitting, not ruled:** `sahjhan hook eval` answers a
+config- or ledger-load failure with `ok:true, decision:"allow"`, exit 0 —
+deliberately (`src/cli/hooks_cmd.rs`, `cmd_hook_eval`: *"don't block agent on
+broken config"*). Observed with a malformed and with a missing `--config-dir`.
+That output is byte-identical to a genuine allow, so item 39's first premise —
+*"a config or version fault"* reaches the non-zero path — holds for the version
+fault only (an unknown flag exits 2 with empty stdout, observed) and **not** for
+the config fault, which silences `pre_tool_hook` as well as the recorder. No
+holtz-side change can tell the two apart; the ask is for the engine to report a
+load failure distinguishably and leave the block/warn call to the consumer.
 
 ### Item 11 · gates that print no escape
 
@@ -4506,14 +4530,40 @@ out of a PostToolUse hook.
 - [ ] **2.** (11) **Close the class:** a lint check (or an H8 extension) asserting
       **every** gate carries an `intent`. Item 11 is a symptom list; the check is
       the fix
-- [ ] **3.** (39) Handle non-zero the way `pre_tool_hook` does —
+- [x] **3.** (39) Handle non-zero the way `pre_tool_hook` does —
       `exit_enforcement_error` with the PostToolUse variant (a warning, since
       PostToolUse cannot undo the work)
-- [ ] **4.** (39) Guard the shape: `if not isinstance(data, dict)` before `.get`.
+      → by making it the **same code**: `_common.read_hook_eval` turns a reply
+      into `(payload, "")` or `(None, reason)` and both hooks call it, so "the
+      two hooks disagree" is closed by construction rather than by a second
+      copy. Stdout is read whatever the exit code (a `block` exits 1 with the
+      whole reply); the reason names the exit code and, for an empty stdout,
+      the engine's first stderr line — `exit 2: error: unexpected argument
+      '--agent-id' found` is the difference between "reinstall" and "wait".
+      ⚠️ **This closes the version-fault half only.** The config-fault half is
+      the sahjhan ask recorded under the rulings above: `hook eval` exits 0
+      with a genuine-looking allow, so no reply-reading change can see it
+- [x] **4.** (39) Guard the shape: `if not isinstance(data, dict)` before `.get`.
       **Prefer the explicit check** — the except tuple is already doing too much
+      → explicit, in `read_hook_eval`, on the payload *after* unwrapping
+      `data` too: `{"data": []}` crashed both hooks the same way `[]` did.
+      **`pre_tool_hook` had the same `AttributeError`** — the RED run took it
+      down on both list shapes
 - [ ] **5.** (49) Work rows a–h from the table above
+      → **d** done with item 39 (same file): `--agent-id event_actor(event)`,
+      the orchestrator passed as `""` exactly as `pre_tool_hook` passes it
 - [ ] **6.** `bash scripts/hash-trusted-callers.sh` — this touches four
       manifest-listed hooks
+      → run for item 39's commit (three rows moved: `_common.py`,
+      `pre_tool_hook.py`, `post_tool_hook.py`); rerun owed as rows a, b, e, g
+      touch their hooks
+
+**Found while doing item 39, not in this unit, recorded and not fixed:**
+`post_tool_hook.py` reads `tool_input["file_path"]` alone. W19 established
+that `NotebookEdit` sends `notebook_path` and fixed `pre_tool_hook` with
+`_write_target()`; the PostToolUse side was never changed, so a notebook edit
+reaches `hook eval` with no `--file`. W19's fourth disagreement, on the other
+side of the tool call. Unruled — a candidate item for Jon.
 
 ### Validation
 
@@ -4521,19 +4571,45 @@ out of a PostToolUse hook.
       Evidence: ___
 - [ ] **V2** (11) For each of the four gates: the block prints an escape **and the
       escape runs**. Evidence: ___
-- [ ] **V3** (39) A non-zero `hook eval` exit produces a **visible** degraded-mode
+- [x] **V3** (39) A non-zero `hook eval` exit produces a **visible** degraded-mode
       signal. Silence is the defect — assert the message, not the absence of a
-      crash. Evidence: ___
-- [ ] **V4** (39) `source_edit` recording unaffected on the success path.
-      Evidence: ___
-- [ ] **V5** (39) `result.stdout` = `"[]"` → no traceback; hook exits 0 with a
-      warning. Evidence: ___
-- [ ] **V6** (39) A single test asserts `pre_tool_hook` and `post_tool_hook` agree on
-      this case, so they cannot drift apart again. Evidence: ___
+      crash.
+      Evidence: `test_hook_eval_reply.py::…::test_a_version_fault_says_so` —
+      a stand-in exiting 2 with clap's stderr; asserts `ENFORCEMENT DEGRADED`,
+      `exit 2` and `unexpected argument` in the warning. RED on the unmodified
+      hook with `{'continue': True, 'suppressOutput': True}` — silence, exactly
+- [x] **V4** (39) `source_edit` recording unaffected on the success path.
+      Evidence: `test_the_success_path_still_records_the_edit` reads the
+      stand-in's argv log for one `event source_edit … edit_type=partial` and no
+      warning. Green before the change and after, as an unchanged-behaviour test
+      must be
+- [x] **V5** (39) `result.stdout` = `"[]"` → no traceback; hook exits 0 with a
+      warning.
+      Evidence: `test_a_json_list_warns_rather_than_raising`. RED unmodified with
+      `AttributeError: 'list' object has no attribute 'get'` in stderr
+- [x] **V6** (39) A single test asserts `pre_tool_hook` and `post_tool_hook` agree on
+      this case, so they cannot drift apart again.
+      Evidence: `TestTheTwoHooksAgree::test_they_degrade_on_the_same_replies_for_
+      the_same_reason`, parametrized over four unusable replies (version fault,
+      `[]`, `{"data": []}`, not-JSON): Pre must deny, Post must warn, and the text
+      after the marker must be **identical**. RED unmodified on all four — two
+      crashes in Pre, silence in Post, and `returned invalid JSON` vs `Hook eval
+      failed` on the one reply both did degrade on
 - [ ] **V7** (49) Each of rows a–h has its validation from the table observed.
-      Evidence: a___ b___ c___ d___ e___ f___ g___ h___
-- [ ] **V8** `pytest -m hook_e2e` → exit 0. Evidence: ___
-- [ ] **V9 · non-vacuity** Revert 39 → V3 and V5 go red. Evidence: ___
+      Evidence: a___ b___ c___
+      d `TestTheTwoHooksAgree::test_they_name_the_same_actor[subagent|orchestrator]`
+      — both hooks' `hook eval` argv carry `--agent-id` with the same value,
+      `""` for the orchestrator; RED unmodified on Post's argv
+      e___ f___ g___ h___
+- [ ] **V8** `pytest -m hook_e2e` → exit 0.
+      Evidence (item 39's commit): **721 passed, 2357 deselected, exit 0**, zero
+      `FAILED`/`ERROR`. Re-observation owed once rows a, b, e, g, h have landed
+- [x] **V9 · non-vacuity** Revert 39 → V3 and V5 go red.
+      Evidence: two single-line mutations, one sitting, two distinct failure
+      sets. **(a)** Post's `exit_enforcement_error` → `exit_ok()`: 6 red (V3, V5,
+      all four agreement cases); V4 and the actor tests stay green. **(b)**
+      `read_hook_eval`'s shape guard → `if False:`: 3 red (V5 and the two list
+      cases) and nothing else. Restored, 9 passed
 
 ---
 

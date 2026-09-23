@@ -11,7 +11,6 @@ Falls back to allow outside active audits or when enforcement is stale.
 """
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
@@ -26,6 +25,7 @@ from _common import (  # noqa: E402
     exit_ok,
     exit_warn,
     read_event,
+    read_hook_eval,
     resolve_config_dir,
 )
 from _protocol_cache import (  # noqa: E402
@@ -180,21 +180,10 @@ def main() -> None:
     except (OSError, subprocess.TimeoutExpired):
         exit_enforcement_error(cwd, "Hook eval subprocess failed")
 
-    # Sahjhan's CLI exits non-zero when the eval decision is ``block``
-    # (exit code as a secondary signal for wrappers that don't parse JSON).
-    # The JSON payload on stdout is authoritative — parse it first and
-    # only fall through to the enforcement-error path if stdout is missing
-    # or unparseable.
-    try:
-        data = json.loads(result.stdout) if result.stdout.strip() else None
-    except (json.JSONDecodeError, ValueError):
-        data = None
+    eval_data, failure = read_hook_eval(result.stdout, result.returncode, result.stderr)
+    if eval_data is None:
+        exit_enforcement_error(cwd, failure)
 
-    if data is None:
-        exit_enforcement_error(cwd, "Hook eval returned invalid JSON")
-
-    assert data is not None  # exit_enforcement_error is NoReturn; help mypy
-    eval_data = data.get("data", data)
     decision = eval_data.get("decision", "allow")
     messages = eval_data.get("messages", [])
 

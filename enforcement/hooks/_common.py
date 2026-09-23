@@ -20,7 +20,7 @@ import os
 import socket
 from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import NoReturn
+from typing import Any, NoReturn
 
 _HOOKS_COMMON = os.path.join(
     os.path.dirname(__file__), '..', '..', 'hooks', '_common.py'
@@ -191,6 +191,40 @@ def exit_enforcement_error(
         exit_ok("PreToolUse")
     else:
         exit_ok()
+
+
+def read_hook_eval(
+    stdout: str, returncode: int, stderr: str,
+) -> tuple[dict[str, Any] | None, str]:
+    """A ``sahjhan --json hook eval`` reply's payload, or why there is none.
+
+    Returns ``(payload, "")`` for a reply a hook can act on and
+    ``(None, reason)`` for one it cannot, with ``reason`` ready for
+    ``exit_enforcement_error``. Both tool hooks read the reply here, so they
+    cannot disagree about which replies are usable or what to call the ones
+    that are not.
+
+    Stdout is read whatever the exit code: the CLI exits 1 on a ``block`` and
+    still prints the whole reply, so the code is a secondary signal and the
+    JSON is the answer. What is unusable is an empty stdout (an argument the
+    binary does not know exits 2 and writes only to stderr), bytes that are
+    not JSON, and JSON that is not an object — each named with the exit code
+    and, when stdout is empty, the engine's own first line of stderr.
+    """
+    def unusable(detail: str) -> tuple[None, str]:
+        return None, f"Hook eval returned no usable reply (exit {returncode}: {detail})"
+
+    if not stdout.strip():
+        first = next((ln.strip() for ln in stderr.splitlines() if ln.strip()), "")
+        return unusable(first or "no output")
+    try:
+        data = json.loads(stdout)
+    except ValueError:
+        return unusable("stdout is not JSON")
+    payload = data.get("data", data) if isinstance(data, dict) else data
+    if not isinstance(payload, dict):
+        return unusable(f"a JSON {type(payload).__name__} where an object belongs")
+    return payload, ""
 
 
 def _linked_worktree_main(git_link: str, fallback: str) -> str:
