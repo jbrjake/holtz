@@ -76,9 +76,9 @@ imprecision (`CLAUDE.md`).
 | W23 | 4, 7, 8, 13, 14 | D | `DONE` — the three files agree; two config-derived doc tests replace prose-vs-prose | — |
 | W24 | 6, 44 | D | `DONE` — the conjunct is a ledger predicate; V1's two clauses conflict and the unit says which one it kept | ~~D-b, D-g~~ ruled |
 | W25 | 11, 39, 49 | D | `DONE` — H12 closes 11 as a class; **39's config-fault half waits on sahjhan#51** | W05, W14 |
-| W26 | 48 | D | `WIP` — V1, V2 observed; V3 is the end-of-session `--cov` run | — |
+| W26 | 48 | D | `DONE` — coverage 89.93% on the full run, once the report stopped counting temp copies | — |
 | W27 | 15, 45, 46 | D | `DONE` — every migrated event validates field by field; a marked binary is hashed before it is trusted | — |
-| W28 | 12, 16 | D | `WIP` — README contradiction gone, changelog drafted; V5 is the full pre-release run | all above |
+| W28 | 12, 16 | D | `DONE` — README contradiction gone, changelog drafted, pre-release check exit 0 | all above |
 | W29 | 21, 24 | D | `DONE` — both comments now claim what the code checks; no predicate touched | ~~D-e, D-f~~ ruled |
 | W30 | 23 | D | `DONE` — a refused fast-forward has a written way back, and a stale green no longer reads as an unreal fix | W12 *(same file)* |
 
@@ -4847,7 +4847,7 @@ side of the tool call. Unruled — a candidate item for Jon.
 
 ## W26 — Item 48: the delta's new enforcement predicates ship with no direct unit tests
 
-**Status:** `WIP` — V1, V2 observed; V3 waits on the end-of-session full `--cov` run  ·  **Tier:** D
+**Status:** `DONE` — V3 read off the 2026-09-23 full run, after fixing the coverage report's population  ·  **Tier:** D
 **Commit:** `test: direct unit coverage for the delta's new enforcement predicates`
 
 ### Defect
@@ -4910,8 +4910,25 @@ covered only by the parametrized subprocess cases in `test_hook_chains.py` —
       `--in-place`), no `sort`/`tree`/`git --output` rows. **All five
       hand-listed long spellings red**; the table-derived tests stay green,
       which is exactly why the hand list exists. Restored
-- [ ] **V3** Coverage does not fall. **Do not lower a threshold** to accommodate
-      this work — if coverage reads low, fix the measurement. Evidence: ___
+- [x] **V3** Coverage does not fall. **Do not lower a threshold** to accommodate
+      this work — if coverage reads low, fix the measurement.
+      Evidence: the full `--cov` run at `a9956a9` (2026-09-23, W28's V5)
+      **read low — 79.86% — and the measurement was what had moved.** Split
+      by population from that run's own report: the declared `--cov` scope
+      (`skills/holtz/scripts`, `hooks`, `enforcement/hooks`) **91.82%**
+      (4,599 stmts); `enforcement/scripts` 83.14% (1,287); **`scripts/`
+      25.28% (443)** — `run.omit` excludes it, but a relative pattern does
+      not hold for subprocess data, whose cwd is a scratch tree; and **temp
+      copies of repo files** that tests execute in scratch trees (`…/pytest-
+      of-*/…/_resolve.py`, the real-daemon fixture's `/private/tmp/sh-…`)
+      32.29% (737). **Fixed:** `[tool.coverage.report] include` names the
+      four repo directories; the report runs in the main process at the repo
+      root, so nothing in a temp tree can match. The **same run's data**
+      re-reported under it: **89.93%** (5,886 stmts), against **89.29%** at
+      `489e84d` — not fallen, with `enforcement/scripts` still counted rather
+      than dropped to raise the number. Control: removing `include` and
+      re-running `test_sahjhan_pin.py --cov` brings the four temp-copy rows
+      back; with it, zero
 
 ---
 
@@ -5186,7 +5203,7 @@ vendor run leaves an unverified binary trusted until the next release.
 
 ## W28 — Items 12 + 16: README contradiction, then the changelog
 
-**Status:** `WIP` — items 12 and 16 done, V1–V4 observed; V5 is the full pre-release run  ·  **Tier:** D  ·  **Depends on:** everything above
+**Status:** `DONE` — V5 observed at `a9956a9`, with the coverage correction recorded under it  ·  **Tier:** D  ·  **Depends on:** everything above
 **Commit:** `docs: remove the refuted security claim; draft the release changelog`
 
 Draft the changelog **last**, so the notes describe the release rather than the
@@ -5274,8 +5291,21 @@ pre-release, but it is step 5 of the release checklist.
       not closed is 48 (W26, V3 only), and its entry, "test: direct unit
       coverage for the delta's new enforcement predicates", claims what V1/V2
       observed and says nothing about coverage
-- [ ] **V5** `scripts/pre-release-check.sh` → exit 0. Evidence: ___ — the
-      session's one full run, which is also W26's V3
+- [x] **V5** `scripts/pre-release-check.sh` → exit 0.
+      Evidence: run once at `a9956a9`, 2026-09-23 — **exit 0, "ALL PASSED",
+      all nine checks PASS** (ruff, mypy, enforcement lint, contract gate,
+      schema freshness, sahjhan pin, full suite, hook smoke 10/10, version
+      bump). Suite: **3271 passed, 8 skipped** = 3279 = the badge, zero
+      `FAILED`/`ERROR`, 27m23s. **Read with one correction:** the suite's
+      coverage gate passed on a *polluted* 79.86%, and it passed through
+      rounding, not by meeting 80 — pytest-cov decides the exit with coverage's
+      `should_fail_under(total, 80, precision=0)`, where 79.86 rounds to 80,
+      while its own summary line compares the raw number and printed "FAIL
+      Required test coverage of 80% not reached". The population is fixed
+      (W26's V3); on the same data it reads 89.93%. **Not re-run** — the full
+      suite runs once — so the pre-release check itself has not been observed
+      under the fixed config. The rounding is raised with Jon, not changed:
+      the 80% gate trips only below 79.5%
 
 ---
 

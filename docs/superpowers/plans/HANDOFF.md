@@ -31,29 +31,36 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**30 of 32 units · 50 of 51 items.** Counted off the dashboard, not carried
-forward. Every item's work is committed; what is left is **one full run**:
-`scripts/pre-release-check.sh`, which is W28's V5 and — through its `--cov`
-suite — W26's V3 (item 48). W18 (item 33, D-v) landed as `76cfac0`; W28's
-items 12 and 16 in the commit after it.
+**32 of 32 units · 51 of 51 items.** Counted off the dashboard, not carried
+forward. The board is done. **Nothing is pushed and CI has never run on any
+of it** — the release is Jon's call (CLAUDE.md "Cutting a Release").
 
-**⭐ Resume here:**
+**The one full run: `scripts/pre-release-check.sh` at `a9956a9`, 2026-09-23 —
+exit 0, all nine checks PASS, 3271 passed + 8 skipped = 3279 = the badge,
+zero `FAILED`/`ERROR`, 27m23s.** Its coverage read 79.86% and passed only by
+rounding; the report was counting temp copies of repo files and `scripts/`.
+The report's population is fixed in `pyproject.toml`; the same run's data now
+reads **89.93%** (89.29% at `489e84d`). The check has not been re-run under
+the fix — the suite runs once. Details in W26's V3 and W28's V5.
 
-- **Run `scripts/pre-release-check.sh` once, on a quiet machine, in the
-  background, and read its output file** — ~25 min. Do not edit the tree
-  while it runs. Read the suite's own last line (`N passed, M skipped`) and
-  `grep -cE '^(FAILED|ERROR)'`; the badge is **3279**, so passed + skipped
-  must equal it. Record the coverage figure as W26's V3 and the exit code as
-  W28's V5. If both hold, W26 and W28 are `DONE` — 32 of 32 units.
-- **If the load-flaky family fails** (`TestPrimer*`, `TestBashGuard*`,
-  worktree pairs, "Hook eval subprocess failed"), that is the documented
-  family — re-run the failing classes standalone as the control before
-  judging anything.
-- **The drafted changelog entry is `0.170.15`.** If any `feat:`/`fix:` lands
-  before the release, the version moves: delete the entry, re-run
-  `generate-changelog.py --write`, and carry the `### Notes` over (W28 step 3).
-- **Then the release itself is Jon's call** (CLAUDE.md "Cutting a Release").
-  Nothing is pushed. `main` locally is stale; compare against `origin/main`.
+**⭐ Resume here — open for Jon, none of them board items:**
+
+- **The coverage gate rounds.** pytest-cov decides the exit with
+  `should_fail_under(total, 80, precision=0)`, so the 80% gate trips only
+  below 79.5%, while its summary line compares the raw number and can print
+  "FAIL" over an exit 0. Setting `[tool.coverage.report] precision = 2`
+  would make the two agree. Not changed: it makes a release gate stricter,
+  and nobody asked for that.
+- **The `__pycache__` tree-hash hazard** (W18, recorded): a project that does
+  not ignore `__pycache__` changes its own tree hash by running its suite.
+  Pre-existing; not fixed.
+- **Carried from before:** sahjhan#51 (W25 / item 39's config-fault half),
+  the unruled NotebookEdit PostToolUse candidate, W06's V8 sahjhan
+  question, H11's declaration-side gap, and the carried debts below.
+- **The drafted changelog entry is `0.170.15`.** Commits after `a9956a9` are
+  `docs:`/`chore:` and not in it; at release, delete the entry, re-run
+  `generate-changelog.py --write`, and carry the `### Notes` over. Local
+  `main` is stale — compare against `origin/main` (v0.141.3).
 - **W26 needs only V3**, read off the one full `--cov` run.
 - **The full suite has not run since `489e84d`, and CI has seen nothing** —
   run it once, at the end of a session, with `--cov` (that is W26's V3).
@@ -89,9 +96,6 @@ census showed D-q′'s verdict list missing the archive's commonest words (TRUE
 **item 39's config-fault half waits on
 [sahjhan#51](https://github.com/jbrjake/sahjhan/issues/51)** (below, under
 Open for Jon). Four rulings were taken before any code, D-l…D-o, recorded in the unit.
-
-**W26** is `WIP` on V3 alone, and **W28** on V5 alone — both read off the one
-pre-release run.
 
 **Closed by ruling 2026-09-23:** **W13's item 17** — its own flake was caught
 in a pre-commit run with the primer's notice naming `TimeoutExpired`, and
@@ -490,10 +494,10 @@ eight queries keyed on `type='finding_deferred'` were never touched.
 
 ## Do this next
 
-### 1. ⭐ The one pre-release run, then the release is Jon's call.
+### 1. ⭐ The release is Jon's call.
 
-Every unit but W26 and W28 is `DONE`, and both of those wait only on
-`scripts/pre-release-check.sh` — see "⭐ Resume here" at the top.
+Every unit is `DONE`. What is open is listed under "⭐ Resume here" at the
+top, and none of it is a board item.
 
 **What W25 left that a later session would otherwise re-derive:**
 

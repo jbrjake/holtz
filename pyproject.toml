@@ -36,6 +36,20 @@ omit = [
     "*/site-packages/*",
 ]
 
+[tool.coverage.report]
+# The report's population, named by repo-relative directory. The report runs
+# in the main pytest process, whose cwd is the repo root, so these resolve
+# there. `run.omit`'s relative patterns do not hold for subprocess data, whose
+# cwd is often a scratch tree: it arrives carrying `scripts/` and the copies of
+# repo files that tests execute in temp directories. Nothing outside these
+# four directories is ever reported.
+include = [
+    "skills/holtz/scripts/*",
+    "hooks/*",
+    "enforcement/hooks/*",
+    "enforcement/scripts/*",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--tb=short -q"
