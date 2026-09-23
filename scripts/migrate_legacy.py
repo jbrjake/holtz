@@ -7,8 +7,14 @@ JSONL events to stdout. Output is piped to sahjhan ledger import.
 Usage:
     python3 scripts/migrate_legacy.py --input docs/holtz/archive/2026-03-22-run9/
     python3 scripts/migrate_legacy.py --run 9 --input docs/holtz/archive/2026-03-22-run9/
-    python3 scripts/migrate_legacy.py --all --archive-root docs/holtz/archive/
+    python3 scripts/migrate_legacy.py --all --archive-root docs/holtz/archive/ --out-dir migrated/
     python3 scripts/migrate_legacy.py --build-project
+
+`--all` writes one file per run, `<out-dir>/run-<N>.jsonl`, because
+`sahjhan ledger import` makes one ledger from one stream and every run numbers
+its findings from BH-001. Import each file into its own ledger:
+
+    sahjhan ledger import --name run-<N> --path <ledger file> < migrated/run-<N>.jsonl
 """
 from __future__ import annotations
 
@@ -837,6 +843,8 @@ def main() -> None:
     parser.add_argument("--archive-root", type=Path, default=Path("docs/holtz/archive"),
                         help="Root of archive directories")
     parser.add_argument("--build-project", action="store_true", help="Build project ledger")
+    parser.add_argument("--out-dir", type=Path,
+                        help="With --all: write one run-<N>.jsonl per run here")
     args = parser.parse_args()
 
     if args.build_project:
@@ -848,25 +856,35 @@ def main() -> None:
         return
 
     if args.all:
+        # One stream is one ledger, and every run's findings start at BH-001,
+        # so a combined stream collides identically-numbered findings under
+        # by-id latest-wins. There is no combined form to fall back to.
+        if args.out_dir is None:
+            parser.error("--all writes one file per run: pass --out-dir DIR")
+        by_run: dict[int, list[dict[str, Any]]] = {}
         for dirname, meta in sorted(ARCHIVE_MAP.items(), key=lambda x: x[1]["run"]):
             dir_path = args.archive_root / dirname
             if not dir_path.is_dir():
                 print(f"# Skipping {dirname} (not found)", file=sys.stderr)
                 continue
-            events = migrate_directory(dir_path, run=meta["run"],
-                                       auditor=meta["auditor"], project=args.project)
-            for event in events:
-                print(json.dumps(event))
+            by_run.setdefault(meta["run"], []).extend(migrate_directory(
+                dir_path, run=meta["run"], auditor=meta["auditor"], project=args.project,
+            ))
 
-        # Standalone justine directories
+        # Standalone justine directories belong to the run they were matched to.
         for dirname, matched_run in sorted(JUSTINE_MAP.items(), key=lambda x: x[1]):
             dir_path = args.archive_root / dirname
             if not dir_path.is_dir():
                 continue
-            events = migrate_directory(dir_path, run=matched_run,
-                                       auditor="justine", project=args.project)
-            for event in events:
-                print(json.dumps(event))
+            by_run.setdefault(matched_run, []).extend(migrate_directory(
+                dir_path, run=matched_run, auditor="justine", project=args.project,
+            ))
+
+        args.out_dir.mkdir(parents=True, exist_ok=True)
+        for run, events in sorted(by_run.items()):
+            target = args.out_dir / f"run-{run}.jsonl"
+            target.write_text("".join(json.dumps(e) + "\n" for e in events), encoding="utf-8")
+            print(f"{target}  ({len(events)} events)")
         return
 
     if not args.input:

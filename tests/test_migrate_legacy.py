@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -329,3 +330,98 @@ def test_build_project_ledger():
     assert len(registered) == 3
     checkpoints = [e for e in events if e["type"] == "_checkpoint"]
     assert len(checkpoints) >= 1
+
+
+# ---------------------------------------------------------------------------
+# W27 / item 45: `--all` keeps each run in its own ledger
+# ---------------------------------------------------------------------------
+#
+# `--all` printed every run's events as one stream, and the usage line invited
+# piping it into a single `sahjhan ledger import` — which creates ONE ledger,
+# so every run's BH-001 landed in it and D25's by-id latest-wins collapsed them.
+
+_SCRIPT = Path(__file__).parent.parent / "scripts" / "migrate_legacy.py"
+_TWO_RUNS = ("2026-03-19-run2", "2026-03-20-run2")  # ARCHIVE_MAP runs 12 and 13
+
+
+def _archive(root: Path) -> Path:
+    archive = root / "archive"
+    for dirname in _TWO_RUNS:
+        run_dir = archive / dirname
+        run_dir.mkdir(parents=True)
+        (run_dir / "PUNCHLIST.md").write_text(
+            SAMPLE_TABLE_PUNCHLIST.replace("Pattern count stale", f"stale in {dirname}")
+        )
+    return archive
+
+
+def _migrate_all(*extra: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(_SCRIPT), "--all", *extra],
+        capture_output=True, text=True, timeout=60,
+    )
+
+
+def test_all_refuses_to_write_one_combined_stream(tmp_path):
+    result = _migrate_all("--archive-root", str(_archive(tmp_path)))
+    assert result.returncode != 0
+    assert result.stdout == "", "no events may reach a stream a single import would merge"
+    assert "--out-dir" in result.stderr
+
+
+def test_all_writes_one_file_per_run(tmp_path):
+    out = tmp_path / "out"
+    result = _migrate_all("--archive-root", str(_archive(tmp_path)), "--out-dir", str(out))
+    assert result.returncode == 0, result.stderr
+    assert sorted(p.name for p in out.iterdir()) == ["run-12.jsonl", "run-13.jsonl"]
+    for name, dirname in (("run-12.jsonl", _TWO_RUNS[0]), ("run-13.jsonl", _TWO_RUNS[1])):
+        events = [json.loads(line) for line in (out / name).read_text().splitlines()]
+        assert {e["fields"]["run"] for e in events} == {name[4:6]}
+        ids = [e["fields"]["description"] for e in events
+               if e["type"] == "finding" and e["fields"]["id"] == "BH-001"]
+        assert ids == [f"stale in {dirname}"]
+
+
+def test_the_same_id_in_two_runs_stays_two_findings(tmp_path):
+    """V5, end to end: each file into its own ledger with the real engine."""
+    sys.path.insert(0, str(Path(__file__).parent.parent / "enforcement" / "hooks"))
+    from _resolve import ensure_sahjhan
+
+    binary = ensure_sahjhan()
+    if not binary:
+        import pytest
+        pytest.skip("sahjhan binary not available")
+    config = str(Path(__file__).parent.parent / "enforcement")
+    out = tmp_path / "out"
+    assert _migrate_all("--archive-root", str(_archive(tmp_path)),
+                        "--out-dir", str(out)).returncode == 0
+    project = tmp_path / "project"
+    project.mkdir()
+    subprocess.run([binary, "--config-dir", config, "init"], cwd=project,
+                   check=True, capture_output=True)
+    seen = {}
+    for run in ("12", "13"):
+        with open(out / f"run-{run}.jsonl") as stream:
+            subprocess.run(
+                [binary, "--config-dir", config, "ledger", "import",
+                 "--name", f"run-{run}", "--path", str(project / f"run-{run}.jsonl")],
+                cwd=project, stdin=stream, check=True, capture_output=True,
+            )
+        rows = subprocess.run(
+            [binary, "--config-dir", config, "--ledger", f"run-{run}", "query",
+             "SELECT description FROM events WHERE type='finding' AND id='BH-001'",
+             "--format", "json"],
+            cwd=project, check=True, capture_output=True, text=True,
+        ).stdout
+        seen[run] = [r["description"] for r in json.loads(rows)]
+    assert seen == {"12": [f"stale in {_TWO_RUNS[0]}"], "13": [f"stale in {_TWO_RUNS[1]}"]}
+
+
+def test_the_usage_line_teaches_the_per_run_import():
+    import migrate_legacy
+
+    usage = [
+        ln for ln in (migrate_legacy.__doc__ or "").splitlines()
+        if "migrate_legacy.py" in ln and "--all" in ln
+    ]
+    assert usage and all("--out-dir" in ln for ln in usage), usage

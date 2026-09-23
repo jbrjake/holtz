@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -70,11 +71,42 @@ def render(source: str, version: str, sums: dict[str, str]) -> str:
     return source
 
 
+def native_version(bin_dir: Path) -> str:
+    """The version the platform-native vendored binary reports, or ``""``.
+
+    Only this one can be asked: the other three targets do not execute here,
+    and are covered by their checksums from the same vendor run.
+    """
+    sys.path.insert(0, str(RESOLVE.parent))
+    from _resolve import platform_triple  # noqa: PLC0415
+
+    binary = bin_dir / f"sahjhan-{platform_triple()}"
+    try:
+        result = subprocess.run(
+            [str(binary), "--version"], capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    found = re.search(r"\b(\d+\.\d+\.\d+)\b", result.stdout)
+    return found.group(1) if found else ""
+
+
 def main() -> None:
     if len(sys.argv) < 2:
         raise SystemExit("Usage: update_sahjhan_pin.py <version> [bin_dir]")
     version = sys.argv[1]
     bin_dir = Path(sys.argv[2]) if len(sys.argv) > 2 else REPO_ROOT / "bin"
+
+    # Pinning hashes whatever bytes sit in `bin_dir`, and the fast path in
+    # `ensure_sahjhan` then trusts them on a marker-string match. So the bytes
+    # must be the version being named before their hashes are written down.
+    reported = native_version(bin_dir)
+    if reported != version:
+        raise SystemExit(
+            f"refusing to pin sahjhan v{version}: the vendored binary in "
+            f"{bin_dir} reports {('v' + reported) if reported else 'no version'}. "
+            "Re-run the vendor step for the version you mean."
+        )
 
     updated = render(RESOLVE.read_text(encoding="utf-8"), version, checksums(bin_dir))
     RESOLVE.write_text(updated, encoding="utf-8")

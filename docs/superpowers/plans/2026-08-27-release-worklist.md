@@ -77,7 +77,7 @@ imprecision (`CLAUDE.md`).
 | W24 | 6, 44 | D | `DONE` — the conjunct is a ledger predicate; V1's two clauses conflict and the unit says which one it kept | ~~D-b, D-g~~ ruled |
 | W25 | 11, 39, 49 | D | `DONE` — H12 closes 11 as a class; **39's config-fault half waits on a sahjhan ask** | W05, W14 |
 | W26 | 48 | D | `WIP` — V1, V2 observed; V3 is the end-of-session `--cov` run | — |
-| W27 | 15, 45, 46 | D | `TODO` | — |
+| W27 | 15, 45, 46 | D | `WIP` — steps 4, 6, 7 landed; four questions open for Jon | — |
 | W28 | 12, 16 | D | `TODO` | all above |
 | W29 | 21, 24 | D | `TODO` | ~~D-e, D-f~~ ruled |
 | W30 | 23 | D | `TODO` | W12 *(same file)* |
@@ -4801,8 +4801,36 @@ covered only by the parametrized subprocess cases in `test_hook_chains.py` —
 
 ## W27 — Items 15 + 45 + 46: dependency declaration, migration tooling, pin checks
 
-**Status:** `TODO`  ·  **Tier:** D
+**Status:** `WIP` — steps 4, 6, 7 landed; four questions put to Jon (below) before the rest  ·  **Tier:** D
 **Commit:** `chore: declare test dependencies and cross-check the sahjhan pin`
+
+### Checked against the tree before code, 2026-09-23 — four open questions
+
+- **Item 15's mechanism.** A `[project]` table needs a `version`, and this
+  plugin's lives in `.claude-plugin/plugin.json`, bumped by post-commit. And a
+  bare `[project]` does not install here — measured: `pip install ".[test]"`
+  fails with *"Multiple top-level packages discovered in a flat-layout"*. PEP
+  735 `[dependency-groups]` declares the same set with no `[project]` and no
+  version; `pip install --group test` works (measured on pip 26.1.2; needs
+  ≥ 25.1). Which mechanism is Jon's call.
+- **Item 45's V4 is wider than the item.** Field-by-field over every migrated
+  event from all 30 archives (2936 events): `step: ''` on 308 findings and 214
+  resolutions and `commit_hash: ''` on 214 — the two the item names — **plus**
+  474 `audit_claim` verdicts of `PASS` against
+  `^(VERIFIED|OVERSTATED|FALSE|MISSING)$`, 60 events of four types
+  `events.toml` does not declare (`run_summary`, `merge_result`,
+  `convergence_iteration`, `run_postmortem`), and one severity carrying prose.
+  (508 `state_transition` rows are the engine built-in, not a failure.) Step
+  3's "omit the optional fields" is unavailable: `step` and `commit_hash` are
+  **required**. A resolution whose commit was never recorded has no honest
+  `commit_hash`.
+- **Item 45's step 5 premise does not hold on the pinned engine.**
+  `sahjhan ledger import` creates a *new* ledger and refuses an existing path
+  — measured on 0.28.0: *"import failed: I/O error: File exists (os error
+  17)"*. So re-running `--build-project` cannot accumulate rows through the
+  import the tool feeds. Separately, `build_project_ledger` emits
+  `run_registered`/`run_completed`, which `events.toml` does not declare.
+- **Step 8** is written as a decision with a recommendation, not a ruling.
 
 ### Item 15 · `hypothesis` is undeclared · **OBSERVED**
 
@@ -4852,13 +4880,22 @@ vendor run leaves an unverified binary trusted until the next release.
       the two cannot drift
 - [ ] **3.** (45) Emit schema-valid values, or omit the optional fields rather than
       emitting empty strings that fail their own patterns
-- [ ] **4.** (45) Give `--all` a ledger boundary per run; fix the usage line that
+- [x] **4.** (45) Give `--all` a ledger boundary per run; fix the usage line that
       invites the colliding import
+      → `--all` requires `--out-dir` and writes `run-<N>.jsonl` per run; a
+      standalone Justine archive joins the run `JUSTINE_MAP` matches it to.
+      With no `--out-dir` it refuses and prints nothing — `ledger import` makes
+      one ledger from one stream, so there is no combined form to fall back to.
+      The usage line and docstring teach the per-run import
 - [ ] **5.** (45) Make `build_project_ledger` idempotent
-- [ ] **6.** (46) `update_sahjhan_pin.py` runs `bin/sahjhan --version` and refuses to
+- [x] **6.** (46) `update_sahjhan_pin.py` runs `bin/sahjhan --version` and refuses to
       pin if it disagrees with the version being pinned
-- [ ] **7.** (46) Wire `check_sahjhan_pin.py` into `git-hooks/pre-commit` (it is
+      → asks the platform-native binary (`sahjhan-<platform_triple()>`, which
+      `bin/sahjhan` links to). **The other three targets cannot execute here
+      and are covered only by their checksums** from the same vendor run
+- [x] **7.** (46) Wire `check_sahjhan_pin.py` into `git-hooks/pre-commit` (it is
       fast), not only into the release script
+      → unconditional and first among the gates; 0.23 s measured
 - [ ] **8.** (46) Decide whether `ensure_sahjhan`'s fast path should re-hash.
       Recommendation: re-hash when the marker changes or the mtime moves, not on
       every call
@@ -4874,16 +4911,36 @@ vendor run leaves an unverified binary trusted until the next release.
       with the same `ModuleNotFoundError`. Evidence: ___
 - [ ] **V4** (45) Every migrated event validates against `events.toml` field-by-field
       — **not** via a lax import that would pass today. Evidence: ___
-- [ ] **V5** (45) `--all` across two runs with the same `BH-001` keeps them distinct.
-      Evidence: ___
+- [x] **V5** (45) `--all` across two runs with the same `BH-001` keeps them distinct.
+      Evidence: `test_the_same_id_in_two_runs_stays_two_findings` — two
+      archives each filing `BH-001`, migrated with `--all --out-dir`, each file
+      imported into its own ledger by the real engine, and each ledger's
+      `BH-001` is its own run's. Partners: the combined stream is refused and
+      prints nothing; one file per run. RED first: the combined stream was
+      accepted and `--out-dir` was unknown
 - [ ] **V6** (45) `build_project_ledger` run twice produces the same ledger as once.
       Evidence: ___
-- [ ] **V7** (46) Put a mismatched binary in `bin/` → the pin updater refuses,
-      naming both versions. Evidence: ___
-- [ ] **V8** (46) Stage a mismatched pin → the commit fails via pre-commit.
-      Evidence: ___
+- [x] **V7** (46) Put a mismatched binary in `bin/` → the pin updater refuses,
+      naming both versions.
+      Evidence: `test_the_updater_refuses_a_binary_of_another_version` — run on
+      a copy of the updater and `_resolve.py` in a scratch tree, so the real
+      pin cannot be written. RED first: the unmodified updater printed *"Pinned
+      _resolve.py to sahjhan v0.28.0"* over a binary reporting 0.27.0. The
+      partner (a matching binary is pinned) is green before and after
+- [x] **V8** (46) Stage a mismatched pin → the commit fails via pre-commit.
+      Evidence: observed by hand — `SAHJHAN_VERSION` set to `0.27.9`, staged
+      alone, `git commit`: **rc 1** at the first gate, *"FAIL:
+      bin/.sahjhan-version says '0.28.0' but _resolve.SAHJHAN_VERSION is
+      '0.27.9'"*; HEAD unchanged. Restored, and the vendored binary checked
+      afterwards (mtime unchanged, `--version` 0.28.0, pin check PASS) — a hook
+      calling `ensure_sahjhan` in that window would have re-downloaded
 - [ ] **V9** (46) All three pins agree after a real vendor run, and all four
-      `SAHJHAN_CHECKSUMS` recompute and match. Evidence: ___
+      `SAHJHAN_CHECKSUMS` recompute and match.
+      Evidence so far — **local, not a vendor run:** the real updater over the
+      real vendored 0.28.0 binaries → *"Pinned"*, `_resolve.py`
+      **byte-identical** (all four checksums recomputed and matched), pin check
+      PASS; `update_sahjhan_pin.py 0.27.0` against them refused, file
+      untouched. **Owed:** the download half (`vendor-sahjhan.sh`, ~510 MB)
 
 ---
 
