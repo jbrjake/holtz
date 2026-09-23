@@ -44,6 +44,10 @@ H9   An item-scoped transition that does not record the item state it implies,
      forcing the agent to state the same fact twice.
 H10  A gate that delegates its check to a tool without naming the ledger event
      that tool reads, so the gate reads as a direct check everywhere else.
+H11  A gate excused by an escape-qualifier literal that names no writer it may
+     trust, so the agent can type the word that lets it through.
+H12  A gate whose printed intent names no escape — what is wrong, and nothing
+     to run — or names one that cannot run.
 ===  =========================================================================
 
 Usage::
@@ -59,6 +63,7 @@ import argparse
 import ast
 import difflib
 import json
+import os
 import re
 import sys
 import tomllib
@@ -1283,6 +1288,17 @@ _ESCAPE_FORMS = (
 )
 
 
+def _argument_scoped(model: Model, query: str) -> bool:
+    """Whether a named query judges the argument the agent picked.
+
+    Its SQL binds a ``{{placeholder}}``, so its answer is about the pair the
+    agent chose (``item_open``: *this* finding), not about the run. H8 cannot
+    name one as a blocking gate's escape, and H12 does not demand an escape of
+    one — "pick another" is not a command.
+    """
+    return "{{" in model.queries.get(query, {}).get("sql", "")
+
+
 def _named_escapes(text: str, commands: set[str], own: str = "") -> list[str]:
     found = []
     for pattern in _ESCAPE_FORMS:
@@ -1374,10 +1390,7 @@ def check_h8_escape_identity(model: Model) -> list[Finding]:
         `defer_medium` carries `medium_deferral_budget` alongside two
         parameterised gates, and D2's block is required to reference it.
         """
-        return {
-            name for name in names
-            if "{{" not in model.queries.get(name, {}).get("sql", "")
-        }
+        return {name for name in names if not _argument_scoped(model, name)}
 
     def _judge(
         where: str,
@@ -1843,6 +1856,146 @@ def check_h11_literal_provenance(model: Model) -> list[Finding]:
     return findings
 
 
+# ── H12: every gate's printed intent names an escape ─────────────────────────
+#
+# Item 11, closed as a class (D-l, RULED Jon 2026-09-23). A gate that says what
+# is wrong and not what to run leaves the agent guessing at the moment it is
+# blocked — and a wrong guess at a protocol command is how runs wedge.
+#
+# What is judged is what the engine *prints*: the gate's own intent, else its
+# named query's, else a per-type default (sahjhan `src/gates/types.rs`, `eval`).
+# A composite prints only its own intent, so only top-level gates are judged.
+
+_BACKTICKED = re.compile(r"`([^`]+)`")
+_TEMPLATE_VAR = re.compile(r"\{\{[^}]*\}\}")
+_PROSE_VAR = re.compile(r"<[^>]*>")
+_SAHJHAN_REFERENT = re.compile(r"\b(event|transition)\s+([a-z_][a-z0-9_]*)")
+# What a person types: a prompt word, a slash command, or a `!` line (checked
+# as the command it runs).
+_HUMAN_ESCAPES = frozenset({"/clear", "/holtz", "holtz-start"})
+# Shell verbs whose escape is the act itself — amend the commit, delete the
+# file — with no referent in the config to check.
+_SHELL_ESCAPES = frozenset({"git", "rm"})
+
+
+def _printed_intent(model: Model, gate: dict) -> tuple[str, str]:
+    """The intent the engine prints for ``gate``, and where it comes from."""
+    if gate.get("intent"):
+        return str(gate["intent"]), "its own intent"
+    name = gate.get("query")
+    if gate.get("type") == "query" and isinstance(name, str):
+        text = model.queries.get(name, {}).get("intent")
+        if text:
+            return str(text), f"[queries.{name}]'s intent"
+    return "", "the engine's per-type default"
+
+
+def _script_exists(model: Model, token: str) -> bool:
+    name = os.path.basename(token.strip("\"'"))
+    return any((directory / name).is_file() for directory in model.tree.py_dirs)
+
+
+def _judge_escape(
+    model: Model, span: str, gate: dict, commands: set[str], own: str,
+) -> tuple[bool, str]:
+    """Whether a backticked span is a runnable escape, and what is wrong if not.
+
+    The second element is non-empty only when the span *claims* an escape that
+    does not exist — a wrong escape is followed, and fails, which is worse
+    than none.
+    """
+    if span.startswith("!"):
+        span = span[1:].strip()
+    if span in commands:
+        return span != own, ""
+    if span in _HUMAN_ESCAPES:
+        return True, ""
+    tokens = span.split()
+    if not tokens:
+        return False, ""
+    head = tokens[1] if tokens[0] == "python3" and len(tokens) > 1 else tokens[0]
+    if head == "sahjhan":
+        referent = _SAHJHAN_REFERENT.search(span)
+        if referent:
+            kind, name = referent.groups()
+            known = model.events if kind == "event" else commands
+            if name not in known:
+                return False, f"`{span}` names {kind} '{name}', which is not declared"
+        return True, ""
+    if head.strip("\"'").endswith(".py"):
+        if _script_exists(model, head):
+            return True, ""
+        return False, f"`{span}` names a script that is not in the tree"
+    if head in _SHELL_ESCAPES:
+        return True, ""
+    # The gate's own command or file, by hand: run the check yourself and fix
+    # what it reports, or write the file it reads.
+    own_text = _TEMPLATE_VAR.sub("", f"{gate.get('cmd', '')} {gate.get('path', '')}")
+    probe = _PROSE_VAR.sub("", span).strip()
+    return bool(probe) and probe in own_text, ""
+
+
+def check_h12_escape_named(model: Model) -> list[Finding]:
+    """A gate whose printed intent names nothing to run.
+
+    Accepted escapes: a declared transition (in backticks, or H8's ``run X`` /
+    ``transition X``); a ``sahjhan …`` or ``! sahjhan …`` line, whose
+    ``event``/``transition`` referent must be declared; a script that is in the
+    tree; a human action (``/clear``, ``/holtz``, ``holtz-start``); ``git`` or
+    ``rm``; the gate's own command or file; and for ``min_elapsed``, the wait
+    itself stated with the gate's seconds.
+
+    Argument-scoped queries are exempt, by H8's rule (``_argument_scoped``).
+    """
+    findings: list[Finding] = []
+    commands = {
+        transition.get("command", "")
+        for transition in model.transitions
+        if transition.get("command")
+    }
+    for transition in model.transitions:
+        own = transition.get("command", "")
+        for index, gate in enumerate(transition.get("gates", []) or []):
+            query = gate.get("query")
+            if gate.get("type") == "query" and isinstance(query, str) and _argument_scoped(
+                model, query,
+            ):
+                continue
+            where = (
+                f"transitions.toml: transition '{own}' "
+                f"({transition.get('from', '?')} → {transition.get('to', '?')}), "
+                f"gate {index} ({gate.get('type', '?')})"
+            )
+            text, source = _printed_intent(model, gate)
+            seconds = gate.get("seconds")
+            if gate.get("type") == "min_elapsed" and seconds is not None and re.search(
+                rf"\bwait\b.*\b{seconds}\b", text,
+            ):
+                continue
+            named = _named_escapes(text, commands, own)
+            for span in (s.strip() for s in _BACKTICKED.findall(text)):
+                ok, wrong = _judge_escape(model, span, gate, commands, own)
+                if ok:
+                    named.append(span)
+                elif wrong:
+                    findings.append(Finding(
+                        "H12", "error", where,
+                        f"names an escape that cannot run: {wrong}",
+                        "name the command as the skill files teach it",
+                    ))
+            if not named:
+                printed = f"{text!r}" if text else "nothing of its own"
+                findings.append(Finding(
+                    "H12", "error", where,
+                    f"prints {printed} ({source}) — it says what is wrong and "
+                    "names nothing to run",
+                    "end the intent with the way out: a transition, a "
+                    "`sahjhan …` line, a script, or the human action "
+                    "(`! …`, `/clear`, `holtz-start`)",
+                ))
+    return findings
+
+
 CHECKS = {
     "H1": check_h1_unsatisfiable,
     "H2": check_h2_false_declarations,
@@ -1855,6 +2008,7 @@ CHECKS = {
     "H9": check_h9_transition_state_decoupling,
     "H10": check_h10_delegated_gate_evidence,
     "H11": check_h11_literal_provenance,
+    "H12": check_h12_escape_named,
 }
 
 

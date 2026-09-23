@@ -213,6 +213,23 @@ class TestTheOtherSeatsAreUntouched:
         )
         assert "medium_deferral_budget" in (refused.stdout + refused.stderr)
 
+    def test_the_refusal_names_its_escape(self, run):
+        """W25 / item 11 (D-l) — the spent budget says what to do instead.
+
+        The escape is the fix: `fix_commit` is declared from `fix_loop`, where
+        this refusal fires. It cannot be driven to success from a test — a real
+        daemon refuses a test process the `suite_green` its gate reads — so the
+        assertion is on what the refusal prints.
+        """
+        for n in range(1, 3):
+            run.file(f"BH-2{n:02d}", "MEDIUM")
+        run.sah("transition", "defer_medium", "--", "BH-201")
+        refused = run.sah("transition", "defer_medium", "--", "BH-202", check=False)
+        assert refused.returncode != 0, refused.stdout + refused.stderr
+        assert "`fix_commit`" in (refused.stdout + refused.stderr), (
+            refused.stdout + refused.stderr
+        )
+
     def test_v6_the_breaker_escape_is_still_reachable(self, run):
         """`pattern_done`'s `any_of` keeps the branch whose post-state a single
         `defer batch --severity low,medium` produces. Without it the breaker's

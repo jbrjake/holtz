@@ -75,7 +75,7 @@ imprecision (`CLAUDE.md`).
 | **P4 — hygiene and record** ||||
 | W23 | 4, 7, 8, 13, 14 | D | `DONE` — the three files agree; two config-derived doc tests replace prose-vs-prose | — |
 | W24 | 6, 44 | D | `DONE` — the conjunct is a ledger predicate; V1's two clauses conflict and the unit says which one it kept | ~~D-b, D-g~~ ruled |
-| W25 | 11, 39, 49 | D | `WIP` — D-l…D-o ruled; a sahjhan ask raised for item 39's config-fault half | W05, W14 |
+| W25 | 11, 39, 49 | D | `DONE` — H12 closes 11 as a class; **39's config-fault half waits on a sahjhan ask** | W05, W14 |
 | W26 | 48 | D | `TODO` | — |
 | W27 | 15, 45, 46 | D | `TODO` | — |
 | W28 | 12, 16 | D | `TODO` | all above |
@@ -4460,7 +4460,7 @@ property 2.**
 
 ## W25 — Items 11 + 39 + 49: escapes, the PostToolUse fall-through, and the lower tail
 
-**Status:** `WIP`  ·  **Tier:** D  ·  **Depends on:** W05, W14 (they fix two of item 11's four gates)
+**Status:** `DONE` — every box below ticked; **item 39's config-fault half waits on the sahjhan ask** recorded under the rulings, and is not a plan clause  ·  **Tier:** D  ·  **Depends on:** W05, W14 (they fix two of item 11's four gates)
 **Commit:** `fix(enforcement): every gate names an escape, and no hook degrades in silence`
 
 ### Four rulings — RULED (Jon, 2026-09-23)
@@ -4526,10 +4526,36 @@ out of a PostToolUse hook.
 
 ### Plan
 
-- [ ] **1.** (11) Add an `intent` to `quiz_exhaustions_resolved`
-- [ ] **2.** (11) **Close the class:** a lint check (or an H8 extension) asserting
+- [x] **1.** (11) Add an `intent` to `quiz_exhaustions_resolved`
+      → on `converge`'s gate, since the query already carried one (*"no
+      unresolved quiz exhaustions"*) — the condition, which the engine printed.
+      The gate's intent keeps that text and names the human-only escape,
+      `! sahjhan event quiz_exhausted_resolved`, as `phase-convergence.md`
+      teaches it
+- [x] **2.** (11) **Close the class:** a lint check (or an H8 extension) asserting
       **every** gate carries an `intent`. Item 11 is a symptom list; the check is
       the fix
+      → **as ruled in D-l, not as written:** "carries an intent" could not fail at
+      `48c72fd`. **H12** asserts every top-level gate's *printed* intent names
+      an escape — a declared transition, a `sahjhan`/`! sahjhan` line whose
+      referent is declared, a script in the tree, a human action, `git`/`rm`,
+      the gate's own command or file, or for `min_elapsed` the wait itself.
+      Argument-scoped queries are exempt by H8's rule, now one named function
+      (`_argument_scoped`) shared by both checks. It found **49** gates; all 49
+      intents were rewritten, each keeping its old text as a prefix and ending in
+      the escape the skill files teach.
+      ⚠️ **Two escapes are paths, and H8 said so.** `fix_commit`'s 15-fix cap and
+      `fix_loop_start`'s first-pass gate were first written "run
+      `iteration_boundary`" / "run `audit_complete`"; H8 raised an error and a
+      warning, because each of those transitions has run-wide gates of its own
+      and so can refuse at the moment it is printed. Neither is a deadlock —
+      each refusal names its next step — and neither is one guaranteed command,
+      so the text describes the path instead of the imperative. **Recorded so the
+      phrasing can be overruled; it was not written to quiet H8.**
+      ⚠️ **Two gates' only escape leaves the run** — `no_violations` (a violation
+      is permanent) and `recon_complete`'s no-audit-phase-findings gate. Both
+      name "ask the user to start a fresh run", the form `phase-convergence.md`
+      already uses
 - [x] **3.** (39) Handle non-zero the way `pre_tool_hook` does —
       `exit_enforcement_error` with the PostToolUse variant (a warning, since
       PostToolUse cannot undo the work)
@@ -4600,10 +4626,31 @@ side of the tool call. Unruled — a candidate item for Jon.
 
 ### Validation
 
-- [ ] **V1** (11) The new check **fails on the tree at `48c72fd`** and passes after.
-      Evidence: ___
-- [ ] **V2** (11) For each of the four gates: the block prints an escape **and the
-      escape runs**. Evidence: ___
+- [x] **V1** (11) The new check **fails on the tree at `48c72fd`** and passes after.
+      Evidence: `enforcement_lint.py --only H12 --config-dir <48c72fd's
+      enforcement/, git archive>` → **exit 1, 52 errors**, and all four of item
+      11's gates are among them (converge's amplification seat, its
+      MEDIUM-budget seat, its quiz gate; the lens gate's `all_findings_closed`).
+      On this tree → **exit 0, 0 errors**. `TestH12EscapeNamed`, 16 tests: the
+      48c72fd quiz gate reconstructed, the engine default, prose, and each
+      accepted form with a firing twin
+- [x] **V2** (11) For each of the four gates: the block prints an escape **and the
+      escape runs**.
+      Evidence: **quiz** — `test_gate_escapes.py`, driven: a config derived
+      from `enforcement/` at test time with only `quiz_exhausted`'s `restricted`
+      cleared; at `final_sweep` with a lens exhausted the ✗ line names
+      `! sahjhan event quiz_exhausted_resolved`; the command is read out of
+      `phase-convergence.md`'s fenced block, run as written, and the line flips
+      to ✓. **amplification** — W14's
+      `test_the_batch_plus_the_round_it_buys_clears_converge`.
+      **`medium_deferral_budget`** — its `converge` seat is gone (W05); the
+      remaining cap's refusal now names `fix_commit`
+      (`test_the_refusal_names_its_escape`, driven); `fix_commit` itself cannot
+      be driven to success from a test (the standing `suite_green` constraint).
+      **`all_findings_closed`** — no seat anywhere (W07; both removals pinned).
+      RED control: `transitions.toml` put back → the quiz test, the refusal test
+      and H12's current-dev test fail, each on its own reason. The 28 files that
+      read `transitions.toml` or drive gates: **1093 passed, exit 0**
 - [x] **V3** (39) A non-zero `hook eval` exit produces a **visible** degraded-mode
       signal. Silence is the defect — assert the message, not the absence of a
       crash.

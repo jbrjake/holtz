@@ -1608,6 +1608,222 @@ class TestH11LiteralProvenance:
 # ── Discovery soundness ──────────────────────────────────────────────────────
 
 
+class TestH12EscapeNamed:
+    """Item 11, closed as a class (D-l, RULED Jon 2026-09-23).
+
+    A refusal the agent can act on says what to run. The engine prints a
+    failing gate's intent resolved as its own → its named query's → a
+    per-type default, and a composite prints only its own — so the check is
+    on that text, per top-level gate. The historical defect is `converge` at
+    `48c72fd`: its quiz gate carried no intent, printed the query's *"no
+    unresolved quiz exhaustions"*, and said nothing about the human-only
+    command that clears it.
+
+    Each accepted form has a firing twin, so no clean case can pass against a
+    check that accepts everything.
+    """
+
+    EVENTS = """
+        [events.recon_step]
+        description = "a recon step"
+        fields = [{ name = "step", type = "string" }]
+
+        [[events.recon_step.producers]]
+        id = "agent:cli"
+
+        [events.quiz_exhausted]
+        description = "a lens ran out of quiz attempts"
+        restricted = true
+        fields = [{ name = "perspective", type = "string" }]
+
+        [events.quiz_exhausted_resolved]
+        description = "a human accepted it"
+        attestation = "human"
+        fields = [{ name = "perspective", type = "string" }]
+
+        [[events.quiz_exhausted_resolved.producers]]
+        id = "human:skills/doc.md"
+        """
+
+    QUERIES = """
+        [queries.quiz_exhaustions_resolved]
+        sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted'"
+        intent = "no unresolved quiz exhaustions"
+
+        [queries.item_open]
+        sql = "SELECT count(*) = 0 FROM events WHERE type='finding_resolved' AND id='{{item_id}}'"
+        intent = "finding must not already be resolved or deferred"
+        """
+
+    def _tree(
+        self, root: Path, gate: str, *, tool_scripts: dict[str, str] | None = None,
+    ) -> el.Tree:
+        return build_tree(
+            root,
+            events=self.EVENTS,
+            protocol=f"""
+            [protocol]
+            name = "fixture"
+            version = "1.0.0"
+            {textwrap.dedent(self.QUERIES)}
+            """,
+            transitions=f"""
+            [[transitions]]
+            command = "sweep_dirty"
+            from = "final_sweep"
+            to = "fix_loop"
+            gates = []
+
+            [[transitions]]
+            command = "converge"
+            from = "final_sweep"
+            to = "done"
+            gates = [
+                {gate},
+            ]
+            """,
+            tool_scripts=tool_scripts,
+        )
+
+    def _h12(self, root: Path, gate: str, **kw) -> list[el.Finding]:
+        return findings_for(self._tree(root, gate, **kw), "H12")
+
+    # ── the historical defect, and the default ──
+
+    def test_fires_on_the_48c72fd_quiz_gate(self, tmp_path: Path) -> None:
+        """The gate as it stood: no intent of its own, the query's condition."""
+        findings = self._h12(
+            tmp_path,
+            '{ type = "query", query = "quiz_exhaustions_resolved", expect = "true" }',
+        )
+        assert len(findings) == 1, [f.render() for f in findings]
+        assert findings[0].level == "error"
+        assert "no unresolved quiz exhaustions" in findings[0].message
+        assert "[queries.quiz_exhaustions_resolved]" in findings[0].message
+
+    def test_fires_on_the_engines_default(self, tmp_path: Path) -> None:
+        findings = self._h12(
+            tmp_path, '{ type = "ledger_has_event", event = "recon_step", min_count = 1 }',
+        )
+        assert len(findings) == 1, [f.render() for f in findings]
+        assert "per-type default" in findings[0].message
+
+    def test_prose_naming_no_command_fires(self, tmp_path: Path) -> None:
+        """"Run the suite" is a sentence, not a transition — H8's filter."""
+        findings = self._h12(
+            tmp_path,
+            '{ type = "ledger_has_event", event = "recon_step", '
+            'intent = "record the recon step and run the suite" }',
+        )
+        assert len(findings) == 1, [f.render() for f in findings]
+
+    # ── each accepted form, with its twin ──
+
+    def test_a_declared_transition_is_an_escape(self, tmp_path: Path) -> None:
+        assert self._h12(
+            tmp_path,
+            '{ type = "ledger_has_event", event = "recon_step", '
+            'intent = "record the recon step — run `sweep_dirty`" }',
+        ) == []
+
+    def test_an_undeclared_transition_is_not(self, tmp_path: Path) -> None:
+        assert len(self._h12(
+            tmp_path,
+            '{ type = "ledger_has_event", event = "recon_step", '
+            'intent = "record the recon step — run `sweep_dirtyy`" }',
+        )) == 1
+
+    def test_a_sahjhan_event_escape_names_a_declared_event(self, tmp_path: Path) -> None:
+        assert self._h12(
+            tmp_path,
+            '{ type = "ledger_has_event", event = "recon_step", '
+            'intent = "record it with `sahjhan event recon_step`" }',
+        ) == []
+
+    def test_a_sahjhan_event_escape_naming_no_event_fires(self, tmp_path: Path) -> None:
+        """A wrong escape is worse than none: it is followed, and fails."""
+        findings = self._h12(
+            tmp_path,
+            '{ type = "ledger_has_event", event = "recon_step", '
+            'intent = "record it with `sahjhan event recon_stepp`" }',
+        )
+        assert findings and all(f.level == "error" for f in findings)
+        assert any("recon_stepp" in f.message for f in findings), [
+            f.render() for f in findings
+        ]
+
+    def test_a_human_escape_counts(self, tmp_path: Path) -> None:
+        """Step 1 of item 11: only the user can clear an exhausted quiz."""
+        assert self._h12(
+            tmp_path,
+            '{ type = "query", query = "quiz_exhaustions_resolved", expect = "true", '
+            'intent = "ask the user to run `! sahjhan event quiz_exhausted_resolved`" }',
+        ) == []
+
+    def test_a_script_escape_must_exist(self, tmp_path: Path) -> None:
+        gate = (
+            '{ type = "ledger_has_event", event = "recon_step", '
+            'intent = "record it with `verify_suite.py --record --scope full`" }'
+        )
+        assert self._h12(tmp_path / "a", gate, tool_scripts={"verify_suite.py": "x = 1\n"}) == []
+        assert len(self._h12(tmp_path / "b", gate)) >= 1
+
+    def test_the_gates_own_command_run_by_hand(self, tmp_path: Path) -> None:
+        assert self._h12(
+            tmp_path,
+            '{ type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", '
+            'intent = "no lint violations — run `ruff check .` and fix what it reports" }',
+        ) == []
+
+    def test_a_command_the_gate_does_not_run_is_not(self, tmp_path: Path) -> None:
+        assert len(self._h12(
+            tmp_path,
+            '{ type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", '
+            'intent = "no lint violations — run `mypy .` and fix what it reports" }',
+        )) == 1
+
+    def test_the_file_the_gate_reads(self, tmp_path: Path) -> None:
+        assert self._h12(
+            tmp_path,
+            '{ type = "command_succeeds", '
+            'cmd = "test -s docs/holtz/investigations/{{item_id}}.md", '
+            'intent = "attempts must be documented in `docs/holtz/investigations/<id>.md`" }',
+        ) == []
+
+    def test_min_elapsed_states_the_wait(self, tmp_path: Path) -> None:
+        assert self._h12(
+            tmp_path / "a",
+            '{ type = "min_elapsed", event = "recon_step", seconds = 120, '
+            'intent = "rapid-fire guard — wait 120 s after the last recon_step" }',
+        ) == []
+        assert len(self._h12(
+            tmp_path / "b",
+            '{ type = "min_elapsed", event = "recon_step", seconds = 120, '
+            'intent = "prevent rapid-fire gaming" }',
+        )) == 1
+
+    # ── scope ──
+
+    def test_an_argument_scoped_query_is_exempt(self, tmp_path: Path) -> None:
+        """H8's `_run_wide` rule: a query binding `{{...}}` judges the argument
+        the agent picked, and "pick another" is not a command."""
+        assert self._h12(
+            tmp_path, '{ type = "query", query = "item_open", expect = "true" }',
+        ) == []
+
+    def test_a_composite_is_judged_on_its_own_intent_alone(self, tmp_path: Path) -> None:
+        """The engine never prints a child's intent, so a child is not judged."""
+        gate = (
+            '{ type = "any_of", intent = "run `sweep_dirty`", gates = ['
+            '{ type = "ledger_has_event", event = "recon_step", min_count = 1 }] }'
+        )
+        assert self._h12(tmp_path, gate) == []
+
+    def test_current_dev_is_clean(self, model: el.Model) -> None:
+        errors = [f for f in el.run_checks(model, ["H12"]) if f.level == "error"]
+        assert errors == [], "\n".join(f.render() for f in errors)
+
+
 class TestWritePathDiscovery:
     """Grepping for event names cannot work — enumerate the verbs."""
 
