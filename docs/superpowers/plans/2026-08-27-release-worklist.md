@@ -77,7 +77,7 @@ imprecision (`CLAUDE.md`).
 | W24 | 6, 44 | D | `DONE` — the conjunct is a ledger predicate; V1's two clauses conflict and the unit says which one it kept | ~~D-b, D-g~~ ruled |
 | W25 | 11, 39, 49 | D | `DONE` — H12 closes 11 as a class; **39's config-fault half waits on sahjhan#51** | W05, W14 |
 | W26 | 48 | D | `WIP` — V1, V2 observed; V3 is the end-of-session `--cov` run | — |
-| W27 | 15, 45, 46 | D | `WIP` — 15 and 46 done; 45 done but `audit_claim`, and V4 fails on nothing else | `audit_claim`'s verdict words — put to Jon |
+| W27 | 15, 45, 46 | D | `DONE` — every migrated event validates field by field; a marked binary is hashed before it is trusted | — |
 | W28 | 12, 16 | D | `TODO` | all above |
 | W29 | 21, 24 | D | `TODO` | ~~D-e, D-f~~ ruled |
 | W30 | 23 | D | `TODO` | W12 *(same file)* |
@@ -4804,7 +4804,7 @@ covered only by the parametrized subprocess cases in `test_hook_chains.py` —
 
 ## W27 — Items 15 + 45 + 46: dependency declaration, migration tooling, pin checks
 
-**Status:** `WIP` — every step but `audit_claim` landed, and every validation but V4; `audit_claim` waits on Jon (D-q′ does not cover the verdict words the archive uses — below), and V4 fails on nothing else  ·  **Tier:** D
+**Status:** `DONE` — all eight steps and D-t, V1–V9; `audit_claim` on D-u  ·  **Tier:** D
 **Commit:** `chore: declare test dependencies and cross-check the sahjhan pin`
 
 ### Checked against the tree before code, 2026-09-23 — four open questions
@@ -4849,6 +4849,7 @@ covered only by the parametrized subprocess cases in `test_hook_chains.py` —
 | **D-s** | Item 46 step 8 | **Re-hash when the marker or the binary's mtime moves** — record mtime and size beside the marker; re-hash only when either changes |
 | **D-q′** | Item 45, `audit_claim` | Put again after the correction above, because D-q's "`PASS` → `VERIFIED`" was ruled on the misstatement. **Read the header; skip non-claims** — emit `audit_claim` only from tables whose header names a verdict column; map real verdict words (`YES`/`PASS`/`Verified`/`confirmed` → `VERIFIED`, `NO` → `FALSE`); count skipped rows on stderr |
 | **D-t** | D-q vs D-r | D-q emits only declared types; D-r keeps `run_registered`/`run_completed`, which were undeclared. **Declare the two types** in `events.toml`, so V4 covers the project ledger too |
+| **D-u** | Item 45, `audit_claim` | Put after a census showed D-q′'s list missing the archive's commonest words. **`TRUE`/`OK` → `VERIFIED`, `FAIL` → `FALSE`; `PARTIAL` → `OVERSTATED`; `DRIFT`/`UNDERSTATED`/`STALE` → `FALSE`.** The verdict column is the one headed `Verdict`, `Status`, `Verified`/`Verified?` or `Match`, and `Status` wins where a table also has `Verified` (there `Verified` holds evidence). `Result \| Count` and tables with none of these are skipped, counted |
 
 ### Item 15 · `hypothesis` is undeclared · **OBSERVED**
 
@@ -4898,9 +4899,9 @@ vendor run leaves an unverified binary trusted until the next release.
 - [x] **2.** (15) Point CI at the extra instead of a hand-written `pip install`, so
       the two cannot drift
       → `python -m pip install --upgrade pip` then `pip install --group test`
-- [ ] **3.** (45) Emit schema-valid values, or omit the optional fields rather than
+- [x] **3.** (45) Emit schema-valid values, or omit the optional fields rather than
       emitting empty strings that fail their own patterns
-      → **as ruled in D-q, all but `audit_claim`:** a finding records step 7
+      → **as ruled in D-q:** a finding records step 7
       and a resolution step 10 (what SKILL.md teaches each to record); a
       resolution with no recorded commit carries `0000000`, and a recorded one
       is read out of any prose around it; a prose severity keeps its leading
@@ -4910,18 +4911,26 @@ vendor run leaves an unverified binary trusted until the next release.
       and 214 resolution `step`s were `''`, all 214 `commit_hash`es `''` — no
       archive punchlist carries a `**Fix Commit:**` line at all — and the one
       severity was `HIGH (upgraded from MEDIUM per Justine merge)`
-      **`audit_claim` is not done — D-q′ does not cover the archive's
-      verdict words.** Census of every table in every migrated `1-*.md`
-      (header, then the distinct values of any header-named verdict column):
-      `TRUE` ×98 and `OK` ×14 are the commonest real verdicts and neither is
-      in D-q′'s list; `PARTIAL` ×8, `DRIFT` ×3, `UNDERSTATED` ×3, `STALE`,
-      `FAIL` and `NEEDS CHECK` have no ruled target; many carry decoration
-      (`**FALSE** — off by 24`, `OVERSTATED → BH-004`, `VERIFIED (…)`); and
-      nine `Verified` cells are prose (`Matches`, `0.3.1`). Which headers name
-      a verdict column is also open: `Verdict`, `Verified`, `Verified?`,
-      `Status`, `Match` and `Result` all occur, two tables carry both
-      `Verified` and `Status`, and `Result | Count` is a summary table. Put to
-      Jon
+      → **`audit_claim`, as ruled in D-q′ and D-u:** each table is read by
+      its header — the verdict column by name (`Status` over `Verified`), the
+      claim and source by name, evidence from the rest — and a cell's leading
+      word (decoration stripped) maps through the ruled table. Cells split
+      only on unescaped pipes: run 9 has `ls … \| grep -v backstory = 13` in
+      a cell, which a plain split read as the verdict. The census that
+      prompted D-u, over every table in every migrated `1-*.md` with `Status`
+      preferred: 424 rows under a verdict header, 63 in tables with none;
+      the words were VERIFIED 111, YES 118, TRUE 112, PASS 16, OK 14,
+      OVERSTATED 15, PARTIAL 8, NO 12, FALSE 4, DRIFT 3, UNDERSTATED 3,
+      STALE 1, FAIL 1, and six cells with no verdict word (`NEEDS CHECK` ×2,
+      `N/A`, three prose). After the parser, the real archive gives 371
+      `VERIFIED`, 24 `FALSE`, 23 `OVERSTATED`, 6 rows skipped for no verdict
+      word and 63 for no verdict column. Those are the census's numbers,
+      derived a second way.
+      RED first: all 23 new claims tests, each because column 3 (a location)
+      was read as the verdict. Mutations: unescaped-only split reverted → 1
+      red (V4 stays green, since the real row then carries no verdict word
+      and is skipped — only the unit test sees it); `Verified` ahead of
+      `Status` → 1 red; an unmapped word emitted raw → 2 red, V4 one of them
 - [x] **D-t** Declare `run_registered`/`run_completed`
       → done: `project`, `run`, `auditor`, `attestation = "agent"`, producer
       `agent:cli` — honest, because a re-run's delta goes in by
@@ -4993,8 +5002,25 @@ vendor run leaves an unverified binary trusted until the next release.
       Evidence: exit 2, `ModuleNotFoundError: No module named 'hypothesis'`,
       *"Interrupted: 1 error during collection"*. Restored; V1 re-run on the
       restored file: 3199, exit 0
-- [ ] **V4** (45) Every migrated event validates against `events.toml` field-by-field
-      — **not** via a lax import that would pass today. Evidence: ___
+- [x] **V4** (45) Every migrated event validates against `events.toml` field-by-field
+      — **not** via a lax import that would pass today.
+      Evidence: `test_every_migrated_event_validates_against_events_toml` —
+      `--all` over the real `docs/holtz/archive`, then every emitted event
+      checked against its declaration: required fields present, patterns
+      held, type declared or an engine event. **2810 events, zero failures.**
+      Before this unit the same population (2936 events) failed 1,271 field
+      checks in 9 classes, the engine's `state_transition` not counted. Its
+      partner `test_the_validator_sees_a_bad_value` proves the check can
+      fail: an emptied `step` and an undeclared type are both reported. Not
+      vacuous on real data either: an unmapped verdict emitted raw takes it
+      red. Scope: the 37 `ARCHIVE_MAP`/`JUSTINE_MAP` directories `--all`
+      migrates. The archive's other 16 are in neither map, so `--all` skips
+      them; `--input` with `--run` can take one, and V4 does not cover that.
+      Engine events (`state_transition`, 508 reconstructed from STATUS.md)
+      have no `events.toml` schema, and these carry `description` where the
+      engine writes `from`/`to`/`command` — harmless on an imported
+      historical ledger, since state derives from the last row's `to` and
+      falls back to the initial state
 - [x] **V5** (45) `--all` across two runs with the same `BH-001` keeps them distinct.
       Evidence: `test_the_same_id_in_two_runs_stays_two_findings` — two
       archives each filing `BH-001`, migrated with `--all --out-dir`, each file

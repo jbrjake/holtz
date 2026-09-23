@@ -4,7 +4,10 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
+
+import pytest
 
 # Add scripts/ to path so we can import migrate_legacy
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
@@ -468,6 +471,150 @@ def test_a_prose_severity_keeps_its_leading_word():
     )
     events = parse_punchlist(prose, run="1", auditor="holtz", source="PUNCHLIST.md")
     assert [f["severity"] for f in _by_type(events, "finding")] == ["LOW", "HIGH"]
+
+
+# `_parse_claims_table` read column 3 of any row as the verdict whatever the
+# header said, so most of what it emitted were locations, labels and counts.
+# D-q′ and D-u (RULED 2026-09-23): read the header, map the verdict words the
+# archive uses, and skip — counted — what is not a claim or carries no verdict.
+
+
+def _claims(table: str) -> list[dict]:
+    events = parse_audit_file("1-doc-claims.md", table, run="9", auditor="holtz")
+    return _by_type(events, "audit_claim")
+
+
+@pytest.mark.parametrize(("cell", "verdict"), [
+    ("VERIFIED (rounded)", "VERIFIED"),
+    ("TRUE", "VERIFIED"),
+    ("YES", "VERIFIED"),
+    ("PASS", "VERIFIED"),
+    ("OK (matches #13)", "VERIFIED"),
+    ("Verified", "VERIFIED"),
+    ("confirmed in code", "VERIFIED"),
+    ("NO", "FALSE"),
+    ("**FALSE** — off by 24", "FALSE"),
+    ("FAIL — recommendation-escalation.md not counted", "FALSE"),
+    ("DRIFT (minor)", "FALSE"),
+    ("UNDERSTATED (missing 2) → BH-001", "FALSE"),
+    ("STALE — run 12 completed, now run 13", "FALSE"),
+    ("PARTIAL", "OVERSTATED"),
+    ("**PARTIAL** — convention violated in some places", "OVERSTATED"),
+    ("OVERSTATED → BH-004", "OVERSTATED"),
+    ("MISSING", "MISSING"),
+])
+def test_every_ruled_verdict_word_maps(cell, verdict):
+    table = f"| # | Claim | Location | Verdict | Notes |\n|---|---|---|---|---|\n| 1 | c | L1 | {cell} | n |\n"
+    assert [c["verdict"] for c in _claims(table)] == [verdict]
+
+
+def test_a_claims_table_is_read_by_its_header():
+    table = (
+        "| # | Claim | Location | Status | Notes |\n"
+        "|---|-------|----------|--------|-------|\n"
+        '| 7 | "13 lenses" | README:15 | VERIFIED | lens-registry.md lists 13 |\n'
+    )
+    [claim] = _claims(table)
+    assert claim["claim"] == '"13 lenses"'
+    assert claim["source"] == "README:15"
+    assert claim["verdict"] == "VERIFIED"
+    assert "lens-registry.md lists 13" in claim["evidence"]
+
+
+def test_status_is_the_verdict_when_a_table_also_has_verified():
+    table = (
+        "| # | Claim | Verified | Status |\n"
+        "|---|-------|----------|--------|\n"
+        "| 17 | version: 0.3.1 | Matches | PASS |\n"
+    )
+    [claim] = _claims(table)
+    assert claim["verdict"] == "VERIFIED"
+    assert "Matches" in claim["evidence"]
+
+
+def test_an_escaped_pipe_stays_inside_its_cell():
+    table = (
+        "| # | Claim | Actual | Verdict |\n"
+        "|---|-------|--------|---------|\n"
+        '| 3 | "13 reference docs" | ls references/*.md \\| grep -v backstory = 13 | TRUE |\n'
+    )
+    [claim] = _claims(table)
+    assert claim["verdict"] == "VERIFIED"
+    assert "ls references/*.md | grep -v backstory = 13" in claim["evidence"]
+
+
+def test_a_table_with_no_verdict_column_is_skipped_and_counted(capsys):
+    table = (
+        "| Result | Count |\n|---|---|\n| PASS | 30 |\n| FAIL | 2 |\n\n"
+        "| # | Claim | Test exists? | Notes |\n|---|---|---|---|\n| 1 | c | yes | n |\n"
+    )
+    assert _claims(table) == []
+    assert "3 rows in tables with no verdict column" in capsys.readouterr().err
+
+
+def test_a_row_with_no_verdict_word_is_skipped_and_counted(capsys):
+    table = (
+        "| # | Claim | Location | Status |\n|---|---|---|---|\n"
+        "| 1 | a | L1 | NEEDS CHECK |\n| 2 | b | L2 | N/A |\n"
+        "| 3 | c | L3 | See #8/#9 above |\n| 4 | d | L4 | VERIFIED |\n"
+    )
+    assert [c["claim"] for c in _claims(table)] == ["d"]
+    assert "3 rows with no verdict word" in capsys.readouterr().err
+
+
+_REPO = Path(__file__).parent.parent
+# Written by the engine itself, so events.toml declares no schema for them.
+_ENGINE_EVENTS = {"state_transition"}
+
+
+def _schema_failures(events: list[dict], declared: dict) -> Counter[str]:
+    """Every (type, field) an event fails against its events.toml declaration."""
+    import re
+
+    failures: Counter[str] = Counter()
+    for event in events:
+        spec = declared.get(event["type"])
+        if spec is None:
+            if event["type"] not in _ENGINE_EVENTS:
+                failures[f"{event['type']}: undeclared"] += 1
+            continue
+        for field in spec["fields"]:
+            value = event["fields"].get(field["name"])
+            if value is None:
+                if not field.get("optional"):
+                    failures[f"{event['type']}.{field['name']}: missing"] += 1
+            elif field.get("pattern") and not re.search(field["pattern"], value):
+                failures[f"{event['type']}.{field['name']}: {value[:40]!r}"] += 1
+    return failures
+
+
+def test_every_migrated_event_validates_against_events_toml(tmp_path):
+    """V4: field by field over every archive, not through a lax import."""
+    import tomllib
+
+    declared = tomllib.loads((_REPO / "enforcement" / "events.toml").read_text())["events"]
+    out = tmp_path / "out"
+    result = _migrate("--all", "--archive-root", str(_REPO / "docs" / "holtz" / "archive"),
+                      "--out-dir", str(out))
+    assert result.returncode == 0, result.stderr
+    events = [json.loads(line) for path in sorted(out.iterdir())
+              for line in path.read_text().splitlines()]
+    assert len(events) > 2000, "the archive did not migrate"
+    assert _schema_failures(events, declared) == Counter()
+
+
+def test_the_validator_sees_a_bad_value():
+    """The V4 check is only as good as its ability to fail."""
+    import tomllib
+
+    declared = tomllib.loads((_REPO / "enforcement" / "events.toml").read_text())["events"]
+    events = parse_punchlist(SAMPLE_TABLE_PUNCHLIST, run="9", auditor="holtz", source="P.md")
+    assert _schema_failures(events, declared) == Counter()
+    events[0]["fields"]["step"] = ""
+    events.append({"type": "run_summary", "fields": {}})
+    assert _schema_failures(events, declared) == Counter(
+        {"finding.step: ''": 1, "run_summary: undeclared": 1}
+    )
 
 
 def _migrate(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:

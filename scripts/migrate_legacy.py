@@ -528,28 +528,84 @@ def parse_audit_file(
     return events
 
 
+# The headers that name a claims table's verdict column, most specific first:
+# where a table has both `Verified` and `Status`, `Verified` holds evidence.
+_VERDICT_HEADERS = ("verdict", "status", "verified", "match")
+
+# The verdict words the archive's claims tables use (D-q′, D-u).
+_VERDICTS = {
+    "VERIFIED": "VERIFIED", "TRUE": "VERIFIED", "YES": "VERIFIED", "PASS": "VERIFIED",
+    "OK": "VERIFIED", "CONFIRMED": "VERIFIED",
+    "FALSE": "FALSE", "NO": "FALSE", "FAIL": "FALSE",
+    "DRIFT": "FALSE", "UNDERSTATED": "FALSE", "STALE": "FALSE",
+    "OVERSTATED": "OVERSTATED", "PARTIAL": "OVERSTATED",
+    "MISSING": "MISSING",
+}
+_LEADING_WORD = re.compile(r"[\s*_`]*([A-Za-z]+)")
+
+
+def _table_cells(line: str) -> list[str]:
+    """A table row's cells, split on the pipes that are not escaped."""
+    cells = re.split(r"(?<!\\)\|", line.strip())
+    return [c.strip().replace("\\|", "|") for c in cells[1:-1]]
+
+
+def _tables(content: str) -> list[list[str]]:
+    """Each run of consecutive table lines."""
+    tables: list[list[str]] = []
+    current: list[str] = []
+    for line in content.split("\n") + [""]:
+        if line.strip().startswith("|"):
+            current.append(line)
+        elif current:
+            tables.append(current)
+            current = []
+    return tables
+
+
+def _verdict(cell: str) -> str | None:
+    match = _LEADING_WORD.match(cell)
+    return _VERDICTS.get(match.group(1).upper()) if match else None
+
+
 def _parse_claims_table(
     content: str, run: str, auditor: str, source: str, project: str,
 ) -> list[dict[str, Any]]:
-    """Parse doc claims audit table."""
+    """Parse doc claims audit tables, reading each by its header."""
     events: list[dict[str, Any]] = []
-    for line in content.split("\n"):
-        if not line.strip().startswith("|"):
+    no_column = no_word = 0
+    for table in _tables(content):
+        header = [h.lower().rstrip("?") for h in _table_cells(table[0])]
+        rows = [_table_cells(line) for line in table[1:]
+                if not re.fullmatch(r"\|[\s:|-]*", line.strip())]
+        named = [h for h in _VERDICT_HEADERS if h in header]
+        if not named:
+            no_column += len(rows)
             continue
-        cells = [c.strip() for c in line.split("|")]
-        cells = [c for c in cells if c]
-        if len(cells) < 4 or cells[0] in ("Source", "--", "---"):
-            continue
-        if cells[0].startswith("-"):
-            continue
-        events.append(_make_event("audit_claim", {
-            "phase": "audit",
-            "step": "6",
-            "source": cells[0],
-            "claim": cells[1] if len(cells) > 1 else "",
-            "verdict": cells[2] if len(cells) > 2 else "",
-            "evidence": cells[3] if len(cells) > 3 else "",
-        }, run=run, auditor=auditor, project=project, source=source))
+        verdict_col = header.index(named[0])
+        number_col = header.index("#") if "#" in header else None
+        # A table with no `Claim` column states its claim in the first other one.
+        claim_col = header.index("claim") if "claim" in header else next(
+            (k for k in range(len(header)) if k not in (verdict_col, number_col)), None)
+        source_col = next((header.index(h) for h in ("location", "source") if h in header), None)
+        used = {verdict_col, number_col, claim_col, source_col}
+        for cells in rows:
+            cells += [""] * (len(header) - len(cells))
+            verdict = _verdict(cells[verdict_col])
+            if verdict is None:
+                no_word += 1
+                continue
+            events.append(_make_event("audit_claim", {
+                "phase": "audit",
+                "step": "6",
+                "source": cells[source_col] if source_col is not None else "",
+                "claim": cells[claim_col] if claim_col is not None else "",
+                "verdict": verdict,
+                "evidence": "; ".join(c for k, c in enumerate(cells) if k not in used and c),
+            }, run=run, auditor=auditor, project=project, source=source))
+    if no_column or no_word:
+        print(f"# run {run} {source}: skipped {no_column} rows in tables with no verdict "
+              f"column, {no_word} rows with no verdict word", file=sys.stderr)
     return events
 
 
