@@ -75,7 +75,7 @@ imprecision (`CLAUDE.md`).
 | **P4 — hygiene and record** ||||
 | W23 | 4, 7, 8, 13, 14 | D | `DONE` — the three files agree; two config-derived doc tests replace prose-vs-prose | — |
 | W24 | 6, 44 | D | `DONE` — the conjunct is a ledger predicate; V1's two clauses conflict and the unit says which one it kept | ~~D-b, D-g~~ ruled |
-| W25 | 11, 39, 49 | D | `DONE` — H12 closes 11 as a class; **39's config-fault half waits on a sahjhan ask** | W05, W14 |
+| W25 | 11, 39, 49 | D | `DONE` — H12 closes 11 as a class; **39's config-fault half waits on sahjhan#51** | W05, W14 |
 | W26 | 48 | D | `WIP` — V1, V2 observed; V3 is the end-of-session `--cov` run | — |
 | W27 | 15, 45, 46 | D | `WIP` — 15 done; 46 steps 6–7 done, step 8 (D-s) and V9's download owed; 45 step 4 done, steps 3 and 5 (D-q, D-q′, D-r, D-t) owed | — |
 | W28 | 12, 16 | D | `TODO` | all above |
@@ -4486,6 +4486,9 @@ fault only (an unknown flag exits 2 with empty stdout, observed) and **not** for
 the config fault, which silences `pre_tool_hook` as well as the recorder. No
 holtz-side change can tell the two apart; the ask is for the engine to report a
 load failure distinguishably and leave the block/warn call to the consumer.
+**Filed as [sahjhan#51](https://github.com/jbrjake/sahjhan/issues/51)**
+(2026-09-23, at Jon's request), with a genuine allow and a broken-config allow
+compared byte for byte (`cmp` → identical).
 
 ### Item 11 · gates that print no escape
 

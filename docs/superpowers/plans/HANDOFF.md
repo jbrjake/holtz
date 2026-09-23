@@ -68,8 +68,9 @@ part-done), W28 (12, 16), W29 (21, 24), W30 (23), W18's item 33, W13's item 17
 
 **W25 landed 2026-09-23** in three commits — `1795e6a` (39 + 49d), `b90d713`
 (49 a–c, e–h), `d0a0cd4` (11). It is `DONE` with a debt in its dashboard row:
-**item 39's config-fault half waits on a sahjhan ask** (below, under Open for
-Jon). Four rulings were taken before any code, D-l…D-o, recorded in the unit.
+**item 39's config-fault half waits on
+[sahjhan#51](https://github.com/jbrjake/sahjhan/issues/51)** (below, under
+Open for Jon). Four rulings were taken before any code, D-l…D-o, recorded in the unit.
 
 Three units are `WIP` and none moves the unit count. **W13** closed item 37 and
 left item 17 open **by ruling**. **W18** closed item 36 and left item 33 open —
@@ -297,7 +298,9 @@ eight queries keyed on `type='finding_deferred'` were never touched.
   `protocol.toml` silently turns off every PreToolUse gate and every
   PostToolUse auto-record, and **no holtz-side change can tell the two
   apart.** The ask: report a load failure distinguishably and leave block/warn
-  to the consumer (`exit_enforcement_error` already decides it). **Not filed.**
+  to the consumer (`exit_enforcement_error` already decides it). **Filed as
+  [sahjhan#51](https://github.com/jbrjake/sahjhan/issues/51)** at Jon's
+  request, with a byte-for-byte comparison against a genuine allow.
   When it ships, `read_hook_eval` in `enforcement/hooks/_common.py` is the one
   place both hooks read the reply — the change lands there.
 - **A candidate item (a fifth NotebookEdit disagreement).** `post_tool_hook.py`
@@ -326,8 +329,9 @@ eight queries keyed on `type='finding_deferred'` were never touched.
 
 - **W25 / item 39 — the config-fault half.** The version fault (exit 2, empty
   stdout) now degrades loudly in both hooks; a config or ledger-load fault
-  still reads as a genuine allow, because the engine says so. Waits on the
-  sahjhan ask under Open for Jon.
+  still reads as a genuine allow, because the engine says so. Waits on
+  [sahjhan#51](https://github.com/jbrjake/sahjhan/issues/51); when it ships,
+  the change lands in `_common.read_hook_eval`.
 
 - **W22 / item 27 — the seccomp functional run.** The fix is in (`6852e0d`) and
   both new tests inject the errno on macOS, which is what makes them runnable at
