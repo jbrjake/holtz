@@ -106,6 +106,10 @@ class TestTheCapCountsTheRoundsOwnOpenItems:
         """Step 13's blast-radius items land in the same window.
 
         Charging the round for them would block it for work it did not do.
+        The same rule lets a sibling filed without its `pattern_id` escape the
+        cap. That cost is accepted (D-e, RULED 2026-08-27): the population
+        stays as it is, and `protocol.toml` records the gap above
+        `round_item_cap_exceeded`.
         """
         _seed(run)
         run.round()
@@ -118,7 +122,8 @@ class TestTheCapCountsTheRoundsOwnOpenItems:
         """The population joins to the courier-derived `pattern_ids` (D6).
 
         A PAT the brief never got is not a round's output, whatever the
-        finding claims.
+        finding claims. So a sibling tagged with the wrong PAT escapes the cap
+        too — the same accepted cost (D-e), recorded in the same place.
         """
         _seed(run)
         run.round(pat_ids=["PAT-001"])

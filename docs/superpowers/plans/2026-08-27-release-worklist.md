@@ -79,7 +79,7 @@ imprecision (`CLAUDE.md`).
 | W26 | 48 | D | `WIP` — V1, V2 observed; V3 is the end-of-session `--cov` run | — |
 | W27 | 15, 45, 46 | D | `DONE` — every migrated event validates field by field; a marked binary is hashed before it is trusted | — |
 | W28 | 12, 16 | D | `TODO` | all above |
-| W29 | 21, 24 | D | `TODO` | ~~D-e, D-f~~ ruled |
+| W29 | 21, 24 | D | `DONE` — both comments now claim what the code checks; no predicate touched | ~~D-e, D-f~~ ruled |
 | W30 | 23 | D | `TODO` | W12 *(same file)* |
 
 ## ⛔ Release gate: ALL 49 items. RULED (Jon, 2026-09-01)
@@ -5123,7 +5123,7 @@ pre-release, but it is step 5 of the release checklist.
 
 ## W29 — Items 21 + 24: the recorded decisions
 
-**Status:** `TODO`  ·  **Tier:** D  ·  **D-e + D-f RULED**
+**Status:** `DONE` — two comments made true, no predicate touched  ·  **Tier:** D  ·  **D-e + D-f RULED**
 **Commit:** `fix(enforcement): narrow the round-cap claim and record the hardening-batch scope`
 
 **RULED (Jon, 2026-08-27): both take the record-the-decision branch.**
@@ -5165,40 +5165,81 @@ gates `converge`.
 
 ### Plan
 
-- [ ] **1.** (21) Narrow the `protocol.toml` D6 comment to the conjunct it is
+- [x] **1.** (21) Narrow the `protocol.toml` D6 comment to the conjunct it is
       **true of** — the backpressure conjunct, where under-reporting forfeits
       relief. Say explicitly that it is **false** of D7's cap and of the
       two-dry-rounds clause, where under-reporting is the block-dodging direction
-- [ ] **2.** (21) Record the accepted gap: an untagged sibling escapes the cap, and
+      → the D6 paragraph now says the claim holds for the backpressure
+      conjunct only, names D7's cap and obligation as the block-dodging
+      direction, and names the dry-rounds clause's own version. Checked
+      against `pattern_courier.py` while writing it: `patterns_found` counts
+      only *new* headings, so "dry" is "adds no new `## PAT-NNN:` heading",
+      not "writes none"
+- [x] **2.** (21) Record the accepted gap: an untagged sibling escapes the cap, and
       that is a known cost of not charging blast-radius and lens findings to a round
-- [ ] **3.** (21) ⚠️ **Do not change the population.** The ruling is explicit. If
+      → a paragraph under D7's population, above `round_item_cap_exceeded`:
+      an untagged or wrongly tagged sibling is counted by neither query, so a
+      round can file ten with no cap and no obligation. Accepted, citing D-e
+- [x] **3.** (21) ⚠️ **Do not change the population.** The ruling is explicit. If
       the narrowed comment makes the gap look intolerable while writing it, that is
       a new question for Jon, not a licence to close it
-- [ ] **4.** (24) Document the scope where `hardening_batch.check()`'s four
+      → unchanged; see V7
+- [x] **4.** (24) Document the scope where `hardening_batch.check()`'s four
       refusals are enumerated, and **correct the docstring** — *"a diff that has not
       been used before is the work"* claims more than the check enforces, and the
       docstring is the defect
-- [ ] **5.** (24) ⚠️ **Do not add a module-touching requirement.** Batch closure is
+      → the fourth refusal now reads "an unspent diff costs something", and a
+      paragraph after the list says the check does not ask where the diff is,
+      citing D-f
+- [x] **5.** (24) ⚠️ **Do not add a module-touching requirement.** Batch closure is
       D35's intent and the commit message must already name every id
+      → none added; V4's test goes red if one is
 
 ### Validation
 
-- [ ] **V1** (21) The narrowed comment is diffed against the SQL as two independent
-      claims, and they now agree **for each conjunct separately**. Evidence: ___
-- [ ] **V2** (21) `test_round_item_cap.py:105,117` keep asserting the mechanism (they
+- [x] **V1** (21) The narrowed comment is diffed against the SQL as two independent
+      claims, and they now agree **for each conjunct separately**.
+      Evidence, clause by clause: backpressure `(…) <= 25` — fewer counted
+      keeps it true, so `pattern_analysis_overdue` stays true: the obligation
+      stays, relief forfeited ✓. `round_item_cap_exceeded` `count(*) > 3` and
+      `round_opens_exceed_closes` `opens > closes` over the same population —
+      fewer counted, no block ✓, so under-reporting dodges both. Dry rounds
+      `count(patterns_found = 0 in the last two) < 2` with `patterns_found =
+      len(new_ids)` — two rounds adding no new heading make it false and the
+      obligation lapses ✓
+- [x] **V2** (21) `test_round_item_cap.py:105,117` keep asserting the mechanism (they
       are right about it) and gain a docstring naming the accepted cost — so the
-      next reader sees a decision, not an oversight. Evidence: ___
-- [ ] **V3** (21) The round-cap **behaviour is unchanged** — assert it, so the
+      next reader sees a decision, not an oversight.
+      Evidence: both docstrings name the escape and cite D-e; neither
+      assertion changed
+- [x] **V3** (21) The round-cap **behaviour is unchanged** — assert it, so the
       comment edit cannot have quietly moved the predicate. `test_round_item_cap.py`
-      passes untouched except for the added docstrings. Evidence: ___
-- [ ] **V4** (24) A test asserting the four refusals **and explicitly asserting the
+      passes untouched except for the added docstrings.
+      Evidence: passes, docstrings the only diff; `protocol.toml`'s diff has
+      zero non-comment lines
+- [x] **V4** (24) A test asserting the four refusals **and explicitly asserting the
       fifth is not checked**, with the corrected docstring quoted in the test. That
-      is what converts an overclaim into a recorded decision. Evidence: ___
-- [ ] **V5** (24) `hardening_batch.check()` **behaviour is unchanged** — same
-      assertion discipline as V3. Evidence: ___
-- [ ] **V6** `enforcement_lint` H8 → exit 0. Evidence: ___
-- [ ] **V7** `git show --stat` for this commit touches **no** `.toml` predicate and
-      **no** SQL. If it does, the ruling was exceeded. Evidence: ___
+      is what converts an overclaim into a recorded decision.
+      Evidence: the four refusals keep their tests;
+      `test_it_does_not_require_the_diff_to_touch_the_module` records a batch
+      whose commit touches only `docs/elsewhere.md`, quoting the corrected
+      docstring; `test_the_docstring_states_the_scope_it_checks` pins it.
+      RED first: the docstring test, on the old text. The behaviour test is
+      green on unchanged code by design, and adding a module-touching check
+      to `check()` takes it red (mutation, reverted)
+- [x] **V5** (24) `hardening_batch.check()` **behaviour is unchanged** — same
+      assertion discipline as V3.
+      Evidence: `hardening_batch.py`'s diff is its docstring alone;
+      `test_hardening_batch.py` in full, courier and gate included, passes
+- [x] **V6** `enforcement_lint` H8 → exit 0. Evidence: exit 0, 0 errors, no H8
+      finding
+- [x] **V7** `git show --stat` for this commit touches **no** `.toml` predicate and
+      **no** SQL. If it does, the ruling was exceeded.
+      Evidence: `git diff -U0 enforcement/protocol.toml` has 0 changed lines
+      that are not comments; `enforcement_contract --check` current. Across
+      the six files that cover this (round cap, hardening batch, pattern
+      round, backpressure, lint, contract), slow included: 245 passed, 0
+      FAILED/ERROR
 
 ---
 

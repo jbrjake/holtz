@@ -402,9 +402,13 @@ intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings"
 # only when that PAT appears in some round's `pattern_ids`, which the courier
 # derives from the brief's `## PAT-NNN:` headings and the agent cannot type.
 # So the population cannot be inflated past what the brief actually contains.
-# It can still be *under*-reported by leaving the field off, which is the
-# direction that forfeits the relief this conjunct grants, not the direction
-# that dodges a block.
+# It can still be *under*-reported by leaving the field off. For this conjunct
+# that forfeits relief: fewer counted keeps the count at or under 25, and the
+# obligation stays. That holds for this conjunct only. The same population
+# feeds D7's round cap and obligation below, where under-reporting is the
+# direction that dodges the block. The second conjunct has its own version: a
+# round that adds no new `## PAT-NNN:` heading to the brief counts as dry, and
+# two in a row withdraw the obligation.
 #
 # The membership test is `strpos` over a comma-fenced list rather than LIKE:
 # `pattern_ids` is a joined string, and fencing both sides with commas is what
@@ -449,6 +453,13 @@ intent = "3+ findings resolved since the last pattern analysis, unless the last 
 # blast-radius and lens findings filed in the same window carry no
 # `pattern_id`, and capping those would charge the round for work it did not
 # do.
+#
+# Here, unlike in D6's conjunct, under-reporting dodges the block. A sibling
+# filed without its `pattern_id`, or tagged with a PAT the brief never got, is
+# not counted by either query below, so a round can file ten and stay under the
+# cap with no obligation owed. That is accepted (D-e, RULED 2026-08-27). It is
+# the cost of not charging blast-radius and lens findings to a round, and the
+# population stays as it is.
 #
 # The cap counts findings still **open**, which is what makes its escape
 # reachable: a filing cannot be withdrawn from an append-only ledger, so a cap

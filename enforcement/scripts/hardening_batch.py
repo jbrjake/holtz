@@ -19,7 +19,7 @@ sandboxed and cannot reach the daemon, so it derives, checks and prints.
 `hardening_batch_courier.py` runs outside the sandbox, re-derives the same
 population and writes the resolutions.
 
-What makes the claim cost something is the commit. Four refusals:
+What makes the claim cost something is a commit. Four refusals:
 
 * **A module nobody filed against.** The batch has to name a directory the
   board actually carries.
@@ -28,8 +28,13 @@ What makes the claim cost something is the commit. Four refusals:
   commit and the saving with it.
 * **A commit that names another module's findings.** One commit, one module —
   otherwise a single commit disposes of the whole board.
-* **A commit already spent, or with no changes in it.** A message is cheap; a
-  diff that has not been used before is the work.
+* **A commit already spent, or with no changes in it.** A message is cheap; an
+  unspent diff costs something.
+
+The check does not ask where the diff is. A commit that changes only another
+directory closes this module as readily as one inside it. That scope is
+deliberate (D-f, RULED 2026-08-27): batch closure is D35's intent, and the
+message must already name every id in the module.
 
 A finding whose `location` cannot be placed is refused too, and named. It
 belongs to no module, so no batch could ever cover it and `converge` would

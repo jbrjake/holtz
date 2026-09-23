@@ -408,12 +408,37 @@ class TestRecordRefusals:
         assert "already" in result.stderr
 
     def test_it_refuses_an_empty_commit(self, board):
-        """A message is cheap; a diff is the work."""
+        """A message is cheap; a diff costs something."""
         board.file("BH-001", "tqdm/std.py:736")
         board.git("commit", "-q", "--allow-empty", "-m", "harden tqdm: BH-001")
         result = board.record("tqdm")
         assert result.returncode != 0
         assert "no changes" in result.stderr
+
+    def test_it_does_not_require_the_diff_to_touch_the_module(self, board):
+        """W29 / item 24, D-f (RULED 2026-08-27): the scope is deliberate.
+
+        The module docstring says so where it enumerates the refusals:
+
+            The check does not ask where the diff is. A commit that changes
+            only another directory closes this module as readily as one
+            inside it.
+
+        One non-empty, unspent commit naming every id closes the module.
+        Asserted, so the gap reads as a decision and cannot close silently.
+        """
+        board.file("BH-001", "tqdm/std.py:736")
+        board.file("BH-002", "tqdm/utils.py:240")
+        board.commit("harden tqdm: BH-001 BH-002", touching=["docs/elsewhere.md"])
+        result = board.record("tqdm")
+        assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+        assert hb.RECORD_MARKER in result.stdout
+
+    def test_the_docstring_states_the_scope_it_checks(self):
+        """The overclaim was the docstring's; the decision is recorded there."""
+        doc = " ".join((hb.__doc__ or "").split())
+        assert "The check does not ask where the diff is." in doc
+        assert "a diff that has not been used before is the work" not in doc
 
     def test_it_refuses_a_finding_it_cannot_place(self, board):
         """An unplaceable finding has no module, so no batch can ever cover
