@@ -77,7 +77,7 @@ imprecision (`CLAUDE.md`).
 | W24 | 6, 44 | D | `DONE` — the conjunct is a ledger predicate; V1's two clauses conflict and the unit says which one it kept | ~~D-b, D-g~~ ruled |
 | W25 | 11, 39, 49 | D | `DONE` — H12 closes 11 as a class; **39's config-fault half waits on sahjhan#51** | W05, W14 |
 | W26 | 48 | D | `WIP` — V1, V2 observed; V3 is the end-of-session `--cov` run | — |
-| W27 | 15, 45, 46 | D | `WIP` — 15 done; 46 steps 6–8 done, V9's download owed; 45 steps 4, 5 and D-t done, step 3 done but `audit_claim`, V4 owed | `audit_claim`'s verdict words — put to Jon |
+| W27 | 15, 45, 46 | D | `WIP` — 15 and 46 done; 45 done but `audit_claim`, and V4 fails on nothing else | `audit_claim`'s verdict words — put to Jon |
 | W28 | 12, 16 | D | `TODO` | all above |
 | W29 | 21, 24 | D | `TODO` | ~~D-e, D-f~~ ruled |
 | W30 | 23 | D | `TODO` | W12 *(same file)* |
@@ -4804,7 +4804,7 @@ covered only by the parametrized subprocess cases in `test_hook_chains.py` —
 
 ## W27 — Items 15 + 45 + 46: dependency declaration, migration tooling, pin checks
 
-**Status:** `WIP` — steps 1, 2, 4–8 and D-t landed; step 3 all but `audit_claim` (D-q′ does not cover the verdict words the archive uses — below); V4 and V9's download half owed  ·  **Tier:** D
+**Status:** `WIP` — every step but `audit_claim` landed, and every validation but V4; `audit_claim` waits on Jon (D-q′ does not cover the verdict words the archive uses — below), and V4 fails on nothing else  ·  **Tier:** D
 **Commit:** `chore: declare test dependencies and cross-check the sahjhan pin`
 
 ### Checked against the tree before code, 2026-09-23 — four open questions
@@ -5028,13 +5028,20 @@ vendor run leaves an unverified binary trusted until the next release.
       '0.27.9'"*; HEAD unchanged. Restored, and the vendored binary checked
       afterwards (mtime unchanged, `--version` 0.28.0, pin check PASS) — a hook
       calling `ensure_sahjhan` in that window would have re-downloaded
-- [ ] **V9** (46) All three pins agree after a real vendor run, and all four
+- [x] **V9** (46) All three pins agree after a real vendor run, and all four
       `SAHJHAN_CHECKSUMS` recompute and match.
-      Evidence so far — **local, not a vendor run:** the real updater over the
-      real vendored 0.28.0 binaries → *"Pinned"*, `_resolve.py`
-      **byte-identical** (all four checksums recomputed and matched), pin check
-      PASS; `update_sahjhan_pin.py 0.27.0` against them refused, file
-      untouched. **Owed:** the download half (`vendor-sahjhan.sh`, ~510 MB)
+      Evidence — local half: the real updater over the real vendored 0.28.0
+      binaries → *"Pinned"*, `_resolve.py` **byte-identical** (all four
+      checksums recomputed and matched), pin check PASS;
+      `update_sahjhan_pin.py 0.27.0` against them refused, file untouched.
+      Download half, 2026-09-23: `vendor-sahjhan.sh 0.28.0` exit 0, *"Pinned
+      _resolve.py to sahjhan v0.28.0"*; the four binaries and `_resolve.py`
+      **byte-identical** to their pre-run sha256s, so the updater's four
+      recomputed checksums are the pinned four; all four also `OK` against
+      the release's published `SHA256SUMS` (`shasum -c`); pin check PASS;
+      marker and `bin/sahjhan --version` both 0.28.0. The run moved the
+      marker and every binary, and step 8's stamp caught it: the next
+      `ensure_sahjhan` re-hashed (39.7 ms), then stat-checked (0.2 ms)
 
 ---
 
