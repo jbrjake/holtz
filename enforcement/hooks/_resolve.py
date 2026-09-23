@@ -57,13 +57,14 @@ def sahjhan_binary() -> str:
 def ensure_sahjhan() -> str | None:
     """Return path to the Sahjhan binary, downloading if needed.
 
-    Returns the binary path if available (already present or successfully
-    downloaded). Returns None if the binary cannot be obtained.
+    Returns the binary path if available (already present, its version marker
+    current and its bytes the pinned release's, or successfully downloaded).
+    Returns None if the binary cannot be obtained.
 
     Download is skipped if a recent failure marker exists (< 1 hour old).
     """
     path = sahjhan_binary()
-    if os.path.isfile(path) and not _version_stale(path):
+    if os.path.isfile(path) and not _version_stale(path) and _verified(path):
         return path
     return _bootstrap(path)
 
@@ -82,6 +83,64 @@ def _version_stale(binary_path: str) -> bool:
             return f.read().strip() != SAHJHAN_VERSION
     except OSError:
         return False
+
+
+def _verified(binary_path: str) -> bool:
+    """Whether the binary's bytes are the pinned release's.
+
+    The marker says which version was installed, not that these bytes are it,
+    so a marked binary is hashed against SAHJHAN_CHECKSUMS. The hash is taken
+    again only when the marker or the binary moves: the stamp beside the
+    marker records what the last matching hash was taken over, and while that
+    still holds a stat is the whole check. With no marker (vendored by hand)
+    or no checksum for this platform there is nothing to compare, and the
+    binary is used as it stands.
+    """
+    expected = SAHJHAN_CHECKSUMS.get(platform_triple())
+    marker = os.path.join(os.path.dirname(binary_path), ".sahjhan-version")
+    if not expected or not os.path.isfile(marker):
+        return True
+    stamp = os.path.join(os.path.dirname(binary_path), ".sahjhan-verified")
+    current = _fingerprint(binary_path, marker, expected)
+    if current is None:
+        return False
+    try:
+        with open(stamp, encoding="utf-8") as f:
+            if f.read().strip() == current:
+                return True
+    except OSError:
+        pass
+    if _file_sha256(binary_path) != expected:
+        return False
+    _write_stamp(stamp, current)
+    return True
+
+
+def _fingerprint(binary_path: str, marker: str, expected: str) -> str | None:
+    """What a verification is valid for: pin, marker mtime, binary mtime and size."""
+    try:
+        binary_stat = os.stat(binary_path)
+        marker_stat = os.stat(marker)
+    except OSError:
+        return None
+    return (
+        f"{SAHJHAN_VERSION} {expected} {marker_stat.st_mtime_ns} "
+        f"{binary_stat.st_mtime_ns} {binary_stat.st_size}"
+    )
+
+
+def _file_sha256(path: str) -> str:
+    sha = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            sha.update(chunk)
+    return sha.hexdigest()
+
+
+def _write_stamp(stamp: str, fingerprint: str) -> None:
+    """Record a verification. Unwritable only costs a hash on the next call."""
+    with contextlib.suppress(OSError), open(stamp, "w", encoding="utf-8") as f:
+        f.write(fingerprint + "\n")
 
 
 def _bootstrap(dest: str) -> str | None:
@@ -132,6 +191,12 @@ def _bootstrap(dest: str) -> str | None:
         version_file = os.path.join(bin_dir, ".sahjhan-version")
         with open(version_file, "w", encoding="utf-8") as f:
             f.write(SAHJHAN_VERSION + "\n")
+
+        # The bytes were hashed on the way in; record it so the next call
+        # does not hash them again.
+        fingerprint = _fingerprint(dest, version_file, expected_hash)
+        if fingerprint is not None:
+            _write_stamp(os.path.join(bin_dir, ".sahjhan-verified"), fingerprint)
 
         # Create platform-neutral `sahjhan` symlink so bare invocations via
         # PATH (Claude Code prepends the plugin's bin/ to PATH) resolve to

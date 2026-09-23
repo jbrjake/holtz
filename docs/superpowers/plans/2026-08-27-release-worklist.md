@@ -77,7 +77,7 @@ imprecision (`CLAUDE.md`).
 | W24 | 6, 44 | D | `DONE` — the conjunct is a ledger predicate; V1's two clauses conflict and the unit says which one it kept | ~~D-b, D-g~~ ruled |
 | W25 | 11, 39, 49 | D | `DONE` — H12 closes 11 as a class; **39's config-fault half waits on sahjhan#51** | W05, W14 |
 | W26 | 48 | D | `WIP` — V1, V2 observed; V3 is the end-of-session `--cov` run | — |
-| W27 | 15, 45, 46 | D | `WIP` — 15 done; 46 steps 6–7 done, step 8 (D-s) and V9's download owed; 45 steps 4, 5 and D-t done, step 3 done but `audit_claim`, V4 owed | `audit_claim`'s verdict words — put to Jon |
+| W27 | 15, 45, 46 | D | `WIP` — 15 done; 46 steps 6–8 done, V9's download owed; 45 steps 4, 5 and D-t done, step 3 done but `audit_claim`, V4 owed | `audit_claim`'s verdict words — put to Jon |
 | W28 | 12, 16 | D | `TODO` | all above |
 | W29 | 21, 24 | D | `TODO` | ~~D-e, D-f~~ ruled |
 | W30 | 23 | D | `TODO` | W12 *(same file)* |
@@ -4804,7 +4804,7 @@ covered only by the parametrized subprocess cases in `test_hook_chains.py` —
 
 ## W27 — Items 15 + 45 + 46: dependency declaration, migration tooling, pin checks
 
-**Status:** `WIP` — steps 1, 2, 4, 5, 6, 7 and D-t landed; step 3 all but `audit_claim` (D-q′ does not cover the verdict words the archive uses — below); step 8, V4, V9's download half owed  ·  **Tier:** D
+**Status:** `WIP` — steps 1, 2, 4–8 and D-t landed; step 3 all but `audit_claim` (D-q′ does not cover the verdict words the archive uses — below); V4 and V9's download half owed  ·  **Tier:** D
 **Commit:** `chore: declare test dependencies and cross-check the sahjhan pin`
 
 ### Checked against the tree before code, 2026-09-23 — four open questions
@@ -4954,9 +4954,30 @@ vendor run leaves an unverified binary trusted until the next release.
 - [x] **7.** (46) Wire `check_sahjhan_pin.py` into `git-hooks/pre-commit` (it is
       fast), not only into the release script
       → unconditional and first among the gates; 0.23 s measured
-- [ ] **8.** (46) Decide whether `ensure_sahjhan`'s fast path should re-hash.
+- [x] **8.** (46) Decide whether `ensure_sahjhan`'s fast path should re-hash.
       Recommendation: re-hash when the marker changes or the mtime moves, not on
       every call
+      → **as ruled in D-s.** A marked binary is hashed against
+      `SAHJHAN_CHECKSUMS`; `bin/.sahjhan-verified` (gitignored, beside the
+      marker) records what the last matching hash was taken over — the pin
+      version, the checksum, the marker's mtime, the binary's mtime and size —
+      and while all of those hold a stat is the whole check. A mismatch goes
+      where a stale marker already went, `_bootstrap`, which downloads the
+      release and stamps it (the download was hashed in flight). **Two paths
+      left as they were:** no marker (vendored by hand — W32 step 3's open
+      question, not this step's to answer) and no checksum for the platform.
+      Measured on the real vendored 0.28.0: first call 40 ms, then 0.1 ms.
+      The stamp is a cache of a hash taken, not a defence against a writer
+      who can rewrite `bin/` and the stamp together.
+      Evidence: `test_ensure_sahjhan.py`, six new tests. RED first — the
+      unmodified resolver returned a marked binary's wrong bytes as the pin,
+      and never hashed. Mutations, one each: no stamp after a download → 1
+      red; marker mtime left out of the fingerprint → 1 red; binary mtime left
+      out → 1 red (the same-size swap); the no-marker guard dropped → 1 red
+      (`test_no_redownload_when_no_version_file`, unchanged).
+      `test_returns_path_when_binary_exists` wrote fake bytes under a
+      matching marker and expected them trusted — the defect itself — and now
+      pins their checksum
 
 ### Validation
 
