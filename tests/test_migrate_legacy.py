@@ -425,3 +425,211 @@ def test_the_usage_line_teaches_the_per_run_import():
         if "migrate_legacy.py" in ln and "--all" in ln
     ]
     assert usage and all("--out-dir" in ln for ln in usage), usage
+
+
+# ---------------------------------------------------------------------------
+# W27 / item 45 step 3: emit values the schema accepts (D-q, RULED 2026-09-23)
+# ---------------------------------------------------------------------------
+#
+# `step` and `commit_hash` are required and pattern-bound, so the migration
+# emitted `""` for both on every finding and resolution — accepted only because
+# `ledger import` validates nothing.
+
+
+def _by_type(events, event_type):
+    return [e["fields"] for e in events if e["type"] == event_type]
+
+
+def test_a_finding_records_the_audit_step_and_a_resolution_the_fix_loop_step():
+    for sample in (SAMPLE_TABLE_PUNCHLIST, SAMPLE_BLOCK_PUNCHLIST):
+        events = parse_punchlist(sample, run="9", auditor="holtz", source="PUNCHLIST.md")
+        assert {f["step"] for f in _by_type(events, "finding")} == {"7"}
+        assert {f["step"] for f in _by_type(events, "finding_resolved")} == {"10"}
+
+
+def test_a_resolution_with_no_recorded_commit_carries_the_unknown_sentinel():
+    events = parse_punchlist(SAMPLE_TABLE_PUNCHLIST, run="9", auditor="holtz", source="PUNCHLIST.md")
+    assert [f["commit_hash"] for f in _by_type(events, "finding_resolved")] == ["0000000"]
+    no_commit = SAMPLE_BLOCK_PUNCHLIST.replace("**Fix Commit:** abc1234\n", "")
+    events = parse_punchlist(no_commit, run="1", auditor="holtz", source="PUNCHLIST.md")
+    assert [f["commit_hash"] for f in _by_type(events, "finding_resolved")] == ["0000000"]
+
+
+def test_a_recorded_commit_is_kept_out_of_the_prose_around_it():
+    wrapped = SAMPLE_BLOCK_PUNCHLIST.replace("abc1234", "`abc1234` (rebased onto dev)")
+    events = parse_punchlist(wrapped, run="1", auditor="holtz", source="PUNCHLIST.md")
+    assert [f["commit_hash"] for f in _by_type(events, "finding_resolved")] == ["abc1234"]
+
+
+def test_a_prose_severity_keeps_its_leading_word():
+    prose = SAMPLE_BLOCK_PUNCHLIST.replace(
+        "### BH-001: Pattern count stale\n**Severity:** HIGH",
+        "### BH-001: Pattern count stale\n**Severity:** LOW (upgraded from MEDIUM per Justine merge)",
+    )
+    events = parse_punchlist(prose, run="1", auditor="holtz", source="PUNCHLIST.md")
+    assert [f["severity"] for f in _by_type(events, "finding")] == ["LOW", "HIGH"]
+
+
+def _migrate(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(_SCRIPT), *args],
+        capture_output=True, text=True, timeout=120, cwd=cwd,
+    )
+
+
+_UNDECLARED = ("run_summary", "merge_result", "convergence_iteration", "run_postmortem")
+
+
+def _run_with_every_undeclared_source(root: Path) -> Path:
+    run_dir = root / "2026-03-22-run9"
+    run_dir.mkdir(parents=True)
+    (run_dir / "PUNCHLIST.md").write_text(SAMPLE_TABLE_PUNCHLIST)
+    (run_dir / "SUMMARY.md").write_text(SAMPLE_SUMMARY)
+    (run_dir / "MERGE-REPORT.md").write_text(SAMPLE_MERGE_REPORT)
+    (run_dir / "HISTORY.json").write_text(SAMPLE_HISTORY)
+    (run_dir / "run-20-postmortem.md").write_text("# Postmortem\n\nLessons.")
+    return run_dir
+
+
+def test_the_four_undeclared_legacy_types_are_counted_not_emitted(tmp_path):
+    result = _migrate("--input", str(_run_with_every_undeclared_source(tmp_path)))
+    assert result.returncode == 0, result.stderr
+    emitted = [json.loads(line)["type"] for line in result.stdout.splitlines()]
+    assert not set(emitted) & set(_UNDECLARED), emitted
+    # The same SUMMARY.md also carries prediction outcomes, which are declared.
+    assert emitted.count("prediction_outcome") == 2
+    for count, event_type in ((1, "run_summary"), (1, "merge_result"),
+                              (2, "convergence_iteration"), (1, "run_postmortem")):
+        assert f"{count} {event_type}" in result.stderr, result.stderr
+
+
+def test_all_counts_what_it_does_not_emit(tmp_path):
+    archive = tmp_path / "archive"
+    _run_with_every_undeclared_source(archive)
+    out = tmp_path / "out"
+    result = _migrate("--all", "--archive-root", str(archive), "--out-dir", str(out))
+    assert result.returncode == 0, result.stderr
+    emitted = [json.loads(line)["type"] for line in (out / "run-20.jsonl").read_text().splitlines()]
+    assert not set(emitted) & set(_UNDECLARED), emitted
+    assert "2 convergence_iteration" in result.stderr, result.stderr
+
+
+# ---------------------------------------------------------------------------
+# W27 / item 45 step 5: --build-project is idempotent (D-r, RULED 2026-09-23)
+# ---------------------------------------------------------------------------
+#
+# `ledger import` refuses an existing path, so a re-run cannot go through it.
+# `--ledger NAME` reads the registered runs from that ledger and prints only
+# the ones it lacks; each goes in with `sahjhan --ledger NAME event`.
+
+
+def test_build_project_skips_runs_already_registered():
+    events = build_project_ledger(
+        runs=[(1, "holtz"), (2, "holtz"), (3, "holtz")],
+        project="holtz",
+        registered={"1", "3"},
+    )
+    assert [e["fields"]["run"] for e in events if e["type"] == "run_registered"] == ["2"]
+    assert [e["fields"]["run"] for e in events if e["type"] == "run_completed"] == ["2"]
+
+
+def test_build_project_with_nothing_new_emits_nothing():
+    """A second checkpoint is a row the first run did not write."""
+    assert build_project_ledger(runs=[(1, "holtz")], project="holtz", registered={"1"}) == []
+
+
+def test_the_registry_events_carry_only_their_declared_fields():
+    import tomllib
+
+    declared = tomllib.loads(
+        (Path(__file__).parent.parent / "enforcement" / "events.toml").read_text()
+    )["events"]
+    for event in build_project_ledger(runs=[(1, "holtz")], project="holtz"):
+        if event["type"] not in ("run_registered", "run_completed"):
+            continue
+        names = {f["name"] for f in declared[event["type"]]["fields"]}
+        own = {k for k in event["fields"] if not k.startswith("_")}
+        assert own == names, (event["type"], own ^ names)
+
+
+class _Engine:
+    """The real engine in a scratch project, for the ledger-reading paths."""
+
+    def __init__(self, root: Path):
+        sys.path.insert(0, str(Path(__file__).parent.parent / "enforcement" / "hooks"))
+        from _resolve import ensure_sahjhan
+
+        binary = ensure_sahjhan()
+        if not binary:
+            import pytest
+            pytest.skip("sahjhan binary not available")
+        self.binary = binary
+        self.config = str(Path(__file__).parent.parent / "enforcement")
+        self.root = root
+        root.mkdir(exist_ok=True)
+        self.sahjhan("init")
+
+    def sahjhan(self, *args: str, stdin: str | None = None) -> str:
+        return subprocess.run(
+            [self.binary, "--config-dir", self.config, *args],
+            cwd=self.root, input=stdin, check=True, capture_output=True, text=True,
+        ).stdout
+
+    def import_stream(self, name: str, stream: str) -> None:
+        self.sahjhan("ledger", "import", "--name", name,
+                     "--path", str(self.root / f"{name}.jsonl"), stdin=stream)
+
+    def append(self, name: str, stream: str) -> None:
+        for line in stream.splitlines():
+            event = json.loads(line)
+            fields = [a for k, v in event["fields"].items() for a in ("--field", f"{k}={v}")]
+            self.sahjhan("--ledger", name, "event", event["type"], *fields)
+
+    def rows(self, name: str) -> list[tuple[str, str]]:
+        out = self.sahjhan("--ledger", name, "query",
+                           "SELECT type, run FROM events WHERE type != 'genesis' ORDER BY seq",
+                           "--format", "json")
+        return [(r["type"], r["run"]) for r in json.loads(out)]
+
+
+def test_build_project_run_twice_is_the_ledger_run_once(tmp_path):
+    """V6: the second pass reads the ledger the first one made and adds nothing."""
+    engine = _Engine(tmp_path / "project")
+    first = _migrate("--build-project")
+    assert first.returncode == 0, first.stderr
+    engine.import_stream("project", first.stdout)
+    once = engine.rows("project")
+    assert once.count(("run_registered", "1")) == 1
+
+    second = _migrate("--build-project", "--ledger", "project", cwd=engine.root)
+    assert second.returncode == 0, second.stderr
+    assert second.stdout == ""
+    engine.append("project", second.stdout)
+    assert engine.rows("project") == once
+
+
+def test_build_project_fills_in_only_the_missing_runs(tmp_path):
+    engine = _Engine(tmp_path / "project")
+    full = _migrate("--build-project").stdout.splitlines()
+    head = [ln for ln in full if json.loads(ln)["fields"]["run"] in ("1", "2")
+            and json.loads(ln)["type"] != "_checkpoint"]
+    engine.import_stream("project", "\n".join(head) + "\n")
+
+    delta = _migrate("--build-project", "--ledger", "project", cwd=engine.root)
+    assert delta.returncode == 0, delta.stderr
+    emitted = [json.loads(ln) for ln in delta.stdout.splitlines()]
+    assert not {e["fields"]["run"] for e in emitted if e["type"] != "_checkpoint"} & {"1", "2"}
+    engine.append("project", delta.stdout)
+
+    registered = [run for kind, run in engine.rows("project") if kind == "run_registered"]
+    assert sorted(registered, key=int) == [str(n) for n in range(1, len(ARCHIVE_MAP) + 1)]
+    assert _migrate("--build-project", "--ledger", "project", cwd=engine.root).stdout == ""
+
+
+def test_build_project_refuses_a_ledger_it_cannot_read(tmp_path):
+    """An unreadable registry must not read as "nothing is registered"."""
+    engine = _Engine(tmp_path / "project")
+    result = _migrate("--build-project", "--ledger", "no-such-ledger", cwd=engine.root)
+    assert result.returncode != 0
+    assert result.stdout == ""
+    assert "no-such-ledger" in result.stderr

@@ -77,7 +77,7 @@ imprecision (`CLAUDE.md`).
 | W24 | 6, 44 | D | `DONE` — the conjunct is a ledger predicate; V1's two clauses conflict and the unit says which one it kept | ~~D-b, D-g~~ ruled |
 | W25 | 11, 39, 49 | D | `DONE` — H12 closes 11 as a class; **39's config-fault half waits on sahjhan#51** | W05, W14 |
 | W26 | 48 | D | `WIP` — V1, V2 observed; V3 is the end-of-session `--cov` run | — |
-| W27 | 15, 45, 46 | D | `WIP` — 15 done; 46 steps 6–7 done, step 8 (D-s) and V9's download owed; 45 step 4 done, steps 3 and 5 (D-q, D-q′, D-r, D-t) owed | — |
+| W27 | 15, 45, 46 | D | `WIP` — 15 done; 46 steps 6–7 done, step 8 (D-s) and V9's download owed; 45 steps 4, 5 and D-t done, step 3 done but `audit_claim`, V4 owed | `audit_claim`'s verdict words — put to Jon |
 | W28 | 12, 16 | D | `TODO` | all above |
 | W29 | 21, 24 | D | `TODO` | ~~D-e, D-f~~ ruled |
 | W30 | 23 | D | `TODO` | W12 *(same file)* |
@@ -4804,7 +4804,7 @@ covered only by the parametrized subprocess cases in `test_hook_chains.py` —
 
 ## W27 — Items 15 + 45 + 46: dependency declaration, migration tooling, pin checks
 
-**Status:** `WIP` — steps 4, 6, 7 landed; four questions put to Jon (below) before the rest  ·  **Tier:** D
+**Status:** `WIP` — steps 1, 2, 4, 5, 6, 7 and D-t landed; step 3 all but `audit_claim` (D-q′ does not cover the verdict words the archive uses — below); step 8, V4, V9's download half owed  ·  **Tier:** D
 **Commit:** `chore: declare test dependencies and cross-check the sahjhan pin`
 
 ### Checked against the tree before code, 2026-09-23 — four open questions
@@ -4900,6 +4900,37 @@ vendor run leaves an unverified binary trusted until the next release.
       → `python -m pip install --upgrade pip` then `pip install --group test`
 - [ ] **3.** (45) Emit schema-valid values, or omit the optional fields rather than
       emitting empty strings that fail their own patterns
+      → **as ruled in D-q, all but `audit_claim`:** a finding records step 7
+      and a resolution step 10 (what SKILL.md teaches each to record); a
+      resolution with no recorded commit carries `0000000`, and a recorded one
+      is read out of any prose around it; a prose severity keeps its leading
+      word; `run_summary`, `merge_result`, `convergence_iteration` and
+      `run_postmortem` are parsed, counted on stderr and not emitted.
+      Measured over every migrated event before the change: all 308 finding
+      and 214 resolution `step`s were `''`, all 214 `commit_hash`es `''` — no
+      archive punchlist carries a `**Fix Commit:**` line at all — and the one
+      severity was `HIGH (upgraded from MEDIUM per Justine merge)`
+      **`audit_claim` is not done — D-q′ does not cover the archive's
+      verdict words.** Census of every table in every migrated `1-*.md`
+      (header, then the distinct values of any header-named verdict column):
+      `TRUE` ×98 and `OK` ×14 are the commonest real verdicts and neither is
+      in D-q′'s list; `PARTIAL` ×8, `DRIFT` ×3, `UNDERSTATED` ×3, `STALE`,
+      `FAIL` and `NEEDS CHECK` have no ruled target; many carry decoration
+      (`**FALSE** — off by 24`, `OVERSTATED → BH-004`, `VERIFIED (…)`); and
+      nine `Verified` cells are prose (`Matches`, `0.3.1`). Which headers name
+      a verdict column is also open: `Verdict`, `Verified`, `Verified?`,
+      `Status`, `Match` and `Result` all occur, two tables carry both
+      `Verified` and `Status`, and `Result | Count` is a summary table. Put to
+      Jon
+- [x] **D-t** Declare `run_registered`/`run_completed`
+      → done: `project`, `run`, `auditor`, `attestation = "agent"`, producer
+      `agent:cli` — honest, because a re-run's delta goes in by
+      `sahjhan event`, which stamps `recorded_by = agent:cli` (measured). A
+      producer is what `sahjhan lint` L5 counts: without one both warned
+      "declared but never produced or consumed", as `_checkpoint`,
+      `prediction` and `prediction_outcome` still do. The emitter dropped the
+      empty undeclared `phase`/`step` it wrote into both. `enforcement_lint` 0
+      errors, `sahjhan lint` back to 7 warnings, contract current
 - [x] **4.** (45) Give `--all` a ledger boundary per run; fix the usage line that
       invites the colliding import
       → `--all` requires `--out-dir` and writes `run-<N>.jsonl` per run; a
@@ -4907,7 +4938,14 @@ vendor run leaves an unverified binary trusted until the next release.
       With no `--out-dir` it refuses and prints nothing — `ledger import` makes
       one ledger from one stream, so there is no combined form to fall back to.
       The usage line and docstring teach the per-run import
-- [ ] **5.** (45) Make `build_project_ledger` idempotent
+- [x] **5.** (45) Make `build_project_ledger` idempotent
+      → **as ruled in D-r:** `--build-project --ledger <name>` asks the engine
+      for that ledger's `run_registered` runs and prints only the others. The
+      checkpoint goes out only with at least one run — a second one is a row
+      the first pass did not write. A ledger it cannot read is an error, never
+      an empty registry, which would register every run again. The docstring
+      teaches both halves: the first pass through `ledger import`, the rest
+      through `sahjhan --ledger <name> event`
 - [x] **6.** (46) `update_sahjhan_pin.py` runs `bin/sahjhan --version` and refuses to
       pin if it disagrees with the version being pinned
       → asks the platform-native binary (`sahjhan-<platform_triple()>`, which
@@ -4943,8 +4981,18 @@ vendor run leaves an unverified binary trusted until the next release.
       `BH-001` is its own run's. Partners: the combined stream is refused and
       prints nothing; one file per run. RED first: the combined stream was
       accepted and `--out-dir` was unknown
-- [ ] **V6** (45) `build_project_ledger` run twice produces the same ledger as once.
-      Evidence: ___
+- [x] **V6** (45) `build_project_ledger` run twice produces the same ledger as once.
+      Evidence: `test_build_project_run_twice_is_the_ledger_run_once` — the
+      real engine imports the first pass; the second, with `--ledger`, prints
+      nothing and the ledger's rows are unchanged. Partners:
+      `…fills_in_only_the_missing_runs` (a ledger holding runs 1–2 gets 3–30
+      and a third pass prints nothing) and `…refuses_a_ledger_it_cannot_read`.
+      RED first: `--ledger` was unknown and the registry events carried
+      `phase`/`step`. Mutations, one each: an unreadable ledger read as empty
+      → 1 red (that test passes on the unmodified tree only through
+      argparse's own error, which is why it needed this); the checkpoint
+      always emitted → 3 red; registered runs not skipped → 4 red; the
+      undeclared types written → 2 red
 - [x] **V7** (46) Put a mismatched binary in `bin/` → the pin updater refuses,
       naming both versions.
       Evidence: `test_the_updater_refuses_a_binary_of_another_version` — run on

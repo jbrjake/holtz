@@ -817,6 +817,33 @@ fields = [
     { name = "note", type = "string", optional = true },
 ]
 
+[events.run_registered]
+description = "A run entered the project ledger's registry"
+attestation = "agent"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
+# `scripts/migrate_legacy.py --build-project` prints these. A new project
+# ledger takes them through `ledger import`; an existing one takes only the
+# runs it lacks, one `sahjhan --ledger <name> event` each.
+[[events.run_registered.producers]]
+id = "agent:cli"
+
+[events.run_completed]
+description = "A registered run finished"
+attestation = "agent"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
+[[events.run_completed.producers]]
+id = "agent:cli"
+
 [events.finding_deferred]
 description = "A finding was deferred"
 attestation = "agent"
