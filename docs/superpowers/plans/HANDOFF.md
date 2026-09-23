@@ -31,20 +31,29 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**29 of 32 units · 47 of 51 items · 4 items across 3 units remain.**
-Counted off the dashboard, not carried forward. What is left: **W18's item 33**
-(design ruled, D-v — build it), **W26** (48 — only V3), and **W28** (12, 16 —
-last, it drafts the changelog). W13 and W32 closed by ruling on 2026-09-23.
+**30 of 32 units · 50 of 51 items.** Counted off the dashboard, not carried
+forward. Every item's work is committed; what is left is **one full run**:
+`scripts/pre-release-check.sh`, which is W28's V5 and — through its `--cov`
+suite — W26's V3 (item 48). W18 (item 33, D-v) landed as `76cfac0`; W28's
+items 12 and 16 in the commit after it.
 
 **⭐ Resume here:**
 
-- **Item 33 (W18) next, as ruled in D-v** — read the D-v box in W18 first.
-  Three parts: the courier pins the executed `verify_suite.py` to its
-  `trusted-callers.toml` row; the suite command is fixed and only the
-  interpreter varies (in-tree venv, else `$HOLTZ_PYTHON`, else `python3`),
-  retiring `$HOLTZ_PYTEST`; the courier records only on a nonzero count and a
-  compiled-binary interpreter. V4 needs a **live daemon**.
-- **Then W28 last** — it drafts the changelog after every other unit.
+- **Run `scripts/pre-release-check.sh` once, on a quiet machine, in the
+  background, and read its output file** — ~25 min. Do not edit the tree
+  while it runs. Read the suite's own last line (`N passed, M skipped`) and
+  `grep -cE '^(FAILED|ERROR)'`; the badge is **3279**, so passed + skipped
+  must equal it. Record the coverage figure as W26's V3 and the exit code as
+  W28's V5. If both hold, W26 and W28 are `DONE` — 32 of 32 units.
+- **If the load-flaky family fails** (`TestPrimer*`, `TestBashGuard*`,
+  worktree pairs, "Hook eval subprocess failed"), that is the documented
+  family — re-run the failing classes standalone as the control before
+  judging anything.
+- **The drafted changelog entry is `0.170.15`.** If any `feat:`/`fix:` lands
+  before the release, the version moves: delete the entry, re-run
+  `generate-changelog.py --write`, and carry the `### Notes` over (W28 step 3).
+- **Then the release itself is Jon's call** (CLAUDE.md "Cutting a Release").
+  Nothing is pushed. `main` locally is stale; compare against `origin/main`.
 - **W26 needs only V3**, read off the one full `--cov` run.
 - **The full suite has not run since `489e84d`, and CI has seen nothing** —
   run it once, at the end of a session, with `--cov` (that is W26's V3).
@@ -81,8 +90,8 @@ census showed D-q′'s verdict list missing the archive's commonest words (TRUE
 [sahjhan#51](https://github.com/jbrjake/sahjhan/issues/51)** (below, under
 Open for Jon). Four rulings were taken before any code, D-l…D-o, recorded in the unit.
 
-**W18** is `WIP`: item 36 closed, item 33's design is ruled (D-v) and not yet
-built. **W26** is `WIP` on V3 alone. **W28** is `TODO` and goes last.
+**W26** is `WIP` on V3 alone, and **W28** on V5 alone — both read off the one
+pre-release run.
 
 **Closed by ruling 2026-09-23:** **W13's item 17** — its own flake was caught
 in a pre-commit run with the primer's notice naming `TimeoutExpired`, and
@@ -219,15 +228,15 @@ substitute for CI is not.
 `fast-subset-cannot-see-slow-tests` justifies running **the slow tests that can
 see your change**. It does not justify running all of them.
 
-⚠️ **The full suite has not run since `489e84d`. W19–W21 and W23–W27 are all
+⚠️ **The full suite has not run since `489e84d`. Every commit after it is
 unrun, and CI has never seen any of them — nothing is pushed.**
 Each commit says so. Running it wants a quiet machine; see the flake section.
 
 **Last full run: 2026-09-08 at `489e84d` (W18/item 36)** — observed **exit 0**,
 **2998 passed, 8 skipped**, zero `FAILED`/`ERROR`, coverage **89.29%**, 24m44s.
 2998 + 8 = 3006 = the README badge at that commit; the two numbers check each
-other, so read both. **W19 through W27 have had no full run** and each commit
-says so. Badge is **3241** at `f5a64ee`.
+other, so read both. **Nothing after it has had a full run**, and each commit
+says so. Badge is **3279** at W28's commit.
 
 **Read from the run's own output, not from the wrapper's exit code.** ⚠️ **Two
 corrections, both measured 2026-09-09 against `pyproject.toml` and against real
@@ -239,7 +248,8 @@ per-test names, not the summary. So: read the last line, and cross-check with
 `grep -cE "^(FAILED|ERROR)"` being 0. There is nothing to drop.
 
 **It covers everything up to and including `489e84d` (W18 / item 36).**
-W19–W21 and W23–W27 are the gap, deliberately.
+Everything after it is the gap, deliberately — closed by the one pre-release
+run.
 
 It is *not* CI: CI runs on ubuntu, and the seccomp debt below is a thing no
 local run touches. **Note also that the load-flaky hook family did not fail in
@@ -480,12 +490,10 @@ eight queries keyed on `type='finding_deferred'` were never touched.
 
 ## Do this next
 
-### 1. ⭐ P4 — W29 and W30 next, then the three stragglers, then W28.
+### 1. ⭐ The one pre-release run, then the release is Jon's call.
 
-W23, W24, W25 and W27 are `DONE`; W26 waits only on V3. What remains: **W29
-(21, 24), W30 (23)**, then W18's item 33, W13's item 17 (open by ruling — do
-not reopen), and W32's step 3 (a question for Jon). **W28 (12, 16) drafts the
-changelog last** — after every other unit.
+Every unit but W26 and W28 is `DONE`, and both of those wait only on
+`scripts/pre-release-check.sh` — see "⭐ Resume here" at the top.
 
 **What W25 left that a later session would otherwise re-derive:**
 

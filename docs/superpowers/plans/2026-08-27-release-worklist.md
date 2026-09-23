@@ -78,7 +78,7 @@ imprecision (`CLAUDE.md`).
 | W25 | 11, 39, 49 | D | `DONE` — H12 closes 11 as a class; **39's config-fault half waits on sahjhan#51** | W05, W14 |
 | W26 | 48 | D | `WIP` — V1, V2 observed; V3 is the end-of-session `--cov` run | — |
 | W27 | 15, 45, 46 | D | `DONE` — every migrated event validates field by field; a marked binary is hashed before it is trusted | — |
-| W28 | 12, 16 | D | `TODO` | all above |
+| W28 | 12, 16 | D | `WIP` — README contradiction gone, changelog drafted; V5 is the full pre-release run | all above |
 | W29 | 21, 24 | D | `DONE` — both comments now claim what the code checks; no predicate touched | ~~D-e, D-f~~ ruled |
 | W30 | 23 | D | `DONE` — a refused fast-forward has a written way back, and a stale green no longer reads as an unreal fix | W12 *(same file)* |
 
@@ -5186,11 +5186,18 @@ vendor run leaves an unverified binary trusted until the next release.
 
 ## W28 — Items 12 + 16: README contradiction, then the changelog
 
-**Status:** `TODO`  ·  **Tier:** D  ·  **Depends on:** everything above
+**Status:** `WIP` — items 12 and 16 done, V1–V4 observed; V5 is the full pre-release run  ·  **Tier:** D  ·  **Depends on:** everything above
 **Commit:** `docs: remove the refuted security claim; draft the release changelog`
 
 Draft the changelog **last**, so the notes describe the release rather than the
 review.
+
+### Two rulings — RULED (Jon, 2026-09-23)
+
+| ID | Where | **RULED** |
+|---|---|---|
+| **D-w** | Item 12, the hook counts | **Drop both numbers.** Put after checking the tree: the inventory's "20" was already test-derived — distinct hook *scripts* — while the plan's "22" counts *registrations*. No hook count anywhere; the What's-inside test drops its hooks term and asserts no count remains |
+| **D-x** | Item 16, D-v's `$HOLTZ_PYTEST` | **A patch, called out in the changelog.** `76cfac0` stops reading a documented consumer setting; it stays `fix:` (0.170.x, no major bump), and the release entry names the retired variable and its replacement |
 
 ### Item 12 · README contradicts itself, including on a security claim · verified
 
@@ -5209,28 +5216,66 @@ pre-release, but it is step 5 of the release checklist.
 
 ### Plan
 
-- [ ] **1.** (12) Delete the refuted clause from line 204. The boundary paragraph is
+- [x] **1.** (12) Delete the refuted clause from line 204. The boundary paragraph is
       the best-told story in the delta and needs no help; it needs the
       contradiction removed
-- [ ] **2.** (12) Make both counts say 22, or drop the number
-- [ ] **3.** (16) `.venv/bin/python scripts/generate-changelog.py` (preview), review,
+      → "…never written to disk, inaccessible to the model or any same-user
+      process without kernel-enforced socket credentials." now ends at "never
+      written to disk."
+- [x] **2.** (12) Make both counts say 22, or drop the number
+      → **as ruled in D-w: dropped, all three.** "Twelve hooks" → "Hooks";
+      "20 enforcement hooks" → "the enforcement hooks"; and a third the plan
+      did not name, "The remaining six hooks" → "The remaining hooks"
+- [x] **3.** (16) `.venv/bin/python scripts/generate-changelog.py` (preview), review,
       then `--write`
-- [ ] **4.** (16) ⚠️ **The release-notes exercise in the punchlist is the honest
+      → a `## [0.170.15]` entry of 162 commits since v0.141.3. `--write`
+      replaces everything under `[Unreleased]`, so W13's note went with it;
+      it is back as a `### Notes` section in the entry, rewritten for item
+      17's closure, beside D-x's note on `$HOLTZ_PYTEST`. **If any `feat:`
+      or `fix:` lands before the release, the version moves:** delete this
+      entry, re-run `--write`, and carry the Notes over — a second `--write`
+      without deleting it inserts a duplicate above it
+- [x] **4.** (16) ⚠️ **The release-notes exercise in the punchlist is the honest
       source for what can and cannot be claimed** — three of its five headline
       sentences were unshippable at review time. **Do not restore a sentence whose
       item is still open.**
+      → no headline sentence is added to the changelog; the entry is the
+      commit list plus the two Notes. Every blocker the exercise named (items
+      29, 19, 3, 2, 5, 25, 26, 8, 12) is closed on the board, so all five
+      sentences are available to the release PR's highlights
 
 ### Validation
 
-- [ ] **V1** (12) A test asserting the README's hook count equals
+- [x] **V1** (12) A test asserting the README's hook count equals
       `len(hooks.json entries)` — if a number is kept it must be **derived**, not
-      typed. If no number is kept, assert the phrase is absent. Evidence: ___
-- [ ] **V2** (12) Grep for the refuted phrase → zero hits. Evidence: ___
-- [ ] **V3** (16) `[Unreleased]` is non-empty and every entry maps to a commit in
-      `git log dev --not main`. Evidence: ___
-- [ ] **V4** (16) Each item fixed in this cycle appears; each item **not** fixed has
-      no sentence claiming it. Evidence: ___
-- [ ] **V5** `scripts/pre-release-check.sh` → exit 0. Evidence: ___
+      typed. If no number is kept, assert the phrase is absent.
+      Evidence: `test_the_readme_states_no_hook_count` — no digit or number
+      word (optionally "more"/"remaining") before "hooks" or "enforcement
+      hooks" anywhere in README.md. RED first on all three:
+      `['Twelve hooks', 'six hooks', '20 enforcement hooks']`.
+      `test_readme_metrics_match_actual` drops its hooks term, per D-w
+- [x] **V2** (12) Grep for the refuted phrase → zero hits.
+      Evidence: `git grep 'kernel-enforced socket'` outside the plan docs
+      finds only the test that forbids it,
+      `test_the_refuted_socket_credentials_claim_is_gone` (RED first)
+- [x] **V3** (16) `[Unreleased]` is non-empty and every entry maps to a commit in
+      `git log dev --not main`.
+      Evidence: the entry sits under `[Unreleased]` as the release's own
+      heading. **`main` means `origin/main` here** — local `main` is stale at
+      the v0.135.0 release, while `origin/main` holds v0.141.3 (942e8be, off
+      `dev`'s line). Checked mechanically: 162 entries, every one the
+      rendering of a commit subject in `origin/main..dev`; 162 conventional
+      commits, every one rendered
+- [x] **V4** (16) Each item fixed in this cycle appears; each item **not** fixed has
+      no sentence claiming it.
+      Evidence: through Appendix A's item → unit map — each of W01–W32 is
+      named by at least one commit in range (2 to 19 each), and every one of
+      those commits' subjects is in the entry. At this commit the one item
+      not closed is 48 (W26, V3 only), and its entry, "test: direct unit
+      coverage for the delta's new enforcement predicates", claims what V1/V2
+      observed and says nothing about coverage
+- [ ] **V5** `scripts/pre-release-check.sh` → exit 0. Evidence: ___ — the
+      session's one full run, which is also W26's V3
 
 ---
 
