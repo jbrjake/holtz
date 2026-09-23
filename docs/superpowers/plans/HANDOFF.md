@@ -31,18 +31,20 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**25 of 32 units · 42 of 51 items · 9 items across 7 units remain.**
-Counted off the dashboard, not carried forward. **P3 is finished except W18's
-item 33**, and **P4 is under way**: W23–W25 and W27 are `DONE`; **W26 is
-`WIP`** on V3 alone. What is left is W26 (48 — only V3), W28 (12, 16), W29
-(21, 24), W30 (23), W18's item 33, W13's item 17 (open by ruling), and W32's
-step 3 (a question for Jon).
+**29 of 32 units · 47 of 51 items · 4 items across 3 units remain.**
+Counted off the dashboard, not carried forward. What is left: **W18's item 33**
+(design ruled, D-v — build it), **W26** (48 — only V3), and **W28** (12, 16 —
+last, it drafts the changelog). W13 and W32 closed by ruling on 2026-09-23.
 
 **⭐ Resume here:**
 
-- **W29 (21, 24) or W30 (23) next** — both `TODO`, neither blocked (W29's
-  D-e/D-f are ruled; W30's W12 is done). **W28 goes last**: it drafts the
-  changelog after every other unit.
+- **Item 33 (W18) next, as ruled in D-v** — read the D-v box in W18 first.
+  Three parts: the courier pins the executed `verify_suite.py` to its
+  `trusted-callers.toml` row; the suite command is fixed and only the
+  interpreter varies (in-tree venv, else `$HOLTZ_PYTHON`, else `python3`),
+  retiring `$HOLTZ_PYTEST`; the courier records only on a nonzero count and a
+  compiled-binary interpreter. V4 needs a **live daemon**.
+- **Then W28 last** — it drafts the changelog after every other unit.
 - **W26 needs only V3**, read off the one full `--cov` run.
 - **The full suite has not run since `489e84d`, and CI has seen nothing** —
   run it once, at the end of a session, with `--cov` (that is W26's V3).
@@ -63,8 +65,8 @@ census showed D-q′'s verdict list missing the archive's commonest words (TRUE
   `bin/.sahjhan-verified` (gitignored) caches what the last matching hash was
   taken over. Rewriting the marker or the binary forces one re-hash (~40 ms);
   otherwise it is a stat. A mismatch goes to `_bootstrap`, which re-downloads.
-  **The no-marker path is untouched on purpose** — it is W32 step 3's open
-  question.
+  **The no-marker path is untouched on purpose** — W32 step 3 ruled it stays
+  as it is.
 - **`run_registered`/`run_completed` are declared, producer `agent:cli`** —
   a re-run's delta goes in by `sahjhan --ledger <name> event`, which stamps
   exactly that. A declared producer is what silences `sahjhan lint` L5.
@@ -79,17 +81,21 @@ census showed D-q′'s verdict list missing the archive's commonest words (TRUE
 [sahjhan#51](https://github.com/jbrjake/sahjhan/issues/51)** (below, under
 Open for Jon). Four rulings were taken before any code, D-l…D-o, recorded in the unit.
 
-Three units are `WIP` and none moves the unit count. **W13** closed item 37 and
-left item 17 open **by ruling**. **W18** closed item 36 and left item 33 open —
-a design choice, not a spelling, and the unit carries the two measurements that
-decide it. **W32** closed everything but step 3.
+**W18** is `WIP`: item 36 closed, item 33's design is ruled (D-v) and not yet
+built. **W26** is `WIP` on V3 alone. **W28** is `TODO` and goes last.
+
+**Closed by ruling 2026-09-23:** **W13's item 17** — its own flake was caught
+in a pre-commit run with the primer's notice naming `TimeoutExpired`, and
+explained as load (the reading is in W13's ✅ box). **W32's step 3** — "nothing
+further"; the pin is the fix.
 
 Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) ·
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
-W12 (34, 28) · W11 (42) · W14 (5, 10) · W31 (50) · W15 (30) · W16 (18) ·
-W17 (22) · W19 (40, 47) · W20 (41, 38) · W21 (9) · W23 (4, 7, 8, 13, 14) ·
-W24 (6, 44) · W25 (11, 39, 49) · W27 (15, 45, 46). Commits are in `git log`;
-do not re-summarise them here.
+W12 (34, 28) · W11 (42) · W13 (37, 17) · W14 (5, 10) · W31 (50) · W32 (51) ·
+W15 (30) · W16 (18) · W17 (22) · W19 (40, 47) · W20 (41, 38) · W21 (9) ·
+W23 (4, 7, 8, 13, 14) · W24 (6, 44) · W25 (11, 39, 49) · W27 (15, 45, 46) ·
+W29 (21, 24) · W30 (23). Commits are in `git log`; do not re-summarise them
+here.
 
 ### ⛔ W21 left a question for Jon that a later session must not answer for him
 
@@ -241,22 +247,15 @@ this run.** That is consistent with every previous quiet-machine reading and is
 **not** evidence about its cause — see the flake section below before drawing
 anything from it.
 
-### ✅ RULED 2026-09-04 — W13's item 17 stays open
+### ✅ W13's item 17 is closed (Jon, 2026-09-23)
 
-**Jon: item 17 closes when an occurrence is captured with a named exception AND
-explained. Not on the instrumentation merely being in place.** Two alternatives
-were put and declined — closing on instrumentation, and folding in the four
-other collapsed `except` sites now. **Do not reopen either.** W13 therefore
-stays `WIP`, and 17 is not this board's to tick until a real occurrence is
-read. The primer's notice already names the exception, so catching one is now
-cheap; the work is catching it, not re-arguing it.
-
-Why the evidence pointed this way: 12 full-file runs per arm in one sitting
-gave **0/12 failures on the fixed primer and 0/12 on the unmodified control**.
-The 1-in-4 rate seen earlier was the new test file's own fixture orphaning
-`sleep` children; fixed with `exec sleep`, and the rate went to zero on
-**both** arms. There is also no mechanism — the delta does not touch the
-healthy path's timing.
+The 2026-09-04 ruling was: item 17 closes when an occurrence is captured with
+a named exception AND explained. One was captured 2026-09-23 — item 17's own
+`TestPrimerWithMockBinary` tests, in a serial pre-commit run, each reading
+`sahjhan status did not complete (TimeoutExpired)` — and explained as load on
+a `/bin/sh` mock that does no work. The reading is in W13's ✅ box. **The four
+other collapsed `except` sites stay a separate, untaken step** — declined as a
+fold-in on 2026-09-04, and not reopened by this closure.
 
 ### ✅ W16 is closed — sahjhan#50 shipped, and the answer was not a field
 
@@ -316,13 +315,8 @@ eight queries keyed on `type='finding_deferred'` were never touched.
   PreToolUse side (`_write_target()`), so a notebook edit reaches PostToolUse
   `hook eval` with no `--file`. Recorded in W25, unruled, not fixed.
 
-### Open for Jon — two more, both raised, neither guessed at
+### Open for Jon — one more, raised, not guessed at
 
-- **W32 step 3** (above): does the hand-vendored-old-binary path still want a
-  diagnostic? Unit recommends no; not ruled. **Its premise moved on
-  2026-09-04** — the pin is 0.27.0, not 0.26.0. That changes nothing about the
-  question, which is about the path's existence and not about a version, so it
-  is recorded here rather than answered.
 - **W06's V8 — a sahjhan question.** `sahjhan event finding --field
   perspective=not-a-lens` exits 0 and the row lands with that value; measured
   on the pinned engine, not inferred. `events.toml` gives `perspective` no

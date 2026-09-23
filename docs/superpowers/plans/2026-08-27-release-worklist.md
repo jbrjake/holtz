@@ -56,12 +56,12 @@ imprecision (`CLAUDE.md`).
 | **P2 — before trusting results** ||||
 | W08 | 32, 43 | B | `DONE` — 32 `780ba47`; 43 landed on sahjhan 0.26.0 | — |
 | W31 | **50** *(new)* | C | `DONE` — the finding id, matched as `fix_commit`'s gate matches it | W08 |
-| W32 | **51** *(new)* | C | `WIP` — pin moved to 0.25.0, V1–V4 driven; step 3 open for Jon | — *(fixed upstream: sahjhan#47)* |
+| W32 | **51** *(new)* | C | `DONE` — the pin is the fix; step 3 ruled "nothing further" (Jon, 2026-09-23) | — *(fixed upstream: sahjhan#47)* |
 | W09 | 25, 26 | B | `DONE` — W06's mechanism widened, not duplicated | — |
 | W10 | 35 | B | `DONE` — wider than the item said: one actor is enough | W01 |
 | W11 | 42 | B | `DONE` @ `3697e31` — V6 records an exposure it does not close | W01, ~~sahjhan#49~~ shipped |
 | W12 | 34, 28 | B | `DONE` — one shared refusal, four scripts | — |
-| W13 | 37, 17 | B | `WIP` @ `9555fce` — **37 done, 17 open**; V3 measured and does not support closing it | — |
+| W13 | 37, 17 | B | `DONE` — 37 @ `9555fce`; 17 closed on a captured `TimeoutExpired` under load (Jon, 2026-09-23) | — |
 | W14 | 5, 10 | B | `DONE` @ `7d69854` — V5 caught P0.1's own failure under the mutation | — |
 | **P3 — before release** ||||
 | W15 | 30 | C | `DONE` @ `8bd7e43` — one segmentation owner; two shapes left open and recorded | — |
@@ -2749,14 +2749,36 @@ came off.
 
 ## W13 — Items 37 + 17: the primer's silent degrade and the ordering that hides daemon death
 
-**Status:** `WIP` — **item 37 is done; item 17 is open by ruling.** Steps 1, 2
-and 4 and V1/V2/V4 landed in `9555fce`. Step 3 and V3 stay open, and not for
-want of running them: the flake **did not reproduce on either arm**. Jon ruled
-2026-09-04 that 17 closes only when an occurrence is caught and explained — see
-the box below before proposing anything here.  ·  **Tier:** B
+**Status:** `DONE` — item 37 landed in `9555fce`; **item 17 closed 2026-09-23**
+on a captured occurrence, as the ruling below required (Jon, 2026-09-23 — the
+reading is in the ✅ box)  ·  **Tier:** B
 **Commit:** `9555fce` — `fix(enforcement): check daemon death before status, and say so when degraded`
 
-### ✅ RULED (Jon, 2026-09-04) — item 17 stays open until an occurrence is caught
+### ✅ Item 17 closed (Jon, 2026-09-23) — the occurrence, captured and explained
+
+**The reading.** 2026-09-23, the first `pre-commit` attempt on W29's commit:
+the fast subset (serial pytest — no xdist) failed nine tests, and three were
+item 17's own — `TestPrimerWithMockBinary::test_injects_lens_priming_in_audit`
+and `::test_warns_when_context_reset_fails`, the two the item names, plus
+`::test_injects_context_for_active_run`. Each asserted a state against the
+primer's notice and got:
+
+> `SAHJHAN PRIMER DEGRADED: \`sahjhan status\` did not complete (TimeoutExpired).`
+
+**The explanation.** The mock `status` is a `/bin/sh` `cat` of a fixture file.
+It overran the primer's 5 s cap inside a serial run. `uptime` minutes later
+read a 5-minute load average of 3.78, the window covering that run, of which
+one serial pytest accounts for about one. The
+same classes passed standalone immediately after — 21 in 5.9 s — and the
+identical commit passed pre-commit on its third attempt with nothing changed.
+So the degrade is the timeout arm, under load, on a subprocess that does no
+work: machine load, not a wedged daemon and not a wrong binary path. It
+matches the 2026-09-04 datum, which a fixture defect had tainted. This one comes
+from a different file with no `sleep` in its mock.
+
+Jon ruled it closes on this reading. The ruling it satisfies follows.
+
+### RULED (Jon, 2026-09-04) — item 17 stays open until an occurrence is caught
 
 **Item 17 closes when an occurrence is captured with a named exception AND
 explained. Not before, and not on the instrumentation merely being in place.**
@@ -2842,10 +2864,10 @@ not broken; the gate is not reliably green under load.
       reason. The status handler names *which* of its collapsed exceptions
       fired (`TimeoutExpired` vs `OSError`) — they call for opposite responses,
       and no timeout is changed in the same commit
-- [ ] **3.** Close item 17 against this unit. Note in `CHANGELOG` that the timeout
+- [x] **3.** Close item 17 against this unit. Note in `CHANGELOG` that the timeout
       predates this delta and is not a regression from it.
-      **CHANGELOG note done. Item 17 NOT closed** — see the box above; the
-      evidence does not support it.
+      **CHANGELOG note done. Item 17 closed 2026-09-23** on the captured
+      occurrence in the ✅ box, by Jon's ruling.
       ⚠️ `scripts/generate-changelog.py --write` **replaces** everything between
       `## [Unreleased]` and the next version heading, so that note is dropped at
       release time and must be re-added to the release entry by hand
@@ -2868,9 +2890,12 @@ not broken; the gate is not reliably green under load.
       three RED against the unmodified primer with the marker file absent.
       The hang case is *fast* when fixed and slow when broken, since the fixed
       ordering returns before the subprocess is ever started.
-- [ ] **V3** The flake resolves *for the right reason*: the assertion now has
+- [x] **V3** The flake resolves *for the right reason*: the assertion now has
       something to match. Run the class under concurrent load **three times
-      unchanged**, not once. Evidence: **run, and it does not support the
+      unchanged**, not once. Evidence: **closed on a captured occurrence, not
+      on a rate** — 2026-09-23, the assertion's `''` is now the primer's
+      notice naming `TimeoutExpired` (✅ box). The rate measurement below
+      is what kept it open until then: **run, and it does not support the
       claim.** 12 full-file runs per arm in one sitting: **0/12 failures fixed,
       0/12 unmodified.** The 1-in-4 rate seen earlier was this file's own
       fixture orphaning `sleep` children (fixed with `exec sleep`), and it went
@@ -3554,6 +3579,31 @@ Without it, the class recurs. #79 was this; item 18 is this; the next one will b
 > V4 also requires a **live daemon** — the original observation was limited by
 > an absent one, so a mock-daemon test would reproduce the limitation, not the
 > fix.
+
+### D-v — RULED (Jon, 2026-09-23): item 33's design
+
+Put first as "pin the script, and a human declares any non-default runner".
+**Declined:** *"manual steps aren't ok … find a solution where we're not
+trusting some random script and we're not bugging users for approvals and we
+can support venvs."* The design then put, and ruled, has three parts:
+
+1. **Script.** The courier resolves the `verify_suite.py` the command
+   executed, and refuses unless it is the plugin's own copy **and** its sha256
+   matches its row in `trusted-callers.toml`. That closes V4's fake script.
+2. **Runner.** The suite command is fixed —
+   `<python> -m pytest -x --ff --tb=short -q` — and only the interpreter
+   varies: an in-tree venv (a directory with `pyvenv.cfg`; covers uv,
+   virtualenv, in-project poetry), else `$HOLTZ_PYTHON` (an interpreter path,
+   for conda and out-of-tree envs), else `python3`. **`$HOLTZ_PYTEST`'s
+   free-form command is retired**, so `true` or `echo '4 passed'` cannot be
+   the suite. That closes V6.
+3. **Evidence.** The courier records only with a nonzero `N passed`, and only
+   when an explicitly named interpreter is a compiled binary rather than a `#!`
+   script — a static read; the courier never executes it.
+
+**Residual, accepted with the ruling:** an agent that tampers with the
+environment itself (a fake `pytest` in site-packages) is out of any hook's
+reach, exactly as with the default `python3` today.
 
 Land after W02 so item 36's new guard uses the anchored probe rather than adding a
 sixth `cwd`-relative one.
@@ -5497,9 +5547,9 @@ caller". Only `real_daemon` tests see it at all.
 
 ## W32 — Item 51 (new, found by W08): sahjhan's anchor does not understand linked worktrees
 
-**Status:** `WIP` — **fixed upstream in sahjhan v0.25.0
+**Status:** `DONE` — **fixed upstream in sahjhan v0.25.0
 ([#47](https://github.com/jbrjake/sahjhan/issues/47)); pin moved and V1–V4
-driven.** Step 3 is the only thing left and is a question for Jon, not work
+driven.** Step 3 ruled "nothing further" (Jon, 2026-09-23)
   ·  **Tier:** C  ·  **PROVEN**  ·  **Found:** 2026-08-31, while
 establishing the layout for sahjhan#46
 
@@ -5572,7 +5622,7 @@ unqualified would be the same overreach the punchlist exists to prevent.
       non-repo directory still anchors on itself), and states plainly that the
       default Claude Code layout is unaffected so the report cannot be read as
       more urgent than it is.
-- [ ] **3.** Decide what holtz does *in the meantime* for a user with a sibling
+- [x] **3.** Decide what holtz does *in the meantime* for a user with a sibling
       worktree — at minimum, a diagnostic that names the cause rather than
       surfacing `I/O error (os error 2)`. **Still open**, and independent of
       whether #47 ships: the failure is loud (exit 2 from `status`, `event` and
@@ -5626,11 +5676,11 @@ config** — not a synthetic protocol — in `tests/test_worktree_ledger_anchor.
       shape, per test rather than per file. Restored, and the restored binary's
       sha256 re-checked against `SAHJHAN_CHECKSUMS`.
 
-### Open for Jon
+### Step 3 — ruled
 
 Step 3's floor was "at minimum, a diagnostic that names the cause". On the
 pinned engine the cause no longer occurs, so the floor now has nothing to name.
-Two readings, and the choice is Jon's:
+Two readings were put:
 
 1. **Nothing further.** The pin is the fix; a diagnostic for a failure the
    shipped engine cannot produce is dead code that will rot.
@@ -5639,8 +5689,9 @@ Two readings, and the choice is Jon's:
    it against the directory the engine would have used), but it is a guard on a
    configuration holtz does not create.
 
-Recommended: **(1)**, and W32 closes with the pin plus V1–V4. Not taken as
-ruled.
+**RULED (Jon, 2026-09-23): (1), nothing further.** W32 closes with the pin
+plus V1–V4. The no-marker path stays as it is. W27's hash check (D-s) leaves
+it alone on purpose.
 
 ---
 ---
