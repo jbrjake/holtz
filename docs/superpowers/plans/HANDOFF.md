@@ -31,40 +31,47 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**24 of 32 units · 39 of 51 items · 12 items across 8 units remain.**
+**25 of 32 units · 42 of 51 items · 9 items across 7 units remain.**
 Counted off the dashboard, not carried forward. **P3 is finished except W18's
-item 33**, and **P4 is under way**: W23, W24 and W25 are `DONE`; **W26 and W27
-are `WIP`**. What is left is W26 (48 — only V3), W27 (15 done; 45 and 46
-part-done), W28 (12, 16), W29 (21, 24), W30 (23), W18's item 33, W13's item 17
-(open by ruling), and W32's step 3 (a question for Jon).
+item 33**, and **P4 is under way**: W23–W25 and W27 are `DONE`; **W26 is
+`WIP`** on V3 alone. What is left is W26 (48 — only V3), W28 (12, 16), W29
+(21, 24), W30 (23), W18's item 33, W13's item 17 (open by ruling), and W32's
+step 3 (a question for Jon).
 
-**⭐ Resume here (session paused 2026-09-23 at Jon's request):**
+**⭐ Resume here:**
 
-- **W27 is mid-unit, with every decision already ruled** (D-p…D-t, in the
-  unit — read them first; D-q′ corrects a misstatement of mine and replaces
-  D-q's `PASS` mapping). Owed, in order: **45 step 3** — `step` 7 for audit
-  findings / 10 for resolutions, `commit_hash` `0000000` for an unrecorded
-  commit, a prose severity's leading word, the four undeclared legacy types
-  dropped with a stderr count, and `_parse_claims_table` made header-aware
-  (D-q′); **D-t** — declare `run_registered`/`run_completed` in
-  `events.toml` (fields `project`, `run`, `auditor`; find a producer id H2
-  accepts), then `enforcement_contract --write`; **45 step 5 (D-r)** —
-  `--build-project --ledger <name>` reads the existing project ledger and
-  emits only unregistered runs. `ledger import` cannot append (measured:
-  "File exists"), so the delta goes in by `sahjhan --ledger <name> event`,
-  which does append to the event-only ledger (measured); **46 step 8 (D-s)**
-  — stamp mtime+size beside the marker, re-hash only when either moves (43 ms
-  hash vs 16 µs stat, measured); **V4, V6, V9's download half.**
-  `scratchpad/validate_migrated.py` from this session was the V4 validator —
-  rebuild it as a test.
+- **W29 (21, 24) or W30 (23) next** — both `TODO`, neither blocked (W29's
+  D-e/D-f are ruled; W30's W12 is done). **W28 goes last**: it drafts the
+  changelog after every other unit.
 - **W26 needs only V3**, read off the one full `--cov` run.
 - **The full suite has not run since `489e84d`, and CI has seen nothing** —
-  run it once, at the end of the next session, with `--cov` (that is W26's
-  V3). Nothing is pushed.
-- **Method trap from this session:** restoring a mutation with
-  `git checkout -- <file>` also discards that file's *uncommitted* work — it
-  cost the D-p edit once. Undo a mutation with a reverse Edit when the file
-  carries other changes.
+  run it once, at the end of a session, with `--cov` (that is W26's V3).
+  Nothing is pushed.
+- **Method trap:** restoring a mutation with `git checkout -- <file>` also
+  discards that file's *uncommitted* work. Undo a mutation with a reverse
+  Edit when the file carries other changes. And a test that is RED while its
+  ruling is pending cannot sit in the tree across a commit — pre-commit runs
+  the working tree, not the index. `git stash push -- <that file>`, commit,
+  pop.
+
+**W27 landed 2026-09-23** — `a302477`, `3411780`, `e67f2ba`, `c2f7f98`,
+`b513385`, `f5a64ee`. Six rulings, D-p…D-u; **D-u was put mid-unit** because a
+census showed D-q′'s verdict list missing the archive's commonest words (TRUE
+×112, OK ×14). What a later session would otherwise re-derive:
+
+- **`ensure_sahjhan` hashes a marked binary before trusting it**, and
+  `bin/.sahjhan-verified` (gitignored) caches what the last matching hash was
+  taken over. Rewriting the marker or the binary forces one re-hash (~40 ms);
+  otherwise it is a stat. A mismatch goes to `_bootstrap`, which re-downloads.
+  **The no-marker path is untouched on purpose** — it is W32 step 3's open
+  question.
+- **`run_registered`/`run_completed` are declared, producer `agent:cli`** —
+  a re-run's delta goes in by `sahjhan --ledger <name> event`, which stamps
+  exactly that. A declared producer is what silences `sahjhan lint` L5.
+- **`migrate_legacy.py` emits only declared types** and counts the rest on
+  stderr; V4 (`test_every_migrated_event_validates_against_events_toml`)
+  checks all 2810 events `--all` emits, field by field. It covers the 37
+  mapped directories, not the archive's 16 unmapped ones.
 
 **W25 landed 2026-09-23** in three commits — `1795e6a` (39 + 49d), `b90d713`
 (49 a–c, e–h), `d0a0cd4` (11). It is `DONE` with a debt in its dashboard row:
@@ -81,7 +88,8 @@ Done: W01 (fixtures, no item) · W02 (29) · W03 (31) · W04 (19, 1) · W05 (2) 
 W08 (32, 43) · W22 (27) · W06 (20) · W07 (3) · W09 (25, 26) · W10 (35) ·
 W12 (34, 28) · W11 (42) · W14 (5, 10) · W31 (50) · W15 (30) · W16 (18) ·
 W17 (22) · W19 (40, 47) · W20 (41, 38) · W21 (9) · W23 (4, 7, 8, 13, 14) ·
-W24 (6, 44). Commits are in `git log`; do not re-summarise them here.
+W24 (6, 44) · W25 (11, 39, 49) · W27 (15, 45, 46). Commits are in `git log`;
+do not re-summarise them here.
 
 ### ⛔ W21 left a question for Jon that a later session must not answer for him
 
@@ -205,15 +213,15 @@ substitute for CI is not.
 `fast-subset-cannot-see-slow-tests` justifies running **the slow tests that can
 see your change**. It does not justify running all of them.
 
-⚠️ **The full suite has not run since `489e84d`. W19, W20, W21, W23, W24 and
-W25 are all unrun, and CI has never seen any of them — nothing is pushed.**
+⚠️ **The full suite has not run since `489e84d`. W19–W21 and W23–W27 are all
+unrun, and CI has never seen any of them — nothing is pushed.**
 Each commit says so. Running it wants a quiet machine; see the flake section.
 
 **Last full run: 2026-09-08 at `489e84d` (W18/item 36)** — observed **exit 0**,
 **2998 passed, 8 skipped**, zero `FAILED`/`ERROR`, coverage **89.29%**, 24m44s.
 2998 + 8 = 3006 = the README badge at that commit; the two numbers check each
-other, so read both. **W19 through W25 have had no full run** and each commit
-says so. Badge is **3117** at `d0a0cd4`.
+other, so read both. **W19 through W27 have had no full run** and each commit
+says so. Badge is **3241** at `f5a64ee`.
 
 **Read from the run's own output, not from the wrapper's exit code.** ⚠️ **Two
 corrections, both measured 2026-09-09 against `pyproject.toml` and against real
@@ -224,8 +232,8 @@ still ended with a `2596 passed, 435 deselected in 136.53s` line. `-q` drops the
 per-test names, not the summary. So: read the last line, and cross-check with
 `grep -cE "^(FAILED|ERROR)"` being 0. There is nothing to drop.
 
-**It covers everything up to and including `489e84d` (W18 / item 36).** W19,
-W20, W21, W23, W24 and W25 are the gap, deliberately.
+**It covers everything up to and including `489e84d` (W18 / item 36).**
+W19–W21 and W23–W27 are the gap, deliberately.
 
 It is *not* CI: CI runs on ubuntu, and the seccomp debt below is a thing no
 local run touches. **Note also that the load-flaky hook family did not fail in
@@ -478,12 +486,12 @@ eight queries keyed on `type='finding_deferred'` were never touched.
 
 ## Do this next
 
-### 1. ⭐ P4 — W26 next, then W27–W30. Then the three stragglers.
+### 1. ⭐ P4 — W29 and W30 next, then the three stragglers, then W28.
 
-W23, W24 and W25 are `DONE`. What remains, in the board's own order: **W26
-(48), W27 (15, 45, 46), W28 (12, 16), W29 (21, 24), W30 (23)**, then W18's item
-33, W13's item 17 (open by ruling — do not reopen), and W32's step 3 (a
-question for Jon). **W28 drafts the changelog last** — after every other unit.
+W23, W24, W25 and W27 are `DONE`; W26 waits only on V3. What remains: **W29
+(21, 24), W30 (23)**, then W18's item 33, W13's item 17 (open by ruling — do
+not reopen), and W32's step 3 (a question for Jon). **W28 (12, 16) drafts the
+changelog last** — after every other unit.
 
 **What W25 left that a later session would otherwise re-derive:**
 
