@@ -77,7 +77,7 @@ imprecision (`CLAUDE.md`).
 | W24 | 6, 44 | D | `DONE` — the conjunct is a ledger predicate; V1's two clauses conflict and the unit says which one it kept | ~~D-b, D-g~~ ruled |
 | W25 | 11, 39, 49 | D | `DONE` — H12 closes 11 as a class; **39's config-fault half waits on a sahjhan ask** | W05, W14 |
 | W26 | 48 | D | `WIP` — V1, V2 observed; V3 is the end-of-session `--cov` run | — |
-| W27 | 15, 45, 46 | D | `WIP` — steps 4, 6, 7 landed; four questions open for Jon | — |
+| W27 | 15, 45, 46 | D | `WIP` — 15 done; 46 steps 6–7 done, step 8 (D-s) and V9's download owed; 45 step 4 done, steps 3 and 5 (D-q, D-q′, D-r, D-t) owed | — |
 | W28 | 12, 16 | D | `TODO` | all above |
 | W29 | 21, 24 | D | `TODO` | ~~D-e, D-f~~ ruled |
 | W30 | 23 | D | `TODO` | W12 *(same file)* |
@@ -4816,8 +4816,12 @@ covered only by the parametrized subprocess cases in `test_hook_chains.py` —
 - **Item 45's V4 is wider than the item.** Field-by-field over every migrated
   event from all 30 archives (2936 events): `step: ''` on 308 findings and 214
   resolutions and `commit_hash: ''` on 214 — the two the item names — **plus**
-  474 `audit_claim` verdicts of `PASS` against
-  `^(VERIFIED|OVERSTATED|FALSE|MISSING)$`, 60 events of four types
+  474 `audit_claim` rows failing `^(VERIFIED|OVERSTATED|FALSE|MISSING)$`
+  (**corrected 2026-09-23:** this line first said "474 verdicts of `PASS`",
+  which was the validator's first example reported as the whole class; the
+  distinct values show `_parse_claims_table` reads column 3 of any row as the
+  verdict whatever the header says, so most are locations, row labels, counts
+  and quoted claims, and real verdict words are a minority), 60 events of four types
   `events.toml` does not declare (`run_summary`, `merge_result`,
   `convergence_iteration`, `run_postmortem`), and one severity carrying prose.
   (508 `state_transition` rows are the engine built-in, not a failure.) Step
@@ -4831,6 +4835,17 @@ covered only by the parametrized subprocess cases in `test_hook_chains.py` —
   import the tool feeds. Separately, `build_project_ledger` emits
   `run_registered`/`run_completed`, which `events.toml` does not declare.
 - **Step 8** is written as a decision with a recommendation, not a ruling.
+
+### Four rulings — RULED (Jon, 2026-09-23)
+
+| ID | Where | **RULED** |
+|---|---|---|
+| **D-p** | Item 15 | **PEP 735 `[dependency-groups] test`**; CI upgrades pip and runs `pip install --group test`. No `[project]` table, no second version |
+| **D-q** | Item 45 V4 | **Map what maps; sentinel the rest.** `step` = its phase's protocol step; `PASS` → `VERIFIED`; a prose severity → its leading word; an unrecorded commit → `0000000`, documented as unknown; the four undeclared legacy types are not emitted, with a count on stderr. V4 then holds |
+| **D-r** | Item 45 step 5 | **Make it idempotent anyway** — `build_project_ledger` reads an existing project ledger (a new `--ledger` input) and emits only runs not yet registered |
+| **D-s** | Item 46 step 8 | **Re-hash when the marker or the binary's mtime moves** — record mtime and size beside the marker; re-hash only when either changes |
+| **D-q′** | Item 45, `audit_claim` | Put again after the correction above, because D-q's "`PASS` → `VERIFIED`" was ruled on the misstatement. **Read the header; skip non-claims** — emit `audit_claim` only from tables whose header names a verdict column; map real verdict words (`YES`/`PASS`/`Verified`/`confirmed` → `VERIFIED`, `NO` → `FALSE`); count skipped rows on stderr |
+| **D-t** | D-q vs D-r | D-q emits only declared types; D-r keeps `run_registered`/`run_completed`, which were undeclared. **Declare the two types** in `events.toml`, so V4 covers the project ledger too |
 
 ### Item 15 · `hypothesis` is undeclared · **OBSERVED**
 
@@ -4874,10 +4889,12 @@ vendor run leaves an unverified binary trusted until the next release.
 
 ### Plan
 
-- [ ] **1.** (15) Add a `[project]` table to `pyproject.toml` with a test extra
+- [x] **1.** (15) Add a `[project]` table to `pyproject.toml` with a test extra
       declaring `pytest`, `hypothesis` and anything else CI installs by hand
-- [ ] **2.** (15) Point CI at the extra instead of a hand-written `pip install`, so
+      → **as ruled in D-p:** `[dependency-groups] test`, no `[project]` table
+- [x] **2.** (15) Point CI at the extra instead of a hand-written `pip install`, so
       the two cannot drift
+      → `python -m pip install --upgrade pip` then `pip install --group test`
 - [ ] **3.** (45) Emit schema-valid values, or omit the optional fields rather than
       emitting empty strings that fail their own patterns
 - [x] **4.** (45) Give `--all` a ledger boundary per run; fix the usage line that
@@ -4902,13 +4919,18 @@ vendor run leaves an unverified binary trusted until the next release.
 
 ### Validation
 
-- [ ] **V1** (15) In a **clean virtualenv built only from `pyproject.toml`'s test
+- [x] **V1** (15) In a **clean virtualenv built only from `pyproject.toml`'s test
       extra**: `python -m pytest --collect-only -q` → exit 0, no collection errors.
-      Paste the collected count. Evidence: ___
-- [ ] **V2** (15) Grep `pip install` in the workflow → every name is declared.
-      Evidence: ___
-- [ ] **V3** (15) **non-vacuity** Remove `hypothesis` from the extra → V1 goes red
-      with the same `ModuleNotFoundError`. Evidence: ___
+      Paste the collected count.
+      Evidence: fresh python3.12 venv, pip upgraded, `pip install --group test`
+      only → collect exit 0, zero errors, **3199** collected (= the dev venv)
+- [x] **V2** (15) Grep `pip install` in the workflow → every name is declared.
+      Evidence: the only installs left are `pip` itself and `--group test`
+- [x] **V3** (15) **non-vacuity** Remove `hypothesis` from the extra → V1 goes red
+      with the same `ModuleNotFoundError`.
+      Evidence: exit 2, `ModuleNotFoundError: No module named 'hypothesis'`,
+      *"Interrupted: 1 error during collection"*. Restored; V1 re-run on the
+      restored file: 3199, exit 0
 - [ ] **V4** (45) Every migrated event validates against `events.toml` field-by-field
       — **not** via a lax import that would pass today. Evidence: ___
 - [x] **V5** (45) `--all` across two runs with the same `BH-001` keeps them distinct.

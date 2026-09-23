@@ -1,3 +1,11 @@
+# What the test suite and the gates need, and nothing else — CI installs this
+# group and nothing by hand (`pip install --group test`, pip >= 25.1), so a
+# fresh checkout and CI collect the same set. There is no [project] table: the
+# plugin's version lives in .claude-plugin/plugin.json, and this repo is not a
+# pip-installable package.
+[dependency-groups]
+test = ["pytest", "pytest-cov", "ruff", "mypy", "hypothesis"]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 120

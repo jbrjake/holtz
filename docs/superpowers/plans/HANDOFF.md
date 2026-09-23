@@ -33,9 +33,38 @@ any phrasing where one unit closing reads as the work closing.
 
 **24 of 32 units · 39 of 51 items · 12 items across 8 units remain.**
 Counted off the dashboard, not carried forward. **P3 is finished except W18's
-item 33**, and **P4 is under way**: W23, W24 and W25 are `DONE`. What is left
-is W26–W30 (9 items: 48; 15, 45, 46; 12, 16; 21, 24; 23), W18's item 33, W13's
-item 17 (open by ruling), and W32's step 3 (a question for Jon).
+item 33**, and **P4 is under way**: W23, W24 and W25 are `DONE`; **W26 and W27
+are `WIP`**. What is left is W26 (48 — only V3), W27 (15 done; 45 and 46
+part-done), W28 (12, 16), W29 (21, 24), W30 (23), W18's item 33, W13's item 17
+(open by ruling), and W32's step 3 (a question for Jon).
+
+**⭐ Resume here (session paused 2026-09-23 at Jon's request):**
+
+- **W27 is mid-unit, with every decision already ruled** (D-p…D-t, in the
+  unit — read them first; D-q′ corrects a misstatement of mine and replaces
+  D-q's `PASS` mapping). Owed, in order: **45 step 3** — `step` 7 for audit
+  findings / 10 for resolutions, `commit_hash` `0000000` for an unrecorded
+  commit, a prose severity's leading word, the four undeclared legacy types
+  dropped with a stderr count, and `_parse_claims_table` made header-aware
+  (D-q′); **D-t** — declare `run_registered`/`run_completed` in
+  `events.toml` (fields `project`, `run`, `auditor`; find a producer id H2
+  accepts), then `enforcement_contract --write`; **45 step 5 (D-r)** —
+  `--build-project --ledger <name>` reads the existing project ledger and
+  emits only unregistered runs. `ledger import` cannot append (measured:
+  "File exists"), so the delta goes in by `sahjhan --ledger <name> event`,
+  which does append to the event-only ledger (measured); **46 step 8 (D-s)**
+  — stamp mtime+size beside the marker, re-hash only when either moves (43 ms
+  hash vs 16 µs stat, measured); **V4, V6, V9's download half.**
+  `scratchpad/validate_migrated.py` from this session was the V4 validator —
+  rebuild it as a test.
+- **W26 needs only V3**, read off the one full `--cov` run.
+- **The full suite has not run since `489e84d`, and CI has seen nothing** —
+  run it once, at the end of the next session, with `--cov` (that is W26's
+  V3). Nothing is pushed.
+- **Method trap from this session:** restoring a mutation with
+  `git checkout -- <file>` also discards that file's *uncommitted* work — it
+  cost the D-p edit once. Undo a mutation with a reverse Edit when the file
+  carries other changes.
 
 **W25 landed 2026-09-23** in three commits — `1795e6a` (39 + 49d), `b90d713`
 (49 a–c, e–h), `d0a0cd4` (11). It is `DONE` with a debt in its dashboard row:
