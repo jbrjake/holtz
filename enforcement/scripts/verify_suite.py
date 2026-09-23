@@ -108,7 +108,16 @@ def _audit_data_dir(cwd: str) -> str:
 # rather than running pytest. Do not add a second — a gate that invokes pytest
 # itself is both a duplicate default and a suite run this design exists to
 # remove (asserted by test_suite_gates_delegate_to_verify_suite).
-DEFAULT_PYTEST = "python3 -m pytest -x --ff --tb=short -q"
+#
+# Only the interpreter in front of it varies (`suite_python`), so no setting
+# can make the suite something other than pytest with these flags (D-v).
+PYTEST_ARGS = "-m pytest -x --ff --tb=short -q"
+DEFAULT_PYTEST = f"python3 {PYTEST_ARGS}"
+
+# In-tree virtualenv directories, in the order they are looked for. A venv is
+# the directory holding `pyvenv.cfg`, which uv, virtualenv, venv and in-project
+# poetry all write.
+VENV_DIRS = (".venv", "venv")
 
 # `suite_green` is spelled out as a string literal in the gate's SQL below, and
 # at the write site in `enforcement/hooks/suite_courier.py`, deliberately, and
@@ -146,8 +155,7 @@ GRAPH_PATH = os.path.join("docs", "holtz", "impact-graph.json")
 
 # pytest's exit codes for "the narrowed command could not be run", as distinct
 # from "the tests ran and something failed": 4 is a usage error (a path that
-# does not collect, or a `$HOLTZ_PYTEST` override that rejects trailing paths)
-# and 5 is nothing-collected. Either way the narrowed run proved nothing, so
+# does not collect) and 5 is nothing-collected. Either way the narrowed run proved nothing, so
 # the answer is to widen to the full suite. Widening can only ever run more
 # tests, so it is always the safe direction; recording the narrow result is
 # not.
@@ -318,9 +326,34 @@ def compute_tree_hash(root: str) -> str:
 # ── Shared helpers ───────────────────────────────────────────────────────────
 
 
-def suite_command() -> str:
+def _project_anchor(cwd: str) -> str:
+    """``_common.project_anchor``, reached lazily like ``_audit_data_dir``."""
+    sys.path.insert(0, _hooks_dir())
+    from _common import project_anchor  # noqa: PLC0415
+
+    return str(project_anchor(cwd))
+
+
+def suite_python(root: str, cwd: str) -> str:
+    """The interpreter the suite runs under.
+
+    An in-tree virtualenv first — in the tree being tested, then in the main
+    checkout, because a fix subagent's linked worktree does not carry the
+    gitignored venv. Then ``$HOLTZ_PYTHON``, an interpreter path for an
+    environment outside the tree (conda, poetry's cache). Then ``python3``.
+    """
+    for base in dict.fromkeys((root, _project_anchor(cwd))):
+        for name in VENV_DIRS:
+            venv = os.path.join(base, name)
+            python = os.path.join(venv, "bin", "python")
+            if os.path.isfile(os.path.join(venv, "pyvenv.cfg")) and os.path.isfile(python):
+                return python
+    return os.environ.get("HOLTZ_PYTHON") or "python3"
+
+
+def suite_command(root: str, cwd: str) -> str:
     """The suite command this run will execute (or did)."""
-    return os.environ.get("HOLTZ_PYTEST") or DEFAULT_PYTEST
+    return f"{shlex.quote(suite_python(root, cwd))} {PYTEST_ARGS}"
 
 
 def accepted_scopes(requested: str) -> tuple[str, ...]:
@@ -623,7 +656,7 @@ def _suite_invocation(cwd: str, root: str, scope: str) -> tuple[str, str]:
     ``full``. Recording the request rather than the result would understate a
     full run, and ``full`` satisfies an ``affected`` check anyway.
     """
-    base = suite_command()
+    base = suite_command(root, cwd)
     if scope != "affected":
         return base, "full"
 
@@ -668,7 +701,15 @@ def mode_record(cwd: str, root: str, scope: str) -> int:
     """
     tree_hash = compute_tree_hash(root)
     print(f"verify_suite: tree_hash={tree_hash}", file=sys.stderr)
+    if os.environ.get("HOLTZ_PYTEST"):
+        print(
+            "verify_suite: $HOLTZ_PYTEST is ignored — the suite is always "
+            "`<python> -m pytest`. Set $HOLTZ_PYTHON to an interpreter path "
+            "for an environment outside the tree.",
+            file=sys.stderr,
+        )
 
+    python = suite_python(root, cwd)
     command, scope = _suite_invocation(cwd, root, scope)
     proc = _run_suite(command, cwd)
 
@@ -682,7 +723,7 @@ def mode_record(cwd: str, root: str, scope: str) -> int:
             f"(exit {proc.returncode}) — widening to the full suite",
             file=sys.stderr,
         )
-        command, scope = suite_command(), "full"
+        command, scope = suite_command(root, cwd), "full"
         proc = _run_suite(command, cwd)
 
     if proc.returncode != 0:
@@ -699,7 +740,7 @@ def mode_record(cwd: str, root: str, scope: str) -> int:
         )
         return proc.returncode
 
-    evidence = {"command": command, "scope_ran": scope}
+    evidence = {"command": command, "scope_ran": scope, "python": python}
     passed = _PASSED_RE.search(proc.stdout)
     if passed:
         evidence["test_count"] = passed.group(1)

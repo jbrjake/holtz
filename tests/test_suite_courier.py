@@ -39,6 +39,7 @@ PLUGIN_COMMAND = (
 
 
 def _marker(**payload) -> str:
+    payload.setdefault("python", "python3")
     return f"{verify_suite.RECORD_MARKER} {json.dumps(payload, sort_keys=True)}"
 
 
@@ -315,6 +316,183 @@ class TestBothSignalsRequired:
             "suite_courier.py", _event(root, output=noisy), cwd=root,
         )
         assert _recorded(mock_daemon)["test_count"] == "7"
+
+
+# ── D-v (RULED 2026-09-23): what the green is allowed to rest on ─────────────
+#
+# W18 / item 33: the script was identified by its path's tail, so a two-line
+# `sub/enforcement/scripts/verify_suite.py` that only printed the marker was
+# indistinguishable from the real one. Three checks now, each with a test.
+
+
+def _warning(output: dict) -> str:
+    return output.get("hookSpecificOutput", {}).get("additionalContext", "")
+
+
+def _fake_script(root: str) -> str:
+    fake = os.path.join(root, "sub", "enforcement", "scripts", "verify_suite.py")
+    os.makedirs(os.path.dirname(fake))
+    with open(fake, "w", encoding="utf-8") as fh:
+        fh.write(f"print({_marker(command='x', scope_ran='full', test_count='9')!r})\n")
+    return fake
+
+
+@pytest.mark.hook_e2e
+class TestTheScriptIsThePinnedOne:
+
+    def test_a_same_named_script_elsewhere_records_nothing(self, tmp_path, mock_daemon):
+        root = _git_repo(tmp_path)
+        _fake_script(root)
+        command = "python3 sub/enforcement/scripts/verify_suite.py --record --scope full"
+        code, output, _ = run_enforcement_hook(
+            "suite_courier.py", _event(root, command=command), cwd=root,
+        )
+        assert code == 0
+        assert _recorded(mock_daemon) is None
+        assert "NOT recorded" in _warning(output)
+        assert "not the plugin's" in _warning(output)
+
+    def test_a_byte_copy_elsewhere_records_nothing(self, tmp_path, mock_daemon):
+        """The hash matches, and the path still refuses it.
+
+        A copy imports `_ledger_query` and `_recorded_command` from its own
+        directory, which is wherever the copier put them.
+        """
+        import shutil
+
+        root = _git_repo(tmp_path)
+        copy = os.path.join(root, "sub", "enforcement", "scripts", "verify_suite.py")
+        os.makedirs(os.path.dirname(copy))
+        shutil.copyfile(os.path.join(SCRIPTS_DIR, "verify_suite.py"), copy)
+        assert suite_courier._pin_problem(copy, suite_courier.MANIFEST) is None
+        command = "python3 sub/enforcement/scripts/verify_suite.py --record --scope full"
+        code, output, _ = run_enforcement_hook(
+            "suite_courier.py", _event(root, command=command), cwd=root,
+        )
+        assert code == 0
+        assert _recorded(mock_daemon) is None
+        assert "not the plugin's" in _warning(output)
+
+    def test_the_plugin_script_by_absolute_path_records(self, tmp_path, mock_daemon):
+        root = _git_repo(tmp_path)
+        command = f"python3 {SCRIPTS_DIR}/verify_suite.py --record --scope full"
+        code, _, _ = run_enforcement_hook(
+            "suite_courier.py", _event(root, command=command), cwd=root,
+        )
+        assert code == 0
+        assert _recorded(mock_daemon) is not None
+
+
+class TestTheManifestPinsTheScript:
+    """The hash is checked against `trusted-callers.toml`, the daemon's own list."""
+
+    SCRIPT = os.path.join(SCRIPTS_DIR, "verify_suite.py")
+
+    def _manifest(self, tmp_path, digest: str | None) -> str:
+        path = tmp_path / "trusted-callers.toml"
+        row = "" if digest is None else f'"scripts/verify_suite.py" = "sha256:{digest}"\n'
+        path.write_text(f'[callers]\n"hooks/x.py" = "sha256:{"0" * 64}"\n{row}')
+        return str(path)
+
+    def _digest(self) -> str:
+        import hashlib
+
+        with open(self.SCRIPT, "rb") as fh:
+            return hashlib.sha256(fh.read()).hexdigest()
+
+    def test_the_real_manifest_pins_the_real_script(self):
+        assert suite_courier._pin_problem(self.SCRIPT, suite_courier.MANIFEST) is None
+
+    def test_a_matching_row_passes(self, tmp_path):
+        manifest = self._manifest(tmp_path, self._digest())
+        assert suite_courier._pin_problem(self.SCRIPT, manifest) is None
+
+    def test_a_different_hash_is_refused(self, tmp_path):
+        manifest = self._manifest(tmp_path, "f" * 64)
+        assert "does not match" in suite_courier._pin_problem(self.SCRIPT, manifest)
+
+    def test_no_row_is_refused(self, tmp_path):
+        manifest = self._manifest(tmp_path, None)
+        assert "no row" in suite_courier._pin_problem(self.SCRIPT, manifest)
+
+
+class TestTheInterpreterIsCompiled:
+    """A named interpreter must be a binary, never a script (read, not run)."""
+
+    def test_the_bare_default_is_not_inspected(self, tmp_path):
+        assert suite_courier._interpreter_problem("python3", str(tmp_path)) is None
+
+    def test_a_real_interpreter_passes(self, tmp_path):
+        assert suite_courier._interpreter_problem(sys.executable, str(tmp_path)) is None
+
+    def test_a_symlinked_venv_python_passes(self, tmp_path):
+        link = tmp_path / "python"
+        link.symlink_to(sys.executable)
+        assert suite_courier._interpreter_problem(str(link), str(tmp_path)) is None
+
+    @pytest.mark.parametrize("body", [
+        "#!/bin/sh\necho '9 passed'\n",
+        "echo '9 passed'\n",
+    ])
+    def test_a_script_is_refused(self, tmp_path, body):
+        """With or without a `#!`: `sh` runs a shebang-less file as a script."""
+        fake = tmp_path / "python"
+        fake.write_text(body)
+        fake.chmod(0o755)
+        assert "not a compiled" in suite_courier._interpreter_problem(str(fake), str(tmp_path))
+
+    def test_a_relative_path_is_read_from_the_cwd(self, tmp_path):
+        (tmp_path / "bin").mkdir()
+        (tmp_path / "bin" / "python").write_text("#!/bin/sh\n")
+        problem = suite_courier._interpreter_problem("bin/python", str(tmp_path))
+        assert "not a compiled" in problem
+
+    def test_a_missing_interpreter_is_refused(self, tmp_path):
+        problem = suite_courier._interpreter_problem(str(tmp_path / "nope"), str(tmp_path))
+        assert problem is not None
+
+    def test_the_courier_refuses_a_run_under_a_script(self, tmp_path, mock_daemon):
+        root = _git_repo(tmp_path)
+        fake = os.path.join(root, "fakepython")
+        with open(fake, "w", encoding="utf-8") as fh:
+            fh.write("#!/bin/sh\necho '9 passed'\n")
+        output = _marker(command=f"{fake} -m pytest", scope_ran="full",
+                         test_count="9", python=fake)
+        code, result, _ = run_enforcement_hook(
+            "suite_courier.py", _event(root, output=output), cwd=root,
+        )
+        assert code == 0
+        assert _recorded(mock_daemon) is None
+        assert "not a compiled" in _warning(result)
+
+
+@pytest.mark.hook_e2e
+class TestACountIsRequired:
+    """A green that passed no test proves nothing."""
+
+    @pytest.mark.parametrize("count", ["0", None])
+    def test_no_passing_test_records_nothing(self, tmp_path, mock_daemon, count):
+        root = _git_repo(tmp_path)
+        payload = {"command": "python3 -m pytest", "scope_ran": "full"}
+        if count is not None:
+            payload["test_count"] = count
+        code, output, _ = run_enforcement_hook(
+            "suite_courier.py", _event(root, output=_marker(**payload)), cwd=root,
+        )
+        assert code == 0
+        assert _recorded(mock_daemon) is None
+        assert "no passing test" in _warning(output)
+
+    def test_an_unnamed_interpreter_records_nothing(self, tmp_path, mock_daemon):
+        """The pinned script always names it; evidence without it is not the script's."""
+        root = _git_repo(tmp_path)
+        bare = (f"{verify_suite.RECORD_MARKER} "
+                + json.dumps({"command": "x", "scope_ran": "full", "test_count": "3"}))
+        code, output, _ = run_enforcement_hook(
+            "suite_courier.py", _event(root, output=bare), cwd=root,
+        )
+        assert code == 0
+        assert _recorded(mock_daemon) is None
 
 
 @pytest.mark.hook_e2e

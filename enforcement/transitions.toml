@@ -127,8 +127,8 @@ gates = [
 # writer and forgeability instead of calling this a direct check.
 #
 # The suite command itself (and why it is `-x --ff` and never `--lf`) now lives
-# in exactly one place: `DEFAULT_PYTEST` in verify_suite.py. `$HOLTZ_PYTEST`
-# still overrides it; it is read there rather than expanded here.
+# in exactly one place: `DEFAULT_PYTEST` in verify_suite.py. Only its
+# interpreter varies — an in-tree venv, or `$HOLTZ_PYTHON` — decided there too.
 [[transitions]]
 from = "fix_loop"
 to = "fix_loop"

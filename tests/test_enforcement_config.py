@@ -428,11 +428,10 @@ def test_test_and_lint_gates_are_env_overridable():
 
     Gate commands run in the environment that invoked ``sahjhan transition``, so
     a target project whose tests/lint only run under a venv/pyenv/conda/poetry/
-    tox can't rely on the login ``python3``/``ruff``. Wrapping each command in
-    ``${HOLTZ_PYTEST:-...}`` / ``${HOLTZ_LINT:-...}`` lets an operator set the
-    exact command once (``sh`` expands the default when the var is unset, so
-    prior behavior is preserved) — without hardcoding any interpreter path into
-    the engine.
+    tox can't rely on the login ``python3``/``ruff``. Wrapping the lint command
+    in ``${HOLTZ_LINT:-...}`` lets an operator set it once (``sh`` expands the
+    default when the var is unset) — without hardcoding any interpreter path
+    into the engine. The suite's interpreter is chosen in verify_suite.py.
     """
     cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
     lint_cmds = [
@@ -446,13 +445,15 @@ def test_test_and_lint_gates_are_env_overridable():
         assert cmd.startswith("${HOLTZ_LINT:-") and cmd.endswith("}"), (
             f"lint gate must be overridable via $HOLTZ_LINT (#63/#70.5): {cmd}"
         )
-    # The suite half of the same contract moved into verify_suite.py when the
-    # gates stopped running pytest and started reading the ledger. The override
-    # still exists and still flows to every gate — it is read where the suite
-    # is actually run, so it reaches the agent's `--record` too, which the
-    # shell-expansion form never did.
-    assert "HOLTZ_PYTEST" in VERIFY_SUITE.read_text(), (
-        "the suite command must stay overridable via $HOLTZ_PYTEST (#63/#70.5)"
+    # The suite half of the same contract lives in verify_suite.py, where the
+    # suite is run. It reaches the project's interpreter by detecting an
+    # in-tree venv and, outside the tree, through `$HOLTZ_PYTHON` — the
+    # interpreter only, never the command (D-v, RULED 2026-09-23). That the
+    # command ignores `$HOLTZ_PYTEST` is pinned by behaviour, in
+    # test_verify_suite.py::TestTheSuiteInterpreter.
+    text = VERIFY_SUITE.read_text()
+    assert "pyvenv.cfg" in text and 'os.environ.get("HOLTZ_PYTHON")' in text, (
+        "the suite must reach a project's own interpreter (#63/#70.5)"
     )
 
 
@@ -471,10 +472,9 @@ def test_gate_commands_never_truncate_the_suite():
     the known-failing test is hit first (which is what makes ``-x`` pay off in
     the fix/re-run loop) but still runs everything.
 
-    This constrains the *defaults* in transitions.toml. An operator who exports
-    ``HOLTZ_PYTEST='pytest --lf'`` can still defeat their own gate — that is
-    outside what a config test can reach, and is called out in
-    references/phase-fix-loop.md.
+    This constrains the gate commands in transitions.toml. The suite's own
+    flags are fixed in ``verify_suite.PYTEST_ARGS``, and no setting reaches
+    them (D-v).
     """
     cfg = tomllib.loads(TRANSITIONS_TOML.read_text())
     banned = ("--lf", "--last-failed")
@@ -552,9 +552,9 @@ def test_the_suite_command_fails_fast_in_its_one_home():
     previously-failing tests).
     """
     default = re.search(
-        r'^DEFAULT_PYTEST\s*=\s*"([^"]+)"', VERIFY_SUITE.read_text(), re.M
+        r'^PYTEST_ARGS\s*=\s*"([^"]+)"', VERIFY_SUITE.read_text(), re.M
     )
-    assert default, "verify_suite.py must define DEFAULT_PYTEST as a literal"
+    assert default, "verify_suite.py must define PYTEST_ARGS as a literal"
     tokens = default.group(1).split()
     assert "-x" in tokens, f"suite command should fail fast with -x: {tokens}"
     assert "--ff" in tokens, f"suite command should order failed-first: {tokens}"

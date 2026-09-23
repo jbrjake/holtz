@@ -14,7 +14,7 @@ The division is chosen so that nothing a gate reads passes through the agent:
                  reached; never from the run's account of itself
   project/run  — derived from the tree and the active-ledger marker
   command      — from the marker; informational, no gate reads it
-  test_count   — from the marker; informational, optional
+  test_count   — from the marker; must be a nonzero count of passes
 
 Two independent signals must agree before anything is written, because either
 one alone has a hole. Claude Code 2.x omits `exit_code` and fires PostToolUse
@@ -28,16 +28,29 @@ The command must also be a single shell segment matching the invocation
 `phase-fix-loop.md` prescribes, so there is no `echo 'SUITE-GREEN: …'` and no
 work chained around a real run.
 
+The marker is only as good as the script that printed it, so three more checks
+stand behind it (D-v). The script the command ran must be this plugin's own
+`verify_suite.py`, and its sha256 must match its row in `trusted-callers.toml`;
+a same-named file anywhere else prints the same marker. That script runs
+`<python> -m pytest` with fixed flags, so the only thing the evidence reports
+that it did not decide itself is the interpreter — and a named interpreter
+must be a compiled executable, read here and never run. And the run must have
+passed at least one test.
+
 What remains agent-influenced is what was always agent-influenced: the tests
-themselves, and `$HOLTZ_PYTEST`. Confining the shell does not make a project's
-own test suite honest, and this hook does not pretend otherwise.
+themselves, and the environment they run in — the interpreter's own packages
+included. Confining the shell does not make a project's own test suite honest,
+and this hook does not pretend otherwise.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import shlex
 import sys
+import tomllib
 
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(
@@ -73,6 +86,83 @@ from _common import (  # noqa: E402
 from _protocol_cache import _split_shell_segments  # noqa: E402
 
 _TEST_COUNT_RE = re.compile(r"^\d+$")
+
+_CONFIG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_PLUGIN_ROOT = os.path.dirname(_CONFIG_DIR)
+
+# The one script whose green this hook records, and where its hash is pinned:
+# `trusted-callers.toml`, the manifest the daemon authenticates callers by,
+# keyed config-dir-relative the same way (D-v).
+PINNED_SCRIPT = os.path.join(_CONFIG_DIR, "scripts", "verify_suite.py")
+MANIFEST = os.path.join(_CONFIG_DIR, "trusted-callers.toml")
+_MANIFEST_KEY = "scripts/verify_suite.py"
+
+# The first bytes of a compiled executable: ELF; Mach-O in both widths and
+# byte orders; a universal binary.
+_EXECUTABLE_MAGIC = (
+    b"\x7fELF",
+    b"\xfe\xed\xfa\xce", b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xcf\xfa\xed\xfe",
+    b"\xca\xfe\xba\xbe",
+)
+
+
+def _executed_script(segment: str, cwd: str) -> str:
+    """The file a recognized segment ran, resolved the way the shell did.
+
+    The host reports the command as typed, so `${CLAUDE_PLUGIN_ROOT}` is still
+    a literal here and is expanded to the value the shell had.
+    """
+    root = os.environ.get("CLAUDE_PLUGIN_ROOT") or _PLUGIN_ROOT
+    path = shlex.split(segment)[1]
+    path = path.replace("${CLAUDE_PLUGIN_ROOT}", root).replace("$CLAUDE_PLUGIN_ROOT", root)
+    return os.path.realpath(os.path.join(cwd, path))
+
+
+def _pin_problem(script: str, manifest: str) -> str | None:
+    """Why ``script`` is not the manifest's ``verify_suite.py``, or None."""
+    try:
+        with open(manifest, "rb") as fh:
+            callers = tomllib.load(fh).get("callers", {})
+        with open(script, "rb") as fh:
+            digest = hashlib.sha256(fh.read()).hexdigest()
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        return f"cannot check {script} against {manifest}: {exc}"
+    pinned = callers.get(_MANIFEST_KEY)
+    if pinned is None:
+        return (f"{manifest} has no row for {_MANIFEST_KEY}. "
+                "Run scripts/hash-trusted-callers.sh.")
+    if pinned != f"sha256:{digest}":
+        return (f"{script} does not match its row in {manifest}. "
+                "Run scripts/hash-trusted-callers.sh.")
+    return None
+
+
+def _script_problem(segment: str, cwd: str) -> str | None:
+    """Why the script this segment ran is not the pinned one, or None."""
+    script = _executed_script(segment, cwd)
+    if script != os.path.realpath(PINNED_SCRIPT):
+        return f"{script} is not the plugin's verify_suite.py ({PINNED_SCRIPT})."
+    return _pin_problem(script, MANIFEST)
+
+
+def _interpreter_problem(python: str, cwd: str) -> str | None:
+    """Why the interpreter the run named is not a compiled executable, or None.
+
+    Read, never run: executing it here would run agent-chosen code outside
+    the sandbox. A bare name like ``python3`` resolves through the agent's
+    PATH, which this hook cannot see, so only a named path is inspected. A
+    file with no ``#!`` is refused too — ``sh`` runs one as a script.
+    """
+    if os.sep not in python:
+        return None
+    try:
+        with open(os.path.realpath(os.path.join(cwd, python)), "rb") as fh:
+            head = fh.read(4)
+    except OSError as exc:
+        return f"the interpreter {python} cannot be read ({exc})."
+    if not head.startswith(_EXECUTABLE_MAGIC):
+        return f"the interpreter {python} is not a compiled executable."
+    return None
 
 
 def _evidence(output: str) -> dict | None:
@@ -167,6 +257,11 @@ def main() -> None:
     if bash_exit_code(event) != 0:
         exit_ok()
 
+    cwd = event.get("cwd", os.getcwd())
+    problem = _script_problem(_split_shell_segments(command)[0], cwd)
+    if problem:
+        exit_warn(f"suite_green NOT recorded: {problem}", "PostToolUse")
+
     evidence = _evidence(bash_output(event))
     if evidence is None:
         # The command the host says succeeded, without the line the script
@@ -181,7 +276,27 @@ def main() -> None:
             "PostToolUse",
         )
 
-    cwd = event.get("cwd", os.getcwd())
+    assert evidence is not None
+    python = evidence.get("python")
+    if not isinstance(python, str) or not python:
+        exit_warn(
+            "suite_green NOT recorded: the evidence line names no interpreter, "
+            "and the pinned verify_suite.py always does.",
+            "PostToolUse",
+        )
+    assert isinstance(python, str)
+    problem = _interpreter_problem(python, cwd)
+    if problem:
+        exit_warn(f"suite_green NOT recorded: {problem}", "PostToolUse")
+
+    count = str(evidence.get("test_count") or "")
+    if not (_TEST_COUNT_RE.match(count) and int(count) > 0):
+        exit_warn(
+            "suite_green NOT recorded: the run reported no passing test, and a "
+            "green that passed nothing proves nothing.",
+            "PostToolUse",
+        )
+
     root = repo_root(cwd)
     if root is None:
         exit_warn(
@@ -215,9 +330,7 @@ def main() -> None:
     head = _git(["rev-parse", "HEAD"], root)
     if head and _COMMIT_RE.match(head):
         fields["commit_hash"] = head
-    count = str(evidence.get("test_count") or "")
-    if _TEST_COUNT_RE.match(count):
-        fields["test_count"] = count
+    fields["test_count"] = count
 
     try:
         record_authed_event("suite_green", fields, cwd)

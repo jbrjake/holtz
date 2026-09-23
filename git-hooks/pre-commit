@@ -79,7 +79,7 @@ fi
 # scripts/hash-trusted-callers.sh — the hook does it and re-stages
 # the result so the commit stays coherent.
 CHANGED_TRACKED_CALLER=$(echo "$CHANGED_FILES" \
-    | grep -E '^(enforcement/hooks/.*\.py|hooks/.*\.py|skills/holtz/scripts/.*\.py)$' || true)
+    | grep -E '^(enforcement/hooks/.*\.py|enforcement/scripts/verify_suite\.py|hooks/.*\.py|skills/holtz/scripts/.*\.py)$' || true)
 if [[ -n "$CHANGED_TRACKED_CALLER" ]]; then
     echo "pre-commit: tracked caller(s) changed — regenerating trusted-callers.toml"
     bash scripts/hash-trusted-callers.sh >/dev/null

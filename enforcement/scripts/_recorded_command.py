@@ -40,8 +40,8 @@ import shlex
 #: `poetry run` / `uv run` / `conda run` / a venv shim: those put a wrapper in
 #: `tokens[0]` and shift the script into `tokens[2]`, and the space of wrappers
 #: is not enumerable. The scripts do not need the project's interpreter anyway
-#: — `verify_suite.py` runs the suite through `$HOLTZ_PYTEST`, which is exactly
-#: the seam for a project whose tests only run under one. So the taught
+#: — `verify_suite.py` runs the suite under an in-tree venv or `$HOLTZ_PYTHON`,
+#: which is exactly the seam for a project whose tests only run under one. So the taught
 #: spelling is the supported one, and `looks_like_a_record` is what makes any
 #: other spelling loud instead of silent.
 INTERPRETERS = frozenset({"python", "python3", "py"})
@@ -86,8 +86,9 @@ def not_the_taught_form(event_label: str, taught: str) -> str:
         "--record, but it is not the form the courier recognises, so nothing "
         f"was written. Run it exactly as:\n    {taught}\n"
         "— alone on its own Bash line, launched with python3, and without "
-        "--cwd. To run the suite under a project's own interpreter, set "
-        "$HOLTZ_PYTEST rather than wrapping this command."
+        "--cwd. The suite already runs under an in-tree venv; for an "
+        "interpreter outside the tree, set $HOLTZ_PYTHON rather than wrapping "
+        "this command."
     )
 
 

@@ -40,6 +40,9 @@ TRUSTED_SCRIPTS=(
     "enforcement/hooks/tdd_courier.py"
     "enforcement/hooks/theoretical_courier.py"
     "enforcement/hooks/hardening_batch_courier.py"
+    # Not a daemon caller: it runs in the agent's sandbox. suite_courier.py
+    # checks the script a suite_green came from against this row (D-v).
+    "enforcement/scripts/verify_suite.py"
 )
 
 cat > "$MANIFEST" << 'HEADER'

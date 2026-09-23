@@ -991,9 +991,10 @@ def _record_suite_green(real_daemon):
 
     `fix_commit`'s suite gate is a ledger read (`verify_suite.py --check`), so
     driving the transition means producing the evidence rather than making a
-    trivially-true pytest command. `HOLTZ_PYTEST` stands in for the suite; the
-    hash, the daemon call, and the `restricted` write are all real — which is
-    the point, since a test that stubbed those would stop exercising the gate.
+    trivially-true pytest command. A one-test suite is the suite, run by real
+    pytest (D-v leaves no stand-in command); the hash, the daemon call, and the
+    `restricted` write are all real — which is the point, since a test that
+    stubbed those would stop exercising the gate.
 
     Both halves of the taught sequence run: `--record` in the agent's shell,
     which under the sandbox cannot reach the daemon, and then the PostToolUse
@@ -1002,9 +1003,15 @@ def _record_suite_green(real_daemon):
     which is the shape `test-the-taught-sequence-not-just-the-gate` describes.
     """
     root = real_daemon["project_root"]
+    os.makedirs(os.path.join(root, "tests"), exist_ok=True)
+    with open(os.path.join(root, "tests", "test_green.py"), "w", encoding="utf-8") as fh:
+        fh.write("def test_green():\n    assert True\n")
+    with open(os.path.join(root, ".gitignore"), "w", encoding="utf-8") as fh:
+        fh.write("__pycache__/\n")
     script = os.path.join(REPO_ROOT, "enforcement", "scripts", "verify_suite.py")
     env = os.environ.copy()
     env["SAHJHAN_DAEMON_SOCKET"] = real_daemon["sock_path"]
+    env["HOLTZ_PYTHON"] = sys.executable
     result = subprocess.run(
         [sys.executable, script, "--record"],
         cwd=root, capture_output=True, text=True, env=env, timeout=60,
@@ -1092,10 +1099,9 @@ class TestFixCommitAutoEmitsFindingResolved:
 
     def _drive_to_fix_commit(self, real_daemon, monkeypatch, finding_id="BH-001"):
         # Gates run in the `sahjhan transition` subprocess env; a trivially-true
-        # test/lint command lets us exercise the transition without a real suite.
+        # lint command lets us exercise the transition without a real linter.
         # CLAUDE_PLUGIN_ROOT is how the suite gate finds verify_suite.py — the
         # gate command fails loudly rather than silently if it is unset.
-        monkeypatch.setenv("HOLTZ_PYTEST", "true")
         monkeypatch.setenv("HOLTZ_LINT", "true")
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", REPO_ROOT)
         _git_init_with_commit(

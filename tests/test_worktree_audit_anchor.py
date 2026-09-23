@@ -23,7 +23,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from worktree_project import ACTIVE_RUN, fresh_enforcement_state  # noqa: E402
+from worktree_project import ACTIVE_RUN, REPO_ROOT, fresh_enforcement_state  # noqa: E402
 
 pytestmark = pytest.mark.hook_e2e
 
@@ -219,13 +219,16 @@ class TestV3DaemonStop:
 class TestV4TheCourierRecordsTheProjectsRunNumber:
     """V4 — `suite_courier` writes the real run and the anchored project."""
 
+    # The plugin's own script: the courier records only for the pinned copy
+    # (D-v), and the fixture's CLAUDE_PLUGIN_ROOT is a stub directory.
     _COMMAND = (
-        "python3 /x/enforcement/scripts/verify_suite.py --record --scope full"
+        f"python3 {os.path.join(REPO_ROOT, 'enforcement', 'scripts', 'verify_suite.py')} "
+        "--record --scope full"
     )
 
     def _drive(self, worktree_cwd, mock_daemon, cwd: str) -> dict:
         marker = "SUITE-GREEN: " + json.dumps(
-            {"command": "pytest", "scope": "full", "test_count": "5"},
+            {"command": "pytest", "scope": "full", "test_count": "5", "python": "python3"},
             sort_keys=True,
         )
         mock_daemon.recorded_events.clear()

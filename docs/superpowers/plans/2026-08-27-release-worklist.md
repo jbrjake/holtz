@@ -67,7 +67,7 @@ imprecision (`CLAUDE.md`).
 | W15 | 30 | C | `DONE` @ `8bd7e43` — one segmentation owner; two shapes left open and recorded | — |
 | W16 | 18 | C | `DONE` — step 2 @ `b111960`, step 1 on sahjhan 0.28.0's `recorded_by`; fixed at the lens site too | W09, ~~sahjhan#50~~ shipped |
 | W17 | 22 | C | `DONE` — H11, driven red at `48c72fd` before it was trusted | W16 |
-| W18 | 36, 33 | C | `WIP` — **36 done, 33 open**; 33 is a design choice, see the unit | W02 |
+| W18 | 36, 33 | C | `DONE` — a green rests on the pinned script, a fixed pytest command, a compiled interpreter and a nonzero count (D-v) | W02 |
 | W19 | 40, 47 | C | `DONE` — plus a 4th disagreement: NotebookEdit sends `notebook_path` | W02 |
 | W20 | 41, 38 | C | `DONE` — an abandoned audit is released by name, not by freshness; both flag spellings listed | — |
 | W21 | 9 | C | `DONE` — both D-c terms; step 2's mechanism does not exist and the substitute is raised in the unit | ~~D-c~~ ruled |
@@ -3554,11 +3554,11 @@ Without it, the class recurs. #79 was this; item 18 is this; the next one will b
 
 ## W18 — Items 36 + 33: courier triggers and the suite marker
 
-**Status:** `WIP` — **item 36 landed; item 33 is open**
+**Status:** `DONE` — item 36 landed; **item 33 landed as ruled in D-v**
 **Tier:** C  ·  **33 PROVEN**  ·  **Depends on:** W02
 **Commit:** `fix(enforcement): couriers fire on execution, not on mention, and re-derive what they record`
 
-> **Item 33 is not started, and it is a design choice rather than a spelling.**
+> **Item 33 was a design choice rather than a spelling** — ruled as D-v, below.
 > Step 3 offers "re-run the real check **or** bind the marker to a host-derived
 > signal it cannot echo". Re-running is not available to a PostToolUse hook —
 > this suite is ~24 minutes — so it is the second, and two facts measured while
@@ -3662,10 +3662,33 @@ is passed straight through.
       findings, and the `problem` channel is for a sweep that should have
       happened and did not — spending it here would teach every consumer to
       ignore it
-- [ ] **3.** (33) Have the courier re-run the real check (as the other four do),
+- [x] **3.** (33) Have the courier re-run the real check (as the other four do),
       **or** bind the marker to a host-derived signal it cannot echo
-- [ ] **4.** (33) Re-derive `--scope full` rather than trusting command text. The
+      → **as ruled in D-v, parts 1 and 3.** The courier resolves the script
+      the command ran (expanding `${CLAUDE_PLUGIN_ROOT}` as the shell did)
+      and refuses unless it is the plugin's own `verify_suite.py` **and** its
+      sha256 matches the new `scripts/verify_suite.py` row in
+      `trusted-callers.toml`. Both halves are needed: a same-named fake fails
+      the hash, and a *byte-copy* elsewhere passes the hash but imports its
+      siblings from wherever it was put, so only the path stops it. The
+      evidence must name its interpreter; a named one must be ELF or Mach-O,
+      read and never run (a shebang-less file is refused too — `sh` runs it
+      as a script); the run must have passed at least one test.
+      `hash-trusted-callers.sh` lists the script, and `git-hooks/pre-commit`
+      regenerates the manifest when it changes, as it does for hooks —
+      otherwise any edit to `verify_suite.py` would make the courier refuse
+      every green
+- [x] **4.** (33) Re-derive `--scope full` rather than trusting command text. The
       weaker claim is re-derived today and the stronger one is not — backwards
+      → **as ruled in D-v, part 2 — by removing what made it untrustworthy.**
+      The command text was never the problem once the script is pinned;
+      `$HOLTZ_PYTEST` was. The suite is always `<python> -m pytest -x --ff
+      --tb=short -q` (`PYTEST_ARGS`); `<python>` is an in-tree venv (`.venv/`
+      or `venv/` holding `pyvenv.cfg`, looked for in the tree and then in the
+      main checkout, which a linked worktree needs), else `$HOLTZ_PYTHON`,
+      else `python3`. `$HOLTZ_PYTEST` is not read, and a set one gets a
+      stderr line saying so. A pinned script running `--scope full` runs the
+      whole collection, so `full` means what it says
 
 ### Validation
 
@@ -3688,26 +3711,66 @@ is passed straight through.
       beside the courier's own tests**, because that fixture is the only thing
       in the suite that can take the audit dir away — every test run inside
       this repo has one
-- [ ] **V4** (33) The throwaway-repo reproduction: a two-line fake `verify_suite.py`
+- [x] **V4** (33) The throwaway-repo reproduction: a two-line fake `verify_suite.py`
       that only prints the marker must **not** produce a `suite_green`. **Run it
       with a live daemon** — the original observation was limited by an absent one,
-      so a mock-daemon test reproduces the limitation, not the fix. Evidence: ___
-- [ ] **V5** (33) A genuine full-suite run still records. Evidence: ___
-- [ ] **V6** (33) `--scope full` is re-derived: a run claiming `full` that ran a
-      subset does not record `full`. Evidence: ___
-- [ ] **V7** (33) The recorded green still satisfies `verify_suite.py --check` and
-      the `fix_commit` suite gate — end to end, not just the write. Evidence: ___
-- [ ] **V8 · non-vacuity** Item 36's two arms are driven; **33's is owed with
+      so a mock-daemon test reproduces the limitation, not the fix.
+      Evidence: `TestAgainstRealDaemon::test_a_fake_script_that_prints_the_marker_records_nothing`
+      — a `sub/enforcement/scripts/verify_suite.py` printing a well-formed
+      marker (real interpreter, nine passes), a command the recognizer still
+      accepts, a **live daemon**: the courier warns "not the plugin's
+      verify_suite.py" and the ledger holds no `suite_green`. Mock-daemon
+      partners pin the same-named fake, the byte-copy, and the plugin's own
+      script by absolute path (records). RED first: the unmodified courier
+      recorded the fake
+- [x] **V5** (33) A genuine full-suite run still records.
+      Evidence: `test_green_suite_records_an_accepted_event` — a real
+      four-test suite, `test_count` "4", tree hash matching; the whole
+      real-daemon class (13) runs real pytest, with no stand-in command
+- [x] **V6** (33) `--scope full` is re-derived: a run claiming `full` that ran a
+      subset does not record `full`.
+      Evidence, both doors, live daemon: `test_holtz_pytest_cannot_make_a_full_green`
+      — `HOLTZ_PYTEST=true` beside a red test: the real suite runs, exits 1,
+      nothing recorded; `test_an_interpreter_that_is_a_script_records_nothing`
+      — `$HOLTZ_PYTHON` naming a `#!` script that prints "9 passed":
+      `verify_suite` prints a marker, the courier refuses it as not a
+      compiled executable, nothing recorded. Unit partners in
+      `TestTheSuiteInterpreter` (8) and `TestTheInterpreterIsCompiled` (8)
+- [x] **V7** (33) The recorded green still satisfies `verify_suite.py --check` and
+      the `fix_commit` suite gate — end to end, not just the write.
+      Evidence: `test_check_passes_only_for_the_tree_that_was_proven` (the
+      check, live daemon) and `test_e2e_audit_flow`'s two `fix_commit` tests,
+      which record a real one-test green through `--record` and the courier
+      and then take `fix_commit` against the real config and binary — green,
+      on a real one-test suite
+- [x] **V8 · non-vacuity** Item 36's two arms are driven; **33's is owed with
       33.** Reverting step 1 (the merge branch back to "mentioned", the sahjhan
       branch back to its token loop) takes **five** tests red — the four
       parametrised naming cases and the `echo` one — and nothing else in the
       class. Reverting step 2 takes V3's test red, alone. Both mutations run in
-      one sitting against the same tree, restored after
-- [ ] **V9 · the manifest** (36) `theoretical_courier.py` is a daemon-calling
+      one sitting against the same tree, restored after.
+      **33's arm, one sitting, each undone by a reverse edit:** the path check
+      dropped → 2 red (the byte-copy, and the same-named fake's message — the
+      hash still refuses it); the interpreter check dropped → 5 red; a zero
+      count accepted → 1 red; `$HOLTZ_PYTEST` read again → 2 red; the
+      main-checkout venv lookup dropped → 1 red (the linked worktree)
+- [x] **V9 · the manifest** (36) `theoretical_courier.py` is a daemon-calling
       hook, so `scripts/hash-trusted-callers.sh` had to rerun — and this is the
       failure it produces if you forget: the four `TestTheCourierWritesForReal`
       tests go red with the deferral simply absent, which reads exactly like a
-      broken trigger. The trigger was fine. Only `real_daemon` tests see it
+      broken trigger. The trigger was fine. Only `real_daemon` tests see it.
+      **33:** `verify_suite.py`'s new row is covered by the same freshness test
+      that covers every row, and pre-commit regenerates it on any edit
+
+**Found while doing 33, pre-existing and not this unit's to close:** the tree
+hash takes in untracked, non-ignored files, and a real pytest run writes
+`__pycache__/`. A project that does not ignore `__pycache__` therefore changes
+its own tree hash by running its suite. The subagent's green names its
+worktree's bytecode, and the orchestrator's `--check` in the main checkout sees
+different bytecode, or none. `python3 -m pytest` always did this. The tests
+only started seeing it when they stopped using a stand-in command, and their
+fixture repos now carry the `__pycache__/` line real projects have. Recorded, not
+fixed.
 
 ---
 

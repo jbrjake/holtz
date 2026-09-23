@@ -255,16 +255,14 @@ To see one lens's board: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/fin
 
 This is **not** a licence to ask whether to continue. Continuing is the default (see SKILL.md's Autonomy section) — `pause` is for a question the user actually asked, not for converting a blocked gate into "how would you like me to proceed?"
 
-**Test / lint command for non-standard targets.** `verify_suite.py` runs the suite; the perspective-completion and `converge` gates still run the linter directly. Both resolve via the `PATH` of the shell you invoke them from. If the target's tests only run under a venv/pyenv/conda/poetry/tox, export an override **once at run start**:
+**Test / lint for non-standard targets.** `verify_suite.py` runs the suite as `<python> -m pytest -x --ff --tb=short -q`, and picks `<python>` itself: an in-tree venv (`.venv/` or `venv/` with a `pyvenv.cfg` — uv, virtualenv, in-project poetry), else `$HOLTZ_PYTHON`, else `python3`. The perspective-completion and `converge` gates run the linter directly, resolved via the `PATH` of the shell you invoke them from. If the target's interpreter lives outside the tree (conda, poetry's cache), or its linter needs a wrapper, export these **once at run start**:
 
 ```bash
-export HOLTZ_PYTEST='.venv/bin/python -m pytest -x --ff --tb=short -q'  # or: poetry run pytest / tox / ...
-export HOLTZ_LINT='.venv/bin/ruff check .'                             # or: poetry run ruff check .
+export HOLTZ_PYTHON=/path/to/env/bin/python   # a real interpreter, not a shim script
+export HOLTZ_LINT='.venv/bin/ruff check .'    # or: poetry run ruff check .
 ```
 
-Unset, these default to `python3 -m pytest -x --ff --tb=short -q` and `ruff check .`. Do not put `--lf`/`--last-failed` in `HOLTZ_PYTEST`: it runs only the previously-failing tests, so a green would mean nothing.
-
-`$HOLTZ_PYTEST` is how the suite reaches a project's own interpreter. The scripts under `enforcement/scripts/` are launched with `python3` and no wrapper, exactly as written above — they need no project environment of their own. When a gate command fails, Sahjhan surfaces a tail of its stderr in the block reason (sahjhan ≥ 0.16.0, holtz #63).
+The scripts under `enforcement/scripts/` are launched with `python3` and no wrapper, exactly as written above — they need no project environment of their own. When a gate command fails, Sahjhan surfaces a tail of its stderr in the block reason (sahjhan ≥ 0.16.0, holtz #63).
 
 ```dot
 digraph {
