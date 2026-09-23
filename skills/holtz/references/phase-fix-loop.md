@@ -57,10 +57,11 @@ The subagent runs the enforced TDD sequence itself, in its worktree:
 8. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event hardening_complete --field project=holtz --field run=N --field auditor=holtz --field phase=fix_loop --field step=10 --field finding_id=BH-NNN --field edge_cases_tested=N --field tests_added=N`
 9. **Once nothing else will touch the tree,** commit your worktree and rebase it onto the branch you were given:
    ```bash
-   git add -A && git commit -m "fix(<scope>): <desc>" -m "BH-NNN"
+   git add <each file you changed for this finding>
+   git commit -m "fix(<scope>): <desc>" -m "BH-NNN"
    git rebase <branch>
    ```
-   Commit exactly once. If the rebase conflicts, run `git rebase --abort`, record nothing, and return the conflicting paths — the finding goes back out, it does not get merged.
+   Stage by name only the test and source files you wrote for this finding. Commit exactly once. If the rebase conflicts, run `git rebase --abort`, record nothing, and return the conflicting paths — the finding goes back out, it does not get merged.
 
 10. **Last, after the rebase:** `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record --scope affected` — runs the tests covering your change (widens to full if it can't prove the subset), records `suite_green` for this tree. Red records nothing.
 
@@ -74,7 +75,17 @@ If the subagent cannot reach HIGH confidence, it records nothing, leaves the tre
 
 **Step B — Orchestrator merges and records.** You author and apply nothing. Take finished subagents **one at a time**, in the order they finish:
 
-11. **Merge, then validate — read the evidence, don't redo it.** `git merge --ff-only <worktree-branch>`. A refusal means the subagent's rebase is stale; send it back. Then `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --check --scope affected` exits 0 only if a `suite_green` names *this exact tree*, and the ledger must show this finding's `test_failed_before_fix` and `hardening_complete` (`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" status`). If either fails, the fix is not real — send it back or defer; do not record it.
+11. **Merge, then validate — read the evidence, don't redo it.** `git merge --ff-only <worktree-branch>`.
+
+    A refusal means the subagent's rebase is stale. Send it back to its worktree for this rework path, and retry the merge when it returns:
+    - **Rebase again** — step 9's rebase, onto the branch as it stands now; no second commit. A conflict ends as step 9 says.
+    - **Then record again** — step 10, alone on its own Bash line.
+    - **Then return** its compact result.
+
+    Then `python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --check --scope affected` exits 0 only if a `suite_green` names *this exact tree*, and the ledger must show this finding's `test_failed_before_fix` and `hardening_complete` (`sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" status`).
+    - `--check` prints `no suite_green for this working tree`: send the subagent back to record again (step 10), then retry this step.
+    - Either event missing from the ledger, or a record that comes back red: the fix is not real. Send it back or defer; do not record it.
+
 12. `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition fix_commit BH-NNN` — the item id is **positional** (`item_id=BH-NNN` also works); the CLI rejects `--item-id`. Its suite gate re-reads the same `suite_green` step 11 did: the tree hash names content, and a fast-forward merge does not change content, so no second run is needed. **This transition auto-records the `finding_resolved` event for BH-NNN** (id from the arg, commit hash from `HEAD`, run context inherited from the ledger). That resolution event — not the transition itself — is what marks the finding resolved for STATUS.md / PUNCHLIST.md "Resolved" counts and every downstream gate (`pattern_check`, `set complete perspective`, `converge`). You do **not** record `finding_resolved` by hand; one command does both. (Emitted by sahjhan ≥ 0.18.0; the pin is enforced by `scripts/check_sahjhan_pin.py`.)
 13. Move to the next finished subagent.
 

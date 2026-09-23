@@ -149,6 +149,55 @@ def test_an_unrebased_branch_is_refused_rather_than_merged(project):
     )
 
 
+def _refused_after_a_lands(project) -> tuple[str, str, str]:
+    """B rebases and records while A is still out; A lands; B is refused.
+
+    Returns (root, B's worktree, the hash B's first green names).
+    """
+    root = project["root"]
+    a, b = project["worktree"]("fix-a"), project["worktree"]("fix-b")
+    _subagent_turn(a, "alpha.py", "def a():\n    return 11\n")
+    stale = _subagent_turn(b, "beta.py", "def b():\n    return 22\n")
+    _git("merge", "--ff-only", "fix/fix-a", cwd=root)
+    refused = _git("merge", "--ff-only", "fix/fix-b", cwd=root, check=False)
+    assert refused.returncode != 0, "B was rebased onto a branch A has since moved"
+    return root, b, stale
+
+
+def test_a_refused_subagent_is_reworked_rebase_then_record(project):
+    """W30 / item 23, V2: the rework path step 11 teaches, run.
+
+    Sent back, B rebases onto the branch as it stands now and records again.
+    The second green names the tree that lands, so step 11 accepts it, and B
+    still has one commit.
+    """
+    root, b, stale = _refused_after_a_lands(project)
+
+    _git("rebase", "main", cwd=b)
+    reworked = compute_tree_hash(b)
+    _git("merge", "--ff-only", "fix/fix-b", cwd=root)
+
+    assert compute_tree_hash(root) == reworked
+    assert reworked != stale, "the first green must not already name the landed tree"
+    log = _git("log", "--oneline", "fix/fix-a..fix/fix-b", cwd=root).stdout
+    assert len(log.strip().splitlines()) == 1, log
+
+
+def test_a_rework_that_skips_the_record_lands_a_tree_no_green_names(project):
+    """W30 / item 23, V3: rebasing again without recording again stays detectable.
+
+    The merge succeeds, and the only green B holds names the tree from before
+    its second rebase — so step 11's `--check` finds none for the landed tree.
+    What it prints for that is pinned in `test_subagent_contract_consistency`.
+    """
+    root, b, stale = _refused_after_a_lands(project)
+
+    _git("rebase", "main", cwd=b)
+    _git("merge", "--ff-only", "fix/fix-b", cwd=root)
+
+    assert compute_tree_hash(root) != stale
+
+
 def test_a_conflicting_rebase_aborts_without_a_second_commit(project):
     """The stated way out when two fixes touch the same lines.
 

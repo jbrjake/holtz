@@ -256,6 +256,70 @@ def _fix_loop_lines() -> list[str]:
     )
 
 
+def _step_11_lines() -> list[str]:
+    """The orchestrator's step 11: its numbered line through the line before 12."""
+    lines = _fix_loop_lines()
+    starts = [i for i, line in enumerate(lines) if line.startswith("11. ")]
+    ends = [i for i, line in enumerate(lines) if line.startswith("12. ")]
+    assert len(starts) == 1 and len(ends) == 1, (starts, ends)
+    return lines[starts[0]:ends[0]]
+
+
+def _the_one_line(lines: list[str], marker: str) -> int:
+    found = [i for i, line in enumerate(lines) if marker in line]
+    assert len(found) == 1, f"expected one line with {marker!r}, found {len(found)}"
+    return found[0]
+
+
+def test_a_refused_merge_is_sent_back_to_rebase_then_record_then_return() -> None:
+    """W30 / item 23, V1: the rework path, on the document's own line order.
+
+    A subagent sent back that only rebases hands over a green naming the tree
+    from before its second rebase, and step 11 then rejects a fix that is
+    fine. Executed in `test_fix_loop_worktree_merge.py`; taught here.
+    """
+    lines = _step_11_lines()
+    refusal = _the_one_line(lines, "A refusal means")
+    rebase = _the_one_line(lines, "**Rebase again**")
+    record = _the_one_line(lines, "**Then record again**")
+    back = _the_one_line(lines, "**Then return**")
+
+    assert refusal < rebase < record < back
+    assert "step 9" in lines[rebase], "the rework rebase is step 9's"
+    assert "no second commit" in lines[rebase].lower(), "step 9 commits exactly once"
+    assert "step 10" in lines[record], "the re-record is step 10's"
+
+
+def test_a_stale_green_is_sent_back_to_record_not_called_unreal() -> None:
+    """W30 / item 23, V3: `--check`'s own words route to step 10.
+
+    The phrase is read out of `verify_suite.py`, so the doc cannot quote a
+    message the script no longer prints. "The fix is not real" belongs to the
+    missing ledger events and a red record, never to this line.
+    """
+    message = "no suite_green for this working tree"
+    source = (REPO_ROOT / "enforcement" / "scripts" / "verify_suite.py").read_text(encoding="utf-8")
+    assert message in source
+
+    lines = _step_11_lines()
+    stale = lines[_the_one_line(lines, message)]
+    assert "step 10" in stale
+    assert "not real" not in stale.lower()
+    unreal = lines[_the_one_line(lines, "not real")]
+    assert "test_failed_before_fix" in unreal or "either event" in unreal.lower()
+
+
+def test_the_subagent_stages_its_paths_by_name() -> None:
+    """W30 / item 23, V4: `git add -A` rides whatever else is in the worktree."""
+    text = (SKILL_DIR / "references" / "phase-fix-loop.md").read_text(encoding="utf-8")
+    assert "git add -A" not in text
+    lines = _fix_loop_lines()
+    commit = _the_one_line(lines, "git commit -m")
+    assert lines[commit - 1].strip().startswith("git add <"), (
+        "the line before the commit stages named paths"
+    )
+
+
 def _step_11b_lines() -> list[str]:
     """Step 11b's own lines: its heading through the line before the next one."""
     lines = _fix_loop_lines()

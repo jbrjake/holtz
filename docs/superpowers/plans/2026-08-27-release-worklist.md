@@ -80,7 +80,7 @@ imprecision (`CLAUDE.md`).
 | W27 | 15, 45, 46 | D | `DONE` — every migrated event validates field by field; a marked binary is hashed before it is trusted | — |
 | W28 | 12, 16 | D | `TODO` | all above |
 | W29 | 21, 24 | D | `DONE` — both comments now claim what the code checks; no predicate touched | ~~D-e, D-f~~ ruled |
-| W30 | 23 | D | `TODO` | W12 *(same file)* |
+| W30 | 23 | D | `DONE` — a refused fast-forward has a written way back, and a stale green no longer reads as an unreal fix | W12 *(same file)* |
 
 ## ⛔ Release gate: ALL 49 items. RULED (Jon, 2026-09-01)
 
@@ -5245,7 +5245,7 @@ gates `converge`.
 
 ## W30 — Item 23: three-wide dispatch has no rework path when `--ff-only` refuses
 
-**Status:** `TODO`  ·  **Tier:** D  ·  **Depends on:** W12 (file order, not logic)
+**Status:** `DONE` — the rework path is written, and step 11 reads a stale green as a stale green  ·  **Tier:** D  ·  **Depends on:** W12 (file order, not logic)
 **Commit:** `fix(fix-loop): write the rework path, and stage explicitly`
 
 *Last in P4 because it edits `phase-fix-loop.md`, which W03 and W12 step 4 also
@@ -5272,20 +5272,60 @@ in its tree rides the fix commit.
 
 ### Plan
 
-- [ ] **1.** Write the rework path into `phase-fix-loop.md`: re-rebase, **then**
+- [x] **1.** Write the rework path into `phase-fix-loop.md`: re-rebase, **then**
       re-record the green, then hand back
-- [ ] **2.** Replace `git add -A` with explicit paths
+      → step 11 now sends a refused subagent back for three lines in order —
+      **Rebase again** (step 9's rebase, no second commit, a conflict ends as
+      step 9 says), **Then record again** (step 10), **Then return** — and
+      retries the merge. They name steps 9 and 10 rather than repeat their
+      commands, because four existing tests require exactly one `git commit
+      -m`, one `git rebase <branch>`, one `--record --scope affected` and one
+      `--check --scope affected` line in the doc. **Step 11's failure reading
+      changed too, which V3 requires:** it said "if either fails, the fix is
+      not real", so a stale green read as an unreal fix. `--check`'s own
+      message, `no suite_green for this working tree`, now routes to "record
+      again (step 10)"; "not real" is kept for a missing ledger event or a
+      record that comes back red
+- [x] **2.** Replace `git add -A` with explicit paths
+      → `git add <each file you changed for this finding>` on its own line
+      before the commit, and "Stage by name only the test and source files
+      you wrote for this finding". No other skill file teaches `git add -A`
 
 ### Validation
 
-- [ ] **V1** A test over the document's own step order: re-rebase precedes
-      re-record, and re-record precedes hand-back. Evidence: ___
-- [ ] **V2** `test_fix_loop_worktree_merge.py` gains the refused-`--ff-only` case: B
-      is sent back, re-rebases, re-records, and step 11 accepts. Evidence: ___
-- [ ] **V3** A subagent that re-rebases **without** re-recording is rejected — the
+- [x] **V1** A test over the document's own step order: re-rebase precedes
+      re-record, and re-record precedes hand-back.
+      Evidence: `test_a_refused_merge_is_sent_back_to_rebase_then_record_then_return`
+      — the refusal line, then the three rework lines, each found exactly
+      once in step 11, in that order; the rebase line names step 9 and "no
+      second commit", the record line step 10. RED first (no rework lines);
+      swapping the rebase and record lines takes it red (mutation, reverted)
+- [x] **V2** `test_fix_loop_worktree_merge.py` gains the refused-`--ff-only` case: B
+      is sent back, re-rebases, re-records, and step 11 accepts.
+      Evidence: `test_a_refused_subagent_is_reworked_rebase_then_record` —
+      B rebases and records while A is out, A lands, B's fast-forward is
+      refused; B rebases again and records again, the merge lands exactly the
+      re-recorded tree, the first green's tree differs from it, and B still
+      has one commit. Real git and the real `compute_tree_hash`, as the rest
+      of that file; green on unchanged code by design, since it executes the
+      path the doc now teaches
+- [x] **V3** A subagent that re-rebases **without** re-recording is rejected — the
       failure mode must stay detectable, and its message must not look like "the fix
-      is unreal". Evidence: ___
-- [ ] **V4** Grep `phase-fix-loop.md` for `git add -A` → zero hits. Evidence: ___
+      is unreal".
+      Evidence: detectable — `test_a_rework_that_skips_the_record_lands_a_tree_no_green_names`:
+      the merge succeeds and the landed tree is not the one B's only green
+      names. The message — `--check` prints `no suite_green for this working
+      tree` for exactly this case (pinned against a real daemon by
+      `test_check_passes_only_for_the_tree_that_was_proven`), and
+      `test_a_stale_green_is_sent_back_to_record_not_called_unreal` requires
+      step 11 to quote that phrase (checked against `verify_suite.py`'s
+      source), route it to step 10, and keep "not real" off that line. RED
+      first on the old step 11
+- [x] **V4** Grep `phase-fix-loop.md` for `git add -A` → zero hits.
+      Evidence: 0 hits, pinned by `test_the_subagent_stages_its_paths_by_name`
+      (RED first), which also requires the line before the commit to stage
+      named paths. Contract gate PASS; `-m contract` 363 passed; the five
+      files that read this doc, slow included, 347 passed
 
 ---
 
