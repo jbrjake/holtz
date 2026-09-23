@@ -31,11 +31,16 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**23 of 32 units · 36 of 51 items · 15 items across 9 units remain.**
+**24 of 32 units · 39 of 51 items · 12 items across 8 units remain.**
 Counted off the dashboard, not carried forward. **P3 is finished except W18's
-item 33**, and **P4 has started**: W23 and W24 are `DONE`. What is left is
-W25–W30 (13 items), W18's item 33, W13's item 17 (open by ruling), and W32's
-step 3 (a question for Jon).
+item 33**, and **P4 is under way**: W23, W24 and W25 are `DONE`. What is left
+is W26–W30 (9 items: 48; 15, 45, 46; 12, 16; 21, 24; 23), W18's item 33, W13's
+item 17 (open by ruling), and W32's step 3 (a question for Jon).
+
+**W25 landed 2026-09-23** in three commits — `1795e6a` (39 + 49d), `b90d713`
+(49 a–c, e–h), `d0a0cd4` (11). It is `DONE` with a debt in its dashboard row:
+**item 39's config-fault half waits on a sahjhan ask** (below, under Open for
+Jon). Four rulings were taken before any code, D-l…D-o, recorded in the unit.
 
 Three units are `WIP` and none moves the unit count. **W13** closed item 37 and
 left item 17 open **by ruling**. **W18** closed item 36 and left item 33 open —
@@ -170,15 +175,15 @@ substitute for CI is not.
 `fast-subset-cannot-see-slow-tests` justifies running **the slow tests that can
 see your change**. It does not justify running all of them.
 
-⚠️ **The full suite has not run since `489e84d`. W19, W20, W21, W23 and W24
-are all unrun, and CI has never seen any of them — nothing is pushed.** Each
-commit says so. Running it wants a quiet machine; see the flake section.
+⚠️ **The full suite has not run since `489e84d`. W19, W20, W21, W23, W24 and
+W25 are all unrun, and CI has never seen any of them — nothing is pushed.**
+Each commit says so. Running it wants a quiet machine; see the flake section.
 
 **Last full run: 2026-09-08 at `489e84d` (W18/item 36)** — observed **exit 0**,
 **2998 passed, 8 skipped**, zero `FAILED`/`ERROR`, coverage **89.29%**, 24m44s.
 2998 + 8 = 3006 = the README badge at that commit; the two numbers check each
-other, so read both. **W19, W20 and W21 have had no full run** and each commit
-says so. Badge is **3069** at `224355d`.
+other, so read both. **W19 through W25 have had no full run** and each commit
+says so. Badge is **3117** at `d0a0cd4`.
 
 **Read from the run's own output, not from the wrapper's exit code.** ⚠️ **Two
 corrections, both measured 2026-09-09 against `pyproject.toml` and against real
@@ -190,7 +195,7 @@ per-test names, not the summary. So: read the last line, and cross-check with
 `grep -cE "^(FAILED|ERROR)"` being 0. There is nothing to drop.
 
 **It covers everything up to and including `489e84d` (W18 / item 36).** W19,
-W20, W21, W23 and W24 are the gap, deliberately.
+W20, W21, W23, W24 and W25 are the gap, deliberately.
 
 It is *not* CI: CI runs on ubuntu, and the seccomp debt below is a thing no
 local run touches. **Note also that the load-flaky hook family did not fail in
@@ -254,6 +259,23 @@ eight queries keyed on `type='finding_deferred'` were never touched.
   Fail-closed and deliberate; recorded here because it is a real upgrade
   consequence and nothing in the suite can show it.
 
+### Open for Jon — raised 2026-09-23 during W25, neither guessed at
+
+- **A sahjhan ask.** `hook eval` answers a config- or ledger-load failure
+  with `ok:true, decision:"allow"`, exit 0 — deliberately
+  (`src/cli/hooks_cmd.rs`, `cmd_hook_eval`). Observed with a malformed and a
+  missing `--config-dir`. Byte-identical to a genuine allow, so a malformed
+  `protocol.toml` silently turns off every PreToolUse gate and every
+  PostToolUse auto-record, and **no holtz-side change can tell the two
+  apart.** The ask: report a load failure distinguishably and leave block/warn
+  to the consumer (`exit_enforcement_error` already decides it). **Not filed.**
+  When it ships, `read_hook_eval` in `enforcement/hooks/_common.py` is the one
+  place both hooks read the reply — the change lands there.
+- **A candidate item (a fifth NotebookEdit disagreement).** `post_tool_hook.py`
+  reads `tool_input["file_path"]` alone; W19 fixed `notebook_path` only on the
+  PreToolUse side (`_write_target()`), so a notebook edit reaches PostToolUse
+  `hook eval` with no `--file`. Recorded in W25, unruled, not fixed.
+
 ### Open for Jon — two more, both raised, neither guessed at
 
 - **W32 step 3** (above): does the hand-vendored-old-binary path still want a
@@ -272,6 +294,11 @@ eight queries keyed on `type='finding_deferred'` were never touched.
   Holtz side, which the merge reads back from the ledger.
 
 ### Carried debts — landed code that did not finish its unit
+
+- **W25 / item 39 — the config-fault half.** The version fault (exit 2, empty
+  stdout) now degrades loudly in both hooks; a config or ledger-load fault
+  still reads as a genuine allow, because the engine says so. Waits on the
+  sahjhan ask under Open for Jon.
 
 - **W22 / item 27 — the seccomp functional run.** The fix is in (`6852e0d`) and
   both new tests inject the errno on macOS, which is what makes them runnable at
@@ -418,12 +445,42 @@ eight queries keyed on `type='finding_deferred'` were never touched.
 
 ## Do this next
 
-### 1. ⭐ P4 — W25 next, then W26–W30. Then the three stragglers.
+### 1. ⭐ P4 — W26 next, then W27–W30. Then the three stragglers.
 
-W23 and W24 are `DONE`. What remains, in the board's own order: **W25 (11, 39,
-49), W26 (48), W27 (15, 45, 46), W28 (12, 16), W29 (21, 24), W30 (23)**, then
-W18's item 33, W13's item 17 (open by ruling — do not reopen), and W32's step 3
-(a question for Jon).
+W23, W24 and W25 are `DONE`. What remains, in the board's own order: **W26
+(48), W27 (15, 45, 46), W28 (12, 16), W29 (21, 24), W30 (23)**, then W18's item
+33, W13's item 17 (open by ruling — do not reopen), and W32's step 3 (a
+question for Jon). **W28 drafts the changelog last** — after every other unit.
+
+**What W25 left that a later session would otherwise re-derive:**
+
+- **H12 is live and gated: every top-level gate's printed intent must name an
+  escape.** Adding or editing a gate means ending its intent in the way out —
+  a declared transition, a `sahjhan …` line whose `event`/`transition`
+  referent exists, a script in the tree, a human action, or the gate's own
+  command/file. "Printed" means the engine's resolution: own intent → named
+  query's → per-type default; composites print only their own. Argument-scoped
+  queries (`{{…}}` in the SQL) are exempt via `_argument_scoped`, shared with H8.
+- **H12 and H8 meet on multi-step escapes.** Writing "run `X`" where `X` has
+  run-wide gates of its own trips H8, correctly — the escape can refuse when
+  printed. Two intents describe a path instead (`fix_commit`'s 15-fix cap,
+  `fix_loop_start`'s first-pass gate). Do not "fix" them back to the imperative.
+- **Both tool hooks read `hook eval` through `_common.read_hook_eval`.** Do not
+  re-inline parsing in either; `TestTheTwoHooksAgree` is the tripwire.
+- **`read_cache_for_write` is the writer's reader** — it adds `failed`.
+  `not_found` is the only `None` that may create the cache, and
+  `protocol_tracker` is its only creator. Gates keep `read_cache_with_boundary`.
+- **`socket_unplaceable()` decides the unresolvable-`~` case at the reader**,
+  not in `boundary_dir` — raising there would crash every
+  `suppress(RuntimeError)` writer, since `_mutate` resolves the socket outside
+  its `try`.
+- **`event_auditor(event)`** derives `justine`/`holtz` from `agent_type`'s last
+  `:`-segment. Read in the 2.1.280 binary; **never driven with a live Justine
+  dispatch.**
+- **The pre-commit flake hit the first W25 commit twice** (12 failures, then 6
+  different ones, all the `Hook eval subprocess failed` timeout arm), then
+  passed on the third attempt with nothing changed. Standalone, the 12 passed
+  in 6.85 s. Same family, same answer: retry.
 
 **Three plan steps in a row have named a mechanism that does not exist, and the
 pattern is worth expecting rather than rediscovering.** W20 step 1 warned
