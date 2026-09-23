@@ -76,7 +76,7 @@ imprecision (`CLAUDE.md`).
 | W23 | 4, 7, 8, 13, 14 | D | `DONE` — the three files agree; two config-derived doc tests replace prose-vs-prose | — |
 | W24 | 6, 44 | D | `DONE` — the conjunct is a ledger predicate; V1's two clauses conflict and the unit says which one it kept | ~~D-b, D-g~~ ruled |
 | W25 | 11, 39, 49 | D | `DONE` — H12 closes 11 as a class; **39's config-fault half waits on a sahjhan ask** | W05, W14 |
-| W26 | 48 | D | `TODO` | — |
+| W26 | 48 | D | `WIP` — V1, V2 observed; V3 is the end-of-session `--cov` run | — |
 | W27 | 15, 45, 46 | D | `TODO` | — |
 | W28 | 12, 16 | D | `TODO` | all above |
 | W29 | 21, 24 | D | `TODO` | ~~D-e, D-f~~ ruled |
@@ -4731,7 +4731,7 @@ side of the tool call. Unruled — a candidate item for Jon.
 
 ## W26 — Item 48: the delta's new enforcement predicates ship with no direct unit tests
 
-**Status:** `TODO`  ·  **Tier:** D
+**Status:** `WIP` — V1, V2 observed; V3 waits on the end-of-session full `--cov` run  ·  **Tier:** D
 **Commit:** `test: direct unit coverage for the delta's new enforcement predicates`
 
 ### Defect
@@ -4747,22 +4747,53 @@ covered only by the parametrized subprocess cases in `test_hook_chains.py` —
 
 ### Plan
 
-- [ ] **1.** Direct unit tests for all seven. `is_read_only_cmd` first — it is the
+- [x] **1.** Direct unit tests for all seven. `is_read_only_cmd` first — it is the
       one with a known escaped defect
-- [ ] **2.** For the two hand-kept frozensets, test the **long-flag** forms
+      → `tests/test_enforcement_predicates.py`, 75 tests, one class per function
+- [x] **2.** For the two hand-kept frozensets, test the **long-flag** forms
       explicitly; the `--`/`-` asymmetry is the defect class, not any single word
-- [ ] **3.** Drive hooks by subprocess where the interface matters. ⚠️ **Two
+      → **on `_WRITING_FLAGS`, which is where the class lives.** The two
+      frozensets (`_READ_ONLY_COMMANDS`, `_READ_ONLY_GIT_SUBCOMMANDS`) hold
+      command and subcommand *names*; flags are only in the dict. Two layers:
+      every row derived from the table, each spelling in both argument shapes
+      (pins the matching), and the long spellings hand-listed (pins the
+      table's contents — a derived test cannot notice a row deleted).
+      **Not pinned either way:** bundled short flags (`sed -ni`), recorded by
+      W20 as the same class needing a flag parser rather than a row
+- [x] **3.** Drive hooks by subprocess where the interface matters. ⚠️ **Two
       `_common.py` modules exist** — importing the wrong one imports cleanly and
       makes every query return empty. Never let a negative assertion rest on an
       empty set
+      → the `_common` and `pre_tool_hook` functions run in a fresh interpreter
+      with `enforcement/hooks` first on the path; `_protocol_cache` has one
+      module of that name and no `_common` import at load, so its functions are
+      imported directly. `query_named_predicate` runs against the **real
+      engine** on a real ledger, both answers, plus stand-ins for each failure
 
 ### Validation
 
-- [ ] **V1** Each of the seven has at least one test that fails when the function is
+- [x] **V1** Each of the seven has at least one test that fails when the function is
       mutated. **Mutate each, confirm RED, revert** — the list is the checklist.
-      Evidence: 1___ 2___ 3___ 4___ 5___ 6___ 7___
-- [ ] **V2** `is_read_only_cmd`'s test **would have caught item 38**: assert
-      `--in-place` before W20 lands and watch it go red. Evidence: ___
+      Evidence — seven single-line mutations, one sitting, each restored with
+      `git checkout` and `git diff` empty after:
+      1 `is_read_only_cmd` prefix match → `==`: **18 red**.
+      2 `_tdd_gate_exempt` exact `docs` component → `startswith`: **1 red**,
+      `docsfoo/a.py`.
+      3 `project_anchor` stops following a `.git` file: **1 red**, the linked
+      worktree; the submodule test stays green, correctly.
+      4 `stall_bumped` replaces instead of adds: **1 red**; `stall_cleared`
+      clears every actor: **3 red**.
+      5 `pending_commits_for` returns every actor's: **3 red**.
+      6 `exit_boundary_missing` blocks on PostToolUse instead: **3 red**.
+      7 `query_named_predicate` guesses `False` on no rows: **1 red**,
+      `no-rows`
+- [x] **V2** `is_read_only_cmd`'s test **would have caught item 38**: assert
+      `--in-place` before W20 lands and watch it go red.
+      Evidence: `_WRITING_FLAGS` put back to its pre-`fd60952` shape —
+      `"sed": ("-i",)` (whose comment claimed the prefix match covered
+      `--in-place`), no `sort`/`tree`/`git --output` rows. **All five
+      hand-listed long spellings red**; the table-derived tests stay green,
+      which is exactly why the hand list exists. Restored
 - [ ] **V3** Coverage does not fall. **Do not lower a threshold** to accommodate
       this work — if coverage reads low, fix the measurement. Evidence: ___
 
