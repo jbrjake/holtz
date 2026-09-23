@@ -4549,14 +4549,47 @@ out of a PostToolUse hook.
       `data` too: `{"data": []}` crashed both hooks the same way `[]` did.
       **`pre_tool_hook` had the same `AttributeError`** — the RED run took it
       down on both list shapes
-- [ ] **5.** (49) Work rows a–h from the table above
+- [x] **5.** (49) Work rows a–h from the table above
       → **d** done with item 39 (same file): `--agent-id event_actor(event)`,
-      the orchestrator passed as `""` exactly as `pre_tool_hook` passes it
-- [ ] **6.** `bash scripts/hash-trusted-callers.sh` — this touches four
+      the orchestrator passed as `""` exactly as `pre_tool_hook` passes it.
+      → **a** (D-m) is decided at the one place every gate reads through, not
+      in `boundary_dir`. Raising there would have crashed every
+      `suppress(RuntimeError)` writer: `_mutate` resolves the socket *outside*
+      its `try`. So `socket_unplaceable()` names the case (no
+      `SAHJHAN_DAEMON_SOCKET` override and `~` not absolute), the cache reader
+      asks it before connecting, and answers `home_unresolved` while
+      `audit_active` — `exit_boundary_missing` prints `HOME_MESSAGE` for it,
+      because `holtz-start` needs the same path. `holtz-start` refuses on it
+      first thing. The docstring now says what the code does.
+      → **b** splits the reader: `read_cache_for_write` returns a fourth
+      element, `failed`, True unless the daemon served the blob or answered
+      `not_found`. The tracker is the cache's **only** creator
+      (`protocol_tracker.py`, the one `empty_cache()` call in the tree), so
+      `not_found` must still create it and does. `read_cache_with_boundary` is
+      a wrapper, so no gate caller moved. A boundary refusal counts as failed
+      too — it does not establish what is stored.
+      → **c** (D-n): no code change; the ruling keeps today's migration, and the
+      tests pin its cost boundary.
+      → **e**: `format_block(obligations, key)` prints the first obligation that
+      sets the key that blocked; both of `commit_gate`'s blocks use it.
+      → **f**: the comment now says `holtz-start`.
+      → **g** (D-o): permanence is claimed only for writes that landed; a failed
+      one is named with its exit code or exception and retried by the next
+      Bash call's verify. `project` is the anchor's basename, `run` is
+      `quiz_vault.get_run_number` (the public one of four copies), `auditor`
+      is `event_auditor(event)` — `justine` when `agent_type`'s last
+      `:`-segment is `justine`, so both `justine` and `holtz:justine` land.
+      `agent_type` read in the 2.1.280 binary's hook-input builder (`jl()`,
+      every hook event carries `agent_type`), and the `ORCHESTRATOR` comment
+      already quotes its documentation. **Not driven with a live Justine
+      dispatch** — that needs a capture hook wired into settings.
+      → **h**: a `k=v` whose preceding token starts with `-` is an operand, not
+      an assignment
+- [x] **6.** `bash scripts/hash-trusted-callers.sh` — this touches four
       manifest-listed hooks
-      → run for item 39's commit (three rows moved: `_common.py`,
-      `pre_tool_hook.py`, `post_tool_hook.py`); rerun owed as rows a, b, e, g
-      touch their hooks
+      → run for each commit: item 39's moved `_common.py`, `pre_tool_hook.py`,
+      `post_tool_hook.py`; the rows' moved `_common.py`, `sandbox_control.py`,
+      `commit_gate.py`, `bash_guard.py`, `protocol_tracker.py`
 
 **Found while doing item 39, not in this unit, recorded and not fixed:**
 `post_tool_hook.py` reads `tool_input["file_path"]` alone. W19 established
@@ -4595,15 +4628,51 @@ side of the tool call. Unruled — a candidate item for Jon.
       after the marker must be **identical**. RED unmodified on all four — two
       crashes in Pre, silence in Post, and `returned invalid JSON` vs `Hook eval
       failed` on the one reply both did degrade on
-- [ ] **V7** (49) Each of rows a–h has its validation from the table observed.
-      Evidence: a___ b___ c___
+- [x] **V7** (49) Each of rows a–h has its validation from the table observed.
+      Evidence — `tests/test_lower_tail.py`, one class per row, run RED on the
+      unmodified tree first (12 red, each for its stated reason; 9 green, all
+      unchanged-behaviour partners), then 21 passed:
+      **a** `TestRowAUnresolvedHomeFailsClosed` — a live audit with a relative
+      `HOME` is denied naming `HOME` (RED: *allowed*); no audit is left alone;
+      `holtz-start` refuses naming `HOME` (RED: *"daemon did not come up within
+      15s"*); the docstring names `socket_unplaceable` and `audit_active` and no
+      longer credits the fuse. A relative `HOME` is the stand-in for an unset
+      one on a uid with no passwd entry — same `expanduser` result, no root.
+      **b** `TestRowBAFailedReadWritesNothing` — one `internal_error` read, then
+      a sahjhan command: pending commits and stall survive (RED: `{}`, the
+      erasure itself); a `not_found` daemon still gets its first cache.
+      **c** `TestRowCTheScalarStallMigrates` — a scalar 16: a sibling's command
+      lands `{"": 16, sibling: 1}`, only the orchestrator is blocked, and its
+      re-sync clears its own bucket alone. 16, 1 and the threshold 15 are all
+      distinct. Green before, as a ruling that keeps today's behaviour must be.
       d `TestTheTwoHooksAgree::test_they_name_the_same_actor[subagent|orchestrator]`
       — both hooks' `hook eval` argv carry `--agent-id` with the same value,
-      `""` for the orchestrator; RED unmodified on Post's argv
-      e___ f___ g___ h___
-- [ ] **V8** `pytest -m hook_e2e` → exit 0.
-      Evidence (item 39's commit): **721 passed, 2357 deselected, exit 0**, zero
-      `FAILED`/`ERROR`. Re-observation owed once rows a, b, e, g, h have landed
+      `""` for the orchestrator; RED unmodified on Post's argv.
+      **e** `TestRowEThePrintedEscapeIsTheBlockingOnes` — pending commit + stall
+      16, `ls`: the block names the stall and not `fix_commit` (RED: printed
+      `fix_commit required`); the printed escape is read out of the message,
+      passes `commit_gate`, and the tracker clears the stall with it.
+      **f** `TestRowFTheBoundaryCommentAgreesWithTheMessage` — the comment block
+      above the boundary check and `BOUNDARY_MESSAGE` name the same word (RED:
+      `{'holtz-stop'} vs {'holtz-start'}`).
+      **g** `TestRowGTheViolationRecord` — a write exiting 1 is not called
+      permanent and says it could not be recorded (RED: *"This violation is
+      permanent"*); `project` = the anchor's basename and `run` = `7` from
+      `run-7`; `auditor` is `justine` for `holtz:justine` and `justine`,
+      `holtz` for none and for `holtz:merge-agent`. ⚠️ Those last two pass on
+      the unmodified tree too, because the hardcoded value happened to be
+      right for them — only the two Justine cases discriminate.
+      `test_violation_records_event_with_field_syntax` asserted `project=holtz`,
+      the defect; it now asserts the derived name.
+      **h** `TestRowHFieldOperandsAreNotAssignments` — `--field finding_id=BH-001
+      … $finding_id` comes back byte-identical (RED: rewritten to `BH-001`); a
+      real assignment still resolves. `test_shell_indirection.py` and
+      `test_shell_segmentation.py` unchanged and green: no guard decision moved
+- [x] **V8** `pytest -m hook_e2e` → exit 0.
+      Evidence: item 39's commit **721 passed, exit 0**; re-observed after rows
+      a–h **739 passed, 2360 deselected, exit 0**, zero `FAILED`/`ERROR`. The
+      12 slow/`real_daemon` files that drive the changed hooks: 632 passed,
+      exit 0
 - [x] **V9 · non-vacuity** Revert 39 → V3 and V5 go red.
       Evidence: two single-line mutations, one sitting, two distinct failure
       sets. **(a)** Post's `exit_enforcement_error` → `exit_ok()`: 6 red (V3, V5,

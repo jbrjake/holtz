@@ -42,6 +42,7 @@ from _protocol_cache import (  # noqa: E402
     pending_commits_discharged,
     pending_commits_patch,
     query_named_predicate,
+    read_cache_for_write,
     read_cache_with_boundary,
     registered_resolutions,
     sahjhan_segments,
@@ -353,6 +354,7 @@ def _apply_sahjhan_cmd(
     cmd: str,
     actor: str,
     exit_code: int,
+    read_failed: bool = False,
 ) -> dict:
     """Record the effects of a sahjhan enforcement command on the cache.
 
@@ -371,8 +373,15 @@ def _apply_sahjhan_cmd(
     refused rather than silently overwriting the winner, and re-derives against
     what it reads back. ``version`` of ``None`` — no daemon token, or a cache
     this call had to invent — writes unconditionally, exactly as before.
+
+    A cache is invented only when the daemon said nothing is stored. When the
+    read did not complete (``read_failed``) the daemon may hold state this call
+    cannot see, and a whole-blob write of an empty cache would erase it — so
+    nothing is written, and the actor's next sahjhan command re-syncs.
     """
     if cache is None:
+        if read_failed:
+            return {}
         cache = empty_cache()
         version = None
     # The engine's answers, asked for once: a retry re-derives what depends on
@@ -491,11 +500,12 @@ def main() -> None:
 
     # The version comes back with the cache because the whole-blob write below
     # is conditional on it — a token fetched separately would name a different
-    # read than the snapshot it is meant to guard.
-    cache, _boundary, version = read_cache_with_boundary(cwd)
+    # read than the snapshot it is meant to guard. Whether the read failed
+    # comes back too: a failed read is not "nothing stored" (item 49 b).
+    cache, _boundary, version, read_failed = read_cache_for_write(cwd)
 
     if is_sahjhan_cmd(cmd):
-        _apply_sahjhan_cmd(cwd, cache, version, cmd, actor, exit_code)
+        _apply_sahjhan_cmd(cwd, cache, version, cmd, actor, exit_code, read_failed)
         exit_ok()
 
     if cache is None:
@@ -528,7 +538,7 @@ def main() -> None:
     # the stall counter. Checked after the git-commit branch so a
     # ``git commit && sahjhan status`` line still registers its commit. #70 item 1.
     if contains_sahjhan_cmd(cmd):
-        _apply_sahjhan_cmd(cwd, cache, version, cmd, actor, exit_code)
+        _apply_sahjhan_cmd(cwd, cache, version, cmd, actor, exit_code, read_failed)
         exit_ok()
 
     # Test/lint/type-check commands are legitimate TDD activity — don't count

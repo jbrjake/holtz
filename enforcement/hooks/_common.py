@@ -139,6 +139,22 @@ BOUNDARY_MESSAGE = (
 )
 
 
+# The refusal `read_cache_for_write` answers with when the socket cannot be
+# placed at all. Not a daemon reason code: no daemon was reached.
+HOME_UNRESOLVED = "home_unresolved"
+
+HOME_MESSAGE = (
+    "AUDIT BOUNDARY UNAVAILABLE: `~` does not resolve to an absolute path in "
+    "this environment (HOME is unset or relative), so the daemon socket cannot "
+    "be placed outside the project and no hook can reach this audit's "
+    "enforcement. An audit run this way would prove nothing, so nothing "
+    "proceeds.\n\n"
+    "Only a human can fix it: ask the user to restart Claude Code with HOME set "
+    "to their home directory. `holtz-start` cannot fix this — it needs the "
+    "same path."
+)
+
+
 def exit_boundary_missing(reason: str, hook_type: str = "PreToolUse") -> NoReturn:
     """Refuse the call because the audit boundary is not in place.
 
@@ -153,8 +169,14 @@ def exit_boundary_missing(reason: str, hook_type: str = "PreToolUse") -> NoRetur
     at the project, not the cwd. Callers therefore ask `audit_abandoned` first
     and let those sessions past; what remains here is a live audit whose
     boundary came down, which is the case this exists for.
+
+    ``HOME_UNRESOLVED`` is the one refusal no daemon issued, and the one
+    ``holtz-start`` cannot repair, so it carries its own message.
     """
-    message = BOUNDARY_MESSAGE.format(reason=reason)
+    message = (
+        HOME_MESSAGE if reason == HOME_UNRESOLVED
+        else BOUNDARY_MESSAGE.format(reason=reason)
+    )
     if hook_type == "PreToolUse":
         exit_block(message)
     exit_warn(message, hook_type)
@@ -365,14 +387,30 @@ def boundary_dir(cwd: str | None = None) -> str:
     ``restricted`` its courier could not write one, so the per-actor TDD gate
     could never open for it.
 
-    If ``~`` cannot be resolved the result is a relative path, which lands
-    inside the project and trips the fuse — failing closed, which is the
-    correct direction for "we could not put this somewhere safe."
+    If ``~`` cannot be resolved the result is a relative path, and a relative
+    socket path names a different file from every cwd — so it is never read
+    through. ``socket_unplaceable`` names the case, and the cache reader asks
+    it before connecting: while an audit is active (``audit_active``) that is
+    a boundary refusal and every consumer fails closed; with no audit it reads
+    as no daemon. ``holtz-start`` refuses to arm on it.
     """
     if cwd is None:
         cwd = os.getcwd()
     key = hashlib.sha256(project_anchor(cwd).encode()).hexdigest()[:12]
     return os.path.join(os.path.expanduser("~"), ".holtz", "run", key)
+
+
+def socket_unplaceable() -> bool:
+    """Whether the daemon socket has nowhere safe to go.
+
+    True when no ``SAHJHAN_DAEMON_SOCKET`` override names one and ``~`` does
+    not expand to an absolute path — HOME unset on a uid with no passwd entry,
+    or HOME itself relative. ``boundary_dir`` would then hand back a path
+    relative to whichever cwd asks.
+    """
+    if os.environ.get("SAHJHAN_DAEMON_SOCKET"):
+        return False
+    return not os.path.isabs(os.path.expanduser("~"))
 
 
 def _get_daemon_socket_path(cwd: str | None = None) -> str:

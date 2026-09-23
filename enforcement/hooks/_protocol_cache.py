@@ -75,6 +75,10 @@ BOUNDARY_REFUSED = "sandbox_required"
 # would go quiet the day the message is reworded.
 VERSION_CONFLICT = "version_conflict"
 
+# The daemon's answer to a read when nothing is stored yet — the one ``None``
+# a writer may treat as "create it".
+NOT_FOUND = "not_found"
+
 
 def read_cache_with_boundary(
     cwd: str,
@@ -106,24 +110,57 @@ def read_cache_with_boundary(
     (e.g., bad base64, unexpected JSON structure) are NOT caught — they
     should crash visibly rather than silently disabling all enforcement.
     """
+    cache, boundary, version, _failed = read_cache_for_write(cwd)
+    return cache, boundary, version
+
+
+def read_cache_for_write(
+    cwd: str,
+) -> tuple[dict[str, Any] | None, str | None, str | None, bool]:
+    """``read_cache_with_boundary``, plus whether the read failed.
+
+    A whole-blob writer needs the one distinction no gate does. ``None`` from
+    a daemon that answered ``not_found`` means nothing is stored yet, and the
+    writer is what creates the cache. ``None`` from a read that did not
+    establish what is stored — unreachable, refused, errored, unreadable —
+    means the daemon may hold state this caller cannot see, and writing
+    ``empty_cache()`` over it erased every pending commit and stall count.
+    The fourth element is True for that second case only.
+
+    An unplaceable socket (``socket_unplaceable``) is decided here, before any
+    connect, because every gate reads through this function: while an audit is
+    active it is a ``home_unresolved`` boundary refusal, so each consumer fails
+    closed, and with no audit it reads as no daemon.
+    """
+    from _common import (
+        HOME_UNRESOLVED,
+        DaemonError,
+        _daemon_request,
+        _get_daemon_socket_path,
+        audit_active,
+        socket_unplaceable,
+    )
+    if socket_unplaceable():
+        return None, (HOME_UNRESOLVED if audit_active(cwd) else None), None, True
     try:
-        from _common import DaemonError, _daemon_request, _get_daemon_socket_path
         sock_path = _get_daemon_socket_path(cwd)
         try:
             resp = _daemon_request(sock_path, {"op": "enforcement_read"})
         except DaemonError as exc:
             if exc.error == BOUNDARY_REFUSED:
-                return None, exc.reason or BOUNDARY_REFUSED, None
+                return None, exc.reason or BOUNDARY_REFUSED, None, True
+            if exc.error == NOT_FOUND:
+                return None, None, None, False
             raise
         version = resp.get("version")
-        return json.loads(base64.b64decode(resp["data"])), None, version
+        return json.loads(base64.b64decode(resp["data"])), None, version, False
     except (OSError, ConnectionError, RuntimeError, KeyError, json.JSONDecodeError, ValueError):
         # OSError/ConnectionError: daemon socket unreachable
         # RuntimeError: daemon returned an error (from _daemon_request)
-        # KeyError: daemon response missing "data" field (no state stored)
+        # KeyError: daemon response missing "data" field
         # json.JSONDecodeError: daemon sent invalid/empty JSON (corrupt or dead)
         # ValueError: base64 decode failure (corrupt daemon response)
-        return None, None, None
+        return None, None, None, True
 
 
 def read_cache(cwd: str) -> dict[str, Any] | None:
@@ -758,6 +795,20 @@ def event_actor(event: dict[str, Any]) -> str:
     return str(event.get("agent_id") or ORCHESTRATOR)
 
 
+def event_auditor(event: dict[str, Any]) -> str:
+    """Whose audit this tool call belongs to: ``justine`` or ``holtz``.
+
+    Read off ``agent_type``, which the host sets on a hook event from inside a
+    subagent — the same shipped-binary fact ``ORCHESTRATOR`` rests on. The
+    plugin's Justine agent arrives as ``justine`` or, dispatched by its
+    qualified name, ``holtz:justine``, so the last ``:``-segment decides.
+    Everything else — the orchestrator, the merge agent, a fix subagent — is
+    working Holtz's run.
+    """
+    agent_type = str(event.get("agent_type") or "")
+    return "justine" if agent_type.rsplit(":", 1)[-1] == "justine" else "holtz"
+
+
 def _actor_patch(
     cache: dict[str, Any] | None, key: str, whole: dict[str, Any], actor: str
 ) -> dict[str, Any]:
@@ -1052,6 +1103,18 @@ def format_injection(obligations: list[dict[str, Any]], cache: dict[str, Any] | 
     ob = obligations[0]
     blocks = "BLOCKED" if ob.get("blocks_commit") or ob.get("blocks_all") else "PROTOCOL"
     return f"{blocks}: {ob['msg']}"
+
+
+def format_block(obligations: list[dict[str, Any]], key: str) -> str:
+    """The block message of the first obligation that sets ``key``.
+
+    A block prints the remedy for what blocked, and ``obligations[0]`` is not
+    always that: with a pending commit and a stall, the commit comes first and
+    the stall is what refuses a non-commit command — so leading with the list
+    printed ``fix_commit``, which does nothing for a stall.
+    """
+    blocking = next(o for o in obligations if o.get(key))
+    return f"BLOCKED: {blocking['msg']}"
 
 
 def format_state_line(cache: dict[str, Any] | None) -> str:

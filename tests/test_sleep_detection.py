@@ -196,8 +196,8 @@ class TestStallPenalty:
             # at, so a whole-blob write can be made conditional on it. `None`
             # is the honest fixture answer — this path never writes one.
             patch.object(
-                _tracker, "read_cache_with_boundary",
-                return_value=(dict(initial_cache), None, None),
+                _tracker, "read_cache_for_write",
+                return_value=(dict(initial_cache), None, None, False),
             ),
             # Explicit, not inherited. `_load_tracker_module` only installs its
             # always-fresh `_protocol_cache` stub when nothing has imported the

@@ -7,7 +7,6 @@ verification fails, records a protocol_violation event.
 """
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 import subprocess
@@ -20,11 +19,18 @@ from _common import (  # noqa: E402
     exit_enforcement_error,
     exit_ok,
     exit_warn,
+    project_anchor,
     read_event,
     resolve_config_dir,
 )
-from _protocol_cache import is_enforcement_fresh, is_sahjhan_cmd, read_cache  # noqa: E402
+from _protocol_cache import (  # noqa: E402
+    event_auditor,
+    is_enforcement_fresh,
+    is_sahjhan_cmd,
+    read_cache,
+)
 from _resolve import ensure_sahjhan  # noqa: E402
+from quiz_vault import get_run_number  # noqa: E402
 
 
 def main() -> None:
@@ -97,33 +103,59 @@ def main() -> None:
         # substance. Ask the ledger what is already on record and add only what
         # is new. Derived at check time, never mirrored in a cache file (#77).
         already = _recorded_violations(binary, config_dir, cwd)
+        # Whose run, which run, and which auditor, from the same sources the
+        # couriers use — the anchor, the active-ledger marker, and the acting
+        # agent's `agent_type` — so a consumer project's ledger names itself.
+        owner = [
+            "--field", f"project={os.path.basename(project_anchor(cwd))}",
+            "--field", f"run={get_run_number(cwd)}",
+            "--field", f"auditor={event_auditor(event)}",
+        ]
+        unrecorded: list[tuple[str, str]] = []
         for file_path, detail in mismatches:
             if (file_path, detail) in already:
                 continue
-            with contextlib.suppress(OSError, subprocess.TimeoutExpired):
-                violation_cmd = [
-                    binary, "--config-dir", config_dir,
-                    "event", "protocol_violation",
-                    "--field", "project=holtz",
-                    "--field", "run=0",
-                    "--field", "auditor=holtz",
-                    "--field", f"file_path={file_path}",
-                    "--field", f"detail={detail}",
-                ]
-                subprocess.run(
+            violation_cmd = [
+                binary, "--config-dir", config_dir,
+                "event", "protocol_violation",
+                *owner,
+                "--field", f"file_path={file_path}",
+                "--field", f"detail={detail}",
+            ]
+            try:
+                written = subprocess.run(
                     violation_cmd,
                     capture_output=True,
                     timeout=5,
                     cwd=cwd,
                 )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                unrecorded.append((file_path, type(exc).__name__))
+                continue
+            if written.returncode != 0:
+                unrecorded.append((file_path, f"exit {written.returncode}"))
 
+        # Permanent is a claim about the ledger, so it is made only for what
+        # reached it. An unrecorded one is retried by the next Bash call's
+        # verify, which reports the same mismatch until it lands.
         files = ", ".join(path for path, _ in mismatches)
-        exit_warn(
-            f"PROTOCOL VIOLATION: Managed file integrity check failed for: "
-            f"{files}. This violation is permanent and will "
-            f"block convergence for this run.",
-            "PostToolUse",
-        )
+        message = f"PROTOCOL VIOLATION: Managed file integrity check failed for: {files}."
+        if unrecorded:
+            failed = {path for path, _ in unrecorded}
+            recorded = [path for path, _ in mismatches if path not in failed]
+            message += (
+                " The violation could not be recorded for: "
+                + ", ".join(f"{path} ({why})" for path, why in unrecorded)
+                + " — the check runs again after the next Bash call."
+            )
+            if recorded:
+                message += (
+                    f" Recorded, permanent, and blocking convergence: "
+                    f"{', '.join(recorded)}."
+                )
+        else:
+            message += " This violation is permanent and will block convergence for this run."
+        exit_warn(message, "PostToolUse")
 
     exit_ok()
 

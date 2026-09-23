@@ -45,6 +45,7 @@ from collections.abc import Callable
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
+    HOME_MESSAGE,
     DaemonError,
     _daemon_request,
     _enforcement_root,
@@ -55,6 +56,7 @@ from _common import (  # noqa: E402
     exit_prompt_block,
     read_event,
     resolve_config_dir,
+    socket_unplaceable,
 )
 from _protocol_cache import BOUNDARY_REFUSED  # noqa: E402
 from _resolve import ensure_sahjhan  # noqa: E402
@@ -342,6 +344,10 @@ def _check_boundary(sock_path: str) -> str | None:
 
 def arm(cwd: str) -> str:
     """Start the daemon, then raise the boundary. Returns the receipt."""
+    # Before anything that would bind a socket or write a backup: both go
+    # under `boundary_dir`, which has no absolute home to hang off here.
+    if socket_unplaceable():
+        return "HOLTZ-START FAILED: " + HOME_MESSAGE
     binary = ensure_sahjhan()
     if binary is None:
         return "HOLTZ-START FAILED: the sahjhan binary is unavailable."

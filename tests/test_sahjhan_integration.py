@@ -710,7 +710,9 @@ class TestBashGuard:
         )
         logged = log_file.read_text()
         assert "--field" in logged, "violation event should use --field syntax"
-        assert "project=holtz" in logged, "violation event missing project field"
+        # The project is derived from the anchor, never typed (W25 row g).
+        project = os.path.basename(os.path.realpath(tmp_path))
+        assert f"project={project}" in logged, "violation event missing project field"
         # #57: the event must name the actual mismatched file and hashes,
         # not file_path=unknown / detail=error.
         assert "file_path=docs/holtz/patterns-brief.md" in logged, (

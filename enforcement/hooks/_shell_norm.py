@@ -69,7 +69,20 @@ def _unquote(value: str) -> str:
 
 
 def _collect_assignments(cmd: str) -> dict[str, str]:
-    return {m.group(1): _unquote(m.group(2)) for m in _ASSIGN_RE.finditer(cmd)}
+    """``VAR=value`` pairs assigned on this line.
+
+    A ``k=v`` whose preceding token is an option — ``--field k=v`` — is that
+    option's operand, handed to the program as data, and assigns nothing.
+    Collecting it made ``$k`` elsewhere on the line resolve to ``v``, so the
+    guards reasoned about a command string nobody typed.
+    """
+    found = {}
+    for m in _ASSIGN_RE.finditer(cmd):
+        before = cmd[: m.start()].split()
+        if before and before[-1].startswith("-"):
+            continue
+        found[m.group(1)] = _unquote(m.group(2))
+    return found
 
 
 def _substitute(cmd: str, values: dict[str, str]) -> str:

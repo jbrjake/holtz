@@ -27,6 +27,7 @@ from _protocol_cache import (  # noqa: E402
     compute_obligations,
     contains_sahjhan_cmd,
     event_actor,
+    format_block,
     format_injection,
     is_enforcement_fresh,
     is_fix_loop_state,
@@ -63,7 +64,7 @@ def main() -> None:
     # `event` and `set` write the ledger straight to disk — so allowing them
     # through would let the run keep advancing while the enforcement that is
     # supposed to be gating it does nothing. The escape is not a command:
-    # the user types `holtz-stop`, which is a prompt, not a tool call.
+    # the user types `holtz-start`, which is a prompt, not a tool call.
     #
     # Unless the run is already over. Then that ordering costs what it was
     # buying: `_daemon_lifecycle` runs ahead of this hook, blocks a terminated
@@ -141,7 +142,7 @@ def main() -> None:
     if blocks_all:
         if contains_sahjhan_cmd(cmd) and not is_git_commit(cmd):
             exit_ok("PreToolUse")
-        exit_block(injection)
+        exit_block(format_block(obligations, "blocks_all"))
 
     # Test commands are allowed unless stall threshold exceeded
     if _is_test_cmd(cmd):
@@ -149,7 +150,7 @@ def main() -> None:
 
     # Hard block: git commit with unregistered prior commits
     if is_git_commit(cmd) and blocks_commit:
-        exit_block(injection)
+        exit_block(format_block(obligations, "blocks_commit"))
 
     # Soft injection: obligations exist but don't block this command
     if injection:

@@ -97,6 +97,12 @@ class MockEnforcementDaemon:
         # *immediately after* answering a read, deterministically, instead of
         # a test racing two subprocesses and hoping. Fires once, then clears.
         self.after_read: Callable[[MockEnforcementDaemon], None] | None = None
+        # A transient read failure. The next `fail_reads` enforcement reads are
+        # answered with the real daemon's `internal_error` (its poisoned-lock
+        # arm, `src/daemon/mod.rs`) while every write still succeeds — the
+        # shape in which a whole-blob writer that treats "could not read" as
+        # "nothing stored" erases what is there.
+        self.fail_reads = 0
         # (op, outcome) per request, where outcome is "ok" or the refusal code.
         # A retry is otherwise invisible: a conditional write that is refused
         # and then succeeds leaves exactly the state an unconditional write
@@ -207,6 +213,10 @@ class MockEnforcementDaemon:
             }
 
         if op == "enforcement_read":
+            if self.fail_reads > 0:
+                self.fail_reads -= 1
+                return {"ok": False, "error": "internal_error",
+                        "message": "vault lock poisoned"}
             if self.state is None:
                 return {"ok": False, "error": "not_found", "message": "no enforcement state"}
             encoded = base64.b64encode(self._stored()).decode()

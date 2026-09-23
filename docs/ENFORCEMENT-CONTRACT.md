@@ -417,7 +417,7 @@ Every Python writer in the tree, with the registration and pin that decide wheth
 | `enforcement/hooks/lens_quiz.py` | `PostToolUse`, `SubagentStop` | `lens_quiz.py`, `quiz_capture.py` | `quiz_answered`, `quiz_exhausted`, `quiz_failed`, `quiz_posed` |
 | `enforcement/hooks/pattern_courier.py` | `PostToolUse` | `pattern_courier.py` | `pattern_analysis_complete` |
 | `enforcement/hooks/post_tool_hook.py` | `PostToolUse` | `post_tool_hook.py` | `bash_command` |
-| `enforcement/hooks/quiz_vault.py` | `PostToolUse`, `SubagentStop` | `lens_quiz.py`, `quiz_capture.py` | `quiz_bank_generated` |
+| `enforcement/hooks/quiz_vault.py` | `PostToolUse`, `SubagentStop` | `bash_guard.py`, `lens_quiz.py`, `quiz_capture.py` | `quiz_bank_generated` |
 | `enforcement/hooks/session_start.py` | `SessionStart` | `session_start.py` | `context_reset` |
 | `enforcement/hooks/stale_sweep_courier.py` | `PostToolUse` | `stale_sweep_courier.py` | `stale_sweep_complete` |
 | `enforcement/hooks/suite_courier.py` | `PostToolUse` | `suite_courier.py` | `suite_green` |
