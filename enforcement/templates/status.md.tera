@@ -19,7 +19,23 @@
 {% endfor %}
 
 ## Findings
-{% set finding_count = events | where_eq(attribute="event_type", value="finding") | length -%}
-{% set resolved_count = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") | length -%}
-{% set deferred_count = events | where_eq(attribute="event_type", value="finding_deferred") | unique_by(attribute="fields.id") | length -%}
-**Open:** {{ finding_count - resolved_count - deferred_count }} | **Resolved:** {{ resolved_count }} | **Deferred:** {{ deferred_count }} | **Total:** {{ finding_count }}
+{# Counted the way PUNCHLIST.md decides each row's Status: one bucket per
+   finding id, resolved before deferred. Two views of one ledger must not be
+   able to give different answers, and both previous expressions could.
+   `unique_by` because a finding re-filed under an existing id is a correction,
+   not a second finding — it renders as one punchlist row. Membership rather
+   than `total - resolved - deferred` because those two sets are not disjoint:
+   every deferral gates on `item_open` but `fix_commit` does not, so deferring
+   a LOW and fixing it anyway drove Open to -1. #}
+{% set findings = events | where_eq(attribute="event_type", value="finding") | unique_by(attribute="fields.id") -%}
+{% set resolved_ids = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
+{% set deferred_ids = events | where_eq(attribute="event_type", value="finding_deferred") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
+{% set_global open_count = 0 -%}
+{% set_global resolved_count = 0 -%}
+{% set_global deferred_count = 0 -%}
+{% for f in findings -%}
+{% if resolved_ids is containing(f.fields.id) %}{% set_global resolved_count = resolved_count + 1 %}
+{%- elif deferred_ids is containing(f.fields.id) %}{% set_global deferred_count = deferred_count + 1 %}
+{%- else %}{% set_global open_count = open_count + 1 %}{% endif -%}
+{% endfor -%}
+**Open:** {{ open_count }} | **Resolved:** {{ resolved_count }} | **Deferred:** {{ deferred_count }} | **Total:** {{ findings | length }}

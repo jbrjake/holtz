@@ -7,7 +7,6 @@ verification fails, records a protocol_violation event.
 """
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 import subprocess
@@ -16,14 +15,22 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
+    audit_active,
     exit_enforcement_error,
     exit_ok,
     exit_warn,
+    project_anchor,
     read_event,
     resolve_config_dir,
 )
-from _protocol_cache import is_enforcement_fresh, is_sahjhan_cmd, read_cache  # noqa: E402
+from _protocol_cache import (  # noqa: E402
+    event_auditor,
+    is_enforcement_fresh,
+    is_sahjhan_cmd,
+    read_cache,
+)
 from _resolve import ensure_sahjhan  # noqa: E402
+from quiz_vault import get_run_number  # noqa: E402
 
 
 def main() -> None:
@@ -46,8 +53,11 @@ def main() -> None:
     # Check if there's an active Sahjhan run (data dir exists) BEFORE
     # triggering ensure_sahjhan(). Without this ordering, projects without
     # an audit pay the ~100MB binary download on the first Bash command.
-    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
-    if not os.path.isdir(data_dir):
+    #
+    # Anchored, not cwd-relative: the audit dir is gitignored, so a fix
+    # subagent's linked worktree does not contain it and every Bash call the
+    # three of them make would skip manifest verification entirely.
+    if not audit_active(cwd):
         exit_ok()
 
     # Stale enforcement: skip manifest verification for abandoned audits.
@@ -85,33 +95,107 @@ def main() -> None:
             )
             mismatches = [("unknown", detail)]
 
+        # A violation is a standing condition, not an occurrence: verify runs
+        # after every Bash call and reports the same mismatch until someone
+        # fixes it. Recording it each time inflates the hash chain without
+        # adding information and drowns the ledger's signal — #85 watched 51
+        # violation events become 57 across six Bash calls, all identical in
+        # substance. Ask the ledger what is already on record and add only what
+        # is new. Derived at check time, never mirrored in a cache file (#77).
+        already = _recorded_violations(binary, config_dir, cwd)
+        # Whose run, which run, and which auditor, from the same sources the
+        # couriers use — the anchor, the active-ledger marker, and the acting
+        # agent's `agent_type` — so a consumer project's ledger names itself.
+        owner = [
+            "--field", f"project={os.path.basename(project_anchor(cwd))}",
+            "--field", f"run={get_run_number(cwd)}",
+            "--field", f"auditor={event_auditor(event)}",
+        ]
+        unrecorded: list[tuple[str, str]] = []
         for file_path, detail in mismatches:
-            with contextlib.suppress(OSError, subprocess.TimeoutExpired):
-                violation_cmd = [
-                    binary, "--config-dir", config_dir,
-                    "event", "protocol_violation",
-                    "--field", "project=holtz",
-                    "--field", "run=0",
-                    "--field", "auditor=holtz",
-                    "--field", f"file_path={file_path}",
-                    "--field", f"detail={detail}",
-                ]
-                subprocess.run(
+            if (file_path, detail) in already:
+                continue
+            violation_cmd = [
+                binary, "--config-dir", config_dir,
+                "event", "protocol_violation",
+                *owner,
+                "--field", f"file_path={file_path}",
+                "--field", f"detail={detail}",
+            ]
+            try:
+                written = subprocess.run(
                     violation_cmd,
                     capture_output=True,
                     timeout=5,
                     cwd=cwd,
                 )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                unrecorded.append((file_path, type(exc).__name__))
+                continue
+            if written.returncode != 0:
+                unrecorded.append((file_path, f"exit {written.returncode}"))
 
+        # Permanent is a claim about the ledger, so it is made only for what
+        # reached it. An unrecorded one is retried by the next Bash call's
+        # verify, which reports the same mismatch until it lands.
         files = ", ".join(path for path, _ in mismatches)
-        exit_warn(
-            f"PROTOCOL VIOLATION: Managed file integrity check failed for: "
-            f"{files}. This violation is permanent and will "
-            f"block convergence for this run.",
-            "PostToolUse",
-        )
+        message = f"PROTOCOL VIOLATION: Managed file integrity check failed for: {files}."
+        if unrecorded:
+            failed = {path for path, _ in unrecorded}
+            recorded = [path for path, _ in mismatches if path not in failed]
+            message += (
+                " The violation could not be recorded for: "
+                + ", ".join(f"{path} ({why})" for path, why in unrecorded)
+                + " — the check runs again after the next Bash call."
+            )
+            if recorded:
+                message += (
+                    f" Recorded, permanent, and blocking convergence: "
+                    f"{', '.join(recorded)}."
+                )
+        else:
+            message += " This violation is permanent and will block convergence for this run."
+        exit_warn(message, "PostToolUse")
 
     exit_ok()
+
+
+_VIOLATION_SQL = (
+    "SELECT file_path, detail FROM events WHERE type='protocol_violation'"
+)
+
+
+def _recorded_violations(binary: str, config_dir: str, cwd: str) -> set[tuple[str, str]]:
+    """The (file_path, detail) pairs already on the ledger.
+
+    Runs sahjhan's generic `query` primitive, which is daemon-free and resolves
+    the same active ledger the gates evaluate. Returns an empty set on any
+    failure, so a query that cannot run degrades to the old
+    record-every-time behaviour rather than to silence — losing a real
+    violation is worse than logging a duplicate.
+
+    Only ever called on the failure path, so a clean verify pays nothing.
+    """
+    try:
+        proc = subprocess.run(
+            [binary, "--config-dir", config_dir, "query", _VIOLATION_SQL, "--format", "json"],
+            capture_output=True, text=True, timeout=5, cwd=cwd,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return set()
+    if proc.returncode != 0:
+        return set()
+    try:
+        rows = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return set()
+    if not isinstance(rows, list):
+        return set()
+    return {
+        (row.get("file_path") or "", row.get("detail") or "")
+        for row in rows
+        if isinstance(row, dict)
+    }
 
 
 def _parse_mismatches(stdout: str) -> list[tuple[str, str]]:
@@ -120,6 +204,11 @@ def _parse_mismatches(stdout: str) -> list[tuple[str, str]]:
     The JSON envelope carries data.mismatches even on the integrity-error
     exit code. Returns [] when the output isn't parseable (old binary,
     config error) so the caller can fall back to a single opaque event.
+
+    `data.unmanaged` is deliberately NOT read: sahjhan >= 0.20.1 splits out
+    entries whose key is not under any managed path, which cannot describe a
+    file this manifest is responsible for and so are not integrity failures
+    (#85). They stay visible in the CLI's own output.
     """
     try:
         envelope = json.loads(stdout)
@@ -132,14 +221,29 @@ def _parse_mismatches(stdout: str) -> list[tuple[str, str]]:
         path = entry.get("path")
         if not path:
             continue
-        expected = entry.get("expected", "?")[:16]
-        actual = entry.get("actual")
-        detail = (
-            f"manifest hash mismatch: expected {expected}, "
-            f"actual {(actual or 'missing')[:16]}"
-        )
-        mismatches.append((path, detail))
+        mismatches.append((path, _detail_for(entry)))
     return mismatches
+
+
+def _detail_for(entry: dict) -> str:
+    """One line saying what actually happened to a managed file.
+
+    sahjhan >= 0.20.1 reports a `kind`, so a file that was edited and a file
+    that was deleted stop sharing a sentence. The pre-0.20.1 wording is kept
+    as the fallback for an older binary, which reports no kind at all (#85).
+    """
+    expected = (entry.get("expected") or "?")[:16]
+    actual = entry.get("actual")
+    kind = entry.get("kind")
+
+    if kind == "modified":
+        return f"managed file modified: expected {expected}, got {(actual or '?')[:16]}"
+    if kind == "missing":
+        return f"managed file deleted: expected {expected}, file not found"
+    return (
+        f"manifest hash mismatch: expected {expected}, "
+        f"actual {(actual or 'missing')[:16]}"
+    )
 
 
 if __name__ == "__main__":

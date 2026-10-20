@@ -11,13 +11,13 @@ from = "recon"
 to = "audit"
 command = "recon_complete"
 gates = [
-    { type = "query", sql = "SELECT count(DISTINCT step) >= 5 FROM events WHERE type='recon_step'", expect = "true", intent = "recon must cover all 5 steps" },
-    { type = "file_exists", path = "docs/holtz/impact-graph.json", intent = "impact graph must exist before auditing" },
-    { type = "ledger_has_event", event = "recon_step", min_count = 5, intent = "each recon step must be recorded" },
-    { type = "ledger_has_event", event = "justine_dispatched", min_count = 1, intent = "Justine must be dispatched for parallel audit" },
-    { type = "ledger_has_event", event = "snapshot", min_count = 1, intent = "pre-audit edge count snapshot needed for comparison" },
-    { type = "ledger_lacks_event", event = "finding", filter = { phase = "audit" }, intent = "no audit-phase findings should exist before recon is complete" },
-    { type = "ledger_has_event", event = "quiz_bank_generated", min_count = 1, intent = "lens quiz bank must be generated from the graph during recon (#73) — the vault key is writable only in recon, so it cannot be built later" },
+    { type = "query", sql = "SELECT count(DISTINCT step) >= 5 FROM events WHERE type='recon_step'", expect = "true", intent = "recon must cover all 5 steps — record each finished step with `sahjhan event recon_step`" },
+    { type = "file_exists", path = "docs/holtz/impact-graph.json", intent = "impact graph must exist before auditing — build it in Steps 1–2 with `impact_graph.py add_node` and `add_edge`" },
+    { type = "ledger_has_event", event = "recon_step", min_count = 5, intent = "each recon step must be recorded — `sahjhan event recon_step`, once per step" },
+    { type = "ledger_has_event", event = "justine_dispatched", min_count = 1, intent = "Justine must be dispatched for parallel audit — dispatch her, then record `sahjhan event justine_dispatched`" },
+    { type = "ledger_has_event", event = "snapshot", min_count = 1, intent = "pre-audit edge count snapshot needed for comparison — record it with `sahjhan event snapshot` (key=pre_audit_edge_count)" },
+    { type = "ledger_lacks_event", event = "finding", filter = { phase = "audit" }, intent = "no audit-phase findings should exist before recon is complete — file recon-time findings with `sahjhan event recon_finding`; an audit-phase finding already on this ledger cannot be withdrawn, so stop and ask the user to start a fresh run (`/holtz`, then 'start fresh')" },
+    { type = "ledger_has_event", event = "quiz_bank_generated", min_count = 1, intent = "lens quiz bank must be generated from the graph during recon (#73) — stage each question with `quiz_stage.py`, then run `quiz_stage.py --finalize`; the vault key is writable only in recon, so it cannot be built later" },
 ]
 
 # ── Audit ──
@@ -27,8 +27,8 @@ from = "audit"
 to = "merge_ready"
 command = "audit_complete"
 gates = [
-    { type = "ledger_has_event", event = "audit_claim", min_count = 1, intent = "at least one doc claim must be verified" },
-    { type = "snapshot_compare", cmd = "python3 $CLAUDE_PLUGIN_ROOT/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats", extract = "edges", compare = "gt", reference = "snapshot:pre_audit_edge_count", intent = "audit must add edges to the impact graph" },
+    { type = "ledger_has_event", event = "audit_claim", min_count = 1, intent = "at least one doc claim must be verified — record it with `sahjhan event audit_claim`" },
+    { type = "snapshot_compare", cmd = "python3 $CLAUDE_PLUGIN_ROOT/skills/holtz/scripts/impact_graph.py --graph docs/holtz/impact-graph.json stats", extract = "edges", compare = "gt", reference = "snapshot:pre_audit_edge_count", intent = "audit must add edges to the impact graph — add what the audit traced with `impact_graph.py add_edge`" },
 ]
 
 # ── Merge ──
@@ -38,8 +38,15 @@ from = "merge_ready"
 to = "merge_done"
 command = "merge_complete"
 gates = [
-    { type = "file_exists", path = "docs/holtz/PUNCHLIST-MERGED.md", intent = "merged punchlist must exist" },
-    { type = "ledger_has_event", event = "merge_agent_dispatched", min_count = 1, intent = "merge must be performed by a separate merge-agent subagent" },
+    # The merge writes Justine's unmatched findings onto the ledger, so the
+    # unified worklist is the already-rendered PUNCHLIST.md and there is no
+    # merged file to check for. What is left to prove is that the merge ran to
+    # completion, and MERGE-REPORT.md is the one artifact only a completed
+    # merge can produce — blind-spot analysis has no other source. It is
+    # agent-authored and unmanaged, so this gate is satisfiable by its writer
+    # (the #60 wedge was a file_exists on a path nothing was allowed to write).
+    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/validate_merge_report.py" docs/holtz/MERGE-REPORT.md', intent = "merge report must exist with all four sections non-empty — `validate_merge_report.py docs/holtz/MERGE-REPORT.md` names what is missing" },
+    { type = "ledger_has_event", event = "merge_agent_dispatched", min_count = 1, intent = "merge must be performed by a separate merge-agent subagent — dispatch it, then record `sahjhan event merge_agent_dispatched`" },
 ]
 
 # ── Fix Loop ──
@@ -56,7 +63,25 @@ from = "merge_done"
 to = "awaiting_clear"
 command = "fix_loop_start"
 gates = [
-    { type = "ledger_has_event", event = "reference_read", filter = { path = "step-10-fix-loop.md" }, min_count = 1, intent = "must read fix loop procedure before starting" },
+    { type = "ledger_has_event", event = "reference_read", filter = { path = "step-10-fix-loop.md" }, min_count = 1, intent = "must read fix loop procedure before starting — read step-10-fix-loop.md, then record `sahjhan event reference_read` with path=step-10-fix-loop.md" },
+    # P0.4 deleted PUNCHLIST-MERGED.md as a concept: the merge writes findings
+    # onto the ledger and PUNCHLIST.md is the rendered worklist. A leftover
+    # copy is not a stale file, it is a second worklist — one written once,
+    # re-rendered by nothing, and still marking every finding OPEN. A run read
+    # it exclusively for four pattern rounds, blind to 176 findings and 25
+    # committed fixes, and 111 subagent-minutes went to reconciling the
+    # bookkeeping against reality afterwards. The fix loop must not start while
+    # it is on disk.
+    #
+    # Inverted from the shape that wedged issue #60, deliberately. That gate
+    # required this same file to *exist* while the PreToolUse guard forbade
+    # writing it, so the only satisfying act was blocked and the run stopped
+    # for good. This one is satisfied by deleting the file, and the file is
+    # absent from MANAGED_DOCS precisely so that delete is allowed — the
+    # escape is achievable by construction, not by permission.
+    { type = "not", intent = "`rm docs/holtz/PUNCHLIST-MERGED.md` — the ledger is the merged worklist and PUNCHLIST.md renders it", gates = [
+        { type = "file_exists", path = "docs/holtz/PUNCHLIST-MERGED.md" },
+    ] },
 ]
 
 # Lens rotations (no merge on subsequent passes) also clear before fixing:
@@ -66,8 +91,8 @@ from = "audit"
 to = "awaiting_clear"
 command = "fix_loop_start"
 gates = [
-    { type = "ledger_has_event", event = "state_transition", filter = { to = "merge_done" }, min_count = 1, intent = "first pass must go through merge before fix loop" },
-    { type = "ledger_has_event", event = "reference_read", filter = { path = "step-10-fix-loop.md" }, min_count = 1, intent = "must read fix loop procedure before starting" },
+    { type = "ledger_has_event", event = "state_transition", filter = { to = "merge_done" }, min_count = 1, intent = "first pass must go through merge before fix loop — take the merge path: `audit_complete`, then `merge_complete`" },
+    { type = "ledger_has_event", event = "reference_read", filter = { path = "step-10-fix-loop.md" }, min_count = 1, intent = "must read fix loop procedure before starting — read step-10-fix-loop.md, then record `sahjhan event reference_read` with path=step-10-fix-loop.md" },
 ]
 
 # The four suite gates in this file no longer *run* the suite — they ask
@@ -102,19 +127,42 @@ gates = [
 # writer and forgeability instead of calling this a direct check.
 #
 # The suite command itself (and why it is `-x --ff` and never `--lf`) now lives
-# in exactly one place: `DEFAULT_PYTEST` in verify_suite.py. `$HOLTZ_PYTEST`
-# still overrides it; it is read there rather than expanded here.
+# in exactly one place: `DEFAULT_PYTEST` in verify_suite.py. Only its
+# interpreter varies — an in-tree venv, or `$HOLTZ_PYTHON` — decided there too.
 [[transitions]]
 from = "fix_loop"
 to = "fix_loop"
 command = "fix_commit"
 args = ["item_id"]
 gates = [
-    { type = "command_succeeds", cmd = "git log -1 --format=%B | grep -q '{{item_id}}'", intent = "commit must reference the punchlist item" },
-    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope affected', timeout = 60, evidence = "suite_green", intent = "test suite must pass after fix" },
-    { type = "ledger_has_event_since", event = "blast_radius", since = "last_transition", intent = "blast radius must be checked after each fix" },
-    { type = "ledger_has_event_since", event = "hardening_complete", since = "last_transition", intent = "edge cases must be hardened after each fix" },
-    { type = "query", sql = "SELECT count(*) < 15 FROM events WHERE type='state_transition' AND command='fix_commit' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='state_transition' AND command='iteration_boundary'), 0)", expect = "true", intent = "circuit breaker: max 15 fixes per iteration (scoped since the last iteration_boundary /clear, so the cap resets each context reset instead of capping the whole run)" },
+    # P0.5's first route (D29/D34). `fix_commit` is the only place the engine
+    # can see fix-loop eligibility — `fix_start` is an event, and the engine
+    # does not gate events (D30). Its escapes had to exist first, one per
+    # grade: `fault_injected` is closed by Step 15's hardening batch, and a
+    # `theoretical` auto-deferral now clears `all_critical_resolved`. A probe
+    # that establishes a path re-files the finding and this gate opens.
+    { type = "query", query = "item_is_user_reachable", expect = "true", intent = "only user_reachable findings are fix-loop eligible — harden a fault_injected one with Step 15's batch, or re-file it with a path a probe established" },
+    # `anchor = "caller"` on both tree-reading gates (sahjhan >= 0.25.0).
+    #
+    # The orchestrator's path is unchanged and this is a no-op for it: it runs
+    # `fix_commit` from the project root after `git merge --ff-only`, so the
+    # caller *is* the project anchor, HEAD is already the subagent's commit and
+    # the ff-merge left the tree byte-identical.
+    #
+    # What it changes is the one actor the project anchor stranded: a fix
+    # subagent blocked on a second, unregistered commit is told to run this
+    # transition, and its commit is in its own worktree. Read at the project
+    # anchor these two gates answer about a tree that has none of its work —
+    # `git log -1` misses the item id, and `verify_suite --check` recomputes the
+    # project's tree hash rather than the one the subagent's `--record` named.
+    # Both are in sahjhan#46's reproduction, which shows the two of them failing
+    # identically from either directory. The emit below is the same defect and
+    # a separate issue (#48): #46's ask covered gates only.
+    { type = "command_succeeds", cmd = "git log -1 --format=%B | grep -q '{{item_id}}'", anchor = "caller", intent = "commit must reference the punchlist item — amend it so the message names the finding id (`git commit --amend`)" },
+    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope affected', anchor = "caller", timeout = 60, evidence = "suite_green", intent = "test suite must pass after fix — record it with `verify_suite.py --record --scope affected`" },
+    { type = "ledger_has_event_since", event = "blast_radius", since = "last_transition", intent = "blast radius must be checked after each fix — `sahjhan event blast_radius`" },
+    { type = "ledger_has_event_since", event = "hardening_complete", since = "last_transition", intent = "edge cases must be hardened after each fix — `sahjhan event hardening_complete`" },
+    { type = "query", sql = "SELECT count(*) < 15 FROM events WHERE type='state_transition' AND command='fix_commit' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='state_transition' AND command='iteration_boundary'), 0)", expect = "true", intent = "circuit breaker: max 15 fixes per iteration (scoped since the last iteration_boundary /clear, so the cap resets each context reset instead of capping the whole run) — this iteration is spent: end it with `iteration_boundary`, whose own refusal names anything it still needs first, then have the user `/clear`" },
 ]
 # fix_commit AUTO-EMITS finding_resolved (sahjhan >= 0.18.0). Recording the
 # transition writes a state_transition; the finding's resolution is a separate
@@ -127,8 +175,68 @@ gates = [
 # "Resolved: 0" with all findings open, unable to converge. id comes from the
 # positional item_id arg; commit_hash from the just-made HEAD; project/run/
 # auditor are inherited from the run's prior events; phase/step are literals.
+#
+# `anchor = "caller"` (sahjhan >= 0.26.0) for the same reason the two gates
+# above carry it, and it is the half that must not be forgotten: a transition
+# runs its gates' conditions *and* its emits' derivations, and anchoring only
+# the first is worse than anchoring neither. The gate would attest that the
+# caller's HEAD carries the fix and this line would then stamp the project
+# root's unrelated HEAD as the commit that resolved the finding — a false
+# resolution record where there used to be a loud block. That hash is
+# load-bearing twice: `pending_commits_discharged` matches it against what the
+# commit tracker charged, and `hardening_batch.py`'s spent set treats it as a
+# module already hardened. sahjhan#48.
 emits = [
-    { event = "finding_resolved", commands = { commit_hash = "git rev-parse --short=7 HEAD" }, fields = { id = "{{item_id}}", commit_hash = "{{commit_hash}}", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
+    { event = "finding_resolved", anchor = "caller", commands = { commit_hash = "git rev-parse --short=7 HEAD" }, fields = { id = "{{item_id}}", commit_hash = "{{commit_hash}}", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
+]
+
+# ── Merge: this finding is a duplicate of that one ──
+#
+# P0.2's round cap (D7) needs an escape, and its clause names one: "close **or
+# merge** at least as many as it opens". Closing needs a fix; merging is what
+# a sibling search actually produces when the sibling turns out to be a
+# finding the board already carries. Until now the run had no way to say that
+# — finding-level merge existed only in the one-time Step 9 Holtz/Justine
+# phase — so the cap would have been a block naming a command that does not
+# exist.
+#
+# Declared from `fix_loop` **and** from `pattern_analysis`, because the two
+# D7 gates sit in different states and each block must name something
+# reachable from its own side. This is the same reason `defer_low`/
+# `defer_medium` gained their `pattern_analysis` edges for D2.
+#
+# A merge emits `finding_resolved`, so it closes the item everywhere at once
+# and the obligation stays one count rather than two. `commit_hash` is stamped
+# from HEAD exactly as `fix_commit` stamps it: it names the tree the merge was
+# decided against, and leaving the field optional instead would weaken the
+# schema for the fix path, which is the path that actually needs it.
+
+[[transitions]]
+from = "fix_loop"
+to = "fix_loop"
+command = "merge_finding"
+args = ["item_id", "merged_into"]
+gates = [
+    { type = "query", query = "item_open", expect = "true" },
+    { type = "query", query = "merge_target_exists", expect = "true" },
+]
+emits = [
+    { event = "finding_resolved", commands = { commit_hash = "git rev-parse --short=7 HEAD" }, fields = { id = "{{item_id}}", merged_into = "{{merged_into}}", commit_hash = "{{commit_hash}}", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "10" } },
+]
+
+# The same edge from inside a round. `step` is 11 rather than 10 for the same
+# reason the deferral pair uses it — that is where a round runs.
+[[transitions]]
+from = "pattern_analysis"
+to = "pattern_analysis"
+command = "merge_finding"
+args = ["item_id", "merged_into"]
+gates = [
+    { type = "query", query = "item_open", expect = "true" },
+    { type = "query", query = "merge_target_exists", expect = "true" },
+]
+emits = [
+    { event = "finding_resolved", commands = { commit_hash = "git rev-parse --short=7 HEAD" }, fields = { id = "{{item_id}}", merged_into = "{{merged_into}}", commit_hash = "{{commit_hash}}", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "11" } },
 ]
 
 # ── Deferral: can't reproduce ──
@@ -139,10 +247,10 @@ to = "fix_loop"
 command = "defer_cant_reproduce"
 args = ["item_id"]
 gates = [
-    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}'", expect = "true", intent = "finding must exist" },
+    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}'", expect = "true", intent = "finding must exist — name a filed id, or file it first with `sahjhan event finding`" },
     { type = "query", query = "item_open", expect = "true" },
-    { type = "ledger_has_event_since", event = "fix_start", since = "last_transition", intent = "must have started working on this item" },
-    { type = "command_succeeds", cmd = "test -f docs/holtz/investigations/{{item_id}}.md && test -s docs/holtz/investigations/{{item_id}}.md", intent = "reproduction attempts must be documented in investigation file" },
+    { type = "ledger_has_event_since", event = "fix_start", since = "last_transition", intent = "must have started working on this item — `sahjhan event fix_start` for it first" },
+    { type = "command_succeeds", cmd = "test -f docs/holtz/investigations/{{item_id}}.md && test -s docs/holtz/investigations/{{item_id}}.md", intent = "reproduction attempts must be documented in the investigation file, `docs/holtz/investigations/<id>.md`" },
 ]
 # Like fix_commit, the deferral transitions AUTO-EMIT the state they imply
 # (#82). The gate above requires the item to be open; recording the transition
@@ -166,7 +274,7 @@ to = "fix_loop"
 command = "defer_low"
 args = ["item_id"]
 gates = [
-    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='LOW'", expect = "true", intent = "finding must exist and be LOW severity" },
+    { type = "query", query = "item_is_low", expect = "true" },
     { type = "query", query = "item_open", expect = "true" },
 ]
 # Auto-emits the deferral; see defer_cant_reproduce above (#82).
@@ -182,9 +290,9 @@ to = "fix_loop"
 command = "defer_medium"
 args = ["item_id"]
 gates = [
-    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='MEDIUM'", expect = "true", intent = "finding must exist and be MEDIUM severity" },
+    { type = "query", query = "item_is_medium", expect = "true" },
     { type = "query", query = "item_open", expect = "true" },
-    { type = "query", sql = "SELECT (SELECT count(*) FROM events WHERE type='finding_deferred' AND reason='medium_budget') < (SELECT count(*) FROM events WHERE type='finding' AND severity='MEDIUM') / 2", expect = "true", intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings" },
+    { type = "query", query = "medium_deferral_budget", expect = "true", intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings — the budget is spent, so fix this one with `fix_commit` (from pattern_analysis, return with `pattern_done` first)" },
 ]
 # Auto-emits the deferral; see defer_cant_reproduce above (#82). `reason` is
 # load-bearing here rather than decorative: the budget gate counts exactly
@@ -224,7 +332,40 @@ gates = [
     # `full` and nothing else, and it fires at every /clear boundary (every 3-5
     # fixes), so the untested gap is bounded by one iteration. Cheap for the
     # same reason: one full run per boundary, not one per fix.
-    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope full', timeout = 60, evidence = "suite_green", intent = "the full suite must pass on this tree before a context reset — this is what re-bases the affected scope" },
+    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope full', timeout = 60, evidence = "suite_green", intent = "the full suite must pass on this tree before a context reset — this is what re-bases the affected scope; record it with `verify_suite.py --record --scope full`" },
+    # P0.2's round cap and its obligation (D7), at the boundary every fix
+    # batch passes. The cap is checked here as well as on `pattern_done`
+    # because Step 11's *usual* path never enters `pattern_analysis` at all —
+    # it stays in `fix_loop` and cashes the round in here, so a cap that only
+    # gated `pattern_done` would cap the rare path and leave the common one
+    # uncapped. One named query, two consumers, so they cannot drift.
+    #
+    # The obligation is here and nowhere else: `fix_commit` and
+    # `merge_finding` are both reachable from `fix_loop`, so the block always
+    # names a command the run can run.
+    { type = "query", query = "round_item_cap_exceeded", expect = "false", intent = "the last round left more than 3 findings open — fix them, or merge a duplicate into the finding it repeats with `sahjhan transition merge_finding BH-NNN BH-MMM`" },
+    { type = "query", query = "round_opens_exceed_closes", expect = "false", intent = "the last round opened more findings than the run has closed since — resolve one with `fix_commit`, or merge a duplicate with `sahjhan transition merge_finding BH-NNN BH-MMM`" },
+    # P0.1's amplification circuit-breaker, second seat (item 5). Byte-for-byte
+    # the `any_of` on `pattern_done`, referencing the same three named queries
+    # so the two seats cannot drift — the arrangement `round_item_cap_exceeded`
+    # two gates up already has, and for the same reason.
+    #
+    # The first seat alone gated the *rare* path. `pattern_done` is reachable
+    # only from `pattern_analysis`, and `phase-fix-loop.md:101` teaches staying
+    # in `fix_loop` as the usual course and entering `pattern_analysis` only
+    # when this very transition blocks. So on the taught path the breaker never
+    # evaluated, and since `pattern_done`'s escape is the only place batch
+    # deferral is taught, the run that most needed it never saw it.
+    #
+    # The escape is reachable from here without new edges: `defer_low` and
+    # `defer_medium` are both declared `fix_loop -> fix_loop`.
+    { type = "any_of", intent = "amplification: more findings filed than resolved for 3 consecutive rounds — run `sahjhan defer batch --severity low,medium` to clear every open LOW and spend the MEDIUM budget", gates = [
+        { type = "query", query = "amplification_diverging", expect = "false" },
+        { type = "all_of", gates = [
+            { type = "query", query = "open_low_count", expect = "0" },
+            { type = "query", query = "medium_deferral_budget", expect = "false" },
+        ] },
+    ] },
 ]
 
 # The filter is what makes this gate mean what it says. `context_reset` used to
@@ -240,7 +381,7 @@ to = "fix_loop"
 command = "resume"
 boundary = "context-reset"
 gates = [
-    { type = "ledger_has_event_since", event = "context_reset", since = "last_transition", filter = { trigger = "session_start" }, intent = "context must be reset via /clear (or compaction) before resuming" },
+    { type = "ledger_has_event_since", event = "context_reset", since = "last_transition", filter = { trigger = "session_start" }, intent = "context must be reset via /clear (or compaction) before resuming — ask the user to type `/clear`" },
 ]
 
 # The third layer, and the one that fails at rest rather than at runtime (#82).
@@ -275,18 +416,23 @@ from = "fix_loop"
 to = "pattern_analysis"
 command = "pattern_check"
 gates = [
-    # #65: use a COALESCE-scoped query rather than ledger_has_event_since. The
-    # old gate referenced `last_event_of_type:...`, a syntax that gate type does
-    # not understand: it matched no event, silently fell back to "since last
-    # state_transition", and ignored min_count entirely — so the first
-    # pattern_check could never fire (chicken-and-egg: you need a prior
-    # pattern_analysis_complete to satisfy the gate that produces the first one).
-    # COALESCE(..., 0) treats "no prior pattern analysis" as the run start, so
-    # the first pattern_check becomes ready once 3+ findings are resolved.
+    # #65: use a COALESCE-scoped query rather than ledger_has_event_since,
+    # because the predicate has a term that gate type cannot express — the
+    # obligation lapses once two consecutive rounds add no pattern. The
+    # counting half alone would fit: an anchor whose event has never occurred
+    # measures from the run start (seq 0), which is what COALESCE(..., 0) does
+    # here, so the first pattern_check becomes ready once 3+ findings are
+    # resolved rather than deadlocking on needing a prior
+    # pattern_analysis_complete to produce the first one.
     #
     # #82: the predicate itself now lives in protocol.toml [queries], shared
     # with iteration_boundary's block and the commit gate's. See that comment.
-    { type = "query", query = "pattern_analysis_overdue", expect = "true", intent = "pattern analysis needs 3+ findings resolved since the last pattern analysis" },
+    # Blocked either because fewer than 3 findings have been resolved since the
+    # last round, or because the last two rounds added no pattern and the
+    # obligation has lapsed. The second case has no escape to print and needs
+    # none: a round is still available without this transition — Step 11's
+    # usual path stays in `fix_loop` and records with `pattern_round.py`.
+    { type = "query", query = "pattern_analysis_overdue", expect = "true", intent = "pattern analysis needs 3+ findings resolved since the last one, and is no longer owed once two consecutive rounds added no pattern — it is not owed yet: keep working findings with `fix_commit`" },
 ]
 
 [[transitions]]
@@ -294,7 +440,73 @@ from = "pattern_analysis"
 to = "fix_loop"
 command = "pattern_done"
 gates = [
-    { type = "ledger_has_event_since", event = "pattern_analysis_complete", since = "last_transition", intent = "pattern analysis must be recorded before returning to fixes" },
+    { type = "ledger_has_event_since", event = "pattern_analysis_complete", since = "last_transition", intent = "pattern analysis must be recorded before returning to fixes — record the round with `pattern_round.py --record`" },
+    # P0.1's amplification circuit-breaker. The block lands here rather than on
+    # `fix_commit`: this edge is the *return* to fix_loop, so a tripped breaker
+    # stops the next fix being dispatched instead of firing between a verified
+    # fix and its own commit.
+    #
+    # `any_of` is what makes the escape one object with the block. The first
+    # branch is the breaker untripped; the second is the post-state a single
+    # `sahjhan defer batch --severity low,medium` produces.
+    #
+    # The second branch says "budget spent", not "no open MEDIUM", and that is
+    # load-bearing rather than a weakening: `defer_medium` caps deferrals at
+    # 50% of the MEDIUMs, so no command can empty that set, and a block whose
+    # escape cannot clear it is #77's deadlock. Spending a budget cannot be
+    # refused. `medium_deferral_budget` is reused with the opposite expectation
+    # rather than restated, so the cap and this cannot disagree.
+    { type = "any_of", intent = "amplification: more findings filed than resolved for 3 consecutive rounds — run `sahjhan defer batch --severity low,medium` to clear every open LOW and spend the MEDIUM budget", gates = [
+        { type = "query", query = "amplification_diverging", expect = "false" },
+        { type = "all_of", gates = [
+            { type = "query", query = "open_low_count", expect = "0" },
+            { type = "query", query = "medium_deferral_budget", expect = "false" },
+        ] },
+    ] },
+    # P0.2's round cap (D7). The escape is `merge_finding`, which is declared
+    # from this state for that reason; `fix_commit` is not reachable here.
+    { type = "query", query = "round_item_cap_exceeded", expect = "false", intent = "this round left more than 3 findings open — merge a duplicate into the finding it repeats with `sahjhan transition merge_finding BH-NNN BH-MMM`" },
+]
+
+# ── Deferral from a pattern round ──
+#
+# The same two deferrals, reachable from `pattern_analysis`. Without these the
+# breaker above is a dead end by construction: `pattern_analysis` has exactly
+# one exit, and `defer_low`/`defer_medium` are declared `fix_loop → fix_loop`,
+# so a run stopped at `pattern_done` cannot run the command that block names.
+# `sahjhan defer batch` does not merely refuse each item there — it exits
+# non-zero on the first one and defers nothing at all.
+#
+# Gates and emits are identical to the `fix_loop` pair on purpose, including
+# `medium_deferral_budget`: the 50% cap must not become weaker inside a pattern
+# round than outside one. `step` is 11 rather than 10 because that is where a
+# round runs, matching `ROUND_STEP` in `pattern_round.py`.
+
+[[transitions]]
+from = "pattern_analysis"
+to = "pattern_analysis"
+command = "defer_low"
+args = ["item_id"]
+gates = [
+    { type = "query", query = "item_is_low", expect = "true" },
+    { type = "query", query = "item_open", expect = "true" },
+]
+emits = [
+    { event = "finding_deferred", fields = { id = "{{item_id}}", reason = "low_priority", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "11" } },
+]
+
+[[transitions]]
+from = "pattern_analysis"
+to = "pattern_analysis"
+command = "defer_medium"
+args = ["item_id"]
+gates = [
+    { type = "query", query = "item_is_medium", expect = "true" },
+    { type = "query", query = "item_open", expect = "true" },
+    { type = "query", query = "medium_deferral_budget", expect = "true", intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings — the budget is spent, so fix this one with `fix_commit` (from pattern_analysis, return with `pattern_done` first)" },
+]
+emits = [
+    { event = "finding_deferred", fields = { id = "{{item_id}}", reason = "medium_budget", project = "{{project}}", run = "{{run}}", auditor = "{{auditor}}", phase = "fix_loop", step = "11" } },
 ]
 
 # ── Perspective (Lens) Completion ──
@@ -305,15 +517,32 @@ to = "perspective_clean"
 command = "set complete perspective"
 args = ["current_perspective"]
 gates = [
-    { type = "query", query = "all_findings_closed", expect = "0" },
-    { type = "query", sql = "SELECT count(*) >= 2 FROM events WHERE type='iteration_complete' AND perspective='{{current_perspective}}'", expect = "true", intent = "two clean iterations required for stability" },
-    { type = "min_elapsed", event = "iteration_complete", seconds = 120, intent = "prevent rapid-fire gaming of iteration count" },
-    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope full', timeout = 60, evidence = "suite_green", intent = "tests must pass" },
-    { type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", timeout = 30, intent = "no lint violations" },
-    { type = "no_violations", intent = "no unresolved protocol violations" },
-    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='quiz_answered' AND pass='true' AND perspective='{{current_perspective}}'", expect = "true", intent = "lens quiz must be passed" },
-    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='quiz_posed' AND perspective='{{current_perspective}}'", expect = "true", intent = "quiz must be posed by enforcement hook before completion" },
-    { type = "ledger_has_event_since", event = "lens_sweep_started", filter = { perspective = "{{current_perspective}}" }, since = "last_event_of_type:set_member_complete", intent = "a lens sweep must be started for this perspective before completion" },
+    # Item 3, RULED (Jon, 2026-08-26) option (a). This was
+    # `all_findings_closed == 0` — the query P0.1 removed from `converge` as
+    # unreachable, left sitting on the door a run passes thirteen times. These
+    # two ask the same thing of this lens only: a clean lens is not an empty
+    # board. What they let past — another lens's open findings, and a
+    # `fault_injected` HIGH whose route is Step 15's batch — `converge` still
+    # refuses run-wide.
+    { type = "query", query = "lens_critical_resolved", expect = "true", intent = "every CRITICAL filed under this lens must be resolved — work it with `fix_commit`, or harden a fault_injected one with Step 15's `hardening_batch.py --record --module <dir>`" },
+    { type = "query", query = "lens_user_reachable_high_closed", expect = "true", intent = "every user-reachable HIGH filed under this lens must be resolved or deferred — work it with `fix_commit`, or defer it with `defer_cant_reproduce` once the investigation file records the attempts" },
+    # The other end of the fix batch. `iteration_boundary` holds the /clear and
+    # this holds the lens, so the pattern round is owed wherever a batch of
+    # fixes ends and at neither point inside one. Without this a run that
+    # closed a whole perspective without a context reset left the loop having
+    # skipped every round — the commit-path block used to cover that by
+    # accident, at the cost of firing between a verified fix and its own commit.
+    # Same named query as `pattern_check`'s gate with the opposite expectation,
+    # so the escape this prints is ready exactly when this blocks (#82).
+    { type = "query", query = "pattern_analysis_overdue", expect = "false", intent = "pattern analysis required after 3+ fixes — run pattern_check before completing the perspective" },
+    { type = "query", sql = "SELECT count(*) >= 2 FROM events WHERE type='iteration_complete' AND perspective='{{current_perspective}}'", expect = "true", intent = "two clean iterations required for stability — record each with `sahjhan event iteration_complete`" },
+    { type = "min_elapsed", event = "iteration_complete", seconds = 120, intent = "prevent rapid-fire gaming of iteration count — wait 120 s after the last iteration_complete" },
+    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope full', timeout = 60, evidence = "suite_green", intent = "tests must pass — record the full suite with `verify_suite.py --record --scope full`" },
+    { type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", timeout = 30, intent = "no lint violations — run `ruff check .` (or $HOLTZ_LINT) and fix what it reports" },
+    { type = "no_violations", intent = "no unresolved protocol violations — a violation is permanent, so this run cannot pass here; stop and ask the user to start a fresh run (`/holtz`, then 'start fresh')" },
+    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='quiz_answered' AND pass='true' AND perspective='{{current_perspective}}'", expect = "true", intent = "lens quiz must be passed — re-run this lens's sweep (`sahjhan event lens_sweep_started`, then dispatch it); its stop hook poses and grades the quiz" },
+    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='quiz_posed' AND perspective='{{current_perspective}}'", expect = "true", intent = "quiz must be posed by enforcement hook before completion — run this lens's sweep (`sahjhan event lens_sweep_started`, then dispatch it); its stop hook poses the quiz" },
+    { type = "ledger_has_event_since", event = "lens_sweep_started", filter = { perspective = "{{current_perspective}}" }, since = "last_event_of_type:set_member_complete", intent = "a lens sweep must be started for this perspective before completion — `sahjhan event lens_sweep_started`" },
 ]
 
 [[transitions]]
@@ -322,7 +551,7 @@ to = "audit"
 command = "lens_rotate"
 args = ["completed_perspective"]
 gates = [
-    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='set_member_complete' AND member='{{completed_perspective}}'", expect = "true", intent = "perspective must be marked complete before rotating" },
+    { type = "query", sql = "SELECT count(*) >= 1 FROM events WHERE type='set_member_complete' AND member='{{completed_perspective}}'", expect = "true", intent = "perspective must be marked complete before rotating — `set complete perspective` first" },
 ]
 
 # ── Convergence ──
@@ -332,7 +561,7 @@ from = "perspective_clean"
 to = "all_perspectives_clean"
 command = "all_perspectives"
 gates = [
-    { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member", intent = "all 13 lenses must pass clean" },
+    { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member", intent = "all 13 lenses must pass clean — complete each remaining one with `set complete perspective`" },
 ]
 
 [[transitions]]
@@ -346,12 +575,39 @@ from = "final_sweep"
 to = "final_sweep_clean"
 command = "converge"
 gates = [
-    { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member", intent = "all lenses must be complete" },
-    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope full', timeout = 60, evidence = "suite_green", intent = "tests must pass" },
-    { type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", timeout = 30, intent = "no lint violations" },
-    { type = "query", query = "all_findings_closed", expect = "0" },
-    { type = "no_violations", intent = "no unresolved protocol violations" },
-    { type = "query", query = "quiz_exhaustions_resolved", expect = "true" },
+    { type = "set_covered", set = "perspective", event = "set_member_complete", field = "member", intent = "all lenses must be complete — complete each remaining one with `set complete perspective`" },
+    { type = "command_succeeds", cmd = 'python3 "${CLAUDE_PLUGIN_ROOT:?must be set to the holtz plugin directory}/enforcement/scripts/verify_suite.py" --check --scope full', timeout = 60, evidence = "suite_green", intent = "tests must pass — record the full suite with `verify_suite.py --record --scope full`" },
+    { type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", timeout = 30, intent = "no lint violations — run `ruff check .` (or $HOLTZ_LINT) and fix what it reports" },
+    # P0.1's convergence redefinition (D4), replacing `all_findings_closed`.
+    # The audited run's open count rose 124 -> 273 and fell exactly once, so
+    # "every finding closed" was unreachable and the run could not terminate;
+    # what it could not do either was say which findings actually had to be
+    # closed. These four conjuncts say it. MEDIUM and LOW may now legitimately
+    # remain open at convergence — which is precisely why the amplification
+    # conjunct has to be here, and why it reads as pointless against the gate
+    # it replaces rather than the one it joins.
+    #
+    # D5 keeps the 50% cap load-bearing: the MEDIUM budget must be spent, so
+    # the carve-out above cannot become a way of deferring MEDIUMs instead of
+    # fixing half of them. Same query as `pattern_done`'s escape, same
+    # spelling for "spent".
+    #
+    # Every one of these is escapable by `sweep_dirty`, the ungated
+    # `final_sweep -> fix_loop` edge: a blocked converge goes back and works.
+    { type = "query", query = "all_critical_resolved", expect = "true", intent = "every CRITICAL finding must be resolved — run `sweep_dirty` and fix them" },
+    # P0.5's second route (D29/D34/D35). The spec batches `fault_injected` at
+    # finalize; the gate is here instead, because `all_critical_resolved` above
+    # carries no reachability filter and refuses a deferral — a fault-injected
+    # CRITICAL blocks this transition, two doors upstream of `finalize`, so a
+    # batch compelled there could never be reached by the run that needed it.
+    # Escape: Step 15's `hardening_batch.py --record --module <dir>`, the line
+    # immediately above `transition converge` in `phase-convergence.md`.
+    { type = "query", query = "no_open_fault_injected", expect = "true", intent = "every fault_injected finding must be hardened or deferred — run Step 15's `hardening_batch.py --record --module <dir>`, one commit per module" },
+    { type = "query", query = "all_user_reachable_high_closed", expect = "true", intent = "every user-reachable HIGH must be resolved or deferred — run `sweep_dirty` and work them" },
+    { type = "query", query = "amplification_diverging", expect = "false", intent = "the run is still filing faster than it retires over the last 3 rounds — run `sweep_dirty`, then `sahjhan defer batch --severity low,medium` and work a round, so the next round retires more than it files" },
+    { type = "query", query = "deferral_record_complete", expect = "true", intent = "every deferral must name a finding this run filed — file it with `sahjhan event finding`, or re-file under the id the deferral means" },
+    { type = "no_violations", intent = "no unresolved protocol violations — a violation is permanent, so this run cannot pass here; stop and ask the user to start a fresh run (`/holtz`, then 'start fresh')" },
+    { type = "query", query = "quiz_exhaustions_resolved", expect = "true", intent = "no unresolved quiz exhaustions — only the user can accept an exhausted lens: ask them to run `! sahjhan event quiz_exhausted_resolved` as phase-convergence.md shows, or to start a fresh run" },
 ]
 
 [[transitions]]
@@ -371,7 +627,7 @@ from = "converged"
 to = "finalized"
 command = "finalize"
 gates = [
-    { type = "ledger_has_event", event = "baseline_updated", intent = "architecture baseline must be updated" },
-    { type = "ledger_has_event", event = "living_punchlist_updated", intent = "living punchlist must be updated" },
-    { type = "ledger_has_event", event = "pattern_contribution_complete", intent = "pattern contribution must be completed or skipped" },
+    { type = "ledger_has_event", event = "baseline_updated", intent = "architecture baseline must be updated — `sahjhan event baseline_updated`" },
+    { type = "ledger_has_event", event = "living_punchlist_updated", intent = "living punchlist must be updated — `sahjhan event living_punchlist_updated`" },
+    { type = "ledger_has_event", event = "pattern_contribution_complete", intent = "pattern contribution must be completed or skipped — `sahjhan event pattern_contribution_complete` with its outcome" },
 ]

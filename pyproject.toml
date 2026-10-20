@@ -1,3 +1,11 @@
+# What the test suite and the gates need, and nothing else — CI installs this
+# group and nothing by hand (`pip install --group test`, pip >= 25.1), so a
+# fresh checkout and CI collect the same set. There is no [project] table: the
+# plugin's version lives in .claude-plugin/plugin.json, and this repo is not a
+# pip-installable package.
+[dependency-groups]
+test = ["pytest", "pytest-cov", "ruff", "mypy", "hypothesis"]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 120
@@ -26,6 +34,20 @@ omit = [
     "tests/*",
     "scripts/*",
     "*/site-packages/*",
+]
+
+[tool.coverage.report]
+# The report's population, named by repo-relative directory. The report runs
+# in the main pytest process, whose cwd is the repo root, so these resolve
+# there. `run.omit`'s relative patterns do not hold for subprocess data, whose
+# cwd is often a scratch tree: it arrives carrying `scripts/` and the copies of
+# repo files that tests execute in temp directories. Nothing outside these
+# four directories is ever reported.
+include = [
+    "skills/holtz/scripts/*",
+    "hooks/*",
+    "enforcement/hooks/*",
+    "enforcement/scripts/*",
 ]
 
 [tool.pytest.ini_options]

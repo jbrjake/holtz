@@ -7,18 +7,35 @@ JSONL events to stdout. Output is piped to sahjhan ledger import.
 Usage:
     python3 scripts/migrate_legacy.py --input docs/holtz/archive/2026-03-22-run9/
     python3 scripts/migrate_legacy.py --run 9 --input docs/holtz/archive/2026-03-22-run9/
-    python3 scripts/migrate_legacy.py --all --archive-root docs/holtz/archive/
+    python3 scripts/migrate_legacy.py --all --archive-root docs/holtz/archive/ --out-dir migrated/
     python3 scripts/migrate_legacy.py --build-project
+    python3 scripts/migrate_legacy.py --build-project --ledger project
+
+`--all` writes one file per run, `<out-dir>/run-<N>.jsonl`, because
+`sahjhan ledger import` makes one ledger from one stream and every run numbers
+its findings from BH-001. Import each file into its own ledger:
+
+    sahjhan ledger import --name run-<N> --path <ledger file> < migrated/run-<N>.jsonl
+
+`ledger import` only creates. The first `--build-project` goes in that way;
+after it, `--build-project --ledger <name>` prints only the runs that ledger
+has not registered, and each line goes in with
+`sahjhan --ledger <name> event <type> --field <key>=<value> ...`.
+
+Event types events.toml does not declare are parsed, counted on stderr, and
+not emitted.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import re
+import subprocess
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 # Import fence masking from holtz scripts
 _SCRIPTS_DIR = Path(__file__).parent.parent / "skills" / "holtz" / "scripts"
@@ -105,6 +122,29 @@ PROTO_FILENAMES = {
     "BUG-HUNTER-STATUS.md": "STATUS.md",
     "BUG-HUNTER-SUMMARY.md": "SUMMARY.md",
 }
+
+
+# The protocol steps SKILL.md teaches a finding and its resolution to record.
+AUDIT_FINDING_STEP = "7"
+RESOLUTION_STEP = "10"
+
+# `commit_hash` is required. A legacy punchlist rarely recorded one, and this
+# value says the commit is unknown — it names no object in any repository.
+UNKNOWN_COMMIT = "0000000"
+
+# Parsed so they can be counted, never emitted: events.toml declares none of
+# them, so nothing could validate them once imported.
+UNDECLARED_LEGACY_TYPES = frozenset({
+    "run_summary", "merge_result", "convergence_iteration", "run_postmortem",
+})
+
+_SEVERITY_RE = re.compile(r"(CRITICAL|HIGH|MEDIUM|LOW)\b")
+_COMMIT_RE = re.compile(r"\b[0-9a-f]{7,40}\b")
+
+
+def _commit_hash(recorded: str) -> str:
+    match = _COMMIT_RE.search(recorded)
+    return match.group(0) if match else UNKNOWN_COMMIT
 
 
 def _migrated_at() -> str:
@@ -225,7 +265,7 @@ def _parse_table_punchlist(
 
         finding = _make_event("finding", {
             "phase": "audit",
-            "step": "",
+            "step": AUDIT_FINDING_STEP,
             "id": item_id,
             "severity": current_severity,
             "category": category,
@@ -233,15 +273,21 @@ def _parse_table_punchlist(
             "perspective": perspective,
             "description": description,
             "predicted_by": "",
+            # P0.5 made reachability a required field. A legacy punchlist
+            # states none, and inventing `user_reachable` would grade an
+            # archive as fix-loop eligible on no evidence. `theoretical` is
+            # the value's own definition — no path found, reachability
+            # unestablished — which is exactly the archive's situation.
+            "reachability": "theoretical",
         }, run=run, auditor=auditor, project=project, source=source)
         events.append(finding)
 
         if status == "RESOLVED":
             resolved = _make_event("finding_resolved", {
                 "phase": "fix_loop",
-                "step": "",
+                "step": RESOLUTION_STEP,
                 "id": item_id,
-                "commit_hash": "",  # not available from markdown
+                "commit_hash": UNKNOWN_COMMIT,  # the table has no commit column
             }, run=run, auditor=auditor, project=project, source=source)
             events.append(resolved)
 
@@ -265,8 +311,10 @@ def _parse_block_punchlist(
         item_id = header_match.group(1)
         description = header_match.group(2).strip()
 
-        # Extract fields from the block
-        severity = _extract_field(block, "Severity") or _current_severity(content, content.find(block))
+        # Extract fields from the block. A severity can carry prose after it
+        # ("HIGH (upgraded from MEDIUM per Justine merge)"); keep the word.
+        stated = _SEVERITY_RE.match(_extract_field(block, "Severity") or "")
+        severity = stated.group(1) if stated else _current_severity(content, content.find(block))
         category = _extract_field(block, "Category") or ""
         location = _extract_field(block, "Location") or ""
         perspective = _extract_field(block, "Perspective") or ""
@@ -274,7 +322,7 @@ def _parse_block_punchlist(
 
         finding = _make_event("finding", {
             "phase": "audit",
-            "step": "",
+            "step": AUDIT_FINDING_STEP,
             "id": item_id,
             "severity": severity,
             "category": category,
@@ -282,16 +330,21 @@ def _parse_block_punchlist(
             "perspective": perspective,
             "description": description,
             "predicted_by": "",
+            # P0.5 made reachability a required field. A legacy punchlist
+            # states none, and inventing `user_reachable` would grade an
+            # archive as fix-loop eligible on no evidence. `theoretical` is
+            # the value's own definition — no path found, reachability
+            # unestablished — which is exactly the archive's situation.
+            "reachability": "theoretical",
         }, run=run, auditor=auditor, project=project, source=source)
         events.append(finding)
 
         if status == "RESOLVED":
-            commit = _extract_field(block, "Fix Commit") or ""
             resolved = _make_event("finding_resolved", {
                 "phase": "fix_loop",
-                "step": "",
+                "step": RESOLUTION_STEP,
                 "id": item_id,
-                "commit_hash": commit,
+                "commit_hash": _commit_hash(_extract_field(block, "Fix Commit") or ""),
             }, run=run, auditor=auditor, project=project, source=source)
             events.append(resolved)
 
@@ -475,28 +528,84 @@ def parse_audit_file(
     return events
 
 
+# The headers that name a claims table's verdict column, most specific first:
+# where a table has both `Verified` and `Status`, `Verified` holds evidence.
+_VERDICT_HEADERS = ("verdict", "status", "verified", "match")
+
+# The verdict words the archive's claims tables use (D-q′, D-u).
+_VERDICTS = {
+    "VERIFIED": "VERIFIED", "TRUE": "VERIFIED", "YES": "VERIFIED", "PASS": "VERIFIED",
+    "OK": "VERIFIED", "CONFIRMED": "VERIFIED",
+    "FALSE": "FALSE", "NO": "FALSE", "FAIL": "FALSE",
+    "DRIFT": "FALSE", "UNDERSTATED": "FALSE", "STALE": "FALSE",
+    "OVERSTATED": "OVERSTATED", "PARTIAL": "OVERSTATED",
+    "MISSING": "MISSING",
+}
+_LEADING_WORD = re.compile(r"[\s*_`]*([A-Za-z]+)")
+
+
+def _table_cells(line: str) -> list[str]:
+    """A table row's cells, split on the pipes that are not escaped."""
+    cells = re.split(r"(?<!\\)\|", line.strip())
+    return [c.strip().replace("\\|", "|") for c in cells[1:-1]]
+
+
+def _tables(content: str) -> list[list[str]]:
+    """Each run of consecutive table lines."""
+    tables: list[list[str]] = []
+    current: list[str] = []
+    for line in content.split("\n") + [""]:
+        if line.strip().startswith("|"):
+            current.append(line)
+        elif current:
+            tables.append(current)
+            current = []
+    return tables
+
+
+def _verdict(cell: str) -> str | None:
+    match = _LEADING_WORD.match(cell)
+    return _VERDICTS.get(match.group(1).upper()) if match else None
+
+
 def _parse_claims_table(
     content: str, run: str, auditor: str, source: str, project: str,
 ) -> list[dict[str, Any]]:
-    """Parse doc claims audit table."""
+    """Parse doc claims audit tables, reading each by its header."""
     events: list[dict[str, Any]] = []
-    for line in content.split("\n"):
-        if not line.strip().startswith("|"):
+    no_column = no_word = 0
+    for table in _tables(content):
+        header = [h.lower().rstrip("?") for h in _table_cells(table[0])]
+        rows = [_table_cells(line) for line in table[1:]
+                if not re.fullmatch(r"\|[\s:|-]*", line.strip())]
+        named = [h for h in _VERDICT_HEADERS if h in header]
+        if not named:
+            no_column += len(rows)
             continue
-        cells = [c.strip() for c in line.split("|")]
-        cells = [c for c in cells if c]
-        if len(cells) < 4 or cells[0] in ("Source", "--", "---"):
-            continue
-        if cells[0].startswith("-"):
-            continue
-        events.append(_make_event("audit_claim", {
-            "phase": "audit",
-            "step": "6",
-            "source": cells[0],
-            "claim": cells[1] if len(cells) > 1 else "",
-            "verdict": cells[2] if len(cells) > 2 else "",
-            "evidence": cells[3] if len(cells) > 3 else "",
-        }, run=run, auditor=auditor, project=project, source=source))
+        verdict_col = header.index(named[0])
+        number_col = header.index("#") if "#" in header else None
+        # A table with no `Claim` column states its claim in the first other one.
+        claim_col = header.index("claim") if "claim" in header else next(
+            (k for k in range(len(header)) if k not in (verdict_col, number_col)), None)
+        source_col = next((header.index(h) for h in ("location", "source") if h in header), None)
+        used = {verdict_col, number_col, claim_col, source_col}
+        for cells in rows:
+            cells += [""] * (len(header) - len(cells))
+            verdict = _verdict(cells[verdict_col])
+            if verdict is None:
+                no_word += 1
+                continue
+            events.append(_make_event("audit_claim", {
+                "phase": "audit",
+                "step": "6",
+                "source": cells[source_col] if source_col is not None else "",
+                "claim": cells[claim_col] if claim_col is not None else "",
+                "verdict": verdict,
+                "evidence": "; ".join(c for k, c in enumerate(cells) if k not in used and c),
+            }, run=run, auditor=auditor, project=project, source=source))
+    if no_column or no_word:
+        print(f"# run {run} {source}: skipped {no_column} rows in tables with no verdict "
+              f"column, {no_word} rows with no verdict word", file=sys.stderr)
     return events
 
 
@@ -787,19 +896,26 @@ def build_project_ledger(
     runs: list[tuple[int, str]],
     project: str = "holtz",
     impact_graph_path: Path | None = None,
+    registered: set[str] | frozenset[str] = frozenset(),
 ) -> list[dict[str, Any]]:
-    """Build project-level ledger with run registry and checkpoint events."""
+    """Build project-level ledger with run registry and checkpoint events.
+
+    Runs in ``registered`` are already in the ledger and are skipped. With
+    nothing left to register nothing is emitted, checkpoint included, so a
+    re-run against an up-to-date ledger adds no row.
+    """
     events: list[dict[str, Any]] = []
 
     for run_num, auditor in runs:
-        events.append(_make_event("run_registered", {
-            "phase": "",
-            "step": "",
-        }, run=str(run_num), auditor=auditor, project=project))
-        events.append(_make_event("run_completed", {
-            "phase": "",
-            "step": "",
-        }, run=str(run_num), auditor=auditor, project=project))
+        if str(run_num) in registered:
+            continue
+        events.append(_make_event("run_registered", {},
+                                  run=str(run_num), auditor=auditor, project=project))
+        events.append(_make_event("run_completed", {},
+                                  run=str(run_num), auditor=auditor, project=project))
+
+    if not events:
+        return events
 
     # Checkpoint from current state files
     checkpoint_fields: dict[str, str] = {
@@ -816,6 +932,45 @@ def build_project_ledger(
     return events
 
 
+def registered_runs(ledger: str) -> set[str]:
+    """The runs a project ledger has registered, read by the engine.
+
+    Raises ``RuntimeError`` when the ledger cannot be read. An unreadable
+    registry must never stand in for an empty one: that would register every
+    run a second time.
+    """
+    hooks = Path(__file__).resolve().parent.parent / "enforcement" / "hooks"
+    sys.path.insert(0, str(hooks))
+    from _resolve import ensure_sahjhan
+
+    binary = ensure_sahjhan()
+    if not binary:
+        raise RuntimeError("the sahjhan binary is not available")
+    result = subprocess.run(
+        [binary, "--config-dir", str(hooks.parent), "--ledger", ledger, "query",
+         "SELECT run FROM events WHERE type='run_registered'", "--format", "json"],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"cannot read ledger '{ledger}': {result.stderr.strip()}")
+    return {row["run"] for row in json.loads(result.stdout)}
+
+
+def _emit(events: list[dict[str, Any]], out: TextIO, label: str) -> int:
+    """Write the declared events as JSONL and count the rest on stderr.
+
+    Returns how many were written.
+    """
+    kept = [e for e in events if e["type"] not in UNDECLARED_LEGACY_TYPES]
+    for event in kept:
+        out.write(json.dumps(event) + "\n")
+    skipped = Counter(e["type"] for e in events if e["type"] in UNDECLARED_LEGACY_TYPES)
+    if skipped:
+        counts = ", ".join(f"{n} {t}" for t, n in sorted(skipped.items()))
+        print(f"# {label}: not emitted, undeclared in events.toml: {counts}", file=sys.stderr)
+    return len(kept)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Migrate legacy Holtz archives to JSONL")
     parser.add_argument("--input", type=Path, help="Archive directory to migrate")
@@ -825,36 +980,57 @@ def main() -> None:
     parser.add_argument("--archive-root", type=Path, default=Path("docs/holtz/archive"),
                         help="Root of archive directories")
     parser.add_argument("--build-project", action="store_true", help="Build project ledger")
+    parser.add_argument("--ledger",
+                        help="With --build-project: skip the runs this ledger has registered")
+    parser.add_argument("--out-dir", type=Path,
+                        help="With --all: write one run-<N>.jsonl per run here")
     args = parser.parse_args()
 
     if args.build_project:
+        registered: set[str] = set()
+        if args.ledger:
+            try:
+                registered = registered_runs(args.ledger)
+            except RuntimeError as exc:
+                parser.error(str(exc))
         runs = [(meta["run"], meta["auditor"]) for meta in ARCHIVE_MAP.values()]
         runs.sort()
-        events = build_project_ledger(runs, project=args.project)
+        events = build_project_ledger(runs, project=args.project, registered=registered)
         for event in events:
             print(json.dumps(event))
         return
 
     if args.all:
+        # One stream is one ledger, and every run's findings start at BH-001,
+        # so a combined stream collides identically-numbered findings under
+        # by-id latest-wins. There is no combined form to fall back to.
+        if args.out_dir is None:
+            parser.error("--all writes one file per run: pass --out-dir DIR")
+        by_run: dict[int, list[dict[str, Any]]] = {}
         for dirname, meta in sorted(ARCHIVE_MAP.items(), key=lambda x: x[1]["run"]):
             dir_path = args.archive_root / dirname
             if not dir_path.is_dir():
                 print(f"# Skipping {dirname} (not found)", file=sys.stderr)
                 continue
-            events = migrate_directory(dir_path, run=meta["run"],
-                                       auditor=meta["auditor"], project=args.project)
-            for event in events:
-                print(json.dumps(event))
+            by_run.setdefault(meta["run"], []).extend(migrate_directory(
+                dir_path, run=meta["run"], auditor=meta["auditor"], project=args.project,
+            ))
 
-        # Standalone justine directories
+        # Standalone justine directories belong to the run they were matched to.
         for dirname, matched_run in sorted(JUSTINE_MAP.items(), key=lambda x: x[1]):
             dir_path = args.archive_root / dirname
             if not dir_path.is_dir():
                 continue
-            events = migrate_directory(dir_path, run=matched_run,
-                                       auditor="justine", project=args.project)
-            for event in events:
-                print(json.dumps(event))
+            by_run.setdefault(matched_run, []).extend(migrate_directory(
+                dir_path, run=matched_run, auditor="justine", project=args.project,
+            ))
+
+        args.out_dir.mkdir(parents=True, exist_ok=True)
+        for run, events in sorted(by_run.items()):
+            target = args.out_dir / f"run-{run}.jsonl"
+            with target.open("w", encoding="utf-8") as out:
+                written = _emit(events, out, target.name)
+            print(f"{target}  ({written} events)")
         return
 
     if not args.input:
@@ -879,8 +1055,7 @@ def main() -> None:
         auditor = "justine"
 
     events = migrate_directory(args.input, run=run, auditor=auditor, project=args.project)
-    for event in events:
-        print(json.dumps(event))
+    _emit(events, sys.stdout, dirname)
 
 
 if __name__ == "__main__":

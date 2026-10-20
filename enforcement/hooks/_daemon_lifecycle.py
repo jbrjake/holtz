@@ -26,10 +26,12 @@ from _common import (  # noqa: E402
     _is_process_alive,
     _read_init_pid,
     _write_terminated_marker,
+    audit_data_dir,
     exit_block,
     exit_ok,
     read_event,
 )
+from _shell_norm import shell_segments  # noqa: E402
 
 # Tools that don't need the daemon — read-only or infrastructure.
 # These must never be blocked, even when the audit is terminated.
@@ -56,15 +58,20 @@ _DAEMON_RECOVERY_RE = re.compile(
 def _is_recovery_command(event: dict) -> bool:
     """Check if a Bash event is a sahjhan daemon start/stop command.
 
-    Splits on shell operators (&&, ||, ;, |, newline) and requires that
-    every non-empty segment matches the recovery pattern. A single
+    Requires that every segment matches the recovery pattern. A single
     chained segment that does anything else converts the whole command
     into "arbitrary work disguised as recovery" and is denied.
+
+    Segmentation is ``_shell_norm``'s, which is what makes that sentence
+    true of ``&``. The trailing ``\\Z`` cannot enforce it alone: the
+    pattern ends ``(?:\\s+\\S+)*``, so an unsplit ``sahjhan daemon start &
+    rm -rf x`` reads as the recovery command with three extra arguments
+    and this allowlist — live for every Bash call — returns True.
     """
     if event.get("tool_name") != "Bash":
         return False
     cmd = event.get("tool_input", {}).get("command", "")
-    segments = [s for s in re.split(r"&&|\|\||[;|\n]", cmd) if s.strip()]
+    segments = shell_segments(cmd)
     if not segments:
         return False
     return all(_DAEMON_RECOVERY_RE.match(seg) for seg in segments)
@@ -75,7 +82,7 @@ def main() -> None:
     cwd = event.get("cwd", os.getcwd())
     tool_name = event.get("tool_name", "")
 
-    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
+    data_dir = audit_data_dir(cwd)
     if not os.path.isdir(data_dir):
         exit_ok("PreToolUse")
 

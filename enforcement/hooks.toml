@@ -3,21 +3,63 @@
 # Sealed at init time alongside the other 5 config files.
 
 # ── TDD Gate ──
-# Block source file edits in fix_loop without a prior failing test.
-# Makes TDD mechanically unavoidable. Filter excludes test files.
-# Every fix_commit self-loop is a state transition, so the gate resets.
+# Block source file edits in fix_loop without a prior failing test *by the
+# agent doing the editing*. Makes TDD mechanically unavoidable. Filter excludes
+# test files.
+#
+# The predicate: an actor holds authorisation while it has a `tdd_evidence` row
+# whose finding has no later `finding_resolved`. Both halves are scoped, and
+# they are scoped to different things:
+#
+#   filter        what counts   — the caller. `{{agent_id}}` binds to the actor
+#                                 `pre_tool_hook.py` passes to `hook eval`; the
+#                                 orchestrator is the empty string, a real
+#                                 actor and never a wildcard.
+#   since_filter  where the     — that same evidence row's own finding.
+#                 window starts   `{{event.finding_id}}` reads the candidate,
+#                                 so the window is computed per evidence row.
+#
+# `fix_commit BH-NNN` auto-emits `finding_resolved` for that id, so an actor's
+# evidence is consumed by its own commit and by nothing else: a sibling's
+# commit names its own id and leaves this actor's row standing. A run-global
+# window ("any evidence this run") would satisfy the letter of "scope it to the
+# actor" while turning a per-fix gate into a per-actor-per-run one.
+#
+# `tdd_evidence` is `restricted` and written by `tdd_courier.py` from the hook
+# payload, never from anything the agent typed. The courier pairs it per
+# finding, which is what makes `finding_id` a correlatable key.
+#
+# Needs sahjhan >= 0.24.0 for `since_filter` (jbrjake/sahjhan#35). Both field
+# names it references are checked against events.toml when the config is
+# sealed, so a window that would silently widen to the whole run is unsealable
+# rather than merely wrong (#34).
+#
+# ⚠️ The generated contract reports this gate as forgeable, and it is right to:
+# `finding_resolved` is agent-writable by design (the documented
+# `sahjhan resolve` reconciliation path). **Read the direction before reading
+# the flag.** An agent-written `finding_resolved` can only ever move an
+# evidence row *out* of the window — it denies the forger, it cannot admit
+# them, and `tdd_evidence` itself is restricted. There is no spelling of an
+# agent-written event that opens this gate; that is `tdd_courier.py`'s alone.
+#
+# The one thing it does buy an agent is the ability to revoke a *sibling's*
+# authorisation by resolving the sibling's finding out of band. That is
+# strictly narrower than a run-global window, under which any transition
+# revoked every actor at once.
 
 [[hooks]]
 event = "PreToolUse"
-tools = ["Edit", "Write"]
+tools = ["Edit", "Write", "NotebookEdit"]
 states = ["fix_loop"]
 action = "block"
-message = "TDD violation: write and run a failing test before editing source files. Record with: sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" event test_failed_before_fix --field finding_id=BH-NNN --field test_name=..."
+message = "TDD violation: write and run a failing test before editing source files. Record with: sahjhan --config-dir \"$CLAUDE_PLUGIN_ROOT/enforcement\" event test_failed_before_fix --field project=holtz --field run=N --field auditor=holtz --field finding_id=BH-NNN --field test_name=..."
 
 [hooks.gate]
 type = "ledger_has_event_since"
-event = "test_failed_before_fix"
-since = "last_transition"
+event = "tdd_evidence"
+since = "last_event_of_type:finding_resolved"
+since_filter = { id = "{{event.finding_id}}" }
+filter = { agent_id = "{{agent_id}}" }
 
 [hooks.filter]
 path_not_matches = "tests/**"

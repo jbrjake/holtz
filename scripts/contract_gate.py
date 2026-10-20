@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
 """Pre-release contract gate: verify hook decisions match skill instructions.
 
-Extracts all sahjhan commands from fenced code blocks in skills/**/*.md,
-runs each through the bootstrap hook, and fails if:
-  - An allowed command (from the skill) is blocked by the hook
-  - A blocked command (from KNOWN_BLOCKED) is allowed by the hook
+Extracts every sahjhan command taught in `skills/**/*.md` — fenced blocks
+**and** inline backticks — and asks two questions of each:
 
-This catches drift between skill instructions and hook enforcement even
-if someone forgets to update test_contract_commands.py.
+  1. Does the hook allow it? An allowed command the hook blocks, or a
+     KNOWN_BLOCKED command the hook allows, fails the gate.
+  2. Does the *engine* accept its fields? A `sahjhan event` form missing a
+     field `events.toml` requires exits 4 on the first use of every run.
+
+Question 2 is new (item 31 / W03). Asking only question 1 is how
+`phase-fix-loop.md:52` and `hooks.toml`'s TDD block message came to teach a
+`test_failed_before_fix` without `project`, `run` or `auditor`: the hook
+allowed the string, and nothing ever ran it. `hooks.toml` is not a skill file,
+so its message was outside this gate entirely — it is in scope now, because it
+is the string a blocked agent actually copies.
+
+Extraction is shared with `scripts/taught_commands.py` rather than duplicated;
+a second copy is exactly how the fenced-only reader drifted from the six inline
+commands.
 
 Usage:
     python3 scripts/contract_gate.py          # exit 0 = pass, exit 1 = fail
@@ -17,13 +28,16 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HOOK = os.path.join(REPO_ROOT, "enforcement", "hooks", "_sahjhan_bootstrap.py")
 SKILLS_DIR = os.path.join(REPO_ROOT, "skills")
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import taught_commands  # noqa: E402
 
 # Commands that appear in skill files but are INTENTIONALLY blocked.
 # The contract gate verifies these remain blocked (not accidentally allowed).
@@ -33,41 +47,58 @@ KNOWN_BLOCKED = {
     "sahjhan daemon stop",
 }
 
+# Blocks this gate structurally cannot evaluate, and where each one *is*
+# evaluated instead.
+#
+# `sahjhan daemon stop` is not unconditionally blocked. #57 made it graduated
+# on purpose: it is permitted when there is nothing left to protect — no audit
+# dir, an audit already marked `terminated`, an unreachable daemon, or a
+# daemon-cleanup protocol state. Without that, the stop hook told the agent the
+# daemon must be stopped and simultaneously forbade it.
+#
+# This gate runs hermetically, against a cwd with no audit and no daemon —
+# which is precisely the "nothing to protect" case — so the honest answer here
+# is `allow`, every time. Asserting `deny` would be asserting a state the gate
+# never constructs. The block is verified where the state *can* be built:
+# tests/test_worktree_audit_anchor.py::TestV3DaemonStop drives a live daemon in
+# `fix_loop` and observes deny from both the main checkout and a worktree, and
+# asserts the terminated-audit escape still opens.
+#
+# It stays in KNOWN_BLOCKED because that set also drives `is_known_blocked`'s
+# "the skill file is allowed to mention this" reading; only the *decision*
+# assertion is skipped.
+STATE_DEPENDENT_BLOCKS = {
+    "sahjhan daemon stop": (
+        "graduated by #57 — permitted when there is nothing to protect, which "
+        "is this gate's own environment. Verified under a live daemon by "
+        "tests/test_worktree_audit_anchor.py::TestV3DaemonStop."
+    ),
+}
+
+
+def state_dependent_reason(cmd: str) -> str | None:
+    """Why this gate cannot assert a decision for ``cmd``, or None."""
+    normalized = normalize_command(cmd).lstrip("!").strip()
+    for prefix, reason in STATE_DEPENDENT_BLOCKS.items():
+        if normalized == prefix or normalized.startswith(prefix + " "):
+            return reason
+    return None
+
 
 def extract_sahjhan_commands(md_path: str) -> list[tuple[str, int, str]]:
-    """Extract sahjhan commands from fenced code blocks in a markdown file.
+    """Extract sahjhan commands from a markdown file, fenced and inline.
 
     Returns list of (command, line_number, file_path) tuples.
+
+    Delegates to `taught_commands.command_spans`, which is the one answer to
+    "where are the commands we teach". This function used to read fenced blocks
+    only, and to test each physical line separately; a continued command is now
+    joined before it is tested, because that is what the shell receives.
     """
-    with open(md_path, encoding="utf-8") as f:
-        lines = f.readlines()
-
-    commands: list[tuple[str, int, str]] = []
-    in_fence = False
-
-    for i, line in enumerate(lines, 1):
-        stripped = line.strip()
-        if stripped.startswith("```"):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            # Match lines that contain a sahjhan command
-            # Handle line continuations (trailing \)
-            cmd = stripped.rstrip("\\").strip()
-            if not cmd:
-                continue
-            # Skip shell comments
-            if cmd.startswith("#"):
-                continue
-            # Only extract lines where sahjhan is actually being invoked
-            # (not just mentioned in comments or as part of a path)
-            if re.search(r'(?:^|\s|nohup\s+)sahjhan\s', cmd):
-                # Clean up: strip leading shell prefixes that aren't part
-                # of the command itself (like cp, echo, etc.)
-                # We want the actual sahjhan invocation
-                commands.append((cmd, i, md_path))
-
-    return commands
+    return [
+        (span.text, span.line, md_path)
+        for span in taught_commands.command_spans(md_path)
+    ]
 
 
 def run_hook(command: str) -> tuple[str, str]:
@@ -130,18 +161,9 @@ def is_known_blocked(cmd: str) -> bool:
 def main() -> int:
     verbose = "--verbose" in sys.argv
 
-    # Find all markdown files under skills/
-    md_files: list[str] = []
-    for root, _dirs, files in os.walk(SKILLS_DIR):
-        for f in files:
-            if f.endswith(".md"):
-                md_files.append(os.path.join(root, f))
-
-    md_files.sort()
-
     # Extract all sahjhan commands
     all_commands: list[tuple[str, int, str]] = []
-    for md_path in md_files:
+    for md_path in taught_commands.markdown_files(SKILLS_DIR):
         all_commands.extend(extract_sahjhan_commands(md_path))
 
     if not all_commands:
@@ -155,8 +177,17 @@ def main() -> int:
     allowed_count = 0
     blocked_count = 0
 
+    skipped = 0
+
     for cmd, line_no, file_path in all_commands:
         rel_path = os.path.relpath(file_path, REPO_ROOT)
+        deferred = state_dependent_reason(cmd)
+        if deferred:
+            skipped += 1
+            if verbose:
+                print(f"  SKIPPED (state-dependent): {rel_path}:{line_no}: {cmd}\n"
+                      f"         {deferred}")
+            continue
         decision, reason = run_hook(cmd)
         tested += 1
         expected_blocked = is_known_blocked(cmd)
@@ -194,9 +225,31 @@ def main() -> int:
             elif verbose:
                 print(f"  ALLOWED (expected): {rel_path}:{line_no}: {cmd}")
 
+    # Second question: does the engine accept the fields? (item 31 / W03)
+    #
+    # A command the hook allows can still exit 4 the first time it is run,
+    # which is worse than being blocked: the block at least says why. This is
+    # the check `contract_gate` never had, and it covers `hooks.toml`'s block
+    # messages as well as the skill files.
+    field_failures, field_lines = taught_commands.report()
+    tested_fields = len(field_lines)
+    if verbose:
+        for line in field_lines:
+            print(line)
+    if field_failures:
+        failures.extend(
+            "  " + line.strip() for line in field_lines
+            if line.strip().startswith(("MISSING", "UNKNOWN"))
+        )
+
     # Report
+    # Named, never silent: a gate that drops coverage without saying so reads
+    # as "everything checked out".
     print(f"\nContract gate: {tested} commands tested "
-          f"({allowed_count} should-allow, {blocked_count} should-block)")
+          f"({allowed_count} should-allow, {blocked_count} should-block, "
+          f"{skipped} state-dependent — see STATE_DEPENDENT_BLOCKS); "
+          f"{tested_fields} event commands field-checked "
+          f"({field_failures} failing)")
 
     if failures:
         print(f"\n{len(failures)} FAILURE(S):\n")
@@ -205,7 +258,8 @@ def main() -> int:
         print()
         return 1
 
-    print("All commands match expected hook decisions. PASS.")
+    print("All commands match expected hook decisions and the engine's "
+          "required fields. PASS.")
     return 0
 
 

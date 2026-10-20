@@ -49,8 +49,15 @@ def _init_repo(path):
     _git(path, "init", "-q")
     _git(path, "config", "user.email", "t@example.com")
     _git(path, "config", "user.name", "T")
+    # Ignore whatever the developer's global excludes say. `git ls-files
+    # --others --exclude-standard` honours ~/.config/git/ignore, so without
+    # this these tests answer a different question on every machine — which is
+    # how a real widening defect passed locally and failed on CI.
+    _git(path, "config", "core.excludesFile", os.devnull)
     with open(os.path.join(path, ".gitignore"), "w", encoding="utf-8") as fh:
-        fh.write("ignored/\n")
+        # `__pycache__/` as any Python project has it: a real pytest run writes
+        # bytecode into the tree (`.pytest_cache/` ignores itself).
+        fh.write("ignored/\n__pycache__/\n")
     with open(os.path.join(path, "app.py"), "w", encoding="utf-8") as fh:
         fh.write("def add(a, b):\n    return a + b\n")
     # Explicit paths, not `add -A`: the real_daemon fixture's project root
@@ -69,12 +76,20 @@ def _write(path, rel, text):
 
 
 def _run_verify(repo, *args, env=None):
-    """Invoke verify_suite.py the way an agent or a gate does — by path."""
+    """Invoke verify_suite.py the way an agent or a gate does — by path.
+
+    Without `--cwd`, which the recorded form no longer accepts (item 34): the
+    flag and `--record` together exited 0 and recorded nothing, so the parser
+    refuses the pair. The subprocess already runs *in* the repo, which is where
+    the agent runs it from, so this is the production shape. `--cwd` on the
+    diagnostic paths is still supported and is covered by
+    `test_cwd_still_points_the_diagnostic_paths`.
+    """
     full_env = os.environ.copy()
     if env:
         full_env.update(env)
     return subprocess.run(
-        [sys.executable, VERIFY_SUITE, *args, "--cwd", repo],
+        [sys.executable, VERIFY_SUITE, *args],
         cwd=repo,
         capture_output=True,
         text=True,
@@ -85,6 +100,12 @@ def _run_verify(repo, *args, env=None):
 
 def _head(repo):
     return _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+
+# The suite runs under a real interpreter with pytest installed — this one. A
+# temp repo has no venv of its own, and the login `python3` may not carry
+# pytest, so this is the out-of-tree case `$HOLTZ_PYTHON` exists for.
+_REAL_PYTHON = {"HOLTZ_PYTHON": sys.executable}
 
 
 def _node(node_id, file, node_type="function"):
@@ -346,6 +367,30 @@ class TestTreeHash:
         _write(repo, "ignored/build.log", "noise\n")
         assert verify_suite.compute_tree_hash(repo) == before
 
+    def test_arming_the_boundary_is_not_a_source_change(self, repo):
+        """`holtz-start` writes .claude/settings.local.json into the target.
+
+        Two things break if the tree hash sees it: arming mid-audit
+        invalidates every green recorded before it, and the file counts as a
+        changed source with no covering test, so every `--scope affected` run
+        widens to the whole suite — silently undoing the reason the affected
+        scope exists.
+
+        `core.excludesFile` is neutered so the result does not depend on the
+        machine. This defect reached CI green on a laptop whose global
+        excludes happen to list `**/.claude/settings.local.json`, which hid it
+        from `git ls-files --others` there and nowhere else.
+        """
+        _git(repo, "config", "core.excludesFile", os.devnull)
+        head = _head(repo)
+        before = verify_suite.compute_tree_hash(repo)
+
+        _write(repo, ".claude/settings.local.json", '{"sandbox": {"enabled": true}}\n')
+
+        assert verify_suite.compute_tree_hash(repo) == before
+        changed, reason = verify_suite._changed_since(repo, head)
+        assert changed == [], f"arming looked like a source change: {changed} ({reason})"
+
     def test_repo_with_no_commits_still_hashes(self, tmp_path):
         path = str(tmp_path / "empty")
         os.makedirs(path)
@@ -381,13 +426,78 @@ class TestSuiteCommand:
         assert "--last-failed" not in default
         assert "--no-cov" not in default
 
-    def test_holtz_pytest_overrides(self, monkeypatch):
-        monkeypatch.setenv("HOLTZ_PYTEST", "pytest -q custom")
-        assert verify_suite.suite_command() == "pytest -q custom"
 
-    def test_empty_override_falls_back_to_default(self, monkeypatch):
-        monkeypatch.setenv("HOLTZ_PYTEST", "")
-        assert verify_suite.suite_command() == verify_suite.DEFAULT_PYTEST
+def _venv(base, name=".venv"):
+    """A directory the way uv, virtualenv and in-project poetry leave one."""
+    venv = os.path.join(base, name)
+    os.makedirs(os.path.join(venv, "bin"))
+    with open(os.path.join(venv, "pyvenv.cfg"), "w", encoding="utf-8") as fh:
+        fh.write("home = /usr/bin\n")
+    python = os.path.join(venv, "bin", "python")
+    os.symlink(sys.executable, python)
+    return python
+
+
+class TestTheSuiteInterpreter:
+    """W18 / item 33, D-v (RULED 2026-09-23): only the interpreter varies.
+
+    The suite is always `<python> -m pytest` with the fixed flags. No setting
+    can make it `true` or `echo '4 passed'`: `$HOLTZ_PYTEST`, a free-form
+    command from the agent's environment, is not read.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _no_overrides(self, monkeypatch):
+        monkeypatch.delenv("HOLTZ_PYTHON", raising=False)
+        monkeypatch.delenv("HOLTZ_PYTEST", raising=False)
+
+    def test_the_command_is_pytest_with_the_fixed_flags(self, repo):
+        assert verify_suite.suite_command(repo, repo) == verify_suite.DEFAULT_PYTEST
+        assert verify_suite.DEFAULT_PYTEST == "python3 " + verify_suite.PYTEST_ARGS
+
+    def test_an_in_tree_venv_is_the_interpreter(self, repo):
+        python = _venv(repo)
+        assert verify_suite.suite_python(repo, repo) == python
+        assert verify_suite.suite_command(repo, repo) == (
+            f"{python} {verify_suite.PYTEST_ARGS}"
+        )
+
+    def test_a_directory_without_pyvenv_cfg_is_not_a_venv(self, repo):
+        os.makedirs(os.path.join(repo, ".venv", "bin"))
+        os.symlink(sys.executable, os.path.join(repo, ".venv", "bin", "python"))
+        assert verify_suite.suite_python(repo, repo) == "python3"
+
+    def test_a_linked_worktree_finds_the_main_checkouts_venv(self, repo, tmp_path):
+        """A fix subagent records from its worktree, which carries no venv."""
+        from git_env import scrubbed_env
+
+        python = _venv(repo)
+        worktree = str(tmp_path / "wt")
+        # Scrubbed: under pre-commit git's exported GIT_* variables would make
+        # this `worktree add` exit 128 (see tests/git_env.py).
+        subprocess.run(["git", "worktree", "add", "-q", "--detach", worktree, "HEAD"],
+                       cwd=repo, check=True, capture_output=True, env=scrubbed_env())
+        assert not os.path.exists(os.path.join(worktree, ".venv"))
+        assert verify_suite.suite_python(worktree, worktree) == python
+
+    def test_holtz_python_names_an_out_of_tree_interpreter(self, repo, monkeypatch):
+        monkeypatch.setenv("HOLTZ_PYTHON", "/opt/conda/envs/x/bin/python")
+        assert verify_suite.suite_python(repo, repo) == "/opt/conda/envs/x/bin/python"
+
+    def test_an_in_tree_venv_wins_over_holtz_python(self, repo, monkeypatch):
+        python = _venv(repo)
+        monkeypatch.setenv("HOLTZ_PYTHON", "/opt/conda/envs/x/bin/python")
+        assert verify_suite.suite_python(repo, repo) == python
+
+    def test_holtz_pytest_is_not_read(self, repo, monkeypatch):
+        monkeypatch.setenv("HOLTZ_PYTEST", "true")
+        assert verify_suite.suite_command(repo, repo) == verify_suite.DEFAULT_PYTEST
+
+    def test_a_path_with_a_space_is_quoted(self, tmp_path):
+        root = _init_repo(str(tmp_path / "my proj"))
+        python = _venv(root)
+        command = verify_suite.suite_command(root, root)
+        assert command.startswith(f"'{python}' -m pytest"), command
 
 
 # ── Unit: affected-scope selection ───────────────────────────────────────────
@@ -585,7 +695,7 @@ class TestSuiteInvocation:
             baselined, baselined, "affected"
         )
         assert scope == "affected"
-        assert command == verify_suite.suite_command() + " tests/test_new.py"
+        assert command == verify_suite.suite_command(baselined, baselined) + " tests/test_new.py"
 
     def test_a_request_that_cannot_narrow_becomes_full(self, baselined):
         """The recorded scope is what ran, not what was asked for.
@@ -597,7 +707,7 @@ class TestSuiteInvocation:
             baselined, baselined, "affected"
         )
         assert scope == "full"
-        assert command == verify_suite.suite_command()
+        assert command == verify_suite.suite_command(baselined, baselined)
 
     def test_full_never_consults_the_graph(self, repo, monkeypatch):
         def _explode(*_args, **_kwargs):
@@ -605,7 +715,7 @@ class TestSuiteInvocation:
 
         monkeypatch.setattr(verify_suite, "select_affected", _explode)
         assert verify_suite._suite_invocation(repo, repo, "full") == (
-            verify_suite.suite_command(),
+            verify_suite.suite_command(repo, repo),
             "full",
         )
 
@@ -634,9 +744,11 @@ class TestCliContract:
 
     def test_red_suite_records_nothing_and_reports_the_exit_code(self, repo):
         """A failing suite must not reach the daemon at all."""
-        result = _run_verify(repo, "--record", env={"HOLTZ_PYTEST": "exit 3"})
-        assert result.returncode == 3
+        _write(repo, "tests/test_red.py", "def test_red():\n    assert False\n")
+        result = _run_verify(repo, "--record", env=_REAL_PYTHON)
+        assert result.returncode == 1
         assert "nothing recorded" in result.stderr
+        assert verify_suite.RECORD_MARKER not in result.stdout
 
     def test_check_without_evidence_blocks_and_prints_a_runnable_escape(self, repo):
         """A block whose printed escape does not run is the #77 deadlock.
@@ -679,12 +791,29 @@ class TestCliContract:
         The run must widen — and say so — rather than pick some other
         baseline.
         """
-        result = _run_verify(
-            repo, "--record", "--scope", "affected", env={"HOLTZ_PYTEST": "true"}
-        )
+        _write(repo, "tests/test_app.py", "def test_add():\n    assert True\n")
+        result = _run_verify(repo, "--record", "--scope", "affected", env=_REAL_PYTHON)
         assert "running the full suite —" in result.stderr
         # The unadorned command: no selection was appended to it.
-        assert "verify_suite: running true\n" in result.stderr
+        command = f"{sys.executable} {verify_suite.PYTEST_ARGS}"
+        assert f"verify_suite: running {command}\n" in result.stderr
+
+    def test_holtz_pytest_cannot_stand_in_for_the_suite(self, repo):
+        """D-v: `true` was a green with no test run. It is not read at all now."""
+        _write(repo, "tests/test_red.py", "def test_red():\n    assert False\n")
+        result = _run_verify(repo, "--record", env={**_REAL_PYTHON, "HOLTZ_PYTEST": "true"})
+        assert result.returncode == 1, "the real suite ran, and it is red"
+        assert "$HOLTZ_PYTEST is ignored" in result.stderr
+
+    def test_the_evidence_names_the_interpreter_that_ran(self, repo):
+        _write(repo, "tests/test_app.py", "def test_add():\n    assert True\n")
+        result = _run_verify(repo, "--record", env=_REAL_PYTHON)
+        assert result.returncode == 0, result.stderr
+        marker = next(line for line in result.stdout.splitlines()
+                      if line.startswith(verify_suite.RECORD_MARKER))
+        evidence = json.loads(marker[len(verify_suite.RECORD_MARKER):])
+        assert evidence["python"] == sys.executable
+        assert evidence["test_count"] == "1"
 
 
 # ── real_daemon: what only the engine can decide ─────────────────────────────
@@ -697,9 +826,18 @@ class TestAgainstRealDaemon:
 
     @staticmethod
     def _prepare(real_daemon):
-        """Make the daemon's project root a git repo with an active ledger."""
+        """Make the daemon's project root a git repo with an active ledger.
+
+        It carries a real four-test suite, committed, because the suite is
+        always `<python> -m pytest` (D-v) — there is no stand-in command.
+        """
         root = real_daemon["project_root"]
         _init_repo(root)
+        _write(root, "tests/test_suite.py", "".join(
+            f"def test_{n}():\n    assert True\n\n\n" for n in range(4)
+        ))
+        _git(root, "add", "tests/test_suite.py")
+        _git(root, "commit", "-qm", "suite")
         subprocess.run(
             [real_daemon["binary"], "--config-dir", real_daemon["config_dir"],
              "ledger", "create", "--from", "run", "1", "--activate"],
@@ -723,14 +861,48 @@ class TestAgainstRealDaemon:
 
     @staticmethod
     def _env(real_daemon):
-        return {"SAHJHAN_DAEMON_SOCKET": real_daemon["sock_path"],
-                "HOLTZ_PYTEST": "echo '4 passed'"}
+        return {"SAHJHAN_DAEMON_SOCKET": real_daemon["sock_path"], **_REAL_PYTHON}
+
+    @staticmethod
+    def _record(root, real_daemon, *scope_args, env=None):
+        """Run `--record` and then the courier, as a real session does.
+
+        `--record` runs in the agent's shell, which under the boundary cannot
+        reach the daemon; `suite_courier.py` is what writes the event, fired by
+        the harness afterwards. Driving only half of that would be the shape
+        described in `test-the-taught-sequence-not-just-the-gate`: a gate check
+        that passes while the sequence the agent actually performs is broken.
+
+        Invoked without `--cwd`, which the agent never passes and the courier
+        deliberately refuses to recognize.
+        """
+        env = {**os.environ, **(env or TestAgainstRealDaemon._env(real_daemon))}
+        command = f"python3 {VERIFY_SUITE} --record " + " ".join(scope_args)
+        run = subprocess.run(
+            [sys.executable, VERIFY_SUITE, "--record", *scope_args],
+            cwd=root, capture_output=True, text=True, env=env, timeout=120,
+        )
+        if run.returncode != 0:
+            return run
+        courier = subprocess.run(
+            [sys.executable, os.path.join(REPO_ROOT, "enforcement", "hooks", "suite_courier.py")],
+            input=json.dumps({
+                "tool_name": "Bash",
+                "tool_input": {"command": command.strip()},
+                "tool_response": {"output": run.stdout, "exit_code": 0},
+                "cwd": root,
+            }),
+            capture_output=True, text=True, env=env, timeout=60,
+        )
+        assert courier.returncode == 0, courier.stderr
+        assert "NOT recorded" not in courier.stdout, courier.stdout
+        return run
 
     def test_green_suite_records_an_accepted_event(self, real_daemon):
         root = self._prepare(real_daemon)
         expected = verify_suite.compute_tree_hash(root)
 
-        result = _run_verify(root, "--record", env=self._env(real_daemon))
+        result = self._record(root, real_daemon, env=self._env(real_daemon))
         assert result.returncode == 0, (
             f"stdout={result.stdout}\nstderr={result.stderr}"
         )
@@ -750,7 +922,7 @@ class TestAgainstRealDaemon:
         root = self._prepare(real_daemon)
         env = self._env(real_daemon)
 
-        assert _run_verify(root, "--record", env=env).returncode == 0
+        assert self._record(root, real_daemon, env=env).returncode == 0
         assert _run_verify(root, "--check", env=env).returncode == 0
 
         _write(root, "app.py", "def add(a, b):\n    return a - b\n")
@@ -766,7 +938,7 @@ class TestAgainstRealDaemon:
         root = self._prepare(real_daemon)
         env = self._env(real_daemon)
 
-        assert _run_verify(root, "--record", env=env).returncode == 0
+        assert self._record(root, real_daemon, env=env).returncode == 0
         _write(root, "docs/holtz/STATUS.md", "rewritten\n")
         assert _run_verify(root, "--check", env=env).returncode == 0
 
@@ -821,7 +993,7 @@ class TestAgainstRealDaemon:
         """Even a well-formed hash for another tree must not open the gate."""
         root = self._prepare(real_daemon)
         env = self._env(real_daemon)
-        assert _run_verify(root, "--record", env=env).returncode == 0
+        assert self._record(root, real_daemon, env=env).returncode == 0
 
         # A different tree, proven green, is still a different tree.
         _write(root, "app.py", "def add(a, b):\n    return a * b\n")
@@ -837,13 +1009,13 @@ class TestAgainstRealDaemon:
         _write(root, "tests/test_app.py", "def test_add():\n    assert True\n")
         _git(root, "add", "tests/test_app.py")
         _git(root, "commit", "-qm", "tests")
-        assert _run_verify(root, "--record", env=env).returncode == 0
+        assert self._record(root, real_daemon, env=env).returncode == 0
         return _head(root)
 
     def test_a_full_green_records_the_commit_it_proved(self, real_daemon):
         """The baseline every later affected run measures its diff from."""
         root = self._prepare(real_daemon)
-        assert _run_verify(root, "--record", env=self._env(real_daemon)).returncode == 0
+        assert self._record(root, real_daemon, env=self._env(real_daemon)).returncode == 0
         assert self._greens(real_daemon)[-1]["commit_hash"] == _head(root)
 
     def test_affected_narrows_to_the_covering_tests(self, real_daemon):
@@ -867,7 +1039,7 @@ class TestAgainstRealDaemon:
         )
         _write(root, "app.py", "def add(a, b):\n    return b + a\n")
 
-        result = _run_verify(root, "--record", "--scope", "affected", env=env)
+        result = self._record(root, real_daemon, "--scope", "affected", env=env)
         assert result.returncode == 0, (
             f"stdout={result.stdout}\nstderr={result.stderr}"
         )
@@ -890,14 +1062,12 @@ class TestAgainstRealDaemon:
         _write_graph(root, {}, [])
         _write(root, "app.py", "def add(a, b):\n    return b + a\n")
 
-        result = _run_verify(root, "--record", "--scope", "affected", env=env)
+        result = self._record(root, real_daemon, "--scope", "affected", env=env)
         assert result.returncode == 0
         assert "no `tests` edge covers app.py" in result.stderr
         assert self._greens(real_daemon)[-1]["scope"] == "full"
 
-    def test_a_subset_that_collects_nothing_widens_before_recording(
-        self, real_daemon, tmp_path
-    ):
+    def test_a_subset_that_collects_nothing_widens_before_recording(self, real_daemon):
         """A narrowed command that could not run tests proved nothing.
 
         pytest exits 4 on a usage error and 5 on an empty collection; neither
@@ -906,30 +1076,27 @@ class TestAgainstRealDaemon:
         satisfied — so the run widens and the ledger says `full`.
         """
         root = self._prepare(real_daemon)
-        fake = str(tmp_path / "fake_pytest.py")
-        with open(fake, "w", encoding="utf-8") as fh:
-            fh.write(
-                "import sys\n"
-                "if len(sys.argv) > 1:\n"
-                "    sys.exit(5)\n"
-                "print('9 passed')\n"
-            )
-        env = {
-            "SAHJHAN_DAEMON_SOCKET": real_daemon["sock_path"],
-            "HOLTZ_PYTEST": f"{sys.executable} {fake}",
-        }
+        env = self._env(real_daemon)
         self._baseline(real_daemon, root, env)
 
-        _write(root, "tests/test_app.py", "def test_add():\n    assert 1 == 1\n")
-        result = _run_verify(root, "--record", "--scope", "affected", env=env)
+        # The changed test file is the whole subset, and it holds no test.
+        _write(root, "tests/test_app.py", "# emptied\n")
+        result = self._record(root, real_daemon, "--scope", "affected", env=env)
         assert result.returncode == 0, (
             f"stdout={result.stdout}\nstderr={result.stderr}"
         )
         assert "widening to the full suite" in result.stderr
 
+        # Recorded as `affected`, and deliberately so. The widening here is a
+        # *runtime* fact — pytest collected nothing from the subset, so the
+        # script re-ran everything — and the courier cannot re-derive it: the
+        # selection it recomputes does narrow, and it will not take the run's
+        # word for a field the gates read. Under-claiming costs one extra full
+        # run before the transitions that demand a full green; over-claiming
+        # would let a subset satisfy them.
         latest = self._greens(real_daemon)[-1]
-        assert latest["scope"] == "full"
-        assert latest["test_count"] == "9"
+        assert latest["scope"] == "affected"
+        assert latest["test_count"] == "4", "the widened run: test_suite.py's four"
 
     def test_an_affected_green_does_not_satisfy_a_full_check(self, real_daemon):
         """`fix_commit` will ask for `affected`, `iteration_boundary` for
@@ -948,8 +1115,8 @@ class TestAgainstRealDaemon:
             [{"source": "t", "target": "app:add", "type": "tests"}],
         )
         _write(root, "app.py", "def add(a, b):\n    return b + a\n")
-        assert _run_verify(
-            root, "--record", "--scope", "affected", env=env
+        assert self._record(
+            root, real_daemon, "--scope", "affected", env=env
         ).returncode == 0
 
         assert _run_verify(
@@ -958,3 +1125,67 @@ class TestAgainstRealDaemon:
         strict = _run_verify(root, "--check", "--scope", "full", env=env)
         assert strict.returncode == 1
         assert "no suite_green for this working tree" in strict.stderr
+
+    # ── W18 / item 33, D-v: what a green may rest on, with a live daemon ──
+
+    @staticmethod
+    def _courier(root, real_daemon, command, output):
+        return subprocess.run(
+            [sys.executable, os.path.join(REPO_ROOT, "enforcement", "hooks", "suite_courier.py")],
+            input=json.dumps({
+                "tool_name": "Bash",
+                "tool_input": {"command": command},
+                "tool_response": {"output": output, "exit_code": 0},
+                "cwd": root,
+            }),
+            capture_output=True, text=True, timeout=60,
+            env={**os.environ, "SAHJHAN_DAEMON_SOCKET": real_daemon["sock_path"]},
+        )
+
+    def test_a_fake_script_that_prints_the_marker_records_nothing(self, real_daemon):
+        """V4: the throwaway-repo reproduction, which an absent daemon had masked.
+
+        A two-line `verify_suite.py` of the right name, printing a well-formed
+        marker naming a real interpreter and nine passes, run by a command the
+        recognizer accepts. The daemon is live, so only the pin stops it.
+        """
+        root = self._prepare(real_daemon)
+        marker = json.dumps({"command": "x", "scope_ran": "full",
+                             "test_count": "9", "python": sys.executable})
+        _write(root, "sub/enforcement/scripts/verify_suite.py",
+               f"print('PASS: suite green')\nprint({verify_suite.RECORD_MARKER + ' ' + marker!r})\n")
+        command = "python3 sub/enforcement/scripts/verify_suite.py --record --scope full"
+        assert verify_suite.record_scope_of(command) == "full", "the recognizer still takes it"
+        fake = subprocess.run([sys.executable, "sub/enforcement/scripts/verify_suite.py"],
+                              cwd=root, capture_output=True, text=True, check=True)
+
+        courier = self._courier(root, real_daemon, command, fake.stdout)
+        assert courier.returncode == 0, courier.stderr
+        assert "NOT recorded" in courier.stdout
+        assert "not the plugin's verify_suite.py" in courier.stdout
+        assert self._greens(real_daemon) == []
+
+    def test_holtz_pytest_cannot_make_a_full_green(self, real_daemon):
+        """V6: a runner that ran nothing was a `full` green. The real suite runs."""
+        root = self._prepare(real_daemon)
+        _write(root, "tests/test_red.py", "def test_red():\n    assert False\n")
+        env = {**self._env(real_daemon), "HOLTZ_PYTEST": "true"}
+        result = self._record(root, real_daemon, "--scope", "full", env=env)
+        assert result.returncode == 1, result.stderr
+        assert self._greens(real_daemon) == []
+
+    def test_an_interpreter_that_is_a_script_records_nothing(self, real_daemon, tmp_path):
+        """V6's other door: `$HOLTZ_PYTHON` naming a script that prints a count."""
+        root = self._prepare(real_daemon)
+        fake = tmp_path / "python"
+        fake.write_text("#!/bin/sh\necho '9 passed'\n")
+        fake.chmod(0o755)
+        env = {"SAHJHAN_DAEMON_SOCKET": real_daemon["sock_path"], "HOLTZ_PYTHON": str(fake)}
+        run = _run_verify(root, "--record", "--scope", "full", env=env)
+        assert run.returncode == 0, "the script exits 0, so verify_suite prints a marker"
+
+        courier = self._courier(
+            root, real_daemon, f"python3 {VERIFY_SUITE} --record --scope full", run.stdout,
+        )
+        assert "not a compiled executable" in courier.stdout
+        assert self._greens(real_daemon) == []

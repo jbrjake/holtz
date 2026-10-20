@@ -1,0 +1,48 @@
+{# enforcement/templates/deferred.md.tera — the deferred slice of the ledger.
+
+   Same dedupe as punchlist.md.tera and punchlist-archive.md.tera: one row per
+   finding id keeping the last filing, so a correction supersedes what it
+   corrects. This is a projection of PUNCHLIST-ARCHIVE.md, not a fourth
+   partition of the findings — a deferred finding appears in both, and the
+   column that only exists here is `Reason`.
+
+   `Reason` comes from the `finding_deferred` event rather than from the
+   finding, because it is the transition that decides it: `low_priority` from
+   `defer_low`, `medium_budget` from `defer_medium`, `cant_reproduce` from
+   `defer_cant_reproduce`. It is the field the MEDIUM budget gate counts, so a
+   row here is auditable against the cap it spent.
+
+   One line per finding with a 12-word summary, per P0.4: this file is read
+   during convergence, and the six-column form is what made the punchlist 81k
+   tokens. #}
+# Deferred Findings
+
+**Protocol:** {{ protocol.name }} v{{ protocol.version }}
+**Run:** {{ template_instance_id | default(value="?") }}
+**State:** {{ state.label }}
+**Ledger:** {{ ledger_len }} events
+
+Findings deferred out of this run's scope. Open work is in `PUNCHLIST.md`.
+
+{% set findings = events | where_eq(attribute="event_type", value="finding") | unique_by(attribute="fields.id") -%}
+{% set deferrals = events | where_eq(attribute="event_type", value="finding_deferred") | unique_by(attribute="fields.id") -%}
+{% set deferred_ids = deferrals | map(attribute="fields.id") -%}
+{# Resolved takes precedence over deferred, the same way `punchlist.md.tera`
+   gives it precedence — one expression, copied, rather than a second one.
+   `fix_commit` carries no `item_open` gate, so deferring a finding and fixing
+   it anyway is a legal path, and this list is the only place it showed up as
+   still deferred. #}
+{% set resolved_ids = events | where_eq(attribute="event_type", value="finding_resolved") | unique_by(attribute="fields.id") | map(attribute="fields.id") -%}
+
+| ID | Severity | Location | Reason | Summary |
+|----|----------|----------|--------|---------|
+{% for severity in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] -%}
+{% set sev_findings = findings | where_eq(attribute="fields.severity", value=severity) -%}
+{% for e in sev_findings -%}
+{% if deferred_ids is containing(e.fields.id) and resolved_ids is not containing(e.fields.id) -%}
+{% set deferral = deferrals | where_eq(attribute="fields.id", value=e.fields.id) | last -%}
+| {{ e.fields.id }} | {{ severity }} | {{ e.fields.location | replace(from="|", to="\|") }} | {{ deferral.fields.reason | default(value="unspecified") }} | {{ e.fields.description | replace(from="|", to="\|") | replace(from="
+", to=" ") | split(pat=" ") | slice(end=12) | join(sep=" ") }} |
+{% endif -%}
+{% endfor -%}
+{% endfor %}

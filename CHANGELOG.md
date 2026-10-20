@@ -7,6 +7,211 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.170.15] - 2026-10-20
+
+_Changes since v0.141.3_
+
+### Notes
+
+**`$HOLTZ_PYTEST` is no longer read.** The suite is always
+`<python> -m pytest -x --ff --tb=short -q`, and only the interpreter varies:
+an in-tree virtualenv (`.venv/` or `venv/` holding `pyvenv.cfg` — uv,
+virtualenv, in-project poetry) is found without any setting; otherwise
+`$HOLTZ_PYTHON` names an interpreter outside the tree (conda, poetry's cache);
+otherwise `python3`. A run with `$HOLTZ_PYTEST` set prints a line saying it is
+ignored. A project whose suite ran under a wrapper (tox, out-of-tree poetry)
+sets `$HOLTZ_PYTHON` to that environment's interpreter instead. `$HOLTZ_LINT`
+is unchanged. The `suite_green` courier now records only for the plugin's own,
+hash-pinned `verify_suite.py`, a compiled interpreter, and a run that passed
+at least one test.
+
+**The primer's 5 s status timeout is unchanged.** The primer's three failure
+paths now emit a degraded notice instead of exiting silently, and
+daemon-death detection runs ahead of the `sahjhan status` subprocess. **That
+subprocess's 5 s timeout predates this release and is not touched:** a
+`status` call that exceeds it is the same event it always was, and any
+occurrence after this release is not a regression from it. Such a run now
+says so, and names which exception fired (`TimeoutExpired` vs `OSError`).
+
+The intermittent primer-test failures are **explained, not fixed.** An
+occurrence was caught 2026-09-23 with the notice naming `TimeoutExpired`: a
+`/bin/sh` mock that does no work, overrunning the 5 s cap in a serial test run
+on a loaded machine. The same tests pass standalone. It is load, not a wedged
+daemon or a wrong binary path.
+
+### Added
+- **enforcement:** H11 — a gate's escape word must name a writer it may trust
+- **fix-loop:** the loop serializes commits, not findings
+- **enforcement:** a linked worktree reaches its project's daemon
+- **enforcement:** the fix loop works what a user can reach
+- **enforcement:** one hardening commit takes a module off the board
+- **enforcement:** a theoretical finding takes itself off the board
+- **merge:** execute the merge protocol instead of reasoning through it
+- **enforcement:** scope the fix-loop TDD gate to the agent doing the editing
+- **enforcement:** redefine convergence as D4's four conjuncts under D5
+- **enforcement:** require a reachability grade on every finding
+- **enforcement:** let a stale sweep discharge the owed round past round 8
+- **enforcement:** cap a pattern round at 3 new items and make it close as many
+- **enforcement:** stop owing a round while 25+ pattern-filed findings are open
+- **enforcement:** block the next dispatch when amplification diverges
+- **enforcement:** measure amplification per pattern round
+- **enforcement:** the batch deferral escape and DEFERRED.md
+- **skills:** cap the pattern brief and every artifact by bytes
+- **enforcement:** refuse to start the fix loop with a second worklist on disk
+- **enforcement:** render the punchlist as one capped line per open finding
+- **enforcement:** batch deferral, and a boundary that requires it
+- **skills:** route the fast path off Opus, read the brief compact, run the tail suite once
+- **enforcement:** stop owing a pattern round after two dry ones
+- **skills:** add the stale sweep as a named step in the fix loop
+- **enforcement:** split the punchlist into open work and an archive
+- **enforcement:** merge into the ledger, and query the worklist
+- **enforcement:** arm the sandbox fuse
+- **enforcement:** record suite_green through a courier hook
+- **enforcement:** holtz-start and holtz-stop raise the audit boundary
+- **deps:** pin sahjhan 0.21.0
+
+### Fixed
+- **enforcement:** a suite_green rests on the pinned script, a fixed pytest command, a compiled interpreter and a real count
+- **fix-loop:** write the rework path, and stage explicitly
+- **enforcement:** narrow the round-cap claim and record the hardening-batch scope
+- **migrate:** audit claims are read by their header, and every migrated event validates
+- **resolve:** a marked binary is hashed before it is trusted, and re-hashed only when it moves
+- **migrate:** migrated events carry schema values, and --build-project re-runs add nothing
+- **enforcement:** every gate names an escape — H12, and the 49 intents it found
+- **enforcement:** the lower tail — a failed read writes nothing, and no escape names the wrong command
+- **enforcement:** both tool hooks read hook eval one way, and neither degrades in silence
+- **enforcement:** gate converge on the deferral record, not on a file that always exists
+- **skills:** bring the fix-loop and convergence docs to the shipped protocol
+- **enforcement:** merge_finding requires an open target of at least equal severity
+- **enforcement:** release an abandoned audit, and stop reading --in-place as read-only
+- **enforcement:** register NotebookEdit consistently and trust the bootstrap caller
+- **enforcement:** the theoretical courier fires on execution, not on mention
+- **enforcement:** only the courier's theoretical deferral closes a CRITICAL
+- **deps:** pin sahjhan 0.28.0, which answers the ask item 18 stopped on
+- **enforcement:** the theoretical exclusion must agree with the board's own grade
+- **enforcement:** one segmentation owner, splitting on & and on the resolved command
+- **enforcement:** the loop rewrites the hash the discharge is keyed to
+- **tests:** W14 broke 15 tests the fast subset does not run
+- **enforcement:** put the amplification breaker on the path the docs teach
+- **enforcement:** check daemon death before status, and say so when degraded
+- **enforcement:** write the actor's own bucket, not the whole map
+- **deps:** pin sahjhan 0.27.0, which is where enforcement_merge lives
+- **enforcement:** each script's parser refuses exactly what its courier refuses
+- **enforcement:** scope the sweep window to the sweep
+- **merge:** read the whole row, and require the grading that decides routing
+- **enforcement:** scope lens completion to the lens
+- **merge:** require a stated lens and carry it through the merge
+- **tests:** the hook runner keeps the hook's stderr and exit code
+- **skills:** construct the probe socket inside the try
+- **enforcement:** fix_commit asks about the tree its caller is standing in
+- **deps:** pin sahjhan 0.25.0, so a worktree beside the checkout finds the ledger
+- **enforcement:** a refused transition discharges nothing, and the ledger says which one
+- **enforcement:** converge no longer requires the MEDIUM budget be spent
+- **enforcement:** express the TDD window declaratively, on the engine's own anchor
+- **enforcement:** pair TDD evidence by row and scope its window to the actor
+- **fix-loop:** teach the field set the engine actually requires
+- **enforcement:** resolve the audit-active probe at the project anchor
+- **fix-loop:** say three in flight where three are dispatched
+- **enforcement:** a sibling's pending commit is not this actor's charge
+- **lint:** H8 must not warn on an escape that carries no gates
+- **enforcement:** run every taught command against the engine, not just the hook
+- **skills:** decide cold-file coverage from the ledger, not from a render
+- **enforcement:** stamp the pattern round with the phase and step it ran in
+- **skills:** sweep every open finding, not just the ones the run touched
+- **skills:** number the compact brief read in every subagent brief
+- **skills:** route fix subagents by the criteria P1.2 measured
+- **skills:** give the compact brief read its own numbered step
+- **enforcement:** charge the stall counter to the actor that ran the command
+- **enforcement:** discharge the pattern obligation on the transition that satisfies it
+- **enforcement:** revert P0.1's boundary gate and triage default
+- **skills:** scope the resweep, and stop reading the punchlist with the prose parser
+- **enforcement:** a finding's severity is its latest filing
+- **skills:** restore the full pattern_done invocation, and fail on H6
+- **enforcement:** derive the pattern round's yield from the brief
+- **enforcement:** owe the pattern round at the boundary, not at the commit
+- **skills:** cut rationale out of the instruction files
+- **skills:** stop mandating writes the enforcement chain denies
+- **enforcement:** count each finding once, wherever findings are counted
+- **enforcement:** render a punchlist that parses, one row per finding
+- **enforcement:** decide the pattern block on the ledger, not on a snapshot
+- **enforcement:** indirection is not a second door into a blocked command
+- **enforcement:** reading the tree does not stall the protocol
+- **enforcement:** expand variables in script paths before resolving them
+- **enforcement:** holtz's own boundary file is not a source change
+- **enforcement:** never lower the boundary because the binary is missing
+- **enforcement:** fail closed when the daemon reports the boundary is gone
+- **enforcement:** anchor manifest paths at the project root (#85)
+
+### Documentation
+- remove the refuted security claim; draft the release changelog
+- W13 and W32 close by ruling, and item 33's design is ruled — 29 of 32 units, 47 of 51 items
+- W27 is done — 25 of 32 units, 42 of 51 items
+- W27's V9 download half ran — the vendored pin reproduces byte for byte
+- item 39's config-fault half is filed as sahjhan#51
+- W25 is done — 24 of 32 units, 39 of 51 items
+- P4 has started — 23 of 32 units, 36 of 51 items
+- the board is 21 of 32 units, and two of the handoff's traps were wrong
+- W31 closed item 50; P2 is finished and the board is P3
+- W14 is done, and the thing item 10 does not do
+- item 17 ruled open, and the first full suite to cover this branch
+- W13 closed item 37; item 17 is open, and the control says why
+- W11 is done, and the three things it does not close
+- sahjhan#49 shipped in 0.27.0, and W11 is queued to start on it
+- the full suite's result, and a third reading of two traps
+- W11 is stopped upstream, and W10 is done
+- the flake's reason, captured — and what it rules out
+- W06 done, and the two things it does not close
+- count the dashboard instead of carrying the number forward
+- one handoff, kept in place, that says what to do next
+- release means all 49 items, and the gate that said otherwise was ours
+- say in the handoff that the caller-anchor migration is owed, not absent
+- track the plan and spec record left untracked by earlier sessions
+- record the 0.25.0 integration and what item 43 is now waiting on
+- the P0.3 row said OWED after it shipped
+- P0.3 is shipped, and the queue is empty
+- D40 shipped, and what the commit gate forecloses for D39
+- record what a linked worktree measures for P0.3
+- cite the eligibility gate's post-amend hash
+- cite the theoretical courier's post-amend hash
+- cite P4.1's post-amend hash
+- record P0.3's engine half and the courier it still owes
+- record P0.5's reachability field and D4's convergence package
+- record D8's sweep swap against the status file
+- record D7's round cap and merge primitive against the status file
+- cite hashes that are actually on dev in the status file
+- record D6's backpressure conjunct against the status file
+- record P0.1's breaker as shipped against the status file
+- record D2's escape, measurement, and blocked gate against the status file
+- record the engine half of D2's escape against the status file
+- record P2.1 and P3.5's artifact cap against the status file
+- record D20's ledger-derived cold-file scan against the status file
+- record D22's restored phase/step against the status file
+- record D21's widened sweep population against the status file
+- record the unburying against the status file
+- record the six shipped queue items against the status file
+- record Jon's 27 rulings against the status file
+- restore the convergence spec to the 08-18 original; status moves to its own file
+- P0.1 is PARTIAL — its convergence half is owed, not rejected
+- mark P0.1 and P0.2 done on the punchlist
+- mark P1.2, P1.6 and P2.2 done on the punchlist
+- mark P0.2 partial, with the two rejections and their reasons
+- mark P0.4 done and record what the archive is actually for
+- mark P0.4, P4.2 and the P3.6 sequel on the punchlist
+- record the tqdm process post-mortem and its proposal punchlist
+- record the boundary hooks in the architecture inventory
+- close out the sandbox-boundary plan
+- plan the holtz half of the sandbox boundary
+- close out the suite-cost plan at v0.141.3
+
+### Infrastructure
+- **migrate:** judge the archive migration per directory, not by a local event count
+- **coverage:** report the repo's own directories, not the temp copies tests execute
+- declare the test dependencies as a PEP 735 group; pause W27 with every decision ruled
+- cross-check the sahjhan pin, and give --all a ledger per run
+- direct unit coverage for the delta's new enforcement predicates
+- a venv shim with one prefix, instead of sourcing per command
+- fixtures for worktree cwd, two actors, and taught-command fields
+
 ## [0.141.3] - 2026-07-27
 
 _Changes since v0.138.3_

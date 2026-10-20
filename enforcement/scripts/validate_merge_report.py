@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""Validate that PUNCHLIST-MERGED.md has required sections.
+"""Validate that MERGE-REPORT.md has its four required sections, non-empty.
 
-Used as a gate condition on the 'merge_complete' transition.
+Wired as the `merge_complete` gate. The merge writes Justine's unmatched
+findings onto the ledger, so there is no merged file to check for — the report
+is the one artifact only a completed merge can produce, since blind-spot
+analysis has no other source.
+
 Exit 0 if valid, exit 1 with details on stderr if not.
 """
 from __future__ import annotations

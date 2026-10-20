@@ -4,11 +4,41 @@ template = "templates/status.md.tera"
 trigger = "on_transition"
 ledger_template = "run"
 
+# The same target again, on the finding family (D-g). `trigger` is one string
+# per entry and the engine loops every entry, so two entries is how a target
+# answers to both — it renders on a transition *and* on a finding event.
+# Without this, STATUS.md's Open/Resolved counts freeze between transitions,
+# and the fix loop runs many findings between them.
+[[renders]]
+target = "STATUS.md"
+template = "templates/status.md.tera"
+trigger = "on_event"
+event_types = ["finding", "finding_resolved", "finding_deferred"]
+ledger_template = "run"
+
 [[renders]]
 target = "PUNCHLIST.md"
 template = "templates/punchlist.md.tera"
 trigger = "on_event"
 event_types = ["finding", "finding_resolved", "finding_deferred"]
+ledger_template = "run"
+
+[[renders]]
+target = "PUNCHLIST-ARCHIVE.md"
+template = "templates/punchlist-archive.md.tera"
+trigger = "on_event"
+event_types = ["finding", "finding_resolved", "finding_deferred"]
+ledger_template = "run"
+
+[[renders]]
+target = "DEFERRED.md"
+template = "templates/deferred.md.tera"
+trigger = "on_event"
+# `finding` is not here (D-b): it made the file exist from the run's first
+# finding, which is what reduced `converge`'s conjunct to a `file_exists` on a
+# file the engine wrote unconditionally. `finding_resolved` is, because a
+# deferred finding fixed anyway has to leave the list.
+event_types = ["finding_deferred", "finding_resolved"]
 ledger_template = "run"
 
 [[renders]]

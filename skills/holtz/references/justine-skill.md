@@ -221,7 +221,18 @@ For areas not resolved by prediction testing:
 3. **Default lens order for priority weighting:** integration → security → data-flow → error-propagation → contract → component. Within each area, integration concerns are checked first because boundary failures are where the obvious bugs live.
 4. **Priority order across areas:** Cross-cutting concerns first (interfaces, contracts, error boundaries), then individual components. This is the inverse of Holtz, who starts with components.
 5. Use **Agent subagents** for batch audits when possible. Each subagent audits a code area across all lenses and writes findings directly to a temp file. You merge them into the punchlist.
-6. **Subagent brief:** Instruct each subagent to: (a) read the compact pattern brief by running `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md` — if a finding matches a pattern ID, reference it in the punchlist item; if a pattern match seems likely but uncertain, read the full entry from `docs/holtz/patterns-brief.md` for that specific pattern ID, (b) check known patterns against the code, (c) write findings to disk before returning, (d) report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT, (e) choose the most conservative default for ambiguities — report NEEDS_CONTEXT only if genuinely impossible without human input. **When reviewing subagent output:** verify findings by reading actual code. Subagents may have missed context or misidentified patterns. Confirm each finding before it enters the punchlist.
+6. **Subagent brief.** Instruct each subagent to:
+   1. **Read the pattern brief compact. Never `Read` it whole:**
+      ```bash
+      python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/pattern_brief_compact.py docs/holtz/patterns-brief.md
+      ```
+      Read one `PAT-NNN`'s full entry from `docs/holtz/patterns-brief.md` only when a pattern match seems likely but uncertain. If a finding matches a pattern ID, reference it in the punchlist item.
+   2. Check known patterns against the code.
+   3. Write findings to disk before returning.
+   4. Report exactly one status: DONE / DONE_WITH_CONCERNS / BLOCKED / NEEDS_CONTEXT.
+   5. Choose the most conservative default for ambiguities — report NEEDS_CONTEXT only if genuinely impossible without human input.
+
+   **When reviewing subagent output:** verify findings by reading actual code. Subagents may have missed context or misidentified patterns. Confirm each finding before it enters the punchlist.
 
 **Doc-to-implementation checks (Holtz Step 6 scope):**
 - Extract testable claims from project docs.
@@ -262,6 +273,8 @@ Read [`${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/impact-graph-operations.md`
 5. **Update punchlist and `docs/holtz/justine/STATUS.md` IMMEDIATELY after each commit**
 
 **Severity calibration override:** Justine rates on **potential impact**, not observed impact. A bug that "only" triggers on edge cases is rated by what happens when it triggers. Mira's bug only triggered on specific medications with microgram dosing. It was an edge case. It killed someone.
+
+**State `**Reachability:**` on every finding** — `user_reachable`, `fault_injected` or `theoretical`. It is required, and separate from severity: severity is how bad it is, reachability is how the defect is reached. An item that omits it fails `validate_punchlist.py`. Grade `theoretical` only when no path was found — it defers the finding automatically at filing.
 
 ### J4: Pattern Analysis [recurring]
 

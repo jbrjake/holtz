@@ -23,15 +23,15 @@ Every event gets exactly one, declared in `events.toml` and ordered by `[attesta
 
 ## Posture
 
-**21 of 29 gate-consumed events are the agent's own word.**
+**21 of 32 gate-consumed events are the agent's own word.**
 
 This is not a bug — self-attestation is fine for bookkeeping, and a protocol whose every step needed host evidence would not be usable. It is here because it should be a *deliberate, visible* posture rather than an accident nobody had counted. The defect is a **mismatch**: a gate whose purpose is to constrain the agent, fed by evidence the agent controls.
 
 | Class | Gate-consumed events |
 |---|---|
-| `agent` (21) | `audit_claim`, `baseline_updated`, `blast_radius`, `finding`, `finding_deferred`, `finding_resolved`, `fix_start`, `hardening_complete`, `iteration_complete`, `justine_dispatched`, `lens_sweep_started`, `living_punchlist_updated`, `merge_agent_dispatched`, `pattern_analysis_complete`, `pattern_contribution_complete`, `recon_step`, `reference_read`, `set_member_complete`, `snapshot`, `source_edit`, `test_failed_before_fix` |
+| `agent` (21) | `audit_claim`, `baseline_updated`, `blast_radius`, `finding`, `finding_deferred`, `finding_resolved`, `fix_start`, `hardening_complete`, `iteration_complete`, `justine_dispatched`, `lens_sweep_started`, `living_punchlist_updated`, `merge_agent_dispatched`, `pattern_contribution_complete`, `protocol_violation`, `recon_step`, `reference_read`, `set_member_complete`, `snapshot`, `source_edit`, `test_failed_before_fix` |
 | `engine` (1) | `state_transition` |
-| `tool` (5) | `quiz_answered`, `quiz_bank_generated`, `quiz_exhausted`, `quiz_posed`, `suite_green` |
+| `tool` (8) | `pattern_analysis_complete`, `quiz_answered`, `quiz_bank_generated`, `quiz_exhausted`, `quiz_posed`, `stale_sweep_complete`, `suite_green`, `tdd_evidence` |
 | `host` (1) | `context_reset` |
 | `human` (1) | `quiz_exhausted_resolved` |
 
@@ -63,6 +63,8 @@ flowchart LR
     merge_done -->|fix_loop_start| awaiting_clear
     audit -->|fix_loop_start| awaiting_clear
     fix_loop -->|fix_commit| fix_loop
+    fix_loop -->|merge_finding| fix_loop
+    pattern_analysis -->|merge_finding| pattern_analysis
     fix_loop -->|defer_cant_reproduce| fix_loop
     fix_loop -->|defer_low| fix_loop
     fix_loop -->|defer_medium| fix_loop
@@ -72,6 +74,8 @@ flowchart LR
     awaiting_human -->|resume| fix_loop
     fix_loop -->|pattern_check| pattern_analysis
     pattern_analysis -->|pattern_done| fix_loop
+    pattern_analysis -->|defer_low| pattern_analysis
+    pattern_analysis -->|defer_medium| pattern_analysis
     fix_loop -->|set complete perspective| perspective_clean
     perspective_clean -->|lens_rotate| audit
     perspective_clean -->|all_perspectives| all_perspectives_clean
@@ -91,25 +95,29 @@ flowchart LR
     linkStyle 8 stroke:#d1495b,stroke-width:2px
     linkStyle 9 stroke:#d1495b,stroke-width:2px
     linkStyle 10 stroke:#d1495b,stroke-width:2px
-    linkStyle 11 stroke:#2f6fb0,stroke-width:2px
-    linkStyle 12 stroke:#b0b0b0,stroke-width:2px
-    linkStyle 13 stroke:#b0b0b0,stroke-width:2px
-    linkStyle 14 stroke:#d1495b,stroke-width:2px
-    linkStyle 15 stroke:#d1495b,stroke-width:2px
+    linkStyle 11 stroke:#d1495b,stroke-width:2px
+    linkStyle 12 stroke:#d1495b,stroke-width:2px
+    linkStyle 13 stroke:#2f6fb0,stroke-width:2px
+    linkStyle 14 stroke:#b0b0b0,stroke-width:2px
+    linkStyle 15 stroke:#b0b0b0,stroke-width:2px
     linkStyle 16 stroke:#d1495b,stroke-width:2px
     linkStyle 17 stroke:#d1495b,stroke-width:2px
     linkStyle 18 stroke:#d1495b,stroke-width:2px
-    linkStyle 19 stroke:#b0b0b0,stroke-width:2px
+    linkStyle 19 stroke:#d1495b,stroke-width:2px
     linkStyle 20 stroke:#d1495b,stroke-width:2px
-    linkStyle 21 stroke:#b0b0b0,stroke-width:2px
-    linkStyle 22 stroke:#b0b0b0,stroke-width:2px
-    linkStyle 23 stroke:#d1495b,stroke-width:2px
+    linkStyle 21 stroke:#d1495b,stroke-width:2px
+    linkStyle 22 stroke:#d1495b,stroke-width:2px
+    linkStyle 23 stroke:#b0b0b0,stroke-width:2px
+    linkStyle 24 stroke:#d1495b,stroke-width:2px
+    linkStyle 25 stroke:#b0b0b0,stroke-width:2px
+    linkStyle 26 stroke:#b0b0b0,stroke-width:2px
+    linkStyle 27 stroke:#d1495b,stroke-width:2px
 ```
 
 | Colour | Class | Edges |
 |---|---|---|
 | `#b0b0b0` | `ungated` | `confirm_convergence` (final_sweep_clean→converged), `final_sweep_start` (all_perspectives_clean→final_sweep), `pause` (fix_loop→awaiting_human), `resume` (awaiting_human→fix_loop), `run_start` (idle→recon), `sweep_dirty` (final_sweep→fix_loop) |
-| `#d1495b` | `agent` | `all_perspectives` (perspective_clean→all_perspectives_clean), `audit_complete` (audit→merge_ready), `converge` (final_sweep→final_sweep_clean), `defer_cant_reproduce` (fix_loop→fix_loop), `defer_low` (fix_loop→fix_loop), `defer_medium` (fix_loop→fix_loop), `finalize` (converged→finalized), `fix_commit` (fix_loop→fix_loop), `fix_loop_start` (audit→awaiting_clear), `fix_loop_start` (merge_done→awaiting_clear), `iteration_boundary` (fix_loop→awaiting_clear), `lens_rotate` (perspective_clean→audit), `merge_complete` (merge_ready→merge_done), `pattern_check` (fix_loop→pattern_analysis), `pattern_done` (pattern_analysis→fix_loop), `recon_complete` (recon→audit), `set complete perspective` (fix_loop→perspective_clean) |
+| `#d1495b` | `agent` | `all_perspectives` (perspective_clean→all_perspectives_clean), `audit_complete` (audit→merge_ready), `converge` (final_sweep→final_sweep_clean), `defer_cant_reproduce` (fix_loop→fix_loop), `defer_low` (fix_loop→fix_loop), `defer_low` (pattern_analysis→pattern_analysis), `defer_medium` (fix_loop→fix_loop), `defer_medium` (pattern_analysis→pattern_analysis), `finalize` (converged→finalized), `fix_commit` (fix_loop→fix_loop), `fix_loop_start` (audit→awaiting_clear), `fix_loop_start` (merge_done→awaiting_clear), `iteration_boundary` (fix_loop→awaiting_clear), `lens_rotate` (perspective_clean→audit), `merge_complete` (merge_ready→merge_done), `merge_finding` (fix_loop→fix_loop), `merge_finding` (pattern_analysis→pattern_analysis), `pattern_check` (fix_loop→pattern_analysis), `pattern_done` (pattern_analysis→fix_loop), `recon_complete` (recon→audit), `set complete perspective` (fix_loop→perspective_clean) |
 | `#2f6fb0` | `host` | `resume` (awaiting_clear→fix_loop) |
 
 ## Gates
@@ -124,86 +132,119 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| recon must cover all 5 steps | `recon_step` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| impact graph must exist before auditing | *direct check* | — | `direct` | n/a |
-| each recon step must be recorded | `recon_step` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| Justine must be dispatched for parallel audit | `justine_dispatched` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| pre-audit edge count snapshot needed for comparison | `snapshot` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| no audit-phase findings should exist before recon is complete | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| lens quiz bank must be generated from the graph during recon (#73) — the vault key is writable only in recon, so it cannot be built later | `quiz_bank_generated` | `hook:enforcement/hooks/quiz_vault.py` | `tool` | no — daemon refuses unauthenticated callers |
+| recon must cover all 5 steps — record each finished step with `sahjhan event recon_step` | `recon_step` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| impact graph must exist before auditing — build it in Steps 1–2 with `impact_graph.py add_node` and `add_edge` | *direct check* | — | `direct` | n/a |
+| each recon step must be recorded — `sahjhan event recon_step`, once per step | `recon_step` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| Justine must be dispatched for parallel audit — dispatch her, then record `sahjhan event justine_dispatched` | `justine_dispatched` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| pre-audit edge count snapshot needed for comparison — record it with `sahjhan event snapshot` (key=pre_audit_edge_count) | `snapshot` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| no audit-phase findings should exist before recon is complete — file recon-time findings with `sahjhan event recon_finding`; an audit-phase finding already on this ledger cannot be withdrawn, so stop and ask the user to start a fresh run (`/holtz`, then 'start fresh') | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| lens quiz bank must be generated from the graph during recon (#73) — stage each question with `quiz_stage.py`, then run `quiz_stage.py --finalize`; the vault key is writable only in recon, so it cannot be built later | `quiz_bank_generated` | `hook:enforcement/hooks/quiz_vault.py` | `tool` | no — daemon refuses unauthenticated callers |
 
 ### `audit_complete` — audit → merge_ready
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| at least one doc claim must be verified | `audit_claim` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| audit must add edges to the impact graph | *direct check* | — | `direct` | n/a |
+| at least one doc claim must be verified — record it with `sahjhan event audit_claim` | `audit_claim` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| audit must add edges to the impact graph — add what the audit traced with `impact_graph.py add_edge` | *direct check* | — | `direct` | n/a |
 
 ### `merge_complete` — merge_ready → merge_done
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| merged punchlist must exist | *direct check* | — | `direct` | n/a |
-| merge must be performed by a separate merge-agent subagent | `merge_agent_dispatched` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| merge report must exist with all four sections non-empty — `validate_merge_report.py docs/holtz/MERGE-REPORT.md` names what is missing | *direct check* | — | `direct` | n/a |
+| merge must be performed by a separate merge-agent subagent — dispatch it, then record `sahjhan event merge_agent_dispatched` | `merge_agent_dispatched` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 
 ### `fix_loop_start` — merge_done → awaiting_clear
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| must read fix loop procedure before starting | `reference_read` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| must read fix loop procedure before starting — read step-10-fix-loop.md, then record `sahjhan event reference_read` with path=step-10-fix-loop.md | `reference_read` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| `rm docs/holtz/PUNCHLIST-MERGED.md` — the ledger is the merged worklist and PUNCHLIST.md renders it | *direct check* | — | `direct` | n/a |
 
 ### `fix_loop_start` — audit → awaiting_clear
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| first pass must go through merge before fix loop | `state_transition` | `engine:sahjhan` | `engine` | no — written by the engine, only by passing the gate |
-| must read fix loop procedure before starting | `reference_read` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| first pass must go through merge before fix loop — take the merge path: `audit_complete`, then `merge_complete` | `state_transition` | `engine:sahjhan` | `engine` | no — written by the engine, only by passing the gate |
+| must read fix loop procedure before starting — read step-10-fix-loop.md, then record `sahjhan event reference_read` with path=step-10-fix-loop.md | `reference_read` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 
 ### `fix_commit` — fix_loop → fix_loop
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| commit must reference the punchlist item | *direct check* | — | `direct` | n/a |
-| test suite must pass after fix | `suite_green` | `tool:enforcement/scripts/verify_suite.py` | `tool` | no — daemon refuses unauthenticated callers |
-| blast radius must be checked after each fix | `blast_radius` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| edge cases must be hardened after each fix | `hardening_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| circuit breaker: max 15 fixes per iteration (scoped since the last iteration_boundary /clear, so the cap resets each context reset instead of capping the whole run) | `state_transition` | `engine:sahjhan` | `engine` | no — written by the engine, only by passing the gate |
+| only user_reachable findings are fix-loop eligible — harden a fault_injected one with Step 15's batch, or re-file it with a path a probe established | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| commit must reference the punchlist item — amend it so the message names the finding id (`git commit --amend`) | *direct check* | — | `direct` | n/a |
+| test suite must pass after fix — record it with `verify_suite.py --record --scope affected` | `suite_green` | `hook:enforcement/hooks/suite_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| blast radius must be checked after each fix — `sahjhan event blast_radius` | `blast_radius` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| edge cases must be hardened after each fix — `sahjhan event hardening_complete` | `hardening_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| circuit breaker: max 15 fixes per iteration (scoped since the last iteration_boundary /clear, so the cap resets each context reset instead of capping the whole run) — this iteration is spent: end it with `iteration_boundary`, whose own refusal names anything it still needs first, then have the user `/clear` | `state_transition` | `engine:sahjhan` | `engine` | no — written by the engine, only by passing the gate |
+
+### `merge_finding` — fix_loop → fix_loop
+
+| Fact required | Evidence | Writer | Attests | Forgeable |
+|---|---|---|---|---|
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| the finding merged into must exist, must not be the finding being merged, must still be open, and must be at least as severe | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+
+### `merge_finding` — pattern_analysis → pattern_analysis
+
+| Fact required | Evidence | Writer | Attests | Forgeable |
+|---|---|---|---|---|
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| the finding merged into must exist, must not be the finding being merged, must still be open, and must be at least as severe | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
 
 ### `defer_cant_reproduce` — fix_loop → fix_loop
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| finding must exist | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
-| must have started working on this item | `fix_start` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| reproduction attempts must be documented in investigation file | *direct check* | — | `direct` | n/a |
+| finding must exist — name a filed id, or file it first with `sahjhan event finding` | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| must have started working on this item — `sahjhan event fix_start` for it first | `fix_start` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| reproduction attempts must be documented in the investigation file, `docs/holtz/investigations/<id>.md` | *direct check* | — | `direct` | n/a |
 
 ### `defer_low` — fix_loop → fix_loop
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| finding must exist and be LOW severity | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
+| finding must exist and its latest filing must be LOW | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
 
 ### `defer_medium` — fix_loop → fix_loop
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| finding must exist and be MEDIUM severity | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
-| MEDIUM deferrals must not exceed 50% of total MEDIUM findings | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
+| finding must exist and its latest filing must be MEDIUM | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| MEDIUM deferrals must not exceed 50% of total MEDIUM findings — the budget is spent, so fix this one with `fix_commit` (from pattern_analysis, return with `pattern_done` first) | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
 
 ### `iteration_boundary` — fix_loop → awaiting_clear
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `pattern_analysis_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| the full suite must pass on this tree before a context reset — this is what re-bases the affected scope | `suite_green` | `tool:enforcement/scripts/verify_suite.py` | `tool` | no — daemon refuses unauthenticated callers |
+| pattern analysis required after 3+ fixes — run pattern_check before iteration_boundary | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| ↳ | `stale_sweep_complete` | `hook:enforcement/hooks/stale_sweep_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| the full suite must pass on this tree before a context reset — this is what re-bases the affected scope; record it with `verify_suite.py --record --scope full` | `suite_green` | `hook:enforcement/hooks/suite_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| the last round left more than 3 findings open — fix them, or merge a duplicate into the finding it repeats with `sahjhan transition merge_finding BH-NNN BH-MMM` | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| the last round opened more findings than the run has closed since — resolve one with `fix_commit`, or merge a duplicate with `sahjhan transition merge_finding BH-NNN BH-MMM` | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| amplification: more findings filed than resolved for 3 consecutive rounds — run `sahjhan defer batch --severity low,medium` to clear every open LOW and spend the MEDIUM budget | *direct check* | — | `direct` | n/a |
 
 ### `resume` — awaiting_clear → fix_loop
 
@@ -212,7 +253,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| context must be reset via /clear (or compaction) before resuming | `context_reset` | `hook:enforcement/hooks/session_start.py` | `host` | no — daemon refuses unauthenticated callers |
+| context must be reset via /clear (or compaction) before resuming — ask the user to type `/clear` | `context_reset` | `hook:enforcement/hooks/session_start.py` | `host` | no — daemon refuses unauthenticated callers |
 
 ### `pause` — fix_loop → awaiting_human
 
@@ -226,42 +267,77 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| pattern analysis needs 3+ findings resolved since the last pattern analysis | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `pattern_analysis_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| pattern analysis needs 3+ findings resolved since the last one, and is no longer owed once two consecutive rounds added no pattern — it is not owed yet: keep working findings with `fix_commit` | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| ↳ | `stale_sweep_complete` | `hook:enforcement/hooks/stale_sweep_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
 
 ### `pattern_done` — pattern_analysis → fix_loop
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| pattern analysis must be recorded before returning to fixes | `pattern_analysis_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| pattern analysis must be recorded before returning to fixes — record the round with `pattern_round.py --record` | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| amplification: more findings filed than resolved for 3 consecutive rounds — run `sahjhan defer batch --severity low,medium` to clear every open LOW and spend the MEDIUM budget | *direct check* | — | `direct` | n/a |
+| this round left more than 3 findings open — merge a duplicate into the finding it repeats with `sahjhan transition merge_finding BH-NNN BH-MMM` | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+
+### `defer_low` — pattern_analysis → pattern_analysis
+
+| Fact required | Evidence | Writer | Attests | Forgeable |
+|---|---|---|---|---|
+| finding must exist and its latest filing must be LOW | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+
+### `defer_medium` — pattern_analysis → pattern_analysis
+
+| Fact required | Evidence | Writer | Attests | Forgeable |
+|---|---|---|---|---|
+| finding must exist and its latest filing must be MEDIUM | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| finding must not already be resolved or deferred | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| MEDIUM deferrals must not exceed 50% of total MEDIUM findings — the budget is spent, so fix this one with `fix_commit` (from pattern_analysis, return with `pattern_done` first) | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
 
 ### `set complete perspective` — fix_loop → perspective_clean
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| all findings must be resolved or deferred | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
-| two clean iterations required for stability | `iteration_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| prevent rapid-fire gaming of iteration count | `iteration_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| tests must pass | `suite_green` | `tool:enforcement/scripts/verify_suite.py` | `tool` | no — daemon refuses unauthenticated callers |
-| no lint violations | *direct check* | — | `direct` | n/a |
-| no unresolved protocol violations | *direct check* | — | `direct` | n/a |
-| lens quiz must be passed | `quiz_answered` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
-| quiz must be posed by enforcement hook before completion | `quiz_posed` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
-| a lens sweep must be started for this perspective before completion | `lens_sweep_started` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| every CRITICAL filed under this lens must be resolved — work it with `fix_commit`, or harden a fault_injected one with Step 15's `hardening_batch.py --record --module <dir>` | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| every user-reachable HIGH filed under this lens must be resolved or deferred — work it with `fix_commit`, or defer it with `defer_cant_reproduce` once the investigation file records the attempts | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| pattern analysis required after 3+ fixes — run pattern_check before completing the perspective | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| ↳ | `stale_sweep_complete` | `hook:enforcement/hooks/stale_sweep_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| two clean iterations required for stability — record each with `sahjhan event iteration_complete` | `iteration_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| prevent rapid-fire gaming of iteration count — wait 120 s after the last iteration_complete | `iteration_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| tests must pass — record the full suite with `verify_suite.py --record --scope full` | `suite_green` | `hook:enforcement/hooks/suite_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| no lint violations — run `ruff check .` (or $HOLTZ_LINT) and fix what it reports | *direct check* | — | `direct` | n/a |
+| no unresolved protocol violations — a violation is permanent, so this run cannot pass here; stop and ask the user to start a fresh run (`/holtz`, then 'start fresh') | `protocol_violation` | `hook:enforcement/hooks/bash_guard.py` | `agent` | **yes** — `sahjhan event` |
+| lens quiz must be passed — re-run this lens's sweep (`sahjhan event lens_sweep_started`, then dispatch it); its stop hook poses and grades the quiz | `quiz_answered` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
+| quiz must be posed by enforcement hook before completion — run this lens's sweep (`sahjhan event lens_sweep_started`, then dispatch it); its stop hook poses the quiz | `quiz_posed` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
+| a lens sweep must be started for this perspective before completion — `sahjhan event lens_sweep_started` | `lens_sweep_started` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `set_member_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 
 ### `lens_rotate` — perspective_clean → audit
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| perspective must be marked complete before rotating | `set_member_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| perspective must be marked complete before rotating — `set complete perspective` first | `set_member_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 
 ### `all_perspectives` — perspective_clean → all_perspectives_clean
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| all 13 lenses must pass clean | `set_member_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| all 13 lenses must pass clean — complete each remaining one with `set complete perspective` | `set_member_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 
 ### `final_sweep_start` — all_perspectives_clean → final_sweep
 
@@ -271,14 +347,27 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| all lenses must be complete | `set_member_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| tests must pass | `suite_green` | `tool:enforcement/scripts/verify_suite.py` | `tool` | no — daemon refuses unauthenticated callers |
-| no lint violations | *direct check* | — | `direct` | n/a |
-| all findings must be resolved or deferred | `finding` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium` | `agent` | **yes** — `sahjhan event` |
-| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit` | `agent` | **yes** — `sahjhan event` |
-| no unresolved protocol violations | *direct check* | — | `direct` | n/a |
-| no unresolved quiz exhaustions | `quiz_exhausted` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
+| all lenses must be complete — complete each remaining one with `set complete perspective` | `set_member_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| tests must pass — record the full suite with `verify_suite.py --record --scope full` | `suite_green` | `hook:enforcement/hooks/suite_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| no lint violations — run `ruff check .` (or $HOLTZ_LINT) and fix what it reports | *direct check* | — | `direct` | n/a |
+| every CRITICAL finding must be resolved — run `sweep_dirty` and fix them | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| every fault_injected finding must be hardened or deferred — run Step 15's `hardening_batch.py --record --module <dir>`, one commit per module | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| every user-reachable HIGH must be resolved or deferred — run `sweep_dirty` and work them | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| the run is still filing faster than it retires over the last 3 rounds — run `sweep_dirty`, then `sahjhan defer batch --severity low,medium` and work a round, so the next round retires more than it files | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_resolved` | `agent:cli`, `engine:emits:fix_commit`, `engine:emits:merge_finding`, `hook:enforcement/hooks/hardening_batch_courier.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `pattern_analysis_complete` | `hook:enforcement/hooks/pattern_courier.py` | `tool` | no — daemon refuses unauthenticated callers |
+| ↳ | `state_transition` | `engine:sahjhan` | `engine` | no — written by the engine, only by passing the gate |
+| every deferral must name a finding this run filed — file it with `sahjhan event finding`, or re-file under the id the deferral means | `finding` | `agent:cli`, `tool:enforcement/scripts/merge_punchlists.py` | `agent` | **yes** — `sahjhan event` |
+| ↳ | `finding_deferred` | `agent:cli`, `engine:emits:defer_cant_reproduce`, `engine:emits:defer_low`, `engine:emits:defer_medium`, `hook:enforcement/hooks/theoretical_courier.py` | `agent` | **yes** — `sahjhan event` |
+| no unresolved protocol violations — a violation is permanent, so this run cannot pass here; stop and ask the user to start a fresh run (`/holtz`, then 'start fresh') | `protocol_violation` | `hook:enforcement/hooks/bash_guard.py` | `agent` | **yes** — `sahjhan event` |
+| no unresolved quiz exhaustions — only the user can accept an exhausted lens: ask them to run `! sahjhan event quiz_exhausted_resolved` as phase-convergence.md shows, or to start a fresh run | `quiz_exhausted` | `hook:enforcement/hooks/lens_quiz.py` | `tool` | no — daemon refuses unauthenticated callers |
 | ↳ | `quiz_exhausted_resolved` | `human:skills/holtz/references/phase-convergence.md` | `human` | no — bootstrap denies `sahjhan event` |
 
 ### `sweep_dirty` — final_sweep → fix_loop
@@ -293,9 +382,9 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fact required | Evidence | Writer | Attests | Forgeable |
 |---|---|---|---|---|
-| architecture baseline must be updated | `baseline_updated` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| living punchlist must be updated | `living_punchlist_updated` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
-| pattern contribution must be completed or skipped | `pattern_contribution_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| architecture baseline must be updated — `sahjhan event baseline_updated` | `baseline_updated` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| living punchlist must be updated — `sahjhan event living_punchlist_updated` | `living_punchlist_updated` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
+| pattern contribution must be completed or skipped — `sahjhan event pattern_contribution_complete` with its outcome | `pattern_contribution_complete` | `agent:cli` | `agent` | **yes** — `sahjhan event` |
 
 ## Runtime hooks
 
@@ -303,7 +392,7 @@ Every transition in the protocol, in the order `transitions.toml` declares them.
 
 | Fires on | States | Action | Fact required | Evidence | Attests | Forgeable |
 |---|---|---|---|---|---|---|
-| `PreToolUse` (Edit, Write) | fix_loop | `block` | ledger_has_event_since `test_failed_before_fix` | `test_failed_before_fix` | `agent` | **yes** — `sahjhan event` |
+| `PreToolUse` (Edit, Write, NotebookEdit) | fix_loop | `block` | ledger_has_event_since `tdd_evidence` | `finding_resolved`, `tdd_evidence` | `agent`, `tool` | **yes** — `sahjhan event`, no — daemon refuses unauthenticated callers |
 | `Stop` | any except converged, finalized | `block` | the agent's output claims none of 13 completion phrases | *direct check* | `direct` | n/a |
 | `PostToolUse` (Edit) | fix_loop | `warn` | fewer than 8 source_edit since the last transition | `source_edit` | `agent` | **yes** — `sahjhan event` |
 | monitor `fix_loop_stall` | fix_loop | `warn` | fewer than 12 source_edit since the last transition | `source_edit` | — | — |
@@ -324,7 +413,13 @@ Every Python writer in the tree, with the registration and pin that decide wheth
 | Writer | Registered for | Hash-pinned | Writes |
 |---|---|---|---|
 | `enforcement/hooks/bash_guard.py` | `PostToolUse` | `bash_guard.py` | `protocol_violation` |
+| `enforcement/hooks/hardening_batch_courier.py` | `PostToolUse` | `hardening_batch_courier.py` | `finding_resolved` |
 | `enforcement/hooks/lens_quiz.py` | `PostToolUse`, `SubagentStop` | `lens_quiz.py`, `quiz_capture.py` | `quiz_answered`, `quiz_exhausted`, `quiz_failed`, `quiz_posed` |
+| `enforcement/hooks/pattern_courier.py` | `PostToolUse` | `pattern_courier.py` | `pattern_analysis_complete` |
 | `enforcement/hooks/post_tool_hook.py` | `PostToolUse` | `post_tool_hook.py` | `bash_command` |
-| `enforcement/hooks/quiz_vault.py` | `PostToolUse`, `SubagentStop` | `lens_quiz.py`, `quiz_capture.py` | `quiz_bank_generated` |
+| `enforcement/hooks/quiz_vault.py` | `PostToolUse`, `SubagentStop` | `bash_guard.py`, `lens_quiz.py`, `quiz_capture.py` | `quiz_bank_generated` |
 | `enforcement/hooks/session_start.py` | `SessionStart` | `session_start.py` | `context_reset` |
+| `enforcement/hooks/stale_sweep_courier.py` | `PostToolUse` | `stale_sweep_courier.py` | `stale_sweep_complete` |
+| `enforcement/hooks/suite_courier.py` | `PostToolUse` | `suite_courier.py` | `suite_green` |
+| `enforcement/hooks/tdd_courier.py` | `PostToolUse` | `tdd_courier.py` | `tdd_evidence` |
+| `enforcement/hooks/theoretical_courier.py` | `PostToolUse` | `theoretical_courier.py` | `finding_deferred` |

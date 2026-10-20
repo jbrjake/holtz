@@ -11,15 +11,28 @@ Falls back to allow outside active audits or when enforcement is stale.
 """
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import exit_block, exit_enforcement_error, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
-from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
+from _common import (  # noqa: E402
+    audit_abandoned,
+    exit_block,
+    exit_boundary_missing,
+    exit_enforcement_error,
+    exit_ok,
+    exit_warn,
+    read_event,
+    read_hook_eval,
+    resolve_config_dir,
+)
+from _protocol_cache import (  # noqa: E402
+    event_actor,
+    is_enforcement_fresh,
+    read_cache_with_boundary,
+)
 from _resolve import ensure_sahjhan  # noqa: E402
 from _sahjhan_bootstrap import MANAGED_DOCS  # noqa: E402
 
@@ -54,11 +67,30 @@ def _tdd_gate_exempt(file_path: str, cwd: str) -> bool:
     return rel.split(os.sep, 1)[0] == "docs"
 
 
+def _write_target(tool_input: dict) -> str:
+    """The path a write tool is about to touch, whatever it calls the key.
+
+    `NotebookEdit` sends `notebook_path`; `Edit` and `Write` send `file_path`.
+    Confirmed against the installed `claude` binary, which destructures
+    `notebook_path` by name — not inferred from the tool's description.
+
+    Reading only `file_path` is not a missing feature, it is a silent exemption:
+    the managed-path guard has nothing to match, and `hook eval` is invoked with
+    no `--file`, which is the argument every path filter in the TDD gate is
+    written against. So the gate's `tests/**` exemption and its `src/**` scope
+    both stop applying, and each does so by *allowing*.
+
+    `file_path` wins when both are present, so no notebook key can shadow the
+    path an Edit actually named.
+    """
+    return str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
+
+
 def main() -> None:
     event = read_event()
     tool_name = event.get("tool_name", event.get("tool", ""))
     tool_input = event.get("tool_input", {})
-    file_path = tool_input.get("file_path", "")
+    file_path = _write_target(tool_input)
     cwd = event.get("cwd", os.getcwd())
 
     # ── Managed-path guard (no binary required) ──
@@ -87,8 +119,20 @@ def main() -> None:
     if tool_name in ("Edit", "Write", "NotebookEdit") and _tdd_gate_exempt(file_path, cwd):
         exit_ok("PreToolUse")
 
+    cache, boundary, _version = read_cache_with_boundary(cwd)
+
+    # A refusing daemon returns no cache, so the staleness check below reads
+    # it as "no audit" and allows. That inverts the fuse: the moment the
+    # boundary goes missing, every gate it protects would stop applying.
+    #
+    # Which is why the release for an abandoned audit is a separate question
+    # and not a reordering. The daemon outlives the session that started it,
+    # so its refusal reaches sessions with no audit to protect; those are the
+    # ones `audit_abandoned` lets past, and a live audit still blocks (41).
+    if boundary and not audit_abandoned(cwd):
+        exit_boundary_missing(boundary)
+
     # Stale enforcement: skip hook eval for abandoned audits
-    cache = read_cache(cwd)
     if not is_enforcement_fresh(cache):
         exit_ok("PreToolUse")
 
@@ -100,8 +144,15 @@ def main() -> None:
     if not config_found:
         exit_enforcement_error(cwd, "Enforcement config not found")
 
+    # Which actor is asking. A hook gate can filter on `{{agent_id}}` since
+    # sahjhan 0.23.0, and the TDD gate does: without it the gate is run-global
+    # and two concurrent fix agents each pass on the other's failing test.
+    # Always passed, never omitted — the orchestrator is the empty-string
+    # actor, a real bucket rather than a wildcard, and omitting the flag would
+    # bind the same empty value by a less obvious route.
     cmd = [binary, "--config-dir", config_dir, "--json",
-           "hook", "eval", "--event", "PreToolUse"]
+           "hook", "eval", "--event", "PreToolUse",
+           "--agent-id", event_actor(event)]
     if tool_name:
         cmd.extend(["--tool", tool_name])
     if file_path:
@@ -129,21 +180,10 @@ def main() -> None:
     except (OSError, subprocess.TimeoutExpired):
         exit_enforcement_error(cwd, "Hook eval subprocess failed")
 
-    # Sahjhan's CLI exits non-zero when the eval decision is ``block``
-    # (exit code as a secondary signal for wrappers that don't parse JSON).
-    # The JSON payload on stdout is authoritative — parse it first and
-    # only fall through to the enforcement-error path if stdout is missing
-    # or unparseable.
-    try:
-        data = json.loads(result.stdout) if result.stdout.strip() else None
-    except (json.JSONDecodeError, ValueError):
-        data = None
+    eval_data, failure = read_hook_eval(result.stdout, result.returncode, result.stderr)
+    if eval_data is None:
+        exit_enforcement_error(cwd, failure)
 
-    if data is None:
-        exit_enforcement_error(cwd, "Hook eval returned invalid JSON")
-
-    assert data is not None  # exit_enforcement_error is NoReturn; help mypy
-    eval_data = data.get("data", data)
     decision = eval_data.get("decision", "allow")
     messages = eval_data.get("messages", [])
 

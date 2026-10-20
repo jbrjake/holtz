@@ -27,7 +27,7 @@ sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event baseline_updated --
 
 ### Step 18: Pattern Library Contribution (Subagent)
 
-Read [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) and follow the protocol: discover new patterns from `docs/holtz/patterns-brief.md`, generalize, PII-scrub, ask user permission, then submit via `gh` CLI / MCP / manual staging. Record outcome: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event pattern_contribution_complete --patterns_submitted N --outcome submitted|no_new_patterns|declined_by_user`.
+Read [references/pattern-contribution-protocol.md](references/pattern-contribution-protocol.md) and follow the protocol: discover new patterns from `docs/holtz/patterns-brief.md`, generalize, PII-scrub, ask user permission, then submit via `gh` CLI / MCP / manual staging. Record outcome: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event pattern_contribution_complete --field project=holtz --field run=N --field auditor=holtz --field patterns_submitted=N --field outcome=<submitted|no_new_patterns|declined_by_user>`.
 
 ### Step 19: Living Punchlist Update (Subagent)
 
@@ -64,3 +64,9 @@ Run `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition finalize`
 ```
 
 After finalization, the daemon is stopped automatically by the `stop_hook.py` and `protocol_tracker.py` hooks when the state reaches `finalized`. No manual `daemon stop` command is needed.
+
+**Last thing you say to the user:** tell them to type `holtz-stop`. Until they do, every session in the project stays sandboxed, where `git`, `docker` and some CLIs behave oddly. Say it once:
+
+> Audit complete. Type `holtz-stop` to unsandbox this project.
+
+Do not try to lift the sandbox yourself. There is no agent-reachable switch.

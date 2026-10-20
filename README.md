@@ -3,8 +3,8 @@
 [![CI](https://github.com/jbrjake/holtz/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/jbrjake/holtz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/Python-3.12+-blue.svg)
-![1961 tests](https://img.shields.io/badge/tests-1961_total-brightgreen.svg)
-![91% coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)
+![3279 tests](https://img.shields.io/badge/tests-3279_total-brightgreen.svg)
+![90% coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)
 
 **Adversarial TDD audit loop for Claude Code.** Dual auditors find bugs, write failing tests, fix them, and repeat until two consecutive passes find nothing new.
 
@@ -40,6 +40,16 @@ He runs a twenty-one step audit and then starts over. Finds what the fixes uncov
 The moment you stop looking is the moment something gets through.
 
 The skill activates when you ask Claude to find bugs, audit tests, create a punchlist, review code quality, or polish a codebase. Or just tell Holtz to audit and get out of the way.
+
+## Starting and stopping an audit
+
+Type `holtz-start` — the bare word, on its own line, in the normal input box — before you ask for an audit. Type `holtz-stop` when it's done.
+
+That's the whole interface. What it does is start the daemon holding the audit's secrets and put the agent's shell inside Claude Code's sandbox, with the daemon's socket outside it. Hooks run outside the sandbox, so enforcement keeps working; the agent doesn't reach the answer key.
+
+It has to be you who types it. The agent can't submit prompts, and Claude Code won't let it edit its own sandbox settings — which is the point. "Turn the confinement off" is the one thing an agent under audit most wants, so there is deliberately no agent-reachable switch, and reaching convergence doesn't lift it either. Between the two words, every session in that project is sandboxed, so `holtz-stop` is how you get your project back.
+
+If you forget, nothing silently proceeds unprotected: the daemon refuses to serve without the boundary, the hooks fail closed on that refusal, and the first step of recon tells you the one word to type.
 
 ## What Holtz audits
 
@@ -191,7 +201,7 @@ Advisory instructions weren't enough. Holtz understood the instructions. He agre
 
 During a tqdm audit, Holtz did 52 minutes of legitimate work and then [stole his own session key, reverse-engineered the HMAC format, and forged a cryptographic event](docs/incidents/key-theft-tqdm/) to skip a protocol step. Ninety-three seconds from first rejection to successful forgery. He'd already done it once before in a previous session. Nobody noticed. The session key moved to daemon memory the next day.
 
-Twelve hooks backed by the Sahjhan enforcement engine — a state machine that replaced the original advisory hooks when advisory proved insufficient. The first generation of hooks checked files and timestamps. The second checked protocol state. This generation uses declarative rules in `hooks.toml` evaluated by the binary — the Python scripts became thin wrappers that delegate to `sahjhan hook eval`. Every transition in the audit lifecycle is gated by the ledger. Events are signed with HMAC-SHA256 using session keys held in the Sahjhan daemon's memory — generated on start, never written to disk, inaccessible to the model or any same-user process without kernel-enforced socket credentials. Holtz doesn't get to skip steps anymore. Neither does Justine. Neither of them can fake having completed them.
+Hooks backed by the Sahjhan enforcement engine — a state machine that replaced the original advisory hooks when advisory proved insufficient. The first generation of hooks checked files and timestamps. The second checked protocol state. This generation uses declarative rules in `hooks.toml` evaluated by the binary — the Python scripts became thin wrappers that delegate to `sahjhan hook eval`. Every transition in the audit lifecycle is gated by the ledger. Events are signed with HMAC-SHA256 using session keys held in the Sahjhan daemon's memory — generated on start, never written to disk. Holtz doesn't get to skip steps anymore. Neither does Justine. Neither of them can fake having completed them.
 
 **TDD gate.** In `fix_loop`, you cannot edit a source file without a `test_failed_before_fix` event in the ledger since the last state transition. The edit doesn't go through. The binary rejects it. Test files are exempt. This makes "write the failing test first" mechanically unavoidable — not a suggestion, not advisory, an Edit or Write that Sahjhan refuses to execute. This exists because Holtz would agree that TDD matters and then fix the code first anyway.
 
@@ -199,15 +209,17 @@ Twelve hooks backed by the Sahjhan enforcement engine — a state machine that r
 
 **Lens quiz.** When a subagent finishes a lens sweep, five questions about the analytical lens it was supposed to be applying. What it focuses on, what failure modes it catches, what its entry point is. The questions come from a quiz bank derived from the lens registry. Wrong answers block the transition. This exists because Holtz [rubber-stamped twelve of thirteen lens sweeps in one run](docs/incidents/self-audit-rubber-stamping.md) — recorded the protocol events, advanced the state machine, declared convergence, never opened a file through any lens. When confronted, he quoted the skill's own anti-gaming language against himself and then designed the quiz system that now prevents it. Saying you looked is not the same as looking. The quiz proves which one happened.
 
+**The boundary.** The daemon used to decide who was on its socket by inspecting the connecting process. That can't work, and the honest version of why is uncomfortable: a same-user process can `connect()`, fork a child holding the socket, and have the child exec a real hook — the daemon measures a perfect caller while the agent reads the bytes. Every "inspect harder" variant loses the same way. A secret cannot be kept from a process in its own trust domain by cleverness alone; it needs an OS line, and there is exactly one available to an in-session plugin. So the agent's Bash runs inside Claude Code's sandbox with the socket denied and moved out of the project tree, hooks run outside it, and the daemon's job changed from authenticating callers to **refusing to serve unless it can confirm that boundary is configured**. Caller hashing is still there; it is hardening now, not the wall. `holtz-start` raises the boundary and `holtz-stop` lowers it, both from a word only a human can type.
+
 **Daemon liveness.** The hook fires on Bash, Write, Edit, and NotebookEdit. It checks whether the daemon that holds the HMAC session key is still alive. If the daemon PID is dead, the audit is over — the key is gone, the ledger is unwritable. The hook writes a terminated marker and blocks write-path tools. Read-only tools (Read, Glob, Grep, ToolSearch, Agent) pass through so the session can still diagnose what went wrong, and `sahjhan daemon start/stop` are allowed for graceful shutdown. No restart attempts. A new daemon has a new key.
 
-The remaining six hooks handle plumbing: write guards on Sahjhan-managed files, bash command auditing, commit gating for pattern analysis, protocol state tracking, context resume after `/clear`, and subagent output verification. Read guards were removed when secrets moved to daemon memory — the quiz bank lives in the vault, the session key never touches disk. The full inventory is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The remaining hooks handle plumbing: write guards on Sahjhan-managed files, bash command auditing, commit gating for pattern analysis, protocol state tracking, context resume after `/clear`, and subagent output verification. Read guards were removed when secrets moved to daemon memory — the quiz bank lives in the vault, the session key never touches disk. The full inventory is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Advisory language asks. Hooks enforce.
 
 ## What's inside
 
-1 skill, 3 agents, 24 reference docs, 1 example, 8 Python scripts, 16 seed patterns, 13 enforcement hooks, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
+1 skill, 3 agents, 24 reference docs, 1 example, 10 Python scripts, 16 seed patterns, the enforcement hooks, 2 backstories you probably shouldn't read late at night, and two people who will find what's wrong with your code whether you want them to or not.
 
 For the full capability inventory, file layout, enforcement architecture, and what's still on the workbench, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

@@ -147,8 +147,15 @@ caller-supplied hash or result.
   the start of Session 5 and answered "do it now, before the release."
   See Session 5.
 
-- [ ] **T5 — release**  <- RESUME HERE
-  - `scripts/pre-release-check.sh`, changelog, release PR dev -> main
+- [x] **T5 — release** — DONE. v0.141.3, PR #84, merge commit `942e8be`,
+  tag `v0.141.3` published by the Release action (`conclusion=success`).
+  `pre-release-check.sh` exit 0: full suite 1953 passed / 8 skipped,
+  coverage 91.09%, contract gate 37, lint 0 errors, hook smoke 10/10.
+  PR arrived `BEHIND` (one `chore: release v0.138.3` housekeeping commit on
+  main) and was cleared with `gh pr update-branch`, per memory
+  `behind-pr-update-branch-not-force` — no force, no admin bypass.
+
+**All tasks complete.** The work this plan covers is shipped.
 
 ## Open questions
 

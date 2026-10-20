@@ -18,6 +18,10 @@ import shlex
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _shell_norm import resolve_indirection, shell_segments  # noqa: E402
+
 PROTECTED = [
     "enforcement/",
     "bin/sahjhan",
@@ -33,20 +37,22 @@ PROTECTED = [
 #
 #     a path belongs in MANAGED_DOCS  <=>  it has a render rule in renders.toml
 #
-# Do NOT add agent-authored artifacts here. `PUNCHLIST-MERGED.md` and
-# `MERGE-REPORT.md` were previously listed but are written by the merge-agent
-# subagent (judgment-based consolidation per merge-protocol.md — they are NOT
-# rendered from the ledger and have no render rule). Guarding them made the
-# `merge_complete` transition unsatisfiable: the gate requires the merged
-# punchlist to exist, but the only writer (the merge-agent) was blocked and
-# nothing renders it — so a full adversarial run wedged permanently at Step 9
-# (issue #60). Their integrity does not depend on this guard: convergence is
-# driven by `finding`/`finding_resolved` ledger events, not by these files.
+# Do NOT add agent-authored artifacts here. `MERGE-REPORT.md` is written by the
+# merge-agent subagent (judgment-based blind-spot analysis per
+# merge-protocol.md — it is NOT rendered from the ledger and has no render
+# rule), and `merge_complete` gates on it. Guarding it would make that
+# transition unsatisfiable: the only writer would be blocked and nothing
+# renders it — a full adversarial run wedged permanently at Step 9 that way
+# once (issue #60, then on the retired `PUNCHLIST-MERGED.md`). Its integrity
+# does not depend on this guard: convergence is driven by
+# `finding`/`finding_resolved` ledger events, not by this file.
 # `test_managed_docs_consistency.py` enforces the <=> invariant so this class
 # of wedge cannot be reintroduced.
 MANAGED_DOCS = [
     "docs/holtz/STATUS.md",
     "docs/holtz/PUNCHLIST.md",
+    "docs/holtz/PUNCHLIST-ARCHIVE.md",
+    "docs/holtz/DEFERRED.md",
     "docs/holtz/SUMMARY.md",
 ]
 
@@ -168,6 +174,28 @@ def _script_path_from_command(seg_cmd: str) -> str | None:
     return None
 
 
+def _expand_script_path(path: str) -> str:
+    """Expand environment variables in a script path before resolving it.
+
+    ``shlex`` does not expand variables, so a path written the way the skill
+    files write it — ``${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/x.py`` —
+    arrives here as a literal. It is neither absolute nor meaningfully
+    relative, and resolving it against cwd produces a path that describes
+    nothing. That single defect points two ways: against a target project it
+    lands nowhere and the fail-closed branch denies a command the plugin
+    teaches verbatim; against the plugin's own tree it lands *under* the
+    plugin root and the guard waves the script through unread.
+
+    ``CLAUDE_PLUGIN_ROOT`` falls back to the module's own resolved root so
+    the expansion holds wherever the module's other plugin-root reasoning
+    holds.
+    """
+    expanded = os.path.expandvars(path)
+    for form in ("${CLAUDE_PLUGIN_ROOT}", "$CLAUDE_PLUGIN_ROOT"):
+        expanded = expanded.replace(form, _PLUGIN_ROOT)
+    return expanded
+
+
 def _out_of_tree_script_block(
     seg_cmd: str, cwd: str | None, protected: list[str],
 ) -> str | None:
@@ -189,6 +217,7 @@ def _out_of_tree_script_block(
     script_path = _script_path_from_command(seg_cmd)
     if not script_path:
         return None
+    script_path = _expand_script_path(script_path)
     # Resolve path relative to cwd if not absolute.
     resolved = script_path if os.path.isabs(script_path) else os.path.join(cwd, script_path)
     try:
@@ -319,6 +348,27 @@ def _extract_sahjhan_subcmd(segment: str) -> tuple[str, str] | None:
     return (subcmd, sub_subcmd)
 
 
+def _audit_data_dir(cwd: str) -> str | None:
+    """``_common.audit_data_dir(cwd)``, or None if ``_common`` will not import.
+
+    Lazy by design: this hook is deliberately import-free at module level so a
+    broken sibling module cannot disable the bootstrap guards. Anchored rather
+    than cwd-relative — the audit dir is gitignored, so a fix subagent's linked
+    worktree does not contain it, and every guard keyed on that path answered
+    "nothing to protect here" for exactly the three actors the fix loop
+    dispatches.
+
+    Callers decide what None means, because the two callers want opposite
+    things from it: refusing `daemon stop` fails closed, while the
+    audit-terminated escape hatch must stay open.
+    """
+    try:
+        from _common import audit_data_dir  # noqa: PLC0415
+    except ImportError:
+        return None
+    return str(audit_data_dir(cwd))
+
+
 def _daemon_stop_permitted(cwd: str) -> tuple[bool, str]:
     """Graduated `sahjhan daemon stop` policy (#57).
 
@@ -335,7 +385,12 @@ def _daemon_stop_permitted(cwd: str) -> tuple[bool, str]:
     Fails closed when the state of a live daemon cannot be determined.
     Returns (permitted, reason-for-block).
     """
-    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
+    # An unimportable `_common` fails closed here, the same direction the block
+    # below already takes: not being able to tell whether there is an audit to
+    # protect is not the same as knowing there is none.
+    data_dir = _audit_data_dir(cwd)
+    if data_dir is None:
+        return False, "(enforcement modules unavailable — failing closed)"
     if not os.path.isdir(data_dir):
         return True, ""
     if os.path.exists(os.path.join(data_dir, "terminated")):
@@ -373,18 +428,19 @@ def _daemon_stop_permitted(cwd: str) -> tuple[bool, str]:
 def _bash_references_blocked_sahjhan(command: str, cwd: str) -> str | None:
     """Check if a Bash command invokes a blocked sahjhan subcommand.
 
-    Splits on shell operators (&&, ||, ;, |, newline), checks each segment.
+    Splits on shell operators (&&, ||, ;, |, &, newline), checks each segment.
     Returns block reason string if blocked, None if allowed.
+
+    Same-line variables and ``eval``/``sh -c`` wrappers are resolved first.
+    Without that, the block is a check on how the command was spelled: this
+    guard is what makes ``event quiz_exhausted_resolved`` a human-only
+    channel, and a channel that ``"$SAH" event quiz_exhausted_resolved``
+    walks through is not closed to the party it exists to exclude. A
+    channel that ``true & sahjhan event quiz_exhausted_resolved`` walks
+    through is not closed either, which is why segmentation is
+    ``_shell_norm``'s too and not this function's own regex.
     """
-    import re
-
-    segments = re.split(r'\s*(?:&&|\|\||[;|\n])\s*', command)
-
-    for seg in segments:
-        seg = seg.strip()
-        if not seg:
-            continue
-
+    for seg in shell_segments(command):
         result = _extract_sahjhan_subcmd(seg)
         if result is None:
             # Not a sahjhan command — allow
@@ -509,9 +565,17 @@ def _audit_terminated(cwd: str) -> bool:
     mid-run. Once the daemon is dead the ledger is already unwritable — the
     primer and stop_hook both instruct the user to remove .sahjhan/ as the
     recovery step, and keeping the guard active traps them in a dead-end.
+
+    An unimportable ``_common`` answers "not terminated", which keeps the
+    MANAGED guard **on** — the opposite direction from `_daemon_stop_permitted`
+    and the protective one in both cases. This reads the same marker
+    ``_common._write_terminated_marker`` writes, so it must resolve it the same
+    way or a marker written at the anchor is invisible to the guard it releases.
     """
-    marker = os.path.join(cwd, "docs", "holtz", ".sahjhan", "terminated")
-    return os.path.isfile(marker)
+    data_dir = _audit_data_dir(cwd)
+    if data_dir is None:
+        return False
+    return os.path.isfile(os.path.join(data_dir, "terminated"))
 
 
 def _arg_contains_managed(arg: str, cwd: str, managed: list[str]) -> str | None:
@@ -581,14 +645,25 @@ def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
     """Check if a bash command writes to any protected or managed path.
 
     Returns a block reason string if blocked, None if allowed.
-    Splits on shell operators (&&, ||, ;, |, newline) and checks each segment.
+    Splits on shell operators (&&, ||, ;, |, &, newline) and checks each
+    segment.
 
     ``cwd`` determines whether plugin-relative PROTECTED paths are enforced:
     only when the agent is operating inside the plugin tree itself. Managed
     paths (MANAGED_DOCS, MANAGED_DATA) are always cwd-relative and always
     enforced — they live inside the target project's docs/holtz/.
+
+    Every check below reads the *resolved* command. This guard used to parse
+    the raw string while the sahjhan guard above it parsed
+    ``resolve_indirection(...)``, so one module claimed ownership of
+    indirection and the other module protecting ``enforcement/`` — the
+    directory holding both of them — did not consult it. ``eval "rm -rf
+    enforcement/hooks"`` and ``T=docs/holtz/.sahjhan; rm -rf $T`` walked
+    past on that difference alone.
     """
     import re
+
+    command = resolve_indirection(command)
 
     # Default cwd=None preserves legacy test/dev behavior (check all paths).
     # Hook callers pass the real cwd so PROTECTED isn't enforced against
@@ -628,15 +703,10 @@ def _check_bash_write(command: str, cwd: str | None = None) -> str | None:
                     )
             break
 
-    # Split on shell operators to handle chained commands (BH-004 run 27)
-    # BH-005 run 28: bare newline is a valid shell command separator — include \n
-    segments = re.split(r'\s*(?:&&|\|\||[;|\n])\s*', command)
-
-    for seg in segments:
-        seg = seg.strip()
-        if not seg:
-            continue
-
+    # Split on shell operators to handle chained commands (BH-004 run 27).
+    # ``resolve=False``: the command was resolved once at the top, and every
+    # check in this function reads that same string.
+    for seg in shell_segments(command, resolve=False):
         # Protocol-setup exemption: the SKILL-prescribed daemon-init-pid
         # copy is a one-shot setup step that must be allowed to land
         # inside the managed data dir. See _is_daemon_init_pid_setup.
@@ -1089,12 +1159,7 @@ def _maybe_bootstrap_binary(command: str) -> None:
     checksum mismatch) the Bash command fails naturally with a clear
     error Claude can surface to the user.
     """
-    import re as _re
-    segments = _re.split(r'\s*(?:&&|\|\||[;|\n])\s*', command)
-    for seg in segments:
-        seg = seg.strip()
-        if not seg:
-            continue
+    for seg in shell_segments(command):
         if _extract_sahjhan_subcmd(seg) is None:
             continue
         try:

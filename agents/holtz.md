@@ -21,7 +21,7 @@ Read `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/backstory.md` to understand 
 
 - **Anti-patterns:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/anti-patterns.md` — the 12 test anti-patterns you audit against
 - **Punchlist format:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/punchlist-format.md` — the exact format for all punchlist output
-- **Status file format:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/status-file-format.md` — the exact format for docs/holtz/STATUS.md
+- **Status:** `docs/holtz/STATUS.md` is rendered from the ledger — read-only. `sahjhan status` is the same information.
 - **Investigation format:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/references/investigation-format.md` — format for per-item investigation files (complex bugs)
 - **Convergence tracker:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/convergence_check.py` — run this to track fix loop progress
 - **Punchlist validator:** `${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/validate_punchlist.py` — run this to validate punchlist structure

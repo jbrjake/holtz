@@ -453,6 +453,190 @@ class TestRunsTransition:
         assert not _runs_transition("sahjhan transition", "fix_commit")
 
 
+class TestStallCounterIsPerActor:
+    """P3.2: the stall counter is a charge against one actor's own commands.
+
+    Run-global, it made 54 distinct actors drive one number — 112 of 114
+    denials fired at exactly stall=16, and a subagent could be blocked by
+    traffic it never generated or freed by a sibling it never spoke to.
+    Claude Code stamps `agent_id` on a hook event fired inside a subagent and
+    omits it on the main thread, so the orchestrator is the empty-string
+    actor. These run the hooks as subprocesses because that is the interface
+    Claude Code actually uses (CLAUDE.md's subagent-parity rule).
+    """
+
+    def _fix_loop_cache(self, tmp_path, stall=None):
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        if stall is not None:
+            cache["stall"] = stall
+        write_cache(str(tmp_path), cache)
+        return cache
+
+    def _run(self, tmp_path, command, agent_id=None, hook="protocol_tracker.py"):
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "tool_response": {"exit_code": 0, "output": ""},
+            "cwd": str(tmp_path),
+        }
+        if agent_id is not None:
+            event["agent_id"] = agent_id
+        return run_enforcement_hook(hook, event)
+
+    def test_a_subagents_command_does_not_charge_the_orchestrator(self, tmp_path, mock_daemon):
+        from _protocol_cache import ORCHESTRATOR, read_cache, stall_count
+        self._fix_loop_cache(tmp_path)
+
+        self._run(tmp_path, "echo hello", agent_id="sub_abc123")
+
+        cache = read_cache(str(tmp_path))
+        assert stall_count(cache, "sub_abc123") == 1
+        assert stall_count(cache, ORCHESTRATOR) == 0
+
+    def test_two_subagents_do_not_share_a_count(self, tmp_path, mock_daemon):
+        """The 54-actors bug: one number charged for everybody's work."""
+        from _protocol_cache import read_cache, stall_count
+        self._fix_loop_cache(tmp_path)
+
+        for _ in range(3):
+            self._run(tmp_path, "echo a", agent_id="sub_a")
+        self._run(tmp_path, "echo b", agent_id="sub_b")
+
+        cache = read_cache(str(tmp_path))
+        assert stall_count(cache, "sub_a") == 3
+        assert stall_count(cache, "sub_b") == 1
+
+    def test_a_siblings_resync_does_not_clear_another_actors_stall(self, tmp_path, mock_daemon):
+        """A protocol event is evidence about its emitter and nobody else."""
+        from _protocol_cache import read_cache, stall_count
+        self._fix_loop_cache(tmp_path, stall={"sub_a": 12, "sub_b": 2})
+        _force_no_binary(tmp_path)
+
+        self._run(tmp_path, "sahjhan status", agent_id="sub_b")
+
+        cache = read_cache(str(tmp_path))
+        assert stall_count(cache, "sub_a") == 12
+        assert stall_count(cache, "sub_b") == 0
+
+    def test_the_gate_blocks_the_stalled_actor_and_not_its_sibling(self, tmp_path, mock_daemon):
+        self._fix_loop_cache(tmp_path, stall={"sub_a": 20})
+
+        _, blocked, _ = self._run(
+            tmp_path, "echo work", agent_id="sub_a", hook="commit_gate.py",
+        )
+        _, allowed, _ = self._run(
+            tmp_path, "echo work", agent_id="sub_b", hook="commit_gate.py",
+        )
+
+        assert blocked.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
+        assert allowed.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+
+    def test_the_orchestrator_is_an_actor_not_a_wildcard(self, tmp_path, mock_daemon):
+        """A main-thread call carries no agent_id and must not read a subagent's count."""
+        self._fix_loop_cache(tmp_path, stall={"sub_a": 20})
+
+        _, out, _ = self._run(tmp_path, "echo work", hook="commit_gate.py")
+
+        assert out.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+
+    def test_a_cache_written_before_keying_counts_as_the_orchestrators(self, tmp_path, mock_daemon):
+        """Upgrading mid-run must not hand a stalled orchestrator a free reset."""
+        self._fix_loop_cache(tmp_path, stall=20)
+
+        _, out, _ = self._run(tmp_path, "echo work", hook="commit_gate.py")
+
+        assert out.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
+
+
+class TestPatternDoneClearsOverdue:
+    """P3.4: the cached `pattern_analysis_overdue` flag must not survive the
+    transition that discharges it.
+
+    The flag is derived from the ledger, never mirrored — but the derivation
+    runs behind a 5s subprocess that returns None on failure, and None means
+    "keep the last value". So a query that cannot run preserves a stale True
+    and the run is told a round is due immediately after finishing one. The
+    clear below is the only write that moves this flag without asking the
+    ledger, and it moves it in the releasing direction only: nothing that
+    raises the flag is bypassed, so the two can never disagree in the
+    direction that blocks.
+    """
+
+    def test_pattern_done_clears_the_flag_without_the_ledger(self, tmp_path, mock_daemon):
+        """The clear survives a derivation that could not run."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["pattern_analysis_overdue"] = True
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        run_enforcement_hook("protocol_tracker.py", {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan transition pattern_done"},
+            "tool_response": {"exit_code": 0, "output": "Transition: pattern_analysis -> fix_loop"},
+            "cwd": str(tmp_path),
+        })
+
+        assert read_cache(str(tmp_path))["pattern_analysis_overdue"] is False
+
+    def test_diagnostic_naming_pattern_done_does_not_clear(self, tmp_path, mock_daemon):
+        """Reading about the transition is not running it."""
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["pattern_analysis_overdue"] = True
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        run_enforcement_hook("protocol_tracker.py", {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan gate check pattern_done"},
+            "tool_response": {"exit_code": 0, "output": "not ready"},
+            "cwd": str(tmp_path),
+        })
+
+        assert read_cache(str(tmp_path))["pattern_analysis_overdue"] is True
+
+    def test_a_refused_pattern_done_clears_nothing(self, tmp_path, mock_daemon):
+        """The round is discharged by the transition landing, not by trying it.
+
+        Same shape as the pending-commit clear one branch below, and the same
+        answer: `_runs_transition` reads the command, `exit_code` reads the
+        engine, and only the engine knows whether the round actually closed.
+        A refused `pattern_done` leaves the round owed.
+        """
+        from datetime import datetime, timezone
+
+        from _protocol_cache import empty_cache, read_cache, write_cache
+        cache = empty_cache()
+        cache["state"] = "fix_loop"
+        cache["pattern_analysis_overdue"] = True
+        cache["last_sahjhan_cmd"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+        write_cache(str(tmp_path), cache)
+        _force_no_binary(tmp_path)
+
+        run_enforcement_hook("protocol_tracker.py", {
+            "tool_name": "Bash",
+            "tool_input": {"command": "sahjhan transition pattern_done"},
+            "tool_response": {"exit_code": 1, "output": "gate not satisfied"},
+            "cwd": str(tmp_path),
+        })
+
+        assert read_cache(str(tmp_path))["pattern_analysis_overdue"] is True
+
+
 class TestProtocolTracker:
     """Tests for protocol_tracker.py PostToolUse hook."""
 
@@ -489,7 +673,8 @@ class TestProtocolTracker:
 
         updated = read_cache(str(tmp_path))
         assert updated is not None
-        assert "abc1234" in updated["unregistered_commits"]
+        # Keyed by actor since P0.3/D41; no `agent_id` means the orchestrator.
+        assert updated["unregistered_commits"] == {"": ["abc1234"]}
 
     def test_detects_git_commit_cc2x_payload(self, tmp_path, mock_daemon):
         """CC 2.x Bash payload registers commits (#75).
@@ -525,13 +710,19 @@ class TestProtocolTracker:
 
         updated = read_cache(str(tmp_path))
         assert updated is not None
-        assert "abc1234" in updated["unregistered_commits"]
+        # Keyed by actor since P0.3/D41; no `agent_id` means the orchestrator.
+        assert updated["unregistered_commits"] == {"": ["abc1234"]}
 
     def test_increments_stall_counter(self, tmp_path, mock_daemon):
-        """Non-git, non-sahjhan, non-TDD commands increment stall."""
+        """Commands that can change the tree increment stall.
+
+        Read-only inspection is exempt alongside TDD commands — see
+        ``TestReadOnlyCommandsDoNotStall`` in test_hook_chains.py — so the
+        example here has to be something that actually writes.
+        """
         from datetime import datetime, timezone  # noqa: UP017
 
-        from _protocol_cache import empty_cache, read_cache, write_cache
+        from _protocol_cache import empty_cache, read_cache, stall_count, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
         cache["stall"] = 5
@@ -540,14 +731,14 @@ class TestProtocolTracker:
 
         event = {
             "tool_name": "Bash",
-            "tool_input": {"command": "cat some_file.py"},
-            "tool_response": {"exit_code": 0, "output": "contents"},
+            "tool_input": {"command": "touch some_file.py"},
+            "tool_response": {"exit_code": 0, "output": ""},
             "cwd": str(tmp_path),
         }
         run_enforcement_hook("protocol_tracker.py", event)
 
         updated = read_cache(str(tmp_path))
-        assert updated["stall"] == 6
+        assert stall_count(updated) == 6
 
     def test_tdd_commands_skip_stall(self, tmp_path, mock_daemon):
         """Test/lint/type-check commands do not increment stall (BH-012)."""
@@ -592,7 +783,7 @@ class TestProtocolTracker:
         run_enforcement_hook("protocol_tracker.py", event)
 
         updated = read_cache(str(tmp_path))
-        assert updated["unregistered_commits"] == []
+        assert updated["unregistered_commits"] == {}
 
     def test_no_cache_no_update(self):
         """Without existing cache, non-sahjhan commands are no-ops."""
@@ -665,7 +856,11 @@ class TestProtocolTracker:
         assert updated["last_sahjhan_cmd"] == "2026-01-01T00:00:00+00:00"
 
     def test_stale_enforcement_skips_stall(self, tmp_path, mock_daemon):
-        """When enforcement is stale, protocol_tracker does not increment stall."""
+        """When enforcement is stale, protocol_tracker does not increment stall.
+
+        The command has to be one that *would* tick, or staleness is not
+        what the assertion is measuring.
+        """
         from _protocol_cache import empty_cache, read_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
@@ -675,8 +870,8 @@ class TestProtocolTracker:
 
         event = {
             "tool_name": "Bash",
-            "tool_input": {"command": "cat some_file.py"},
-            "tool_response": {"exit_code": 0, "output": "contents"},
+            "tool_input": {"command": "touch some_file.py"},
+            "tool_response": {"exit_code": 0, "output": ""},
             "cwd": str(tmp_path),
         }
         run_enforcement_hook("protocol_tracker.py", event)
@@ -795,8 +990,12 @@ class TestCommitGate:
         perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
         assert perm == "deny"
 
-    def test_blocks_commit_when_pattern_overdue(self, tmp_path, mock_daemon):
-        """Pattern check overdue hard-blocks git commit after 3+ fixes."""
+    def test_pattern_overdue_advises_the_commit_instead_of_blocking_it(
+        self, tmp_path, mock_daemon,
+    ):
+        """The round is owed at `iteration_boundary` and `set complete
+        perspective`, not between a verified fix and its own commit. See
+        tests/test_pattern_analysis_boundary.py."""
         from datetime import datetime, timezone  # noqa: UP017
 
         from _protocol_cache import empty_cache, write_cache
@@ -812,10 +1011,9 @@ class TestCommitGate:
         }
         code, output, _ = run_enforcement_hook("commit_gate.py", event)
         assert code == 0
-        perm = output.get("hookSpecificOutput", {}).get("permissionDecision")
-        assert perm == "deny"
-        reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
-        assert "pattern" in reason.lower()
+        payload = output.get("hookSpecificOutput", {})
+        assert payload.get("permissionDecision") == "allow"
+        assert "pattern_check" in payload.get("additionalContext", "")
 
     def test_injects_soft_obligation_non_commit_cmd(self, tmp_path, mock_daemon):
         """Pattern check due: non-commit commands still get soft injection (not blocked)."""
@@ -988,7 +1186,7 @@ class TestEnforcementIntegration:
 
         # 2. Verify cache has unregistered commit
         c = read_cache(str(tmp_path))
-        assert len(c["unregistered_commits"]) == 1
+        assert c["unregistered_commits"] == {"": ["bbb2222"]}
 
         # 3. Gate blocks next commit
         _, out, _ = run_enforcement_hook("commit_gate.py", {
@@ -1007,7 +1205,7 @@ class TestEnforcementIntegration:
 
         # 5. Verify unregistered commits cleared
         c = read_cache(str(tmp_path))
-        assert c["unregistered_commits"] == []
+        assert c["unregistered_commits"] == {}
         # #77/#82: pattern_analysis_overdue is derived by running the gate's
         # own named query against the ledger, no longer a token-incremented
         # mirror. With no real ledger behind the mock daemon the transition
@@ -1648,10 +1846,27 @@ class TestCommitGateFreshness:
 
 
 class TestPrimerFreshness:
-    """Tests for primer.py freshness gate."""
+    """What the primer does when it cannot read the protocol.
 
-    def test_primer_exits_early_when_stale(self, tmp_path, mock_daemon):
-        """Stale enforcement → primer does not inject context."""
+    ⚠️ **The primer has no freshness gate**, and this class asserted one. It
+    was named `test_primer_exits_early_when_stale` and wrote a year-old
+    `last_sahjhan_cmd`, but `primer.py` never calls `is_enforcement_fresh` —
+    nothing in it reads that timestamp. It passed because the real binary ran
+    `status` against a tmp directory with no ledger, exited 2, and the primer
+    silently `exit_ok()`d. So a stale cache and an unreadable ledger produced
+    the same answer, and the test could not tell which one it had measured.
+
+    That indistinguishability is item 17 itself. W13 makes the degrade path
+    say which, so the test now asserts the thing it was actually driving.
+    """
+
+    def test_a_status_the_primer_cannot_read_is_reported(self, tmp_path, mock_daemon):
+        """No ledger → `status` exits non-zero → the primer says so.
+
+        The cache below is deliberately stale, and deliberately irrelevant:
+        keeping it documents that staleness is *not* what decides this, which
+        is what the previous name got wrong.
+        """
         from _protocol_cache import empty_cache, write_cache
         cache = empty_cache()
         cache["state"] = "fix_loop"
@@ -1661,9 +1876,9 @@ class TestPrimerFreshness:
         event = {"cwd": str(tmp_path)}
         code, output, _ = run_enforcement_hook("primer.py", event)
         assert code == 0
-        # Should pass through silently — no context injection
-        assert output.get("continue") is True
-        assert output.get("suppressOutput") is True
+        context = output.get("hookSpecificOutput", {}).get("additionalContext", "")
+        assert "SAHJHAN PRIMER DEGRADED" in context
+        assert "Protocol state is unknown" in context
 
 
 class TestRemainingHooksFreshness:

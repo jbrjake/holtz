@@ -576,7 +576,8 @@ class TestConcurrentCacheAccess:
 
         assert not errors, f"Concurrent hook errors: {errors}"
         assert mock_daemon.state is not None
-        assert isinstance(mock_daemon.state.get("stall"), int)
+        # Per-actor since P3.2: a map of actor -> count, not a bare int.
+        assert isinstance(mock_daemon.state.get("stall"), dict)
 
 
 # ---------------------------------------------------------------------------

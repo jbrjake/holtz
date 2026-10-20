@@ -112,7 +112,7 @@ class TestEventSchemaValidation:
             "location": "README.md:108",
             "perspective": "public-contract",
             "description": "Pattern count stale",
-            "predicted_by": "1",
+            "predicted_by": "1", "reachability": "user_reachable",
         })
         events = _read_ledger(ledger)
         findings = [e for e in events if e["type"] == "finding"]
@@ -315,7 +315,7 @@ class TestEventSchemaValidation:
             **BREADCRUMBS,
             "phase": "audit", "step": "7", "id": "BH-001", "severity": "HIGH",
             "category": "test", "location": "foo.py", "perspective": "component",
-            "description": "test", "predicted_by": "",
+            "description": "test", "predicted_by": "", "reachability": "user_reachable",
         })
         events = _read_ledger(ledger)
         for event in events:
@@ -347,7 +347,7 @@ class TestEventSchemaValidation:
             **BREADCRUMBS, "phase": "audit", "step": "7",
             "id": "BH-001", "severity": "HIGH", "category": "test",
             "location": "foo.py", "perspective": "component",
-            "description": "bug", "predicted_by": "",
+            "description": "bug", "predicted_by": "", "reachability": "user_reachable",
         })
         _record_event(tmp_path, "test-run", "audit_claim", {
             **BREADCRUMBS, "phase": "audit", "step": "6",
@@ -377,7 +377,7 @@ class TestEventSchemaValidation:
             "--field", "location=foo.py",
             "--field", "perspective=component",
             "--field", "description=test",
-            "--field", "predicted_by=",
+            "--field", "predicted_by=", "--field", "reachability=user_reachable",
             cwd=tmp_path,
             check=False,
         )
@@ -402,7 +402,7 @@ class TestEventSchemaValidation:
             "--field", "location=foo.py",
             "--field", "perspective=component",
             "--field", "description=test",
-            "--field", "predicted_by=",
+            "--field", "predicted_by=", "--field", "reachability=user_reachable",
             cwd=tmp_path,
             check=False,
         )
@@ -539,7 +539,7 @@ class TestMigrationImportPipeline:
                     "location": "src/auth.py:55",
                     "perspective": "security",
                     "description": "Token not rotated",
-                    "predicted_by": "3",
+                    "predicted_by": "3", "reachability": "user_reachable",
                     "_migrated": "true",
                     "_source": "PUNCHLIST.md",
                 },
@@ -616,7 +616,7 @@ class TestTemplateRendering:
             "id": "BH-001", "severity": "HIGH",
             "category": "doc/drift", "location": "README.md:108",
             "perspective": "public-contract",
-            "description": "Pattern count stale", "predicted_by": "",
+            "description": "Pattern count stale", "predicted_by": "", "reachability": "user_reachable",
         })
 
         result = _run_sahjhan(
@@ -672,7 +672,7 @@ class TestTemplateRendering:
                 "id": item_id, "severity": sev,
                 "category": "test", "location": f"file{i}.py",
                 "perspective": "component",
-                "description": f"finding {i}", "predicted_by": "",
+                "description": f"finding {i}", "predicted_by": "", "reachability": "user_reachable",
             })
 
         result = _run_sahjhan(
@@ -711,7 +711,7 @@ class TestTemplateRendering:
             "id": "BH-001", "severity": "HIGH",
             "category": "doc/drift", "location": "README.md:108",
             "perspective": "public-contract",
-            "description": "Pattern count stale", "predicted_by": "",
+            "description": "Pattern count stale", "predicted_by": "", "reachability": "user_reachable",
         })
 
         result = _run_sahjhan(
@@ -727,7 +727,9 @@ class TestTemplateRendering:
                 content = punchlist.read_text()
                 assert "BH-001" in content
                 assert "HIGH" in content
-                assert "doc/drift" in content
+                # P0.4: the open worklist renders id, severity, `file:line`
+                # and a 12-word summary. Category is ledger-only now.
+                assert "README.md:108" in content
         else:
             # Known limitation: render may fail if ledger path resolution
             # doesn't match protocol.toml path_template expectations.
@@ -759,7 +761,7 @@ class TestQueryEngine:
                 "id": item_id, "severity": severity,
                 "category": "test", "location": "foo.py",
                 "perspective": "component",
-                "description": "test finding", "predicted_by": "",
+                "description": "test finding", "predicted_by": "", "reachability": "user_reachable",
             })
 
         result = _run_sahjhan(
@@ -781,7 +783,7 @@ class TestQueryEngine:
             "id": "BH-001", "severity": "HIGH",
             "category": "test", "location": "foo.py",
             "perspective": "component",
-            "description": "test finding", "predicted_by": "",
+            "description": "test finding", "predicted_by": "", "reachability": "user_reachable",
         })
 
         result = _run_sahjhan(
@@ -830,7 +832,7 @@ class TestQueryEngine:
             "id": "BH-001", "severity": "HIGH",
             "category": "test", "location": "foo.py",
             "perspective": "component",
-            "description": "test finding", "predicted_by": "",
+            "description": "test finding", "predicted_by": "", "reachability": "user_reachable",
         })
 
         result = _run_sahjhan(
@@ -854,7 +856,7 @@ class TestQueryEngine:
             "id": "BH-001", "severity": "HIGH",
             "category": "test", "location": "foo.py",
             "perspective": "component",
-            "description": "test finding", "predicted_by": "",
+            "description": "test finding", "predicted_by": "", "reachability": "user_reachable",
         })
         _record_event(tmp_path, "test-run", "finding", {
             **BREADCRUMBS,
@@ -862,7 +864,7 @@ class TestQueryEngine:
             "id": "BH-002", "severity": "MEDIUM",
             "category": "test", "location": "bar.py",
             "perspective": "component",
-            "description": "another finding", "predicted_by": "",
+            "description": "another finding", "predicted_by": "", "reachability": "user_reachable",
         })
 
         result = _run_sahjhan(
@@ -902,7 +904,7 @@ class TestQueryEngine:
                 "category": "test", "location": "foo.py",
                 "perspective": "component",
                 "description": f"finding from run {run_num}",
-                "predicted_by": "",
+                "predicted_by": "", "reachability": "user_reachable",
             })
 
         # Query across both ledgers using glob
@@ -929,7 +931,7 @@ class TestQueryEngine:
                 "id": item_id, "severity": "HIGH",
                 "category": "test", "location": f"file{i}.py",
                 "perspective": "component",
-                "description": f"finding {i}", "predicted_by": "",
+                "description": f"finding {i}", "predicted_by": "", "reachability": "user_reachable",
             })
         # Resolve one
         _record_event(tmp_path, "test-run", "finding_resolved", {

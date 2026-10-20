@@ -238,6 +238,23 @@ def exit_stop_warn(message: str) -> NoReturn:
     sys.exit(0)
 
 
+def exit_prompt_block(reason: str) -> NoReturn:
+    """Consume a UserPromptSubmit prompt, showing `reason` to the user.
+
+    The prompt never reaches the model and no turn is spent on it — which is
+    the point for a word the human types *at* the plugin rather than at
+    Claude (`holtz-start` / `holtz-stop`). The hook has already done the work
+    by the time this is called; `reason` is the receipt.
+
+    See: https://code.claude.com/docs/en/hooks
+    """
+    print(json.dumps({
+        "decision": "block",
+        "reason": reason,
+    }))
+    sys.exit(0)
+
+
 def exit_stop_block(reason: str) -> NoReturn:
     """Block a Stop event. Stop-format JSON on stdout, exit 0.
 

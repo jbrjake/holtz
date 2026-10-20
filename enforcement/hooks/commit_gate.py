@@ -14,31 +14,41 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _common import exit_block, exit_ok, exit_warn, read_event, resolve_config_dir  # noqa: E402
+from _common import (  # noqa: E402
+    audit_abandoned,
+    exit_block,
+    exit_boundary_missing,
+    exit_ok,
+    exit_warn,
+    read_event,
+    resolve_config_dir,
+)
 from _protocol_cache import (  # noqa: E402
     compute_obligations,
     contains_sahjhan_cmd,
+    event_actor,
+    format_block,
     format_injection,
     is_enforcement_fresh,
     is_fix_loop_state,
     is_git_commit,
     is_sahjhan_cmd,
-    read_cache,
+    pending_commits_for,
+    read_cache_with_boundary,
 )
+from _shell_norm import shell_segments  # noqa: E402
 
 
 def _is_test_cmd(cmd: str) -> bool:
     """Detect test/pytest commands that should always be allowed.
 
-    Checks each segment of chained commands (split on &&, ||, ;, |, newline)
-    so that ``cd /project && pytest`` is recognized.
+    Checks each segment of a chained command so that ``cd /project &&
+    pytest`` is recognized. Segmentation is ``_shell_norm``'s.
     """
-    import re as _re
-    for segment in _re.split(r'&&|\|\||[;|\n]', cmd):
-        seg = segment.strip()
-        if seg.startswith("pytest") or seg.startswith("python -m pytest"):
-            return True
-    return False
+    return any(
+        seg.startswith(("pytest", "python -m pytest"))
+        for seg in shell_segments(cmd)
+    )
 
 
 def main() -> None:
@@ -47,7 +57,24 @@ def main() -> None:
     cwd = event.get("cwd", os.getcwd())
     config_dir, _ = resolve_config_dir(cwd)
 
-    cache = read_cache(cwd)
+    cache, boundary, _version = read_cache_with_boundary(cwd)
+
+    # Before the sahjhan-command allowance, not after it. Without the
+    # boundary the daemon serves nothing restricted, but `transition`,
+    # `event` and `set` write the ledger straight to disk — so allowing them
+    # through would let the run keep advancing while the enforcement that is
+    # supposed to be gating it does nothing. The escape is not a command:
+    # the user types `holtz-start`, which is a prompt, not a tool call.
+    #
+    # Unless the run is already over. Then that ordering costs what it was
+    # buying: `_daemon_lifecycle` runs ahead of this hook, blocks a terminated
+    # audit with a message that names the situation, and exempts `sahjhan
+    # daemon start`/`stop` so the human can recover — and this gate revoked
+    # the exemption. `audit_abandoned` is checked here rather than the
+    # ordering being swapped, because freshness is False for a live audit too
+    # (item 41).
+    if boundary and not audit_abandoned(cwd):
+        exit_boundary_missing(boundary)
 
     # Sahjhan commands are always allowed
     if is_sahjhan_cmd(cmd):
@@ -57,36 +84,51 @@ def main() -> None:
     if not is_enforcement_fresh(cache):
         exit_ok("PreToolUse")
 
-    # Unconditional: in fix_loop, git commit requires prior fix_commit registration
+    # Unconditional: in fix_loop, git commit requires prior fix_commit
+    # registration — of *this actor's* own commits (P0.3, D41). A sibling fix
+    # subagent's pending commit is not evidence about this caller.
+    #
+    # The escape below is reachable by whichever actor this blocks, which it
+    # was not before sahjhan 0.25.0/0.26.0. `fix_commit`'s two tree-reading
+    # gates and its `finding_resolved` emit are anchored on the caller, so a
+    # fix subagent blocked on a second commit registers the first one from its
+    # own worktree: the gates read the tree holding the commit, and the emit
+    # stamps that tree's hash — which is the hash the tracker charged, so this
+    # charge is what discharges. The orchestrator's path is unchanged; it calls
+    # from the project root, where caller and project anchor are the same
+    # directory (sahjhan#46, #48; item 43).
+    #
+    # `item_id` is positional and required — the CLI refuses a bare
+    # `transition fix_commit` — so it is named in the escape rather than left
+    # for the reader to discover from a second error.
     if cache and is_fix_loop_state(cache) and is_git_commit(cmd):
-        commits = cache.get("unregistered_commits", [])
+        commits = pending_commits_for(cache, event_actor(event))
         if commits:
             exit_block(
-                f"BLOCKED: {len(commits)} unregistered commit(s). "
-                f"Run sahjhan --config-dir {config_dir} transition fix_commit before committing again."
+                f"BLOCKED: {len(commits)} unregistered commit(s): "
+                f"{', '.join(commits)}. Register from the tree holding the "
+                f"commit — run sahjhan --config-dir {config_dir} transition "
+                f"fix_commit BH-NNN, where BH-NNN is the finding that commit "
+                f"fixes, before committing again."
             )
 
-    obligations = compute_obligations(cache, config_dir=config_dir)
+    # Same actor the tracker charged, so what this reads is this caller's own
+    # command history and not the run's aggregate traffic (P3.2).
+    obligations = compute_obligations(
+        cache, config_dir=config_dir, actor=event_actor(event),
+    )
 
     if not obligations:
         exit_ok("PreToolUse")
 
-    # Hard block: pattern analysis overdue after 3+ fixes
-    if (cache is not None
-            and cache.get("state") == "fix_loop"
-            and is_git_commit(cmd)
-            and cache.get("pattern_analysis_overdue", False)
-            and not cache.get("unregistered_commits")):
-        # The flag is the `pattern_analysis_overdue` named query, evaluated
-        # against the ledger by protocol_tracker. `pattern_check`'s own gate is
-        # that same query — so the escape printed here is ready precisely when
-        # this block fires. #77 was the version where it was not. (#82 H8
-        # checks this file still names the query the escape is gated on.)
-        exit_block(
-            "BLOCKED: Pattern analysis overdue "
-            "(3+ findings resolved since the last analysis). "
-            f"Run: sahjhan --config-dir {config_dir} transition pattern_check"
-        )
+    # Pattern analysis is owed at the batch boundary, not at every commit:
+    # `iteration_boundary` and `set complete perspective` both gate on
+    # `pattern_analysis_overdue`, which is how a run cannot reach a /clear or a
+    # finished lens without the round. A commit is not a boundary — it lands
+    # between a fix that is already written, verified and green and the ledger
+    # entry naming it, so stopping there buys nothing and interrupts the cycle
+    # to run a 17.9-min median analysis on top of an uncommitted tree. It stays
+    # a soft obligation here, which is what `compute_obligations` emits.
 
     blocks_commit = any(o.get("blocks_commit") for o in obligations)
     blocks_all = any(o.get("blocks_all") for o in obligations)
@@ -100,7 +142,7 @@ def main() -> None:
     if blocks_all:
         if contains_sahjhan_cmd(cmd) and not is_git_commit(cmd):
             exit_ok("PreToolUse")
-        exit_block(injection)
+        exit_block(format_block(obligations, "blocks_all"))
 
     # Test commands are allowed unless stall threshold exceeded
     if _is_test_cmd(cmd):
@@ -108,7 +150,7 @@ def main() -> None:
 
     # Hard block: git commit with unregistered prior commits
     if is_git_commit(cmd) and blocks_commit:
-        exit_block(injection)
+        exit_block(format_block(obligations, "blocks_commit"))
 
     # Soft injection: obligations exist but don't block this command
     if injection:

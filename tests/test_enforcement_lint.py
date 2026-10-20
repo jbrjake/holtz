@@ -894,6 +894,38 @@ class TestH8EscapeIdentity:
         assert findings[0].level == "warning"
         assert "pattern_check" in findings[0].message
 
+    UNGATED = """
+        [[transitions]]
+        from = "final_sweep"
+        to = "convergence"
+        command = "converge"
+        gates = [
+            { type = "query", sql = "SELECT count(*) = 0 FROM events WHERE type='finding'", expect = "true", intent = "findings remain — run `sahjhan transition sweep_dirty` and finish the work" },
+        ]
+
+        [[transitions]]
+        from = "final_sweep"
+        to = "fix_loop"
+        command = "sweep_dirty"
+        """
+
+    def test_an_escape_with_no_gates_at_all_is_silent(self, tmp_path: Path) -> None:
+        """An ungated escape cannot be unsatisfiable, so the warning is false.
+
+        H8's whole subject is an escape that can be blocked at the moment it is
+        printed. `sweep_dirty` — the `final_sweep -> fix_loop` edge every
+        convergence conjunct points at — carries no gates, so there is no state
+        in which running it is refused. Warning here does not merely cry wolf;
+        it asserts something untrue about the tree, on every commit.
+
+        The distinction is already in the model: a transition whose gates are
+        *inline* registers an (empty) entry while building the escape map, and
+        a transition with no gates registers none. Only the second is exempt —
+        `test_warns_while_the_escape_is_decided_inline` pins the first.
+        """
+        tree = build_tree(tmp_path, events="", transitions=self.UNGATED)
+        assert findings_for(tree, "H8") == []
+
     def test_errors_when_the_block_ignores_the_escape_s_query(
         self, tmp_path: Path
     ) -> None:
@@ -1010,6 +1042,86 @@ class TestH8EscapeIdentity:
         )
         assert findings_for(tree, "H8") == []
 
+    ARGUMENT_SCOPED = """
+        [protocol]
+        name = "fixture"
+        version = "1.0.0"
+
+        [queries.item_open]
+        sql = "SELECT count(*) = 0 FROM events WHERE type='finding_resolved' AND id='{{item_id}}'"
+        intent = "finding must not already be resolved"
+
+        [queries.round_item_cap_exceeded]
+        sql = "SELECT count(*) > 3 FROM events WHERE type='finding'"
+        intent = "a round may leave at most 3 findings open"
+        """
+
+    CAPPED = """
+        [[transitions]]
+        from = "pattern_analysis"
+        to = "fix_loop"
+        command = "pattern_done"
+        gates = [
+            { type = "query", query = "round_item_cap_exceeded", expect = "false", intent = "this round left more than 3 findings open — run `sahjhan transition merge_finding BH-NNN BH-MMM`" },
+        ]
+
+        [[transitions]]
+        from = "pattern_analysis"
+        to = "pattern_analysis"
+        command = "merge_finding"
+        args = ["item_id", "merged_into"]
+        gates = [
+            { type = "query", query = "item_open", expect = "true" },
+        ]
+        """
+
+    def test_an_argument_scoped_escape_is_not_this_check_s_business(
+        self, tmp_path: Path
+    ) -> None:
+        """`merge_finding`'s gate decides the *pair the agent picks*.
+
+        `item_open`'s SQL reads `id='{{item_id}}'`. A run-wide block has no
+        argument to bind, so "decide this block with query = item_open" names
+        a gate that cannot be instantiated there — the check would be printing
+        a remedy that does not run. Whether the block's condition entails the
+        escape's readiness is real, and an end-to-end test that drives the
+        named command from the blocked state is what settles it.
+        """
+        tree = build_tree(
+            tmp_path,
+            events="",
+            protocol=self.ARGUMENT_SCOPED,
+            transitions=self.CAPPED,
+        )
+        assert findings_for(tree, "H8") == []
+
+    def test_a_run_wide_query_on_the_same_escape_is_still_judged(
+        self, tmp_path: Path
+    ) -> None:
+        """The exemption is per-query, not per-escape.
+
+        `defer_medium` carries `medium_deferral_budget` beside two
+        parameterised gates, and D2's block is required to reference it. An
+        escape that gains one run-wide predicate must not be excused by the
+        parameterised ones standing next to it.
+        """
+        protocol = self.ARGUMENT_SCOPED + (
+            '\n[queries.merge_budget]\n'
+            'sql = "SELECT count(*) < 5 FROM events WHERE type=\'finding_resolved\'"\n'
+            'intent = "merges are capped"\n'
+        )
+        transitions = self.CAPPED.replace(
+            '{ type = "query", query = "item_open", expect = "true" },',
+            '{ type = "query", query = "item_open", expect = "true" },\n'
+            '            { type = "query", query = "merge_budget", expect = "true" },',
+        )
+        tree = build_tree(
+            tmp_path, events="", protocol=protocol, transitions=transitions
+        )
+        findings = findings_for(tree, "H8")
+        assert [f.level for f in findings] == ["error"], findings
+        assert "merge_budget" in findings[0].message
+
 
 # ── H9: a transition that does not record the state it implies ───────────────
 
@@ -1102,6 +1214,68 @@ class TestH9TransitionStateDecoupling:
             """,
         )
         assert findings_for(tree, "H9") == []
+
+    #: `set complete perspective`'s shape after item 3: the argument selects a
+    #: population by lens, and the absence predicate is over that population.
+    POPULATION = """
+        [[transitions]]
+        from = "fix_loop"
+        to = "perspective_clean"
+        command = "set complete perspective"
+        args = ["current_perspective"]
+        gates = [
+            { type = "query", sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.perspective='{{current_perspective}}' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved'))", expect = "true", intent = "every CRITICAL filed under this lens must be resolved" },
+        ]
+        """
+
+    def test_an_argument_that_selects_a_population_is_not_item_scope(
+        self, tmp_path: Path
+    ) -> None:
+        """The argument is a lens name, not a finding.
+
+        The ids in that set are the lens's findings; they are closed one at a
+        time by `fix_commit`, and no `emits` on this transition could record
+        them — `EmitConfig` produces exactly one event with a fixed field map.
+        Firing here would demand a `finding` whose id is the *lens's name*,
+        which is the hint this check actually printed.
+        """
+        tree = build_tree(tmp_path, events="", transitions=self.POPULATION)
+        assert findings_for(tree, "H9") == []
+
+    def test_the_same_transition_still_fires_when_it_binds_the_id(
+        self, tmp_path: Path
+    ) -> None:
+        """Non-vacuity: the narrowing is about *which column*, nothing else.
+
+        Same command, same args, same absence predicate over the same event —
+        the one change is that the argument now binds `id`. A check that had
+        simply stopped looking at this transition would pass the test above and
+        fail this one.
+        """
+        tree = build_tree(
+            tmp_path,
+            events="",
+            transitions=self.POPULATION.replace(
+                "f.perspective='{{current_perspective}}'",
+                "f.id='{{current_perspective}}'",
+            ),
+        )
+        assert len(findings_for(tree, "H9")) == 1
+
+    def test_the_binding_is_read_in_either_order(self, tmp_path: Path) -> None:
+        """`'{{item_id}}'=id` is the same claim as `id='{{item_id}}'`.
+
+        Otherwise the narrowing above doubles as a way out of the check for
+        anyone who writes the comparison backwards.
+        """
+        tree = build_tree(
+            tmp_path,
+            events="",
+            transitions=self.DEFER.replace(
+                "id='{{item_id}}'", "'{{item_id}}'=id"
+            ),
+        )
+        assert len(findings_for(tree, "H9")) == 1
 
 
 class TestH10DelegatedGateEvidence:
@@ -1207,7 +1381,447 @@ class TestH10DelegatedGateEvidence:
         assert findings_for(tree, "H10") == []
 
 
+# ── H11: an escape word the agent can type ───────────────────────────────────
+
+
+class TestH11LiteralProvenance:
+    """Item 22, whose worked example is item 18.
+
+    A gate that excuses itself when some row reads `reason='theoretical'` is
+    trusting a word. Whether that trust is earned depends on who can write the
+    word, and the config knows — it just was not being asked.
+    """
+
+    DEFERRAL = """
+        [events.finding_deferred]
+        description = "a finding taken off the board"
+        attestation = "agent"
+        fields = [
+            { name = "id", type = "string" },
+            { name = "reason", type = "string" },
+        ]
+
+        [[events.finding_deferred.producers]]
+        id = "agent:cli"
+        """
+
+    def _tree(self, root: Path, sql: str, *, events: str = "") -> el.Tree:
+        return build_tree(
+            root,
+            events=events or self.DEFERRAL,
+            protocol=f"""
+            [protocol]
+            name = "fixture"
+            version = "1.0.0"
+
+            [queries.all_closed]
+            sql = "{sql}"
+            intent = "every finding is closed"
+            """,
+            transitions="""
+            [[transitions]]
+            command = "converge"
+            from = "fix_loop"
+            to = "done"
+            gates = [
+                { type = "query", query = "all_closed", expect = "true", intent = "close the board" },
+            ]
+            """,
+        )
+
+    # The predicate under test, in the two shapes that matter. `f` is the
+    # finding, `d` the deferral it is excused by — the same two aliases the
+    # real query uses, because the discharge is alias-scoped.
+    FORGEABLE = (
+        "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE "
+        "f.type='finding' AND f.id NOT IN (SELECT d.id FROM events d WHERE "
+        "d.type='finding_deferred' AND d.reason='theoretical'))"
+    )
+    PINNED = FORGEABLE.replace(
+        "d.reason='theoretical'",
+        "d.reason='theoretical' AND d.recorded_by='hook:hooks/courier.py'",
+    )
+
+    def test_fires_when_the_agent_can_type_the_escape_word(
+        self, tmp_path: Path
+    ) -> None:
+        """Item 18, reduced. The event is `attestation = "agent"` and carries
+        no `restricted`, so `sahjhan event finding_deferred --field
+        reason=theoretical` closes the board."""
+        findings = findings_for(self._tree(tmp_path, self.FORGEABLE), "H11")
+        assert len(findings) == 1, [f.render() for f in findings]
+        assert "reason='theoretical'" in findings[0].message
+        assert "the escape is a word the agent types" in findings[0].message
+
+    def test_silent_once_the_predicate_pins_the_writer(self, tmp_path: Path) -> None:
+        """The discharge, and the fix item 18 shipped."""
+        assert findings_for(self._tree(tmp_path, self.PINNED), "H11") == []
+
+    def test_a_forgeable_writer_literal_does_not_discharge(
+        self, tmp_path: Path
+    ) -> None:
+        """`recorded_by='agent:cli'` names a writer the agent *is*.
+
+        Pinning the column is not the point; pinning it to somebody the agent
+        cannot be is. Without this the rule would accept the very row it
+        exists to refuse, and would do it while looking rigorous.
+        """
+        sql = self.PINNED.replace("hook:hooks/courier.py", "agent:cli")
+        assert len(findings_for(self._tree(tmp_path, sql), "H11")) == 1
+
+    def test_a_writer_on_another_row_does_not_discharge(self, tmp_path: Path) -> None:
+        """Alias scoping. The `recorded_by` here constrains the *finding*, not
+        the deferral that excuses it — a different row making a different
+        claim. Reading it as vouching for the deferral is how a check becomes
+        a formality."""
+        sql = self.FORGEABLE.replace(
+            "f.type='finding'", "f.type='finding' AND f.recorded_by='hook:hooks/x.py'"
+        )
+        assert len(findings_for(self._tree(tmp_path, sql), "H11")) == 1
+
+    def test_silent_when_the_event_is_restricted(self, tmp_path: Path) -> None:
+        """`context_reset`'s shape: the agent cannot write the row at all, so
+        there is no word for it to type."""
+        events = self.DEFERRAL.replace(
+            'attestation = "agent"', 'attestation = "host"\nrestricted = true'
+        )
+        tree = self._tree(tmp_path, self.FORGEABLE, events=events)
+        assert findings_for(tree, "H11") == []
+
+    def test_silent_when_the_bootstrap_denies_the_agent_the_event(
+        self, tmp_path: Path
+    ) -> None:
+        """The other way an event becomes agent-unwritable, and the rule has to
+        know both — a human-only channel is `restricted = false` by design."""
+        tree = build_tree(
+            tmp_path,
+            events=self.DEFERRAL,
+            protocol=f"""
+            [protocol]
+            name = "fixture"
+            version = "1.0.0"
+
+            [queries.all_closed]
+            sql = "{self.FORGEABLE}"
+            intent = "every finding is closed"
+            """,
+            transitions="""
+            [[transitions]]
+            command = "converge"
+            from = "fix_loop"
+            to = "done"
+            gates = [
+                { type = "query", query = "all_closed", expect = "true", intent = "close the board" },
+            ]
+            """,
+            hook_scripts={
+                "_sahjhan_bootstrap.py": """
+                BLOCKED_SAHJHAN_SUBSUB = {
+                    "daemon": {"stop"},
+                    "event": {"finding_deferred"},
+                }
+                """
+            },
+        )
+        assert findings_for(tree, "H11") == []
+
+    def test_the_audits_own_grades_are_not_in_scope(self, tmp_path: Path) -> None:
+        """`severity` and `reachability` are the subject matter, not the
+        excuse. The agent grading its own findings is the design, and a wrong
+        grade is answered by re-reading the latest filing — there is no writer
+        such a filter could name. A rule that fired here would have to be
+        switched off, and a lint nobody can leave on is not a lint.
+        """
+        sql = self.FORGEABLE.replace(
+            "d.reason='theoretical'", "d.severity='LOW' AND d.reachability='theoretical'"
+        )
+        assert findings_for(self._tree(tmp_path, sql), "H11") == []
+
+    def test_a_bound_argument_is_not_a_literal(self, tmp_path: Path) -> None:
+        """`{{item_id}}` is filled at gate time by the transition's own
+        argument, so there is no value here for anyone to have typed."""
+        sql = self.FORGEABLE.replace("d.reason='theoretical'", "d.reason='{{reason}}'")
+        assert findings_for(self._tree(tmp_path, sql), "H11") == []
+
+    def test_it_reads_the_structured_filter_shape_too(self, tmp_path: Path) -> None:
+        """`ledger_has_event_since` names its event and carries `filter = {…}`.
+
+        Same claim as the SQL, written in TOML. A rule that read only SQL would
+        pronounce the config's own model answer clean while never having looked
+        at it — and `context_reset` is exactly that gate.
+        """
+        tree = build_tree(
+            tmp_path,
+            events=self.DEFERRAL,
+            transitions="""
+            [[transitions]]
+            command = "resume"
+            from = "paused"
+            to = "fix_loop"
+            gates = [
+                { type = "ledger_has_event_since", event = "finding_deferred", since = "last_transition", filter = { reason = "theoretical" }, intent = "resume after a deferral" },
+            ]
+            """,
+        )
+        findings = findings_for(tree, "H11")
+        assert len(findings) == 1, [f.render() for f in findings]
+        assert "reason='theoretical'" in findings[0].message
+
+    def test_one_report_per_predicate_not_per_caller(self, tmp_path: Path) -> None:
+        """A named query reached from three transitions is one defect in one
+        place. Reporting it three times inflates the count the release reads."""
+        tree = build_tree(
+            tmp_path,
+            events=self.DEFERRAL,
+            protocol=f"""
+            [protocol]
+            name = "fixture"
+            version = "1.0.0"
+
+            [queries.all_closed]
+            sql = "{self.FORGEABLE}"
+            intent = "every finding is closed"
+            """,
+            transitions="""
+            [[transitions]]
+            command = "converge"
+            from = "fix_loop"
+            to = "done"
+            gates = [
+                { type = "query", query = "all_closed", expect = "true", intent = "close the board" },
+            ]
+
+            [[transitions]]
+            command = "lens_rotate"
+            from = "fix_loop"
+            to = "audit"
+            gates = [
+                { type = "query", query = "all_closed", expect = "true", intent = "close the lens" },
+            ]
+            """,
+        )
+        findings = findings_for(tree, "H11")
+        assert len(findings) == 1, [f.render() for f in findings]
+        assert "'converge', 'lens_rotate'" in findings[0].subject
+
+
 # ── Discovery soundness ──────────────────────────────────────────────────────
+
+
+class TestH12EscapeNamed:
+    """Item 11, closed as a class (D-l, RULED Jon 2026-09-23).
+
+    A refusal the agent can act on says what to run. The engine prints a
+    failing gate's intent resolved as its own → its named query's → a
+    per-type default, and a composite prints only its own — so the check is
+    on that text, per top-level gate. The historical defect is `converge` at
+    `48c72fd`: its quiz gate carried no intent, printed the query's *"no
+    unresolved quiz exhaustions"*, and said nothing about the human-only
+    command that clears it.
+
+    Each accepted form has a firing twin, so no clean case can pass against a
+    check that accepts everything.
+    """
+
+    EVENTS = """
+        [events.recon_step]
+        description = "a recon step"
+        fields = [{ name = "step", type = "string" }]
+
+        [[events.recon_step.producers]]
+        id = "agent:cli"
+
+        [events.quiz_exhausted]
+        description = "a lens ran out of quiz attempts"
+        restricted = true
+        fields = [{ name = "perspective", type = "string" }]
+
+        [events.quiz_exhausted_resolved]
+        description = "a human accepted it"
+        attestation = "human"
+        fields = [{ name = "perspective", type = "string" }]
+
+        [[events.quiz_exhausted_resolved.producers]]
+        id = "human:skills/doc.md"
+        """
+
+    QUERIES = """
+        [queries.quiz_exhaustions_resolved]
+        sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted'"
+        intent = "no unresolved quiz exhaustions"
+
+        [queries.item_open]
+        sql = "SELECT count(*) = 0 FROM events WHERE type='finding_resolved' AND id='{{item_id}}'"
+        intent = "finding must not already be resolved or deferred"
+        """
+
+    def _tree(
+        self, root: Path, gate: str, *, tool_scripts: dict[str, str] | None = None,
+    ) -> el.Tree:
+        return build_tree(
+            root,
+            events=self.EVENTS,
+            protocol=f"""
+            [protocol]
+            name = "fixture"
+            version = "1.0.0"
+            {textwrap.dedent(self.QUERIES)}
+            """,
+            transitions=f"""
+            [[transitions]]
+            command = "sweep_dirty"
+            from = "final_sweep"
+            to = "fix_loop"
+            gates = []
+
+            [[transitions]]
+            command = "converge"
+            from = "final_sweep"
+            to = "done"
+            gates = [
+                {gate},
+            ]
+            """,
+            tool_scripts=tool_scripts,
+        )
+
+    def _h12(self, root: Path, gate: str, **kw) -> list[el.Finding]:
+        return findings_for(self._tree(root, gate, **kw), "H12")
+
+    # ── the historical defect, and the default ──
+
+    def test_fires_on_the_48c72fd_quiz_gate(self, tmp_path: Path) -> None:
+        """The gate as it stood: no intent of its own, the query's condition."""
+        findings = self._h12(
+            tmp_path,
+            '{ type = "query", query = "quiz_exhaustions_resolved", expect = "true" }',
+        )
+        assert len(findings) == 1, [f.render() for f in findings]
+        assert findings[0].level == "error"
+        assert "no unresolved quiz exhaustions" in findings[0].message
+        assert "[queries.quiz_exhaustions_resolved]" in findings[0].message
+
+    def test_fires_on_the_engines_default(self, tmp_path: Path) -> None:
+        findings = self._h12(
+            tmp_path, '{ type = "ledger_has_event", event = "recon_step", min_count = 1 }',
+        )
+        assert len(findings) == 1, [f.render() for f in findings]
+        assert "per-type default" in findings[0].message
+
+    def test_prose_naming_no_command_fires(self, tmp_path: Path) -> None:
+        """"Run the suite" is a sentence, not a transition — H8's filter."""
+        findings = self._h12(
+            tmp_path,
+            '{ type = "ledger_has_event", event = "recon_step", '
+            'intent = "record the recon step and run the suite" }',
+        )
+        assert len(findings) == 1, [f.render() for f in findings]
+
+    # ── each accepted form, with its twin ──
+
+    def test_a_declared_transition_is_an_escape(self, tmp_path: Path) -> None:
+        assert self._h12(
+            tmp_path,
+            '{ type = "ledger_has_event", event = "recon_step", '
+            'intent = "record the recon step — run `sweep_dirty`" }',
+        ) == []
+
+    def test_an_undeclared_transition_is_not(self, tmp_path: Path) -> None:
+        assert len(self._h12(
+            tmp_path,
+            '{ type = "ledger_has_event", event = "recon_step", '
+            'intent = "record the recon step — run `sweep_dirtyy`" }',
+        )) == 1
+
+    def test_a_sahjhan_event_escape_names_a_declared_event(self, tmp_path: Path) -> None:
+        assert self._h12(
+            tmp_path,
+            '{ type = "ledger_has_event", event = "recon_step", '
+            'intent = "record it with `sahjhan event recon_step`" }',
+        ) == []
+
+    def test_a_sahjhan_event_escape_naming_no_event_fires(self, tmp_path: Path) -> None:
+        """A wrong escape is worse than none: it is followed, and fails."""
+        findings = self._h12(
+            tmp_path,
+            '{ type = "ledger_has_event", event = "recon_step", '
+            'intent = "record it with `sahjhan event recon_stepp`" }',
+        )
+        assert findings and all(f.level == "error" for f in findings)
+        assert any("recon_stepp" in f.message for f in findings), [
+            f.render() for f in findings
+        ]
+
+    def test_a_human_escape_counts(self, tmp_path: Path) -> None:
+        """Step 1 of item 11: only the user can clear an exhausted quiz."""
+        assert self._h12(
+            tmp_path,
+            '{ type = "query", query = "quiz_exhaustions_resolved", expect = "true", '
+            'intent = "ask the user to run `! sahjhan event quiz_exhausted_resolved`" }',
+        ) == []
+
+    def test_a_script_escape_must_exist(self, tmp_path: Path) -> None:
+        gate = (
+            '{ type = "ledger_has_event", event = "recon_step", '
+            'intent = "record it with `verify_suite.py --record --scope full`" }'
+        )
+        assert self._h12(tmp_path / "a", gate, tool_scripts={"verify_suite.py": "x = 1\n"}) == []
+        assert len(self._h12(tmp_path / "b", gate)) >= 1
+
+    def test_the_gates_own_command_run_by_hand(self, tmp_path: Path) -> None:
+        assert self._h12(
+            tmp_path,
+            '{ type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", '
+            'intent = "no lint violations — run `ruff check .` and fix what it reports" }',
+        ) == []
+
+    def test_a_command_the_gate_does_not_run_is_not(self, tmp_path: Path) -> None:
+        assert len(self._h12(
+            tmp_path,
+            '{ type = "command_succeeds", cmd = "${HOLTZ_LINT:-ruff check .}", '
+            'intent = "no lint violations — run `mypy .` and fix what it reports" }',
+        )) == 1
+
+    def test_the_file_the_gate_reads(self, tmp_path: Path) -> None:
+        assert self._h12(
+            tmp_path,
+            '{ type = "command_succeeds", '
+            'cmd = "test -s docs/holtz/investigations/{{item_id}}.md", '
+            'intent = "attempts must be documented in `docs/holtz/investigations/<id>.md`" }',
+        ) == []
+
+    def test_min_elapsed_states_the_wait(self, tmp_path: Path) -> None:
+        assert self._h12(
+            tmp_path / "a",
+            '{ type = "min_elapsed", event = "recon_step", seconds = 120, '
+            'intent = "rapid-fire guard — wait 120 s after the last recon_step" }',
+        ) == []
+        assert len(self._h12(
+            tmp_path / "b",
+            '{ type = "min_elapsed", event = "recon_step", seconds = 120, '
+            'intent = "prevent rapid-fire gaming" }',
+        )) == 1
+
+    # ── scope ──
+
+    def test_an_argument_scoped_query_is_exempt(self, tmp_path: Path) -> None:
+        """H8's `_run_wide` rule: a query binding `{{...}}` judges the argument
+        the agent picked, and "pick another" is not a command."""
+        assert self._h12(
+            tmp_path, '{ type = "query", query = "item_open", expect = "true" }',
+        ) == []
+
+    def test_a_composite_is_judged_on_its_own_intent_alone(self, tmp_path: Path) -> None:
+        """The engine never prints a child's intent, so a child is not judged."""
+        gate = (
+            '{ type = "any_of", intent = "run `sweep_dirty`", gates = ['
+            '{ type = "ledger_has_event", event = "recon_step", min_count = 1 }] }'
+        )
+        assert self._h12(tmp_path, gate) == []
+
+    def test_current_dev_is_clean(self, model: el.Model) -> None:
+        errors = [f for f in el.run_checks(model, ["H12"]) if f.level == "error"]
+        assert errors == [], "\n".join(f.render() for f in errors)
 
 
 class TestWritePathDiscovery:
@@ -1340,6 +1954,20 @@ class TestCurrentDev:
         errors = [f for f in el.run_checks(model, [check]) if f.level == "error"]
         assert errors == [], "\n".join(f.render() for f in errors)
 
+    def test_h6_is_silent(self, model: el.Model) -> None:
+        """Every transition must be reachable from a documented command.
+
+        H6 warns rather than errors, and neither CI nor pre-commit runs
+        `--strict`, so it can only fail a build through here. It is worth
+        wiring up: trimming the word count of `phase-fix-loop.md` shortened
+        `sahjhan --config-dir … transition pattern_done` to `transition
+        pattern_done`, and the only signal was a warning in a wall of
+        pre-existing L6 noise. A transition whose invocation no file spells out
+        is a state the run can enter and not leave.
+        """
+        findings = el.run_checks(model, ["H6"])
+        assert findings == [], "\n".join(f.render() for f in findings)
+
     def test_context_reset_is_host_attested_and_unforgeable(
         self, model: el.Model
     ) -> None:
@@ -1383,3 +2011,125 @@ class TestCurrentDev:
             if event not in model.events and event not in el.ENGINE_BUILTIN_EVENTS
         }
         assert unknown == set()
+
+
+class TestSinceAnchorIsADependency:
+    """A `since` anchor names an event the gate depends on.
+
+    `since = "last_event_of_type:<type>"` decides where the gate's window
+    *starts*, which is as much a dependency as `event` deciding what fills it.
+    Unwalked, an anchor-only dependency is invisible to every consumer-side
+    check and to the generated contract — the contract reported the TDD gate as
+    non-forgeable not because it had stopped reading an agent-writable event,
+    but because nothing looked at the anchor that reads it.
+
+    The blind spot was inert until sahjhan 0.24.0: the only other
+    `last_event_of_type:` anchor in the tree names `set_member_complete`, which
+    is also that gate's `event`, so it was consumed either way.
+    """
+
+    def test_a_since_anchor_names_a_consumed_event(self) -> None:
+        gate = {
+            "type": "ledger_has_event_since",
+            "event": "tdd_evidence",
+            "since": "last_event_of_type:finding_resolved",
+        }
+        assert el._gate_consumed(gate) == {"tdd_evidence", "finding_resolved"}
+
+    def test_last_transition_names_no_event(self) -> None:
+        """The other legal anchor is a position, not an event type."""
+        gate = {
+            "type": "ledger_has_event_since",
+            "event": "tdd_evidence",
+            "since": "last_transition",
+        }
+        assert el._gate_consumed(gate) == {"tdd_evidence"}
+
+    def test_an_anchor_inside_a_composite_is_walked(self) -> None:
+        """`_gate_consumed` recurses; the anchor must recurse with it."""
+        gate = {
+            "any_of": [
+                {
+                    "type": "ledger_has_event_since",
+                    "event": "tdd_evidence",
+                    "since": "last_event_of_type:finding_resolved",
+                },
+                {"type": "no_violations"},
+            ]
+        }
+        assert el._gate_consumed(gate) == {
+            "tdd_evidence",
+            "finding_resolved",
+            "protocol_violation",
+        }
+
+    def test_the_live_tdd_gate_declares_its_anchor(self, model: el.Model) -> None:
+        """The claim, against the real config rather than a constructed gate.
+
+        Asserts the whole set, not membership: a change that lands on some
+        third answer must fail here rather than pass on a superset.
+        """
+        gates = [
+            hook["gate"]
+            for hook in model.hooks
+            if hook.get("gate", {}).get("event") == "tdd_evidence"
+        ]
+        assert len(gates) == 1, "expected exactly one gate reading tdd_evidence"
+        assert el.gate_event_types(model, gates[0]) == {
+            "tdd_evidence",
+            "finding_resolved",
+        }
+
+
+class TestEngineGateTypes:
+    """#85: a gate whose predicate is compiled into the sahjhan binary.
+
+    The third shape of opaque gate, after ``command_succeeds`` (predicate in
+    the invoked script — H10) and ``query`` (predicate in SQL). Here it is
+    neither in the config nor in this tree, so the gate names no event and
+    every consumer-side check reads it as depending on nothing.
+    """
+
+    def test_no_violations_consumes_protocol_violation(self) -> None:
+        """Source: sahjhan `src/gates/ledger.rs::eval_no_violations`."""
+        gate = {"type": "no_violations", "intent": "no unresolved protocol violations"}
+        assert el._gate_consumed(gate) == {"protocol_violation"}
+
+    def test_an_unmodelled_gate_type_still_consumes_nothing(self) -> None:
+        """The table is a whitelist, not a guess about every gate type."""
+        assert el._gate_consumed({"type": "file_exists", "path": "x.md"}) == set()
+
+    def test_the_live_no_violations_gates_are_counted(self, model: el.Model) -> None:
+        """The census must include the gate that can terminate a run.
+
+        `no_violations` sits on `set complete perspective` and `converge` — the
+        only two transitions that reach convergence. Before #85 it was absent
+        from ENFORCEMENT-CONTRACT.md's posture entirely, so the document that
+        exists to give one truthful row per gate had none for that one.
+        """
+        gated = [
+            transition["command"]
+            for transition in model.transitions
+            if any(
+                gate.get("type") == "no_violations"
+                for gate in transition.get("gates", []) or []
+            )
+        ]
+        assert gated == ["set complete perspective", "converge"], gated
+        assert "protocol_violation" in el.gate_consumed_events(model)
+
+    def test_the_table_names_only_events_the_protocol_declares(
+        self, model: el.Model
+    ) -> None:
+        """An undeclared event is not consumed evidence.
+
+        The engine also subtracts `violation_resolved`, which holtz does not
+        declare — violations are permanent by design (see #86). Listing it
+        would put a phantom row in the contract.
+        """
+        for events in el._ENGINE_GATE_EVENTS.values():
+            for event in events:
+                assert event in model.events, (
+                    f"_ENGINE_GATE_EVENTS names '{event}', which events.toml "
+                    f"does not declare"
+                )

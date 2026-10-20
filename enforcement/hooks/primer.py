@@ -26,43 +26,113 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
+    BOUNDARY_MESSAGE,
     DaemonError,
     _daemon_request,
     _get_daemon_socket_path,
     _is_process_alive,
     _read_init_pid,
     _write_terminated_marker,
+    audit_data_dir,
     exit_ok,
     exit_warn,
     read_event,
     resolve_config_dir,
 )
-from _protocol_cache import format_state_line, parse_status_text  # noqa: E402
+from _protocol_cache import BOUNDARY_REFUSED, format_state_line, parse_status_text  # noqa: E402
 from _protocol_cache import read_cache as read_enforcement_cache
 from _resolve import ensure_sahjhan  # noqa: E402
 
+# Said once, because both routes to it report the same fact and used to say it
+# in two nearly-identical strings: the marker left by an earlier detection, and
+# the detection itself. The earlier detection's message also named the state the
+# daemon died during — dropped, because knowing that meant asking `sahjhan
+# status` first, and item 37 is precisely that death detection must not queue
+# behind a call that can hang. The state was never in the marker route's message
+# anyway, so the two now agree instead of differing by which turn you saw them.
+TERMINATED_MESSAGE = (
+    "AUDIT TERMINATED: daemon died — session key lost. "
+    "The ledger is unwritable. This audit cannot be completed. "
+    "Check /tmp/sahjhan-daemon.log for crash output. "
+    "A new daemon has a new key and cannot resume this ledger. "
+    "Disable the plugin with /plugin to restore tool access; "
+    "to start a new audit, remove docs/holtz/.sahjhan/ first."
+)
 
-def _enforcement_healthy(cwd: str) -> bool:
+ENFORCEMENT_FAILURE_MESSAGE = (
+    "⛔ ENFORCEMENT FAILURE — STOP IMMEDIATELY\n\n"
+    "The sahjhan daemon is unreachable or rejected this hook. Restricted "
+    "events cannot be recorded, which means protocol gates are permanently "
+    "blocked for this session.\n\n"
+    "This is an unrecoverable state. Do NOT attempt to:\n"
+    "- Reset the ledger (sahjhan reset)\n"
+    "- Modify .sahjhan/ contents directly\n"
+    "- Work around the blocked gate\n\n"
+    "Report this failure to the user and wait for instructions."
+)
+
+# The word every degraded notice carries. One name, so a test asserts the fact
+# rather than a reason's prose, and so the three paths cannot drift into three
+# spellings of the same condition.
+DEGRADED = "SAHJHAN PRIMER DEGRADED"
+
+
+def _degraded(
+    reason: str, boundary_refusal: str, enforcement_failed: bool
+) -> str:
+    """The notice that says the primer could not find out, and why (item 17).
+
+    Composes rather than exits, so the three call sites each read as the exit
+    they are and this stays a plain function of its inputs.
+
+    All three degrade paths used to `exit_ok()`, which emits no
+    `additionalContext` at all — the *same* thing the primer emits when there
+    is genuinely nothing to say (no audit here, a terminal run). So "I have
+    nothing for you" and "I could not find out" were byte-identical, in the
+    hook whose entire job is re-injecting state after a `/clear`, and the
+    `awaiting_clear → resume` design depends on it.
+
+    The two health facts ride along because they are known by now: item 37
+    moves their checks ahead of everything that can hang, so a degrade path
+    that dropped them would be computing the answer and discarding it, which
+    is the failure this is fixing one layer down.
+    """
+    message = f"{DEGRADED}: {reason}"
+    if boundary_refusal:
+        message += "\n\n" + BOUNDARY_MESSAGE.format(reason=boundary_refusal)
+    if enforcement_failed:
+        message += "\n\n" + ENFORCEMENT_FAILURE_MESSAGE
+    return message
+
+
+def _enforcement_status(cwd: str) -> tuple[bool, str]:
     """Probe the daemon over its socket without touching the ledger.
 
-    The removed `context_reset` write used to prove this as a side effect: it
-    failed loudly when the daemon was unreachable or when this hook's hash no
-    longer matched trusted-callers.toml (which otherwise fails open and
-    silently disables every gate). `enforcement_read` is the cheapest op
-    behind the same peer-identity check, and it is a read — so keeping the
-    signal costs no protocol state.
+    Returns ``(healthy, boundary_refusal)``. The removed `context_reset` write
+    used to prove health as a side effect: it failed loudly when the daemon was
+    unreachable or when this hook's hash no longer matched trusted-callers.toml
+    (which otherwise fails open and silently disables every gate).
+    `enforcement_read` is the cheapest op behind the same peer-identity check,
+    and it is a read — so keeping the signal costs no protocol state.
 
     A `not_found` refusal is healthy: the daemon authenticated this caller
     before dispatching the op, and an audit that hasn't written its cache yet
     simply has nothing stored. Only an authorization refusal is a failure.
+
+    A `sandbox_required` refusal is neither — it is the daemon reporting that
+    the boundary is down, which has a name and a one-word fix, and saying
+    "enforcement is broken, report it and wait" for it would send the user
+    hunting a bug that isn't there.
     """
     try:
         _daemon_request(_get_daemon_socket_path(cwd), {"op": "enforcement_read"})
     except DaemonError as exc:
-        return exc.error != "auth_failed"
+        if exc.error == BOUNDARY_REFUSED:
+            return False, exc.reason or BOUNDARY_REFUSED
+        return exc.error != "auth_failed", ""
     except (OSError, ConnectionError, RuntimeError, ValueError):
-        return False
-    return True
+        return False, ""
+    return True, ""
 
 
 def main() -> None:
@@ -71,7 +141,7 @@ def main() -> None:
 
     # No active run — nothing to inject. Check this BEFORE ensure_sahjhan()
     # so projects without an audit don't trigger the ~100MB binary download.
-    data_dir = os.path.join(cwd, "docs", "holtz", ".sahjhan")
+    data_dir = audit_data_dir(cwd)
     if not os.path.isdir(data_dir):
         exit_ok()
 
@@ -80,19 +150,35 @@ def main() -> None:
     # the download cost to announce its own death.
     terminated = os.path.join(data_dir, "terminated")
     if os.path.isfile(terminated):
-        exit_warn(
-            "AUDIT TERMINATED: daemon died — session key lost. "
-            "The ledger is unwritable. This audit cannot be completed. "
-            "Check /tmp/sahjhan-daemon.log for crash output. "
-            "A new daemon has a new key and cannot resume this ledger. "
-            "Disable the plugin with /plugin to restore tool access; "
-            "to start a new audit, remove docs/holtz/.sahjhan/ first.",
-            "UserPromptSubmit",
-        )
+        exit_warn(TERMINATED_MESSAGE, "UserPromptSubmit")
+
+    # Item 37 — both of these now run BEFORE anything that can hang.
+    #
+    # They used to sit after the `sahjhan status` subprocess, so a status that
+    # timed out or exited non-zero skipped the terminated-marker write and the
+    # `auth_failed` probe entirely: the hook whose job is reporting daemon
+    # death stayed silent in exactly the case where the daemon died during a
+    # slow status. Neither needs the binary or the ledger — the death check
+    # reads a pid file and the probe opens a socket — so nothing forced them
+    # to wait behind the bootstrap and the subprocess.
+    #
+    # Death is checked directly rather than inferred from a failed write, so a
+    # daemon that dies between turns is caught on the next prompt whether or
+    # not anything happened to need the socket.
+    init_pid = _read_init_pid(cwd)
+    if init_pid is not None and not _is_process_alive(init_pid):
+        _write_terminated_marker(cwd, init_pid, detected_by="primer")
+        exit_warn(TERMINATED_MESSAGE, "UserPromptSubmit")
+    healthy, boundary_refusal = _enforcement_status(cwd)
+    enforcement_failed = not healthy and not boundary_refusal
 
     binary = ensure_sahjhan()
     if binary is None:
-        exit_ok()
+        exit_warn(_degraded(
+            "the sahjhan binary is unavailable — bootstrap failed, or a recent "
+            "failure is suppressing retries. Protocol state cannot be read.",
+            boundary_refusal, enforcement_failed,
+        ), "UserPromptSubmit")
 
     config_dir, _ = resolve_config_dir(cwd)
 
@@ -106,11 +192,24 @@ def main() -> None:
             timeout=5,
             cwd=cwd,
         )
-    except (OSError, subprocess.TimeoutExpired):
-        exit_ok()
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        # Named, not collapsed: these two call for opposite responses — a
+        # timeout says the machine was loaded or the engine is wedged, an
+        # OSError says the binary or its path is wrong — and a handler that
+        # reports neither is why three sessions could not falsify anything
+        # about the load-flaky primer tests. The timeout above is unchanged.
+        exit_warn(_degraded(
+            f"`sahjhan status` did not complete ({type(exc).__name__}). "
+            "Protocol state is unknown.",
+            boundary_refusal, enforcement_failed,
+        ), "UserPromptSubmit")
 
     if result.returncode != 0:
-        exit_ok()
+        exit_warn(_degraded(
+            f"`sahjhan status` exited {result.returncode}. Protocol state is "
+            "unknown — the ledger or the config may be unreadable.",
+            boundary_refusal, enforcement_failed,
+        ), "UserPromptSubmit")
 
     status = parse_status_text(result.stdout)
 
@@ -129,29 +228,6 @@ def main() -> None:
                 run_number = f.read().strip().replace("run-", "") or "0"
         except OSError:
             pass
-
-    # Enforcement health. Death is checked directly rather than inferred from a
-    # failed write, so a daemon that dies between turns is caught on the next
-    # prompt whether or not anything happened to need the socket.
-    enforcement_failed = False
-    audit_terminated = False
-    init_pid = _read_init_pid(cwd)
-    if init_pid is not None and not _is_process_alive(init_pid):
-        _write_terminated_marker(cwd, init_pid, detected_by="primer")
-        audit_terminated = True
-    elif not _enforcement_healthy(cwd):
-        enforcement_failed = True
-
-    if audit_terminated:
-        exit_warn(
-            f"AUDIT TERMINATED: daemon died during {current_state} — session key lost. "
-            "The ledger is unwritable. This audit cannot be completed. "
-            "Check /tmp/sahjhan-daemon.log for crash output. "
-            "A new daemon has a new key and cannot resume this ledger. "
-            "Disable the plugin with /plugin to restore tool access; "
-            "to start a new audit, remove docs/holtz/.sahjhan/ first.",
-            "UserPromptSubmit",
-        )
 
     # Build resume context
     perspective = status.get("current_perspective", "unknown")
@@ -189,18 +265,11 @@ def main() -> None:
     if state_line:
         context += "\n" + state_line
 
+    if boundary_refusal:
+        context += "\n\n" + BOUNDARY_MESSAGE.format(reason=boundary_refusal)
+
     if enforcement_failed:
-        context += (
-            "\n\n⛔ ENFORCEMENT FAILURE — STOP IMMEDIATELY\n\n"
-            "The sahjhan daemon is unreachable or rejected this hook. Restricted "
-            "events cannot be recorded, which means protocol gates are permanently "
-            "blocked for this session.\n\n"
-            "This is an unrecoverable state. Do NOT attempt to:\n"
-            "- Reset the ledger (sahjhan reset)\n"
-            "- Modify .sahjhan/ contents directly\n"
-            "- Work around the blocked gate\n\n"
-            "Report this failure to the user and wait for instructions."
-        )
+        context += "\n\n" + ENFORCEMENT_FAILURE_MESSAGE
 
     context += f"\nSahjhan binary: {binary}"
     if run_number != "0":

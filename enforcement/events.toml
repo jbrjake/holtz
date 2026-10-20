@@ -29,10 +29,41 @@ fields = [
     { name = "perspective", type = "string" },
     { name = "description", type = "string" },
     { name = "predicted_by", type = "string" },
+    # Which pattern a sibling was filed under (P0.2's backpressure conjunct).
+    # `predicted_by` cannot carry this: across every archived run it holds a
+    # prediction index (0-7) and never a PAT id, and the two facts answer
+    # different questions. Optional because only Step 11.2's sibling search
+    # attributes a finding to a pattern; audit and lens findings have none.
+    #
+    # `pattern_analysis_overdue` counts these only when the id appears in some
+    # round's `pattern_ids`, which the courier derives from the brief's own
+    # headings — so a PAT the brief never got cannot inflate the population.
+    { name = "pattern_id", type = "string", pattern = "^PAT-\\d+$", optional = true },
+    # How the defect is reached (P0.5). ~22 of the audited run's 62 commits
+    # were fault-injection-only — reachable only by making some other call
+    # raise — and BH-258 conceded in its own text that "reachability on CPython
+    # 3.12 is uncertain… needs a reachability probe before any fix" and got a
+    # full fix cycle anyway. Meanwhile 51 of the 75 open HIGHs predated the
+    # first commit and were never worked, including an HTML-injection bug.
+    #
+    # Required, not optional: a grading nobody has to state is a grading the
+    # board will not carry, and this is the field D4's convergence conjunct
+    # ("all user_reachable HIGH resolved-or-deferred") is defined over. An
+    # optional field would make that conjunct silently weaker on every finding
+    # that omitted it.
+    { name = "reachability", type = "string", pattern = "^(user_reachable|fault_injected|theoretical)$" },
 ]
 
 [[events.finding.producers]]
 id = "agent:cli"
+
+# P4.1's merge script: Justine keeps no ledger, so every finding of hers that
+# Holtz did not also find reaches the board through here. Attestation is
+# unchanged — the script runs `sahjhan event finding` in the agent's own shell,
+# so these are agent-attested like any other filing, and the trust posture the
+# generated contract reports does not move.
+[[events.finding.producers]]
+id = "tool:enforcement/scripts/merge_punchlists.py"
 
 [events.finding_resolved]
 description = "A finding was resolved"
@@ -46,6 +77,14 @@ fields = [
     { name = "id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
     { name = "commit_hash", type = "string", pattern = "^[0-9a-f]{7,40}$" },
     { name = "evidence_path", type = "string", optional = true },
+    # Set only by `merge_finding` (P0.2, D7): this id was a duplicate of
+    # `merged_into`, so the work is tracked there and this one is closed.
+    # A merge is a close — `all_findings_closed`, the punchlist counts and the
+    # amplification measure all read it as one, which is what makes the
+    # obligation "close **or merge** at least as many as it opens" one count
+    # rather than two. `merged_into IS NOT NULL` is the only thing that tells
+    # the two apart, and nothing needs to yet.
+    { name = "merged_into", type = "string", pattern = "^B[HJ]-\\d{3}$", optional = true },
 ]
 
 [[events.finding_resolved.producers]]
@@ -53,6 +92,19 @@ id = "agent:cli"
 
 [[events.finding_resolved.producers]]
 id = "engine:emits:fix_commit"
+
+[[events.finding_resolved.producers]]
+id = "engine:emits:merge_finding"
+
+# P0.5's second route (D29/D34/D35): one hardening commit closes a whole
+# module's fault-injected findings. It has to be a hook and not an `emits`
+# because a transition writes exactly one event with a fixed field map, and a
+# batch's size is not something the config knows. Attestation stays `agent` —
+# the courier re-derives the batch from the ledger and stamps HEAD, but this is
+# the same event an ordinary fix writes, and giving it a second, stronger trust
+# level would mean two definitions of closed.
+[[events.finding_resolved.producers]]
+id = "hook:enforcement/hooks/hardening_batch_courier.py"
 
 [events.blast_radius]
 description = "Blast radius query after a fix"
@@ -91,9 +143,31 @@ fields = [
 [[events.iteration_complete.producers]]
 id = "agent:cli"
 
+# A pattern round closed, and this is what it produced (P5.4).
+#
+# `patterns_found` was a number the agent typed, and on the one run it has been
+# measured against it was wrong in the rounds that would have mattered: 14 and
+# 15 recorded 5 and 2 while `patterns-brief.md` says in its own words that both
+# added none. It is derived now — `pattern_ids` are the `## PAT-NNN:` entries
+# this run has in the brief (and its archive) that no earlier round in this
+# ledger reported, and `patterns_found` is how many. Claiming a pattern means
+# writing one into the artifact the round exists to produce.
+#
+# `restricted` + hash-pinned writer is what makes that hold, and the writer is
+# a PostToolUse hook rather than the script the agent runs: that script
+# executes in the sandboxed shell and cannot reach the daemon. `siblings_found`
+# crosses from the run's own output — how many siblings a round filed is a fact
+# only the round has — and no gate reads it.
+#
+# `phase` and `step` are stamped by the courier from constants in
+# `pattern_round.py`: a round is Step 11 of the fix loop wherever it runs, and
+# the suite pins those constants against the document that teaches it. They are
+# what lets a reader of the ledger alone place the event in the protocol, which
+# is why every other event carries them.
 [events.pattern_analysis_complete]
 description = "Pattern analysis cycle completed"
-attestation = "agent"
+attestation = "tool"
+restricted = true
 fields = [
     { name = "project", type = "string" },
     { name = "run", type = "string", pattern = "^\\d+$" },
@@ -101,11 +175,52 @@ fields = [
     { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
     { name = "step", type = "string", pattern = "^\\d+$" },
     { name = "patterns_found", type = "string", pattern = "^\\d+$" },
+    # Optional because most rounds add nothing, and an empty list has no
+    # spelling this pattern admits.
+    { name = "pattern_ids", type = "string", pattern = "^PAT-\\d+(,PAT-\\d+)*$", optional = true },
     { name = "siblings_found", type = "string", pattern = "^\\d+$" },
 ]
 
 [[events.pattern_analysis_complete.producers]]
-id = "agent:cli"
+id = "hook:enforcement/hooks/pattern_courier.py"
+
+# A stale sweep closed, and what it covered (P0.2, D8).
+#
+# Past ~round 8 this is what discharges the owed round instead of a pattern
+# analysis — the swap the plan's ~220–470 agent-min saving rests on. The sweep
+# is the best-performing mechanism the audited run had: 68 open HIGHs triaged
+# in 14 agent-min, ~3.5 min per retirement against 23.4 for a round, writing no
+# code. It retires board; a round adds to it.
+#
+# Nothing recorded a sweep before this. Step 11b writes `fix_start` and a
+# `cant_reproduce` deferral only for the findings it *retires*, so a sweep
+# where everything still reproduces left no trace, and that deferral is
+# reachable outside a sweep anyway. An obligation cannot be discharged by a
+# fact the ledger does not hold.
+#
+# What makes the claim cost something is coverage, which is why `triaged` is
+# derived rather than typed: D21 settled the population as every open finding
+# at every severity, and `stale_sweep.py` refuses unless the verdicts name
+# exactly it. `restricted` + a hash-pinned PostToolUse writer is what keeps
+# that hold — the script runs in the sandboxed shell and cannot reach the
+# daemon, and a weaker sibling event would simply become the cheaper door past
+# round 8, undoing what P5.4 bought for the round it replaces.
+[events.stale_sweep_complete]
+description = "A stale sweep triaged the whole open board"
+attestation = "tool"
+restricted = true
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+    { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
+    { name = "step", type = "string", pattern = "^\\d+$" },
+    { name = "triaged", type = "string", pattern = "^\\d+$" },
+    { name = "retired", type = "string", pattern = "^\\d+$" },
+]
+
+[[events.stale_sweep_complete.producers]]
+id = "hook:enforcement/hooks/stale_sweep_courier.py"
 
 [events.set_member_complete]
 description = "A completion set member passed clean"
@@ -495,6 +610,36 @@ fields = [
 [[events.test_failed_before_fix.producers]]
 id = "agent:cli"
 
+# The same fact, recorded from a signal that entails it (P0.3, D33).
+#
+# `test_failed_before_fix` is agent-written and names no actor, so a gate over
+# it can only ask "did anyone record a failing test", never "did *this* agent".
+# That is what held the fix loop at concurrency 1: with two agents working,
+# each one's source edit was authorised by the other's failing test.
+#
+# The actor cannot be an agent-stated field. Claude Code puts `agent_id` on the
+# hook event, not in the model's context, so the agent has no honest way to
+# state it and a dishonest one would be indistinguishable. The courier reads it
+# off the hook payload instead, where the host set it.
+#
+# `agent_id` carries no pattern because the orchestrator is the empty string —
+# a real actor like every other, never a wildcard.
+[events.tdd_evidence]
+description = "A failing test was recorded, by a named actor"
+attestation = "tool"
+restricted = true
+fields = [
+    { name = "finding_id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
+    { name = "test_name", type = "string" },
+    { name = "agent_id", type = "string" },
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
+[[events.tdd_evidence.producers]]
+id = "hook:enforcement/hooks/tdd_courier.py"
+
 # ── Enforcement hardening events ──
 [events.lens_sweep_started]
 description = "A lens sweep has been initiated for a specific perspective"
@@ -534,10 +679,14 @@ id = "agent:cli"
 # tree proven green?" instead of proving it again. A tree that changed by one
 # byte has a different hash and no longer satisfies anything.
 #
-# `restricted` + hash-pinned writer is what makes the answer trustworthy. The
-# writer computes the hash and runs the suite itself; it accepts no
-# caller-supplied hash and no caller-supplied result, so the strongest thing an
-# agent can do is run the suite for real.
+# `restricted` + hash-pinned writer is what makes the answer trustworthy, and
+# the writer is a PostToolUse hook rather than the script that runs the tests.
+# That script executes in the agent's shell, which is sandboxed and cannot
+# reach the daemon; the hook runs outside the sandbox. It computes `tree_hash`
+# and `commit_hash` from git itself and reads `scope` from the command text the
+# host reports, so every field a gate consults is derived beyond the agent's
+# reach. `command` and `test_count` cross from the run's own output and no gate
+# reads either. The strongest thing an agent can do is run the suite for real.
 [events.suite_green]
 description = "The test suite ran and passed on a specific working-tree hash"
 attestation = "tool"
@@ -560,13 +709,14 @@ fields = [
     { name = "commit_hash", type = "string", pattern = "^[0-9a-f]{7,40}$", optional = true },
 ]
 
-# `tool:`, not `hook:`. Nothing in the harness fires this script — a gate runs
-# it, and the fix loop teaches the agent to. The distinction is load-bearing
-# for H4: a `hook:` that is absent from hooks.json never runs at all, whereas
-# demanding registration of a gate helper would be a permanent false error.
-# Both kinds still owe the hash pin, which is what the daemon actually checks.
+# `hook:`, so H4 holds it to being registered in hooks.json — which it must be,
+# since a PostToolUse hook that the harness never fires records nothing and the
+# fix loop simply stops. The suite still runs from `verify_suite.py` in the
+# agent's shell; that shell is sandboxed and cannot reach the daemon, so the
+# courier is what turns a green run into a ledger entry. Both owe the hash pin,
+# which is what the daemon actually checks.
 [[events.suite_green.producers]]
-id = "tool:enforcement/scripts/verify_suite.py"
+id = "hook:enforcement/hooks/suite_courier.py"
 
 [events.fix_start]
 description = "Starting work on a punchlist item"
@@ -667,6 +817,33 @@ fields = [
     { name = "note", type = "string", optional = true },
 ]
 
+[events.run_registered]
+description = "A run entered the project ledger's registry"
+attestation = "agent"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
+# `scripts/migrate_legacy.py --build-project` prints these. A new project
+# ledger takes them through `ledger import`; an existing one takes only the
+# runs it lacks, one `sahjhan --ledger <name> event` each.
+[[events.run_registered.producers]]
+id = "agent:cli"
+
+[events.run_completed]
+description = "A registered run finished"
+attestation = "agent"
+fields = [
+    { name = "project", type = "string" },
+    { name = "run", type = "string", pattern = "^\\d+$" },
+    { name = "auditor", type = "string", pattern = "^(holtz|justine)$" },
+]
+
+[[events.run_completed.producers]]
+id = "agent:cli"
+
 [events.finding_deferred]
 description = "A finding was deferred"
 attestation = "agent"
@@ -677,7 +854,13 @@ fields = [
     { name = "phase", type = "string", pattern = "^(recon|audit|merge|fix_loop|convergence|finalize)$" },
     { name = "step", type = "string", pattern = "^\\d+$" },
     { name = "id", type = "string", pattern = "^B[HJ]-\\d{3}$" },
-    { name = "reason", type = "string", pattern = "^(cant_reproduce|low_priority|medium_budget)$" },
+    # `theoretical` is P0.5's third route (D29), written only by
+    # `theoretical_courier.py`. It is a reason of its own rather than
+    # `low_priority` because nothing about a theoretical finding says it is low
+    # priority — only that no path to it has been found — and because
+    # `medium_deferral_budget` counts `medium_budget` alone, so a route with its
+    # own word cannot spend a cap it was never meant to touch.
+    { name = "reason", type = "string", pattern = "^(cant_reproduce|low_priority|medium_budget|theoretical)$" },
     { name = "evidence_path", type = "string", optional = true },
 ]
 
@@ -697,3 +880,9 @@ id = "engine:emits:defer_low"
 
 [[events.finding_deferred.producers]]
 id = "engine:emits:defer_medium"
+
+# P0.5's third route: the courier defers a `theoretical` finding at filing
+# time, from a population it re-derives off the ledger rather than reads out of
+# the command that woke it.
+[[events.finding_deferred.producers]]
+id = "hook:enforcement/hooks/theoretical_courier.py"

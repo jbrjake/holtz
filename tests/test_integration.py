@@ -257,7 +257,7 @@ def test_readme_metrics_match_actual():
     # the recurring drift where every test addition broke the prose (BH-019/020).
     m = re.search(
         r"(\d+) skills?, (\d+) agents?, (\d+) reference docs?, (\d+) examples?, "
-        r"(\d+) Python scripts?, (\d+) seed patterns?, (\d+) enforcement hooks?,",
+        r"(\d+) Python scripts?, (\d+) seed patterns?,",
         readme,
     )
     assert m, "Could not find 'What's inside' line in README.md"
@@ -268,7 +268,6 @@ def test_readme_metrics_match_actual():
     claimed_examples = int(m.group(4))
     claimed_scripts = int(m.group(5))
     claimed_patterns = int(m.group(6))
-    claimed_hooks = int(m.group(7))
 
     # Count actual values
     actual_skills = len(list((root / "skills").rglob("SKILL.md")))
@@ -277,22 +276,6 @@ def test_readme_metrics_match_actual():
     actual_examples = len(list((root / "skills" / "holtz" / "examples").glob("*.md")))
     actual_scripts = len(list((root / "skills" / "holtz" / "scripts").glob("*.py")))
     actual_patterns = len(list((root / "skills" / "holtz" / "patterns").glob("*.md")))
-    # Count distinct hook scripts registered in hooks.json (across both
-    # hooks/ and enforcement/hooks/ directories).
-    import json as _json
-    with open(root / "hooks" / "hooks.json") as _hf:
-        _hooks_data = _json.load(_hf)
-    _hook_scripts: set[str] = set()
-    for _event_hooks in _hooks_data.get("hooks", {}).values():
-        for _entry in _event_hooks:
-            for _hook in _entry.get("hooks", []):
-                _cmd = _hook.get("command", "")
-                # Extract the .py filename from the command
-                import re as _re
-                _m = _re.search(r'(\w+\.py)', _cmd)
-                if _m:
-                    _hook_scripts.add(_m.group(1))
-    actual_hooks = len(_hook_scripts)
 
     errors = []
     for label, claimed, actual in [
@@ -302,7 +285,6 @@ def test_readme_metrics_match_actual():
         ("examples", claimed_examples, actual_examples),
         ("Python scripts", claimed_scripts, actual_scripts),
         ("seed patterns", claimed_patterns, actual_patterns),
-        ("enforcement hooks", claimed_hooks, actual_hooks),
     ]:
         if claimed != actual:
             errors.append(f"{label}: README says {claimed}, actual {actual}")
@@ -311,6 +293,39 @@ def test_readme_metrics_match_actual():
         "README 'What's inside' counts are stale. Update README.md:\n  "
         + "\n  ".join(errors)
     )
+
+
+_NUMBER_WORDS = (
+    "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|"
+    "fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty"
+)
+
+
+def test_the_readme_states_no_hook_count():
+    """W28 / item 12, D-w (RULED 2026-09-23): no hook count anywhere.
+
+    The README said "Twelve", "20" and "six more" about one set of hooks
+    while `hooks.json` held 20 scripts in 22 registrations. A typed count
+    drifts, and there are two honest answers to which one it means.
+    """
+    import re
+    from pathlib import Path
+
+    readme = (Path(__file__).resolve().parent.parent / "README.md").read_text()
+    counted = re.findall(
+        rf"\b(?:\d+|{_NUMBER_WORDS})(?:[- ]\w+)?\s+(?:more\s+|remaining\s+)?"
+        r"(?:enforcement\s+)?hooks\b",
+        readme, flags=re.IGNORECASE,
+    )
+    assert counted == [], counted
+
+
+def test_the_refuted_socket_credentials_claim_is_gone():
+    """W28 / item 12, V2: the claim sat eight lines above its own refutation."""
+    from pathlib import Path
+
+    readme = (Path(__file__).resolve().parent.parent / "README.md").read_text()
+    assert "kernel-enforced socket credentials" not in readme
 
 
 def test_readme_badge_counts_match_actual():
@@ -448,4 +463,32 @@ def test_no_backslash_s_in_source_regex():
         "Source regex uses \\s instead of [ \\t]. "
         "Replace \\s with [ \\t] to prevent newline leaks:\n  "
         + "\n  ".join(violations)
+    )
+
+
+def test_the_skill_caps_the_size_of_an_artifact():
+    """P3.5: reading 34–52 KB artifacts is what ended the audited run.
+
+    Not directly — the agent `cd`-ed into `docs/holtz` to shorten the paths it
+    was typing, and the manifest-anchoring bug (#85) then attributed 81
+    violations to `run 0` of the wrong project and killed the run. The
+    anchoring bug is fixed (`d92d468`); the artifacts that made a `cd` worth
+    doing are the other half, capped the same way P2.1 caps the brief.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    skill = (root / "skills" / "holtz" / "SKILL.md").read_text(encoding="utf-8")
+
+    capped = [ln for ln in skill.splitlines()
+              if "40 KB" in ln and "artifact" in ln.lower()]
+    assert capped, (
+        "SKILL.md states no size cap for the artifacts a run writes, so the "
+        "34–52 KB files that made shortening paths worth doing are still "
+        "allowed to exist"
+    )
+    line = capped[0]
+    assert "continue" in line.lower() or "continues" in line.lower(), (
+        f"the cap must say where the overflow goes — a cap that truncates "
+        f"loses audit evidence:\n  {line}"
     )

@@ -27,8 +27,15 @@ def run_hook(
         _empty: True if stdout was empty (stop-allow or silent PostToolUse)
         _parse_error: True if stdout was not valid JSON
         _raw_stdout: raw stdout string (on parse error)
-        _stderr: stderr string
-        _returncode: process exit code
+
+    ``_stderr`` and ``_returncode`` are attached in **all three** cases.
+    They used to be attached only on the empty and parse-error paths, which
+    made a hook that printed valid JSON undiagnosable: its stderr was
+    discarded, so a test could see only that the decision was wrong and never
+    why. Worse, `run_enforcement_hook` reads the exit code as
+    ``output.pop("_returncode", 0)`` — with the key absent, every
+    ``assert code == 0`` in the suite was asserting the default rather than
+    the process's real status.
     """
     result = subprocess.run(
         [sys.executable, hook_path],
@@ -44,7 +51,14 @@ def run_hook(
         return {"_empty": True, "_returncode": result.returncode,
                 "_stderr": result.stderr}
     try:
-        return json.loads(stdout)
+        parsed = json.loads(stdout)
     except json.JSONDecodeError:
         return {"_parse_error": True, "_raw_stdout": stdout,
                 "_stderr": result.stderr, "_returncode": result.returncode}
+    if isinstance(parsed, dict):
+        # setdefault, not assignment: a hook that ever emitted these keys
+        # itself is describing its own run, and the harness must not overwrite
+        # what the thing under test said.
+        parsed.setdefault("_stderr", result.stderr)
+        parsed.setdefault("_returncode", result.returncode)
+    return parsed

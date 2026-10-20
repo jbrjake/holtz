@@ -62,6 +62,8 @@ def make_item():
         category: str = "bug/logic",
         location: str = "`file.py:1`",
         status: str = "OPEN",
+        lens: str = "component",
+        reachability: str = "user_reachable",
         extra_fields: str = "",
         problem: str = "This is a real problem that describes what went wrong in enough detail.",
         evidence: str = "Here is the evidence showing the problem with code references.",
@@ -76,6 +78,14 @@ def make_item():
         lines.append(f"**Category:** {category}")
         lines.append(f"**Location:** {location}")
         lines.append(f"**Status:** {status}")
+        # Required since D-d: pass lens="" to build an item that omits it.
+        if lens:
+            lines.append(f"**Lens:** {lens}")
+        # Required since item 26, and for the same reason one field over: an
+        # unstated grading became `theoretical`, which auto-defers at filing.
+        # Pass reachability="" to build an item that omits it.
+        if reachability:
+            lines.append(f"**Reachability:** {reachability}")
         if extra_fields:
             lines.append(extra_fields)
         lines.append("")
@@ -120,6 +130,7 @@ def make_item():
 
 
 import contextlib
+import json
 import os
 import shutil
 import signal
@@ -158,6 +169,54 @@ def mock_daemon(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def worktree_cwd(tmp_path):
+    """F1 — a main checkout with an ignored audit dir, plus a linked worktree.
+
+    Yields a :class:`worktree_project.WorktreeProject`. See that module for why
+    the stub binary and the scrubbed environment are part of the fixture rather
+    than of each test.
+    """
+    from worktree_project import make_worktree_project
+
+    project = make_worktree_project(str(tmp_path))
+    yield project
+    # `git worktree add` registers metadata under the main checkout's .git;
+    # tmp_path removal takes both, so there is nothing to unregister.
+
+
+@pytest.fixture
+def two_actors(real_daemon):
+    """F2 — several fix actors sharing one real ledger, in the loop's order.
+
+    Yields a bootstrapped :class:`two_actors.TwoActors`; see that module for
+    why the ordering and the per-actor accessors are the fixture rather than
+    each test's own scaffolding.
+    """
+    from two_actors import TwoActors
+
+    actors = TwoActors(real_daemon)
+    actors.bootstrap()
+    return actors
+
+
+def _write_sandbox_settings(project_root: str) -> None:
+    """Declare a confining sandbox for a temp project, as `holtz-start` does.
+
+    The fuse reads *configuration*, not kernel state, so this is all it takes
+    to satisfy it — which is also the honest limit of the fuse, stated in
+    sahjhan's `daemon/fuse.rs`: nothing here actually confines the test
+    process, and nothing needs to.
+    """
+    sys.path.insert(0, str(Path(__file__).parent.parent / "enforcement" / "hooks"))
+    from sandbox_control import sandbox_settings
+
+    claude_dir = os.path.join(project_root, ".claude")
+    os.makedirs(claude_dir, exist_ok=True)
+    with open(os.path.join(claude_dir, "settings.local.json"), "w", encoding="utf-8") as fh:
+        json.dump({"sandbox": sandbox_settings(project_root)}, fh, indent=2)
+
+
+@pytest.fixture
 def real_daemon(monkeypatch):
     """Start a real sahjhan daemon for integration tests.
 
@@ -168,6 +227,15 @@ def real_daemon(monkeypatch):
     104-char AF_UNIX socket limit.  Runs ``sahjhan init`` and
     ``sahjhan daemon start`` with ``--config-dir`` pointing to this
     repo's enforcement/ directory.
+
+    Sets up the same boundary ``holtz-start`` does, because
+    ``protocol.toml`` arms sahjhan's sandbox fuse: the socket lives outside
+    the project root, and the project's settings declare a confining sandbox.
+    Without both, the daemon refuses every privileged operation and every
+    test here fails for a reason that has nothing to do with what it checks.
+    The settings body comes from ``sandbox_control.sandbox_settings`` rather
+    than a copy, so a change to what the fuse demands moves production and
+    this fixture together.
 
     Yields a dict with keys: binary, config_dir, project_root,
     sahjhan_dir, sock_path, pid.
@@ -182,11 +250,13 @@ def real_daemon(monkeypatch):
     config_dir = str(Path(__file__).parent.parent / "enforcement")
 
     # Force /tmp (not $TMPDIR which resolves to /private/var/folders/... on
-    # macOS) so the daemon socket at docs/holtz/.sahjhan/daemon.sock stays
-    # under the 104-char AF_UNIX path limit.
+    # macOS) so the socket path stays under the 104-char AF_UNIX limit.
     project_root = tempfile.mkdtemp(prefix="sh-", dir="/tmp")
     sahjhan_dir = os.path.join(project_root, "docs", "holtz", ".sahjhan")
-    sock_path = os.path.join(sahjhan_dir, "daemon.sock")
+    socket_dir = tempfile.mkdtemp(prefix="sk-", dir="/tmp")
+    sock_path = os.path.join(socket_dir, "daemon.sock")
+
+    _write_sandbox_settings(project_root)
 
     # Initialize
     subprocess.run(
@@ -195,10 +265,11 @@ def real_daemon(monkeypatch):
     )
 
     # Start daemon (foreground-only — must be backgrounded)
+    daemon_env = {**os.environ, "SAHJHAN_DAEMON_SOCKET": sock_path}
     daemon_proc = subprocess.Popen(
         [binary, "--config-dir", config_dir, "daemon", "start",
          "--idle-timeout", "30"],
-        cwd=project_root,
+        cwd=project_root, env=daemon_env,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
 
@@ -229,11 +300,11 @@ def real_daemon(monkeypatch):
         "proc": daemon_proc,
     }
 
-    # Cleanup: stop daemon, remove temp dir
+    # Cleanup: stop daemon, remove temp dirs
     with contextlib.suppress(subprocess.TimeoutExpired, OSError):
         subprocess.run(
             [binary, "--config-dir", config_dir, "daemon", "stop"],
-            cwd=project_root, timeout=5, capture_output=True,
+            cwd=project_root, timeout=5, capture_output=True, env=daemon_env,
         )
     # Ensure process is dead
     if daemon_proc.poll() is None:
@@ -243,3 +314,4 @@ def real_daemon(monkeypatch):
         except subprocess.TimeoutExpired:
             daemon_proc.kill()
     shutil.rmtree(project_root, ignore_errors=True)
+    shutil.rmtree(socket_dir, ignore_errors=True)

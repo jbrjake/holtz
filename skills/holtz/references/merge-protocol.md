@@ -11,12 +11,12 @@ Adversarial Self-Play dispatches both auditors simultaneously against the same c
 After both auditors reach convergence (or one stalls), the parent process merges their punchlists into a unified result. The merge is mechanical — it follows the classification rules below without judgment calls, except for contradictions which are flagged for human review.
 
 **Inputs:**
-- `docs/holtz/PUNCHLIST.md` — Holtz's findings
-- `docs/holtz/justine/PUNCHLIST.md` — Justine's findings
+- Holtz's findings — on the ledger. `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py list --all`.
+- `docs/holtz/justine/PUNCHLIST.md` — the only copy of Justine's findings; she keeps no ledger.
 
 **Outputs:**
-- `docs/holtz/PUNCHLIST-MERGED.md` — unified punchlist (Holtz's worklist going forward)
-- `docs/holtz/MERGE-REPORT.md` — merge statistics, blind spot analysis, and flagged items
+- Justine's unmatched findings, recorded as `finding` events. `docs/holtz/PUNCHLIST.md` is then the unified worklist.
+- `docs/holtz/MERGE-REPORT.md` — statistics, blind spot analysis, flagged items.
 
 ## Stall Conditions
 
@@ -33,13 +33,19 @@ For each item in either punchlist, classify it into exactly one of the five cate
 
 | Classification | Condition | Action |
 |----------------|-----------|--------|
-| **Agreement** | Same bug found by both auditors | Keep one copy. Tag `**Found by:** both auditors`. Use the higher severity. |
-| **Holtz-only** | Found by Holtz, not by Justine | Keep. Tag `**Found by:** Holtz only`. |
-| **Justine-only** | Found by Justine, not by Holtz | Keep. Tag `**Found by:** Justine only`. |
-| **Severity disagreement** | Same bug found by both, different severity | Keep one copy. Tag `**Found by:** both auditors`. Flag: `**Severity disagreement:** Holtz={X}, Justine={Y}`. Use the higher severity. |
-| **Contradictory** | One auditor says X is a bug, the other explicitly verified X as correct | Flag for human review: `**Contradictory:** Holtz says {X}, Justine says {Y}`. Do not auto-resolve. |
+| **Agreement** | Same bug found by both auditors | Nothing to record. List the pair in the report. |
+| **Holtz-only** | Found by Holtz, not by Justine | Nothing to record. |
+| **Justine-only** | Found by Justine, not by Holtz | One `sahjhan event finding`, keeping her `BJ-NNN` id. |
+| **Severity disagreement** | Same bug found by both, different severity | If Justine's is higher, re-file Holtz's id at her severity. List in the report. |
+| **Contradictory** | One auditor says X is a bug, the other explicitly verified X as correct | Record per its class, and flag: `**Contradictory:** Holtz says {X}, Justine says {Y}`. Do not auto-resolve. |
+
+Keep ids as filed. Re-filing an existing id supersedes it: the punchlist keeps the last filing per id.
+
+Every recorded finding carries the `**Lens:**` its punchlist item states, so a merged finding is gated by that lens's completion check like any other.
 
 **Note:** Severity disagreement is a sub-case of Agreement — both auditors found the same bug, they just disagree on severity. In the merge report, severity disagreements are counted in the Agreement section total (e.g., "5 items found by both auditors, including 2 with severity disagreements") and listed individually in the Severity Disagreements section for visibility. They are NOT double-counted in the merged total.
+
+Contradictions stay OPEN. Do not run a deferral transition on one.
 
 ### "Same Bug" Matching Criteria
 
@@ -64,19 +70,24 @@ If conditions 1 and 2 match but condition 3 does not, the items are **not** the 
 6. Unmatched Justine items are classified as Justine-only.
 7. Check for contradictions: scan Justine's notes/evidence for explicit statements that a Holtz finding is "not a bug" or "correct behavior" (and vice versa). These override the Holtz-only/Justine-only classification.
 
-## Output Files
+## Running the Merge
 
-### Unified Punchlist: `docs/holtz/PUNCHLIST-MERGED.md`
+Steps 1–6 above, the recording, the report and the impact-graph merge are one command:
 
-This file follows the standard punchlist format (see `punchlist-format.md`) with these additions:
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/merge_punchlists.py" \
+  --justine docs/holtz/justine/PUNCHLIST.md
+```
 
-- Each item includes a `**Found by:**` tag after the standard fields.
-- Items with severity disagreements include a `**Severity disagreement:**` annotation.
-- Contradictory items include a `**Contradictory:**` annotation and are set to `**Status:** DEFERRED` until human review.
-- Item IDs are re-numbered sequentially as `BH-{NNN}` (Holtz's namespace, since Holtz owns the fix loop).
-- A cross-reference comment maps each merged ID to the original ID(s): `<!-- Was: Holtz BH-003 + Justine BJ-007 -->` for agreements, `<!-- Was: Holtz BH-005 -->` for Holtz-only, `<!-- Was: Justine BJ-012 -->` for Justine-only.
+Add `--dry-run` to classify and write the report without touching the ledger.
+
+It prints the contradiction candidates step 7 asks for — a finding whose text calls a defect the other auditor filed correct behavior — to stderr. Each is already recorded under its own class. Read both findings, decide, and rewrite the report's `## Contradictions` section with the ones that hold.
+
+## Output File
 
 ### Merge Report: `docs/holtz/MERGE-REPORT.md`
+
+The merge's only file. `merge_complete` gates on it existing with all four sections non-empty.
 
 ````markdown
 # Adversarial Self-Play Merge Report
@@ -125,7 +136,7 @@ Based on what each auditor missed:
 
 Post-merge sequence:
 
-1. Holtz reads `PUNCHLIST-MERGED.md` as his worklist.
+1. Holtz's worklist is `docs/holtz/PUNCHLIST.md`.
 2. Holtz runs Steps 10-16 (fix loop, pattern analysis, convergence, resweep) on the merged items.
 3. Parent process archives `docs/holtz/justine/` to `docs/holtz/archive/justine-{ISO date}/`, then deletes the archived `impact-graph.json` (its data has already been merged into the canonical graph — the archive retains all other files for reference).
 4. Justine is not re-dispatched for the fix loop.
@@ -133,7 +144,7 @@ Post-merge sequence:
 
 ## Impact Graph Merge
 
-After both auditors complete, merge Justine's impact graph (`docs/holtz/justine/impact-graph.json`) into the canonical graph (`docs/holtz/impact-graph.json`). Conflict resolution rules:
+`merge_punchlists.py` folds Justine's impact graph (`docs/holtz/justine/impact-graph.json`) into the canonical graph (`docs/holtz/impact-graph.json`) by these rules:
 
 | Conflict | Resolution |
 |----------|-----------|
@@ -156,10 +167,9 @@ Consult examples when:
 
 ## Rules
 
-- **All items from both punchlists must appear in the merged output.** No finding is silently dropped. Every Holtz item and every Justine item is either merged with a counterpart or carried forward independently.
-- **Contradictions are never auto-resolved.** The merge process flags them and defers to human judgment. The contradictory item is included in the merged punchlist with `DEFERRED` status.
-- **Higher severity always wins.** When two findings match and have different severities, the merged item uses the higher severity. The disagreement is noted but does not prevent the merge.
-- **Holtz's description is preferred for agreements.** When merging two descriptions of the same bug, use Holtz's wording for the Problem and Evidence fields (Holtz is the primary auditor). Justine's additional observations can be appended as a note.
-- **Re-numbering is mandatory.** The merged punchlist uses a fresh `BH-{NNN}` sequence starting from BH-001. Cross-reference comments preserve the mapping to original IDs.
-- **Pattern blocks are merged.** If both auditors identified patterns, merge them. Same pattern = combine instance lists. Different patterns = keep both. Pattern IDs are re-numbered in the merged punchlist.
-- **The merge is deterministic.** Given the same two punchlists, the merge always produces the same output. There are no judgment calls in the classification rules (except contradiction detection, which is flagged rather than resolved).
+- **Every finding from both auditors ends up on the ledger.**
+- **Never auto-resolve a contradiction.** Flag in the report, leave OPEN.
+- **Higher severity wins.** Re-file Holtz's id at the higher one.
+- **Use Holtz's description for agreements.** If Justine observed something he did not, re-file his id with it appended.
+- **Never renumber.**
+- **Do not merge patterns here.** Note any Justine pattern in the report; it enters `docs/holtz/patterns-brief.md` at the next pattern round.

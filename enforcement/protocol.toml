@@ -60,6 +60,7 @@ path = "docs/holtz/project.jsonl"
 "defer cant-reproduce" = "transition defer_cant_reproduce"
 "defer low" = "transition defer_low"
 "defer medium" = "transition defer_medium"
+"defer batch" = "batch defer"
 
 # ── Named queries (#82) ──
 #
@@ -70,13 +71,291 @@ path = "docs/holtz/project.jsonl"
 # object, so they cannot disagree. `sahjhan lint` L6 reports the copies not yet
 # migrated.
 
+# ⚠️ **No gate consumes this, and none should.** P0.1 removed it from
+# `converge` as unreachable (the audited run's open count rose 124 -> 273 and
+# fell exactly once) and item 3 removed it from `set complete perspective`,
+# where a run met it thirteen times. It is kept declared because it is the one
+# *named* spelling of "a finding is open" — the six predicates below carry the
+# same NOT IN pair inline only because a named query cannot reference another
+# one — and the tests that assert on openness read it from here rather than
+# pasting a seventh copy.
+#
+# Re-attaching it to a gate is the regression, not deleting it:
+# `test_all_findings_closed_no_longer_gates_converge` and
+# `test_all_findings_closed_no_longer_gates_lens_completion` guard both doors.
 [queries.all_findings_closed]
 sql = "SELECT count(*) FROM events f WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
 intent = "all findings must be resolved or deferred"
 
+# `converge`'s deferral conjunct (D-b). It asks the thing P0.1's clause meant —
+# *the deferral record is complete* — of the ledger, rather than asking whether
+# a file exists that the engine wrote on the run's first finding.
+#
+# Three properties, and the third is what makes the swap safe:
+#
+# 1. **Meaningful.** A `finding_deferred` whose id was never filed satisfies
+#    every write-time check — `id`'s pattern fixes the shape and nothing fixes
+#    the referent — and closes a finding that does not exist. This refuses it.
+# 2. **Vacuously true at zero deferrals.** `DEFERRED.md` is no longer written
+#    by a run that defers nothing, so a conjunct that needed rows would stop a
+#    run that fixed everything from converging — item 2's strand rebuilt at a
+#    new gate. `count(*) = 0` over the violating set is true on an empty ledger.
+# 3. **Achievable.** The refused state is escaped by filing the finding the
+#    deferral names, or re-filing under the id that was meant.
+#
+# The other half of the proposed shape — *"carries a `reason` from the allowed
+# set"* — is deliberately **not** here. `events.toml` pattern-constrains
+# `reason` to `^(cant_reproduce|low_priority|medium_budget|theoretical)$`, so
+# the engine refuses a bad one at write time and no reachable ledger can fail
+# it. A conjunct true in every reachable state is decoration, which is what
+# P0.1 removed from this transition to begin with.
+[queries.deferral_record_complete]
+sql = "SELECT count(*) = 0 FROM events d WHERE d.type='finding_deferred' AND d.id NOT IN (SELECT f.id FROM events f WHERE f.type='finding')"
+intent = "every deferral must name a finding this run filed — file it, or re-file under the id the deferral means"
+
 [queries.item_open]
 sql = "SELECT count(*) = 0 FROM events WHERE type IN ('finding_resolved', 'finding_deferred') AND id='{{item_id}}'"
 intent = "finding must not already be resolved or deferred"
+
+# `merge_finding`'s other end (P0.2, D7). A merge emits `finding_resolved`, so
+# every term here is a way that close would otherwise be had for nothing.
+#
+# The target has to be a finding this run actually filed, or a merge closes an
+# item into a typo and the work is tracked nowhere.
+#
+# `id <> '{{item_id}}'` is the load-bearing half: without it a finding merges
+# into itself, which satisfies every gate, emits a `finding_resolved`, and
+# closes the item for free. That is the whole cap defeated by one command, so
+# the exclusion belongs in the predicate rather than in the skill file's prose.
+#
+# The target must still be **open** and must be **at least as severe** (RULED
+# Jon, 2026-08-27, D-c). A closed target tracks no work, so a merge into one is
+# the same free close by a longer route — and it is the route by which a
+# pattern round can discharge `round_opens_exceed_closes` without fixing
+# anything: merge the siblings pairwise, then merge the last open one into a
+# sibling already merged away. The floor is what stops a CRITICAL being closed
+# into an unrelated LOW, which clears `all_critical_resolved`.
+#
+# What those two terms refuse has a route, which is the condition on adding
+# them at all (#77). A sibling repeating a finding that is already closed goes
+# through `defer cant-reproduce`, whose gate demands the investigation file
+# saying why it does not reproduce — evidence a merge never produced. A target
+# that deserves the higher grade is re-filed at it: severity is the latest
+# filing (D25), so the correction moves this predicate, which is what
+# `test_severity_is_the_latest_filing_on_both_sides` drives.
+#
+# Severity is ranked by CASE because the ledger stores the word. An
+# unrecognised value refuses from either side — 0 for the target, 99 for the
+# item — though `events.toml` pattern-constrains the field, so no written row
+# reaches either branch.
+#
+# Openness is spelled as the two NOT INs rather than by calling `item_open`:
+# a named query cannot reference another, and a gate resolving `query =
+# "item_open"` interpolates *this* transition's vars, so there is no way to
+# rebind its `{{item_id}}` to `{{merged_into}}` (`gates/query.rs`,
+# `resolve_gate_sql`). `all_findings_closed` and the two batch populations
+# carry the identical pair for the same reason.
+[queries.merge_target_exists]
+sql = "SELECT count(*) >= 1 FROM events t WHERE t.type='finding' AND t.id='{{merged_into}}' AND t.id <> '{{item_id}}' AND t.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id='{{merged_into}}') AND t.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND t.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred') AND (CASE t.severity WHEN 'CRITICAL' THEN 4 WHEN 'HIGH' THEN 3 WHEN 'MEDIUM' THEN 2 WHEN 'LOW' THEN 1 ELSE 0 END) >= (SELECT CASE s.severity WHEN 'CRITICAL' THEN 4 WHEN 'HIGH' THEN 3 WHEN 'MEDIUM' THEN 2 WHEN 'LOW' THEN 1 ELSE 99 END FROM events s WHERE s.type='finding' AND s.id='{{item_id}}' AND s.seq = (SELECT MAX(h.seq) FROM events h WHERE h.type='finding' AND h.id='{{item_id}}'))"
+intent = "the finding merged into must exist, must not be the finding being merged, must still be open, and must be at least as severe"
+
+# A finding's severity is its *latest* filing. The ledger holds every filing,
+# `punchlist.md.tera` and `findings.py` both render the last one, and the
+# deferral gates used to match any row ever filed under the id — so a finding
+# corrected LOW -> HIGH still satisfied `defer_low`, and a run could close a
+# HIGH by deferring the severity it no longer has. Same shape as P3.6's
+# duplicate-id count, one field further in: the correction is supposed to
+# supersede what it corrects.
+#
+# `f.id` is pinned by the argument, so the seq of the last filing is a plain
+# scalar subquery here; the run-wide counts below need the correlated form.
+
+[queries.item_is_low]
+sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='LOW' AND seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id='{{item_id}}')"
+intent = "finding must exist and its latest filing must be LOW"
+
+[queries.item_is_medium]
+sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND severity='MEDIUM' AND seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id='{{item_id}}')"
+intent = "finding must exist and its latest filing must be MEDIUM"
+
+# P0.5's first route (D29/D34): only `user_reachable` findings are fix-loop
+# eligible. `item_is_low`'s shape, one field over, and it gates `fix_commit`
+# because that is the only place the engine can see fix-loop eligibility —
+# `fix_start` is an event, and the engine does not gate events (D30).
+#
+# The max-seq clause is the escape as much as the filter. `theoretical` means
+# no path has been found, not that none exists; a probe that establishes one
+# re-files the finding and this predicate flips, which is the legitimate way
+# back onto the board. A re-grade the other way takes it off.
+[queries.item_is_user_reachable]
+sql = "SELECT count(*) >= 1 FROM events WHERE type='finding' AND id='{{item_id}}' AND reachability='user_reachable' AND seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id='{{item_id}}')"
+intent = "finding must exist and its latest filing must be user_reachable"
+
+# count(DISTINCT id), not count(*): this is a policy on findings, and the
+# ledger holds rows. A MEDIUM re-filed under its own id is a correction, not a
+# second finding — counting rows inflated the denominator and let a deferral
+# past the cap that exists to stop it. The numerator has the same shape from
+# the other side: `event finding_deferred` is on the bootstrap allowlist, so a
+# deferral recorded twice would spend budget once too often. And a finding
+# corrected MEDIUM -> HIGH is not a MEDIUM at all, so it funds no budget.
+# The two batch populations. `item_is_low` answers "is *this* id LOW" with the
+# id pinned by the argument; these answer "which ids are LOW" run-wide, so the
+# max-seq subquery has to correlate on `f.id` the way
+# `medium_deferral_budget`'s denominator does. Severity is the latest filing
+# (D25): a finding corrected LOW -> HIGH must not be swept into a LOW batch,
+# which is the same defect `fe2ef56` fixed one field in.
+#
+# Openness is spelled as the two NOT INs rather than by calling `item_open`,
+# because a named query cannot reference another one — `all_findings_closed`
+# carries the identical pair for the same reason.
+#
+# The batch re-runs these per step, after earlier steps have appended, so the
+# MEDIUM population is read with the LOW deferrals already on the ledger.
+
+[queries.open_low_findings]
+sql = "SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='LOW' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
+intent = "open findings whose latest filing is LOW"
+
+[queries.open_medium_findings]
+sql = "SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='MEDIUM' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
+intent = "open findings whose latest filing is MEDIUM"
+
+# P0.5's third route (D29): `theoretical` auto-defers. Same shape as the two
+# batch populations above, one field over — and the max-seq clause carries the
+# same weight it does there. A finding re-graded `theoretical` ->
+# `user_reachable` must leave this set the moment a probe establishes a path,
+# and one re-graded the other way must join it; matching any row ever filed
+# under the id is the defect `fe2ef56` fixed for severity.
+#
+# The run context rides along because the courier writes the deferral and must
+# invent none of it: the deferral is stamped with the phase and step of the
+# filing it defers, which is where it actually happened.
+#
+# Lives here rather than as a string in `theoretical_courier.py` for H7's
+# reason — a hook holding its own copy of a predicate is how #77 shipped.
+
+[queries.open_theoretical_findings]
+sql = "SELECT f.id, f.project, f.run, f.auditor, f.phase, f.step FROM events f WHERE f.type='finding' AND f.reachability='theoretical' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
+intent = "open findings whose latest filing grades them theoretical"
+
+# P0.5's second route (D29/D34/D35): `fault_injected` batches into one
+# hardening commit per module. `location` rides along because the module is the
+# containing directory of the file it names — free text (`file.py:88`,
+# `` `file.py:88` ``, `file.py:88 (function f)` all appear in this repo's
+# archived ledgers), so the directory rule is applied in `hardening_batch.py`
+# and the ledger holds the *result*: one `finding_resolved` per covered id.
+# Deliberately not SQL — a `location` parser written as string surgery inside a
+# gate would be a second, weaker copy of `merge_punchlists.parse_location`.
+#
+# The max-seq clause carries the same weight it does above, and one field more:
+# a finding *relocated* by a later filing must move into the batch that will
+# actually harden it, not stay in the module it was first mis-filed under.
+
+[queries.open_fault_injected_findings]
+sql = "SELECT f.id, f.location, f.project, f.run, f.auditor FROM events f WHERE f.type='finding' AND f.reachability='fault_injected' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred')"
+intent = "open findings whose latest filing grades them fault_injected"
+
+# `converge`'s conjunct, and the scalar half of the pair above — a gate needs
+# one value and named queries cannot reference one another, so this is the
+# `open_low_findings` / `open_low_count` arrangement one route over.
+# `test_hardening_batch.py::test_the_two_queries_agree` runs both and fails the
+# build if they ever disagree about what "open" means.
+#
+# It gates `converge` rather than `finalize`, which is where the spec puts the
+# batching. `all_critical_resolved` carries no reachability filter and refuses
+# a deferral by design, so a `fault_injected` CRITICAL blocks `converge` — two
+# transitions upstream of `finalize`. A batch taught there could never be
+# reached by the run that needed it.
+[queries.no_open_fault_injected]
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.reachability='fault_injected' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"
+intent = "every fault_injected finding must be hardened or deferred"
+
+# What stops one commit disposing of the whole board. `hardening_batch.py`
+# refuses a HEAD that already carries a resolution, so a second module cannot
+# ride the first module's commit — which is the only thing making "one
+# hardening commit **per module**" cost more than one commit in total.
+# Read by the script rather than by a gate, the way
+# `open_theoretical_findings` is: a predicate is named here so there is one of
+# it, whoever asks.
+# Item 50: the `id` column is the second consumer. The pending-commit discharge
+# matches a charge against `commit_hash`, and a rewrite — `git rebase`, which
+# `phase-fix-loop.md` prescribes, or `git commit --amend` — moves that hash
+# after the tracker charged it. The finding id is what the rewrite preserves,
+# because the message does; `fix_commit`'s gate already requires the registered
+# commit's `%B` to carry it. So the two columns are the two ends of one match
+# and belong to one query rather than to two that could drift apart.
+#
+# Renamed off `resolution_commit_hashes` in the same change: a name that says
+# `commit_hashes` while the rows carry a finding id too is how a third consumer
+# ends up declaring its own query for a column that was already here.
+[queries.finding_resolutions]
+sql = "SELECT DISTINCT r.commit_hash, r.id FROM events r WHERE r.type='finding_resolved'"
+intent = "the commit hash and finding id each resolution already carries"
+
+# The escape's first conjunct. `open_low_findings` returns the ids the batch
+# transitions; a gate needs a scalar, and named queries cannot reference one
+# another. `test_amplification_breaker.py` runs both and asserts the count
+# equals the number of ids, so editing one without the other fails.
+[queries.open_low_count]
+sql = "SELECT count(*) FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='LOW' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"
+intent = "no open LOW findings remain"
+
+# P0.1's amplification circuit-breaker: A = findings filed since fix_loop_start
+# / findings resolved since fix_loop_start, evaluated at each round, true when
+# A > 1.0 for the last three rounds. The audited run filed 2.43 findings per
+# fix and its open count rose 124 -> 273, falling exactly once; it was
+# non-terminating from pattern round 1 and nothing measured that.
+#
+# `A > 1.0` is written as `filed > resolved` rather than as a division: it is
+# exact wherever A is defined, and it gives the right answer where A is not —
+# resolved=0 with findings filed is infinite amplification (true), and a round
+# with no activity either way is not amplification (false).
+#
+# The window is a seq floor — the seq of the *third*-most-recent round — not
+# `ORDER BY seq DESC LIMIT 3`. Dropping the floor entirely answers "any three
+# diverging rounds ever", which on a run that diverged twice, recovered, and
+# relapsed once reads `true` where the clause says `false`. Three *consecutive*
+# rounds is the condition; three rounds is not.
+#
+# Correlated scalar subqueries are rejected by the query planner in this
+# position ("Physical plan does not support logical expression
+# ScalarSubquery"), so the per-round counts come from a self-join with
+# GROUP BY/HAVING. A round that joins no events at all drops out, which is the
+# wanted answer: filed=0 and resolved=0 is not divergence.
+#
+# `fix_loop_start` is the run's *first* `state_transition` into fix_loop —
+# MIN(seq), not MAX — so the measurement spans the whole loop rather than
+# resetting at every lens rotation back into it.
+#
+# **A deferral retires a finding (item 10).** The denominator used to count
+# `finding_resolved` alone, so a round that filed three findings and deferred
+# all three — leaving the board empty — read as amplification. That is not a
+# rounding error, it is the two consumers pulling against each other: this same
+# predicate gates `converge`, and the escape the breaker *prescribes* is
+# `sahjhan defer batch`. Every deferral the protocol asks for moved the
+# `pattern_done` block and left the `converge` conjunct exactly as it was.
+#
+# It does not weaken the measurement, because deferral is not free: `defer_low`
+# takes LOWs only, `defer_medium` is capped at 50% by `medium_deferral_budget`,
+# and `defer_cant_reproduce` demands a written investigation. A run cannot
+# defer its way out of divergence any further than those caps allow.
+#
+# `count(DISTINCT ...)` over an `IN` list rather than a sum of two counts: a
+# finding that is both resolved and deferred is one retirement, not two.
+#
+# What this does NOT do, and what item 10's V4 turns on: the join is
+# `f.seq <= r.seq`, so each round counts only what had happened *by that
+# round*. A deferral made after the last round moves no round's window and
+# therefore does not move this predicate. `defer batch` reaches `converge`'s
+# conjunct through the next round it lets the run complete, not by acting on
+# the rounds already recorded.
+[queries.amplification_diverging]
+sql = "SELECT count(*) >= 3 FROM (SELECT r.seq FROM events r JOIN events f ON f.seq <= r.seq AND f.seq > COALESCE((SELECT MIN(s.seq) FROM events s WHERE s.type='state_transition' AND s.to='fix_loop'), 0) WHERE r.type='pattern_analysis_complete' AND r.seq >= COALESCE((SELECT MAX(a.seq) FROM events a WHERE a.type='pattern_analysis_complete' AND a.seq < (SELECT MAX(b.seq) FROM events b WHERE b.type='pattern_analysis_complete' AND b.seq < (SELECT MAX(c.seq) FROM events c WHERE c.type='pattern_analysis_complete'))), 0) GROUP BY r.seq HAVING count(DISTINCT CASE WHEN f.type='finding' THEN f.id END) > count(DISTINCT CASE WHEN f.type IN ('finding_resolved','finding_deferred') THEN f.id END))"
+intent = "more findings filed than retired (resolved or deferred) since fix_loop_start, for three consecutive rounds"
+
+[queries.medium_deferral_budget]
+sql = "SELECT (SELECT count(DISTINCT id) FROM events WHERE type='finding_deferred' AND reason='medium_budget') < (SELECT count(DISTINCT f.id) FROM events f WHERE f.type='finding' AND f.severity='MEDIUM' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id)) / 2"
+intent = "MEDIUM deferrals must not exceed 50% of total MEDIUM findings"
 
 # The predicate #77 deadlocked on, now a single object with three consumers:
 # the `pattern_check` gate (ready when true), the `iteration_boundary` gate
@@ -87,13 +366,335 @@ intent = "finding must not already be resolved or deferred"
 # which was itself blocked. Block condition and printed escape are now the same
 # expression by construction; `enforcement_lint.py` H7/H8 fail the build if a
 # fourth copy appears or a consumer stops referencing this name.
+#
+# The second conjunct is the yield stop (P0.2). A round costs a 17.9-min
+# median and 43% of in-loop time, and on the run this protocol was measured
+# against, rounds 12 through 15 added no new pattern between them for 268
+# agent-min. Two consecutive rounds that wrote nothing into the brief means the
+# obligation stops; it does not mean rounds stop. The fix loop's usual path
+# runs a round without entering `pattern_analysis` at all, so a run that wants
+# another one still has it — what is withdrawn is the *demand*, at
+# `iteration_boundary` and `set complete perspective`.
+#
+# Gating this on `patterns_found` is only honest because that field is now
+# derived: the courier reads the `## PAT-NNN:` headings out of the brief, so
+# reporting a dry round costs actually writing nothing. Typed by the agent, as
+# it was until P5.4, this conjunct would have been a gate the agent could open
+# by understating — and understating is the direction laziness points.
+#
+# A NULL `patterns_found` (a ledger written before P5.4) is not counted as a
+# zero, so an old ledger keeps the obligation rather than silently losing it.
+#
+# The "last two rounds" window is a seq floor — the seq of the second-most-
+# recent round — and not `ORDER BY seq DESC LIMIT 2` in a derived table. The
+# engine applies an outer WHERE *before* that LIMIT, so the LIMITed form counts
+# every zero-yield round the run ever had and stops the obligation the moment
+# any two rounds anywhere were dry. It answers a plausible question and the
+# wrong one; the difference is invisible until a run has three rounds.
+# The third conjunct is the backpressure stop (P0.2, D6). A round's job is to
+# find siblings, so running one while the siblings from earlier rounds are
+# still open buys more board rather than less. Past 25 open, the obligation
+# lapses — the same way it lapses after two dry rounds — and the run is
+# expected to fix what it already filed.
+#
+# The population is the findings a round attributed to a pattern, and it is
+# joined to the rounds rather than trusted on its own: a `pattern_id` counts
+# only when that PAT appears in some round's `pattern_ids`, which the courier
+# derives from the brief's `## PAT-NNN:` headings and the agent cannot type.
+# So the population cannot be inflated past what the brief actually contains.
+# It can still be *under*-reported by leaving the field off. For this conjunct
+# that forfeits relief: fewer counted keeps the count at or under 25, and the
+# obligation stays. That holds for this conjunct only. The same population
+# feeds D7's round cap and obligation below, where under-reporting is the
+# direction that dodges the block. The second conjunct has its own version: a
+# round that adds no new `## PAT-NNN:` heading to the brief counts as dry, and
+# two in a row withdraw the obligation.
+#
+# The membership test is `strpos` over a comma-fenced list rather than LIKE:
+# `pattern_ids` is a joined string, and fencing both sides with commas is what
+# stops PAT-1 matching PAT-10. A NULL on either side yields NULL and drops out,
+# which is right for a dry round and for an unattributed finding.
+# The swap (P0.2, D8). Past ~round 8 the owed round is satisfied by a stale
+# sweep *instead of* pattern analysis, and the plan's ~220-470 agent-min saving
+# rests substantially on that: a round costs a 17.9-min median and adds board,
+# while the sweep that triaged all 68 open HIGHs did it in 14 min and retired
+# four findings writing no code.
+#
+# It is spelled as one floor over two event types rather than as a fourth
+# conjunct. A conjunct that merely withdrew the obligation past round 8 would
+# withdraw it *permanently* — nothing would raise it again, because the only
+# thing that resets this counter is a round, and no round is owed. Widening the
+# floor keeps the obligation cycling on exactly the same "3+ resolved since"
+# rule, with a sweep now able to be the thing it counts from.
+#
+# The ordinal is `count(*)` of the rounds so far, evaluated inside the floor so
+# a `stale_sweep_complete` only becomes a reset once the run has actually got
+# there. Before round 8 a sweep is still worth running and still costs nothing
+# here; it simply does not discharge a round.
 [queries.pattern_analysis_overdue]
-sql = "SELECT count(*) >= 3 FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete'), 0)"
-intent = "3+ findings resolved since the last pattern analysis"
+sql = "SELECT (SELECT count(*) FROM events WHERE type='finding_resolved' AND seq > COALESCE((SELECT MAX(seq) FROM events WHERE type='pattern_analysis_complete' OR (type='stale_sweep_complete' AND (SELECT count(*) FROM events WHERE type='pattern_analysis_complete') >= 8)), 0)) >= 3 AND (SELECT count(*) FROM events e WHERE e.type='pattern_analysis_complete' AND CAST(e.patterns_found AS INTEGER) = 0 AND e.seq >= COALESCE((SELECT MAX(p.seq) FROM events p WHERE p.type='pattern_analysis_complete' AND p.seq < (SELECT MAX(q.seq) FROM events q WHERE q.type='pattern_analysis_complete')), 0)) < 2 AND (SELECT count(*) FROM (SELECT DISTINCT f.id FROM events f JOIN events p2 ON p2.type='pattern_analysis_complete' AND strpos(','||p2.pattern_ids||',', ','||f.pattern_id||',') > 0 WHERE f.type='finding' AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))) <= 25"
+intent = "3+ findings resolved since the last pattern analysis, unless the last two rounds added no pattern or more than 25 pattern-filed findings are open"
+
+# P0.2's round cap and its obligation (D7). A round's job is to find siblings;
+# the audited run's rounds filed 2.43 findings per fix and the board rose
+# 124 -> 273, so an uncapped round is how a run stops being able to terminate.
+#
+# Both windows start at the *previous* round, not the most recent one. A round
+# files its siblings at Step 11.2 and records itself at Step 11.6, so by the
+# time either gate is evaluated the round's own `pattern_analysis_complete` is
+# already the MAX — "since the last round" is the empty set there, and a cap
+# over it would be a gate that always passes. The floor is therefore the
+# second-most-recent round, found with the nested non-correlated subqueries
+# `pattern_analysis_overdue` uses, and COALESCE(…, 0) makes the first round's
+# window the whole run.
+#
+# The population is D6's: a finding whose `pattern_id` appears in some round's
+# courier-derived `pattern_ids`. That is the only set the *round* opened —
+# blast-radius and lens findings filed in the same window carry no
+# `pattern_id`, and capping those would charge the round for work it did not
+# do.
+#
+# Here, unlike in D6's conjunct, under-reporting dodges the block. A sibling
+# filed without its `pattern_id`, or tagged with a PAT the brief never got, is
+# not counted by either query below, so a round can file ten and stay under the
+# cap with no obligation owed. That is accepted (D-e, RULED 2026-08-27). It is
+# the cost of not charging blast-radius and lens findings to a round, and the
+# population stays as it is.
+#
+# The cap counts findings still **open**, which is what makes its escape
+# reachable: a filing cannot be withdrawn from an append-only ledger, so a cap
+# over filings is unclearable the moment a fourth sibling lands (#77's shape,
+# from a new direction). Closing or merging one is what brings the count back
+# under, and `merge_finding` is declared from both states either gate sits in.
+[queries.round_item_cap_exceeded]
+sql = "SELECT count(*) > 3 FROM (SELECT DISTINCT f.id FROM events f JOIN events p ON p.type='pattern_analysis_complete' AND strpos(','||p.pattern_ids||',', ','||f.pattern_id||',') > 0 WHERE f.type='finding' AND f.seq > COALESCE((SELECT MAX(a.seq) FROM events a WHERE a.type='pattern_analysis_complete' AND a.seq < (SELECT MAX(b.seq) FROM events b WHERE b.type='pattern_analysis_complete')), 0) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"
+intent = "a pattern round may leave at most 3 of the findings it opened still open"
+
+# The obligation half: close or merge at least as many as the round opens.
+#
+# It is gated at `iteration_boundary` and not at `pattern_done`. Closing needs
+# `fix_commit`, which is declared `fix_loop -> fix_loop`; from
+# `pattern_analysis` the only close available is `merge_finding`, so a round
+# blocked at its own exit could discharge the obligation only by merging away
+# the very siblings it had just found. That is not an escape, it is the search
+# undoing itself. At the boundary both `fix_commit` and `merge_finding` are in
+# reach, so the block always names something the run can do.
+#
+# The comparison is `>` rather than `>=`: opening three and closing three is
+# the obligation met, not broken. Merges count on the right-hand side because
+# `merge_finding` emits `finding_resolved` — "close **or** merge" is one count.
+[queries.round_opens_exceed_closes]
+sql = "SELECT (SELECT count(DISTINCT f.id) FROM events f JOIN events p ON p.type='pattern_analysis_complete' AND strpos(','||p.pattern_ids||',', ','||f.pattern_id||',') > 0 WHERE f.type='finding' AND f.seq > COALESCE((SELECT MAX(a.seq) FROM events a WHERE a.type='pattern_analysis_complete' AND a.seq < (SELECT MAX(b.seq) FROM events b WHERE b.type='pattern_analysis_complete')), 0)) > (SELECT count(DISTINCT r.id) FROM events r WHERE r.type='finding_resolved' AND r.seq > COALESCE((SELECT MAX(a.seq) FROM events a WHERE a.type='pattern_analysis_complete' AND a.seq < (SELECT MAX(b.seq) FROM events b WHERE b.type='pattern_analysis_complete')), 0))"
+intent = "a pattern round must close or merge at least as many findings as it opens"
+
+# P0.1's convergence redefinition (D4), pre-committed and built as written:
+# `all CRITICAL resolved AND all user_reachable HIGH resolved-or-deferred AND
+# A < 1.0 over last 3 rounds AND DEFERRED.md written`, under D5's constraint
+# that converging still requires the MEDIUM budget spent.
+#
+# It replaces `all_findings_closed == 0`, which is why the 08-21 session's
+# objection to the `A < 1.0` conjunct was invalid: under the *old* gate nothing
+# is open at converge by definition, so measuring amplification there looks
+# pointless. Under the replacement, open MEDIUM and LOW findings legitimately
+# persist — and that conjunct is exactly what stops a run converging while it
+# is still generating faster than it retires.
+#
+# The third conjunct is `amplification_diverging` read with the opposite
+# expectation, not a second expression of it. The fourth is a `file_exists`
+# gate on the transition, and the MEDIUM budget is `medium_deferral_budget`
+# with `expect = "false"` — the established spelling for "spent", shared with
+# `pattern_done`'s escape.
+#
+# Both predicates below grade a finding by its *latest* filing (D25): a
+# CRITICAL downgraded to LOW is not a CRITICAL, and a finding re-filed as
+# `user_reachable` after a probe joins the population that has to be closed.
+# The correlated max-seq subquery sits in the inner WHERE and the aggregate
+# outside it — the `open_low_count` shape, which the query planner accepts;
+# the same correlation inside a comparison is rejected.
+#
+# Every conjunct's escape is `sweep_dirty`, the ungated `final_sweep ->
+# fix_loop` edge. A blocked converge can always go back and do the work.
+
+# One exclusion beyond `finding_resolved`, and it is the escape the fix-loop
+# eligibility gate needs rather than a softening of this conjunct.
+#
+# `theoretical` says no path to the defect has been found — reachability itself
+# unestablished. With `item_is_user_reachable` on `fix_commit`, a theoretical
+# CRITICAL is auto-deferred at filing and then has no route left at all:
+# measured against a real daemon, this conjunct refused the deferral,
+# `merge_finding` refused an already-closed finding, and the hardening batch's
+# population is `fault_injected` **and open**. Re-grading was the only exit,
+# and re-grading to clear a gate is a forgery.
+#
+# ⚠️ W16 / item 18. **This comment used to open with "`theoretical` is written
+# by `theoretical_courier.py`, not chosen by the agent". That was false, and
+# it is what hid the hole for the life of the conjunct.** `finding_deferred`
+# is `attestation = "agent"`, carries no `restricted`, and declares `agent:cli`
+# as a producer — `events.toml` says so in as many words two lines below the
+# declaration ("attestation is the strength of the *weakest* available path,
+# not the intended one"). `event` is on the bootstrap allowlist and
+# `finding_deferred` is not in `BLOCKED_SAHJHAN_SUBSUB`. So the agent could
+# always type the word. Measured against a real daemon at this tree:
+#
+#     file BH-001 severity=CRITICAL reachability=user_reachable
+#       all_critical_resolved -> false
+#     event finding_deferred id=BH-001 reason=theoretical     (exit 0)
+#       all_critical_resolved -> true
+#
+# The correlation below is what refuses that: the exclusion now excuses a
+# finding only if its **own latest filing grades it `theoretical`**, so a
+# CRITICAL the run filed as `user_reachable` is not closed by typing the
+# reason word. `f` is already pinned to the latest filing by the max-seq
+# clause above, so the grade is read off that row rather than through a second
+# correlated subquery — same predicate, and it stays inside the shape this
+# file notes the planner accepts.
+#
+# The second half is provenance, and `d.recorded_by` is what carries it. The
+# grade agreeing with the reason word is not enough on its own: on a finding
+# genuinely graded `theoretical`, the courier's deferral and one the agent
+# typed are identical in every declared field, so the exclusion has to key on
+# the writer.
+#
+# `recorded_by` is a ledger *entry* column (sahjhan 0.28.0, #50), not a
+# declared field — it sits beside `seq`, `ts`, `hash` and `prev`, the engine
+# writes it about the append, and `events.toml` declares nothing to get it.
+# `--field recorded_by=…` lands in the event's fields as ordinary data and
+# leaves the column alone; measured, not inferred. `Ledger::append` takes the
+# recorder as a required argument, so a new route to the ledger cannot appear
+# without naming itself.
+#
+# The literal is the manifest key the daemon verified the peer against, so the
+# identity it checks and the identity it stamps are one fact. Renaming
+# `theoretical_courier.py`, or dropping it from `trusted-callers.toml`, empties
+# this exclusion — `sahjhan lint` L8 errors on a `recorded_by` filter naming a
+# script no writer can be, which is what keeps that from being silent.
+#
+# The whole domain of the field at this filter, so no value is stranded
+# unexamined:
+#
+#     hook:hooks/theoretical_courier.py  the courier over the daemon socket
+#                                        — excluded, and the only thing that is
+#     agent:cli                          `sahjhan event finding_deferred`
+#                                        — counts, which is the fix
+#     agent:hook-eval                    a hook rule's `auto_record`; no rule
+#                                        here records `finding_deferred`
+#     authed:cli                         `authed-event`, which refuses any
+#                                        event that is not `restricted`
+#     engine:emit:defer_{cant_reproduce, the three transition emits, all of
+#       low,medium}                      which carry another `reason` word
+#     import:<source>                    `ledger import`, which validates
+#                                        nothing — deliberately not excluded
+#     daemon:unverified                  `record_event` with no manifest
+#                                        configured; enforcement is already
+#                                        degraded there and this fails closed
+#
+# ⚠️ An entry written before 0.28.0 has no `recorded_by` and reads as the empty
+# string, so its deferral stops counting. That is fail-closed and there is no
+# shim for it: the empty value cannot tell the courier's old row from the
+# agent's, so tolerating it would re-open exactly this hole for those ledgers.
+# A run that crosses the upgrade already carrying a deferred `theoretical`
+# CRITICAL cannot re-earn the closure — the courier is idempotent through
+# `open_theoretical_findings`, which drops any id that carries a deferral — and
+# has to be re-run.
+#
+# Every other reason word still refuses. `low_priority`, `medium_budget` and
+# `cant_reproduce` are discretionary acts, and refusing them is what this
+# conjunct is for; `test_an_ordinary_deferral_still_does_not_converge` fails
+# the build if the exclusion ever widens past the one machine-written word.
+[queries.all_critical_resolved]
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND NOT (f.reachability='theoretical' AND f.id IN (SELECT d.id FROM events d WHERE d.type='finding_deferred' AND d.reason='theoretical' AND d.recorded_by='hook:hooks/theoretical_courier.py')))"
+intent = "every CRITICAL finding must be resolved — only the courier's theoretical deferral of a finding graded theoretical closes one without a fix"
+
+[queries.all_user_reachable_high_closed]
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='HIGH' AND f.reachability='user_reachable' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"
+intent = "every user-reachable HIGH finding must be resolved or deferred"
+
+# The same two predicates, scoped to one lens, for `set complete perspective`
+# (item 3). P0.1 removed `all_findings_closed == 0` from `converge` as
+# unreachable and left the identical query on lens completion, which a run
+# meets **thirteen times** — the unreachable requirement moved one door
+# upstream and multiplied.
+#
+# RULED (Jon, 2026-08-26), option (a): a lens is answerable for its own
+# findings. **A clean lens is not an empty board.** Lens 3 blocks on its own
+# open CRITICALs and ignores lens 1's open MEDIUMs — and lens 1's open
+# CRITICALs, which the two conjuncts above still catch run-wide. Clearing the
+# whole board thirteen times is what made convergence take weeks; it is the
+# disease, not the cure.
+#
+# Accepted cost, recorded so it is not rediscovered as a bug: a finding filed
+# under an already-completed lens is caught only at `converge`. That is the
+# trade that stops lens 7 being answerable for lens 2's board, and
+# `test_a_finding_under_a_finished_lens_is_caught_only_at_converge` asserts
+# `converge` really does catch it.
+#
+# `f.perspective` sits inside the same max-seq row filter as severity and
+# reachability, so the lens is the *latest* filing too (D25) — a finding
+# re-filed under another lens moves to that lens's board. Re-filing to dodge a
+# lens gate is the forgery D34 names, and it is bounded the same way: the
+# CRITICAL is still sitting in front of `converge` afterwards.
+#
+# `lens_`, not `perspective_`: `gate check` prints the query name, so this is a
+# string a reader sees, and the audit axis is a Lens everywhere a reader sees
+# it (Jon, 2026-09-01). The `perspective` *column* is the event field's
+# spelling and is an implementation identifier, unchanged by that ruling.
+
+# `all_critical_resolved` with the lens bound, and the exclusion held to the
+# same two terms — the finding's own latest filing must grade it `theoretical`,
+# and the courier must be the writer. This is the door a run passes thirteen
+# times, so a term that holds only at `converge` is a term that holds after
+# twelve chances to have mattered.
+#
+# Dropping the exclusion here would strand a theoretical CRITICAL at every one
+# of the thirteen doors: `fix_commit` refuses it (`item_is_user_reachable`),
+# the hardening batch's population is `fault_injected`, and re-grading to clear
+# a gate is a forgery — the wedge D34 ruled out at `converge`, thirteen times
+# over. `TestTheLensGateHoldsTheSameExclusionToTheSameTerms` drives the whole
+# grade x reason matrix plus the courier's route, so neither term can be
+# reverted quietly and the escape cannot be closed by mistake.
+#
+# The two predicates cannot be one named query — `{{current_perspective}}`
+# binds only here, and a named query cannot reference another — so they are
+# two texts deciding one fact, which is what `sahjhan lint` L6 reports and
+# `enforcement_lint` H7 governs. Change one, change both.
+[queries.lens_critical_resolved]
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='CRITICAL' AND f.perspective='{{current_perspective}}' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND NOT (f.reachability='theoretical' AND f.id IN (SELECT d.id FROM events d WHERE d.type='finding_deferred' AND d.reason='theoretical' AND d.recorded_by='hook:hooks/theoretical_courier.py')))"
+intent = "every CRITICAL filed under this lens must be resolved — only the courier's theoretical deferral of a finding graded theoretical closes one without a fix"
+
+# `all_user_reachable_high_closed` with the lens bound. The reachability filter
+# is what item 3's second consequence needs: under the run-wide gate one open
+# `fault_injected` HIGH read `1` and blocked the lens, and that finding could
+# not be `fix_commit`'d while Step 15's hardening batch is taught after all
+# thirteen lenses — a block naming an act the run could not reach.
+# `no_open_fault_injected` still refuses to converge on it.
+[queries.lens_user_reachable_high_closed]
+sql = "SELECT count(*) = 0 FROM (SELECT f.id FROM events f WHERE f.type='finding' AND f.severity='HIGH' AND f.reachability='user_reachable' AND f.perspective='{{current_perspective}}' AND f.seq = (SELECT MAX(g.seq) FROM events g WHERE g.type='finding' AND g.id = f.id) AND f.id NOT IN (SELECT r.id FROM events r WHERE r.type='finding_resolved') AND f.id NOT IN (SELECT d.id FROM events d WHERE d.type='finding_deferred'))"
+intent = "every user-reachable HIGH filed under this lens must be resolved or deferred"
 
 [queries.quiz_exhaustions_resolved]
 sql = "SELECT count(*) = 0 FROM events e WHERE e.type='quiz_exhausted' AND e.perspective NOT IN (SELECT r.perspective FROM events r WHERE r.type='quiz_exhausted_resolved')"
 intent = "no unresolved quiz exhaustions"
+
+# ── Batches ──
+#
+# The circuit-breaker's escape, in one command. The engine knows nothing about
+# severity or findings: `param` names the flag, each step's `value` selects it,
+# `items` is a query returning an `id` column, and `transition` is applied to
+# each id *with that transition's own gates*. So `defer_medium`'s 50% budget
+# still holds inside the batch — the MEDIUM step refuses the moment the cap is
+# reached, per item, and refusals are reported rather than fatal.
+#
+# That is why the breaker's predicate has to be phrased as the budget being
+# *spent*, not the MEDIUM set being empty: one run of this command always
+# reaches the cap, and can never clear the whole set.
+
+[batches.defer]
+description = "Defer open findings in bulk, by severity"
+param = "severity"
+steps = [
+    { value = "low", items = "open_low_findings", transition = "defer_low" },
+    { value = "medium", items = "open_medium_findings", transition = "defer_medium" },
+]
 
 # ── Boundaries (#82) ──
 #
@@ -136,6 +737,32 @@ must_traverse = { from = "merge_done", to = "fix_loop" }
 
 [attestation]
 levels = ["agent", "tool", "ambient", "host", "human"]
+
+# ── Daemon ──
+
+[daemon]
+# Arm sahjhan's sandbox fuse. The daemon refuses every privileged operation —
+# signing, the quiz vault, enforcement state, restricted events — unless this
+# project's Claude Code settings confirm the agent's shell is confined and the
+# daemon socket is unreachable from inside it.
+#
+# It is armed because the alternative was never true. `vault.toml` used to
+# describe its state-gating as defence in depth "on top of the trusted-caller
+# auth that already blocks the agent" — and that auth does not block the agent
+# and provably cannot: a same-user process can fork a connected socket into an
+# exec of a genuine hook, or load code into one. Peer identity is hardening.
+# The OS sandbox is the boundary, and this is what makes the daemon refuse to
+# serve without it rather than assume it.
+#
+# `holtz-start` raises the boundary; `enforcement/hooks/sandbox_control.py`
+# writes the settings the fuse reads. protocol.toml is sealed into the genesis
+# ledger, so a checkout cannot quietly disarm this.
+#
+# Known limit, stated rather than buried: the fuse reads configuration, not
+# kernel state. Requiring `failIfUnavailable` is what closes that gap on
+# macOS. On Linux the socket block additionally needs the optional
+# @anthropic-ai/sandbox-runtime seccomp filter, which nothing here can verify.
+require_sandbox = true
 
 # ── Lint (#82) ──
 

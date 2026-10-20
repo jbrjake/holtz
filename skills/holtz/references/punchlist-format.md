@@ -5,13 +5,14 @@
 ````markdown
 ### BH-{NNN}: {title}
 **Severity:** CRITICAL | HIGH | MEDIUM | LOW
+**Reachability:** user_reachable | fault_injected | theoretical ← required
 **Category:** {from taxonomy below}
 **Location:** `path/to/file.py:NN`
 **Status:** OPEN | IN PROGRESS | RESOLVED | DEFERRED
 **Pattern:** {PAT-NNN if applicable}
 **Determinism:** {deterministic | intermittent | theoretical} ← bug/* categories only, optional for others
 **Investigation:** {`docs/holtz/investigations/BH-{NNN}.md` if complex, omit if straightforward}
-**Lens:** {component | integration | security | error-propagation | data-flow | contract — which analytical lens discovered this finding, optional}
+**Lens:** {which analytical lens discovered this finding — one of the 13 names `python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/parse_lens_registry.py --names-only` prints, required}
 **Predicted:** {Prediction N (confidence: HIGH|MEDIUM|LOW) — if this finding matched a prediction from step4-predictions.md, optional}
 
 **Problem:** {What's wrong. Actual vs expected behavior. 1-3 sentences.}
@@ -38,6 +39,20 @@
 - **HIGH:** Incorrect documented behavior, test hiding bugs. This cycle.
 - **MEDIUM:** Edge case failures, missing tests, doc drift. Next cycle.
 - **LOW:** Code quality, minor inconsistencies. As time permits.
+
+## Reachability
+
+Assess for every finding. `sahjhan event finding` requires
+`--field reachability=<value>`.
+
+- **user_reachable** — some input, call, or document a user controls reaches it
+- **fault_injected** — reachable only by making another call raise
+- **theoretical** — no path found; reachability itself is unestablished
+
+A `theoretical` finding is deferred automatically when it is filed, and appears
+in `docs/holtz/DEFERRED.md` with reason `theoretical`. Grade at filing time: the
+id stays deferred once it is. If a probe later establishes a path, file the
+defect as a new finding at `user_reachable`.
 
 ## Categories
 `bug/logic` `bug/state` `bug/error-handling` `bug/security` `bug/type`
@@ -99,5 +114,6 @@ Discovery Chain is required for all items regardless of status (OPEN, RESOLVED, 
 - Resolved items stay (audit trail). Update status + fill Resolution field.
 - After status change: update summary table counts and pattern block if applicable.
 - Evidence is recommended but not enforced — the validator warns on missing Evidence but does not error. Include it whenever possible.
-- Determinism, Investigation, Root Cause Confidence, Lens, and Predicted fields are optional. Only add them when relevant.
+- Determinism, Investigation, Root Cause Confidence, and Predicted fields are optional. Only add them when relevant.
+- Lens is required on every item and must name one of the 13 lenses. The validator errors on an item that omits it or states a name outside the set.
 - Items deferred due to can't-reproduce must include evidence of reproduction attempts in the Evidence section or the linked investigation file.

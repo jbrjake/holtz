@@ -10,12 +10,14 @@ The wrapper enriches auto_record fields with data from tool_input
 (line spans for Read, lines_changed for Edit, etc.) and additionally
 records bash_command events for Bash tools.
 
-Falls back to allow if sahjhan binary is unavailable.
+A missing binary, a failed subprocess or a reply it cannot read is a warning
+during a fresh audit (``exit_enforcement_error``) and an allow outside one —
+never a silent skip, since that stops the auto-records the stall and
+edit-accumulation predicates count.
 """
 from __future__ import annotations
 
 import contextlib
-import json
 import os
 import subprocess
 import sys
@@ -24,13 +26,19 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _common import (  # noqa: E402
+    exit_boundary_missing,
     exit_enforcement_error,
     exit_ok,
     exit_warn,
     read_event,
+    read_hook_eval,
     resolve_config_dir,
 )
-from _protocol_cache import is_enforcement_fresh, read_cache  # noqa: E402
+from _protocol_cache import (  # noqa: E402
+    event_actor,
+    is_enforcement_fresh,
+    read_cache_with_boundary,
+)
 from _resolve import ensure_sahjhan  # noqa: E402
 
 
@@ -106,8 +114,16 @@ def main() -> None:
     file_path = tool_input.get("file_path", "")
     cwd = event.get("cwd", os.getcwd())
 
+    cache, boundary, _version = read_cache_with_boundary(cwd)
+
+    # A warning rather than a block: PostToolUse fires after the work is
+    # done, so refusing here undoes nothing. The PreToolUse side is what
+    # actually stops the run; this makes sure the reason reaches the model
+    # even when the blocked call was one that never fires a PreToolUse gate.
+    if boundary:
+        exit_boundary_missing(boundary, "PostToolUse")
+
     # Stale enforcement: skip event recording for abandoned audits
-    cache = read_cache(cwd)
     if not is_enforcement_fresh(cache):
         exit_ok()
 
@@ -119,24 +135,28 @@ def main() -> None:
     if not config_found:
         exit_enforcement_error(cwd, "Enforcement config not found", "PostToolUse")
 
-    # Call hook eval
+    # Which actor is asking, passed exactly as `pre_tool_hook` passes it. No
+    # PostToolUse rule templates `{{agent_id}}` yet; without the flag the
+    # first one to do so would bind the empty orchestrator bucket for every
+    # actor, and nothing would say so.
     cmd = [binary, "--config-dir", config_dir, "--json",
-           "hook", "eval", "--event", "PostToolUse"]
+           "hook", "eval", "--event", "PostToolUse",
+           "--agent-id", event_actor(event)]
     if tool_name:
         cmd.extend(["--tool", tool_name])
     if file_path:
         cmd.extend(["--file", file_path])
 
-    eval_data: dict[str, Any] = {}
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=5, cwd=cwd,
         )
-        if result.returncode == 0:
-            data = json.loads(result.stdout)
-            eval_data = data.get("data", data)
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, ValueError):
-        exit_enforcement_error(cwd, "Hook eval failed", "PostToolUse")
+    except (OSError, subprocess.TimeoutExpired):
+        exit_enforcement_error(cwd, "Hook eval subprocess failed", "PostToolUse")
+
+    eval_data, failure = read_hook_eval(result.stdout, result.returncode, result.stderr)
+    if eval_data is None:
+        exit_enforcement_error(cwd, failure, "PostToolUse")
 
     # Process auto_records
     for record in eval_data.get("auto_records", []):

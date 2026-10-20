@@ -11,15 +11,15 @@ from urllib.request import urlopen
 
 # ── Pinned version and integrity checksums ──
 
-SAHJHAN_VERSION = "0.20.0"
+SAHJHAN_VERSION = "0.28.0"
 _RELEASE_BASE = "https://github.com/jbrjake/sahjhan/releases/download"
 _BOOTSTRAP_COOLDOWN = 3600  # seconds before retrying after failure
 
 SAHJHAN_CHECKSUMS: dict[str, str] = {
-    "aarch64-apple-darwin": "5183ce7654dbdbeb9c5bb1708e4766a9a4df25a52841166ccfafa1dd5d118da0",
-    "x86_64-apple-darwin": "bf93ac14ba2e69d4fb0fcb0bd32eaa73acc11111e2d1bacf5bb2ecb717b3afea",
-    "x86_64-unknown-linux-gnu": "0216531829157ac9375888d381b6d89849c8a47be9d8ea8e90a6c441a590bb1c",
-    "aarch64-unknown-linux-gnu": "87e41b2cc5a908fe0762270d85437ca70258b8fd36167b704643bb98e10df4aa",
+    "aarch64-apple-darwin": "2914395353aaded127c45e64484e97e0ddf038f934ade04408e44787c286d86a",
+    "x86_64-apple-darwin": "ce6fd7c2b8a283dea40343c32e4ae1d1144746f96df1679d4565c6055d461b77",
+    "x86_64-unknown-linux-gnu": "d3134e8687f80e1eeb269cd2a81120c94e8a17ffd6d15d6f40925c15f8c5d7f6",
+    "aarch64-unknown-linux-gnu": "e6a7dfc7e24f441690c8b68205bd1f63689fc7bd9bc9749cfcbc9668ee67ab28",
 }
 
 # ── Platform resolution ──
@@ -57,13 +57,14 @@ def sahjhan_binary() -> str:
 def ensure_sahjhan() -> str | None:
     """Return path to the Sahjhan binary, downloading if needed.
 
-    Returns the binary path if available (already present or successfully
-    downloaded). Returns None if the binary cannot be obtained.
+    Returns the binary path if available (already present, its version marker
+    current and its bytes the pinned release's, or successfully downloaded).
+    Returns None if the binary cannot be obtained.
 
     Download is skipped if a recent failure marker exists (< 1 hour old).
     """
     path = sahjhan_binary()
-    if os.path.isfile(path) and not _version_stale(path):
+    if os.path.isfile(path) and not _version_stale(path) and _verified(path):
         return path
     return _bootstrap(path)
 
@@ -82,6 +83,64 @@ def _version_stale(binary_path: str) -> bool:
             return f.read().strip() != SAHJHAN_VERSION
     except OSError:
         return False
+
+
+def _verified(binary_path: str) -> bool:
+    """Whether the binary's bytes are the pinned release's.
+
+    The marker says which version was installed, not that these bytes are it,
+    so a marked binary is hashed against SAHJHAN_CHECKSUMS. The hash is taken
+    again only when the marker or the binary moves: the stamp beside the
+    marker records what the last matching hash was taken over, and while that
+    still holds a stat is the whole check. With no marker (vendored by hand)
+    or no checksum for this platform there is nothing to compare, and the
+    binary is used as it stands.
+    """
+    expected = SAHJHAN_CHECKSUMS.get(platform_triple())
+    marker = os.path.join(os.path.dirname(binary_path), ".sahjhan-version")
+    if not expected or not os.path.isfile(marker):
+        return True
+    stamp = os.path.join(os.path.dirname(binary_path), ".sahjhan-verified")
+    current = _fingerprint(binary_path, marker, expected)
+    if current is None:
+        return False
+    try:
+        with open(stamp, encoding="utf-8") as f:
+            if f.read().strip() == current:
+                return True
+    except OSError:
+        pass
+    if _file_sha256(binary_path) != expected:
+        return False
+    _write_stamp(stamp, current)
+    return True
+
+
+def _fingerprint(binary_path: str, marker: str, expected: str) -> str | None:
+    """What a verification is valid for: pin, marker mtime, binary mtime and size."""
+    try:
+        binary_stat = os.stat(binary_path)
+        marker_stat = os.stat(marker)
+    except OSError:
+        return None
+    return (
+        f"{SAHJHAN_VERSION} {expected} {marker_stat.st_mtime_ns} "
+        f"{binary_stat.st_mtime_ns} {binary_stat.st_size}"
+    )
+
+
+def _file_sha256(path: str) -> str:
+    sha = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            sha.update(chunk)
+    return sha.hexdigest()
+
+
+def _write_stamp(stamp: str, fingerprint: str) -> None:
+    """Record a verification. Unwritable only costs a hash on the next call."""
+    with contextlib.suppress(OSError), open(stamp, "w", encoding="utf-8") as f:
+        f.write(fingerprint + "\n")
 
 
 def _bootstrap(dest: str) -> str | None:
@@ -132,6 +191,12 @@ def _bootstrap(dest: str) -> str | None:
         version_file = os.path.join(bin_dir, ".sahjhan-version")
         with open(version_file, "w", encoding="utf-8") as f:
             f.write(SAHJHAN_VERSION + "\n")
+
+        # The bytes were hashed on the way in; record it so the next call
+        # does not hash them again.
+        fingerprint = _fingerprint(dest, version_file, expected_hash)
+        if fingerprint is not None:
+            _write_stamp(os.path.join(bin_dir, ".sahjhan-verified"), fingerprint)
 
         # Create platform-neutral `sahjhan` symlink so bare invocations via
         # PATH (Claude Code prepends the plugin's bin/ to PATH) resolve to

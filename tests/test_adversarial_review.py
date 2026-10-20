@@ -505,10 +505,10 @@ class TestChainedInterpreterBypass:
 # inconsistency.
 #
 # Scope note (issue #60): MANAGED_DOCS covers only ledger-RENDERED views.
-# The merge-agent's artifacts (PUNCHLIST-MERGED.md, MERGE-REPORT.md) are
-# agent-authored, not rendered — they must remain WRITABLE or the
-# merge_complete gate is unsatisfiable. The invariant "MANAGED_DOCS <=>
-# has a render rule" is enforced by test_managed_docs_consistency.py.
+# The merge-agent's artifact (MERGE-REPORT.md) is agent-authored, not
+# rendered — it must remain WRITABLE or the merge_complete gate is
+# unsatisfiable. The invariant "MANAGED_DOCS <=> has a render rule" is
+# enforced by test_managed_docs_consistency.py.
 # ═══════════════════════════════════════════════════════════════════════
 
 
@@ -578,22 +578,24 @@ class TestManagedDocsWriteEditBypass:
             "view, and must be writable or merge_complete is unsatisfiable (#60)"
         )
 
-    def test_write_to_punchlist_merged_allowed(self):
-        """PUNCHLIST-MERGED.md is the merge-agent's worklist output — must be writable.
+    def test_write_to_the_rendered_punchlist_is_blocked(self):
+        """The unified worklist is the *rendered* PUNCHLIST.md, so it is guarded.
 
-        Issue #60: the merge_complete gate requires this file to exist, but the
-        only writer (the merge-agent subagent) was blocked by MANAGED_DOCS and
-        no render rule produces it, so full adversarial runs wedged at Step 9.
+        `PUNCHLIST-MERGED.md` used to be the merge-agent's hand-written worklist
+        and had to stay writable for the merge_complete gate. It is retired: the
+        merge now records Justine's findings onto the ledger, which means the
+        worklist is a render — and a render the agent could overwrite is a
+        forgeable protocol state.
         """
         event = {
             "tool_name": "Write",
-            "tool_input": {"file_path": "docs/holtz/PUNCHLIST-MERGED.md"},
+            "tool_input": {"file_path": "docs/holtz/PUNCHLIST.md"},
             "cwd": "/tmp/fake-cwd",
         }
         output = run_hook(self.HOOK, event)
-        assert output["hookSpecificOutput"]["permissionDecision"] == "allow", (
-            "PUNCHLIST-MERGED.md was blocked — merge_complete requires it to "
-            "exist but the merge-agent is the only writer (#60)"
+        assert output["hookSpecificOutput"]["permissionDecision"] == "deny", (
+            "PUNCHLIST.md is rendered from the ledger — a direct write forges "
+            "protocol state"
         )
 
     def test_write_to_non_managed_doc_allowed(self):

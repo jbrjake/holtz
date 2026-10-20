@@ -15,7 +15,7 @@ def _run(path: str) -> subprocess.CompletedProcess:
 
 
 def test_valid_report(tmp_path):
-    report = tmp_path / "PUNCHLIST-MERGED.md"
+    report = tmp_path / "MERGE-REPORT.md"
     report.write_text(
         "# Merged Punchlist\n\n"
         "## Agreement\n\n"
@@ -33,7 +33,7 @@ def test_valid_report(tmp_path):
 
 
 def test_missing_agreement_section(tmp_path):
-    report = tmp_path / "PUNCHLIST-MERGED.md"
+    report = tmp_path / "MERGE-REPORT.md"
     report.write_text(
         "# Merged Punchlist\n\n"
         "## Holtz-Only\n\nstuff\n"
@@ -46,7 +46,7 @@ def test_missing_agreement_section(tmp_path):
 
 
 def test_missing_blind_spot_section(tmp_path):
-    report = tmp_path / "PUNCHLIST-MERGED.md"
+    report = tmp_path / "MERGE-REPORT.md"
     report.write_text(
         "# Merged Punchlist\n\n"
         "## Agreement\n\nstuff\n"
@@ -64,7 +64,7 @@ def test_nonexistent_file():
 
 
 def test_empty_file(tmp_path):
-    report = tmp_path / "PUNCHLIST-MERGED.md"
+    report = tmp_path / "MERGE-REPORT.md"
     report.write_text("")
     result = _run(str(report))
     assert result.returncode != 0
@@ -72,7 +72,7 @@ def test_empty_file(tmp_path):
 
 def test_headers_only_rejected(tmp_path):
     """BH-010: Headers with no content must be rejected (permissive validator)."""
-    report = tmp_path / "PUNCHLIST-MERGED.md"
+    report = tmp_path / "MERGE-REPORT.md"
     report.write_text(
         "## Agreement\n"
         "## Holtz-Only\n"

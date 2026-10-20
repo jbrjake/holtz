@@ -34,7 +34,13 @@ Cannot advance through a legitimate transition → STOP. A broken enforcement st
 <HARD-GATE>
 **Autonomy.** Invoking this skill authorizes the entire run — recon → audit → merge → fix loop → convergence — to proceed to completion **without pausing for human confirmation**. This is an autonomous execution context, exactly as Justine's is. Choose the most conservative default for any ambiguity and proceed.
 
-The fix loop edits code and creates commits. Those edits and commits are **pre-authorized by the invocation** — do not stop to ask whether to enter the fix loop, which severities to fix, or whether to continue after the merge. Work every finding, resolving or deferring each per the deferral rules: CRITICAL/HIGH must be fixed; LOW, budget-capped MEDIUM, and can't-reproduce may be deferred with the required evidence. "Keep coming back until convergence" (Rule 6) is the default, not a decision to put to the user.
+The fix loop edits code and creates commits. Those edits and commits are **pre-authorized by the invocation** — do not stop to ask whether to enter the fix loop, which severities to fix, or whether to continue after the merge. Work every finding, resolving or deferring each per the deferral rules: CRITICAL/HIGH must be fixed; LOW, budget-capped MEDIUM, and can't-reproduce may be deferred with the required evidence. Severity is half the routing — the `reachability` grade routes it:
+
+- `user_reachable` — fix-loop eligible. This is the only grade `fix_commit` accepts.
+- `fault_injected` — harden in Step 15's batch, one commit per module (`hardening_batch.py --record --module <dir>`). `converge` checks `no_open_fault_injected`.
+- `theoretical` — the courier records the deferral; do not open it in the fix loop. A probe that establishes a path re-files the finding as `user_reachable`, which puts it back on the board.
+
+"Keep coming back until convergence" (Rule 6) is the default, not a decision to put to the user.
 
 Hand control back to the human in exactly three cases — nothing else:
 1. **Enforcement is genuinely broken** — a legitimate transition cannot fire because a gate is unsatisfiable, the daemon is dead, or state is corrupt (per the gate above). Report the specific blocker and stop.
@@ -60,7 +66,7 @@ Operate as Holtz — see [references/backstory.md](references/backstory.md) for 
 
 **Subagent-digested** (consumed via reference reader subagent during Step 0):
 - [references/punchlist-format.md](references/punchlist-format.md) — punchlist format
-- [references/status-file-format.md](references/status-file-format.md) — STATUS.md format
+- [references/status-file-format.md](references/status-file-format.md) — Justine's hand-maintained status file (yours is rendered)
 - [references/recommendation-escalation.md](references/recommendation-escalation.md) — escalation protocol
 - [references/recon-procedures.md](references/recon-procedures.md) — recon procedure (Steps 0-4)
 - [references/architecture-baseline-format.md](references/architecture-baseline-format.md) — baseline format
@@ -114,6 +120,7 @@ sahjhan event finding --field project=holtz --field run=N \
   --field auditor=holtz --field phase=audit --field step=7 \
   --field id=BH-001 --field severity=HIGH --field category=doc/drift \
   --field location="README.md:108" --field perspective=public-contract \
+  --field reachability=user_reachable \
   --field description="Pattern count stale" --field predicted_by=1
 # (auto-emitted by `transition fix_commit BH-001`):
 # sahjhan event finding_resolved --field project=holtz --field run=N \
@@ -161,15 +168,13 @@ sahjhan event blast_radius --field project=holtz --field run=N \
 sahjhan event hardening_complete --field project=holtz --field run=N \
   --field auditor=holtz --field phase=fix_loop --field step=10 \
   --field finding_id=BH-001 --field edge_cases_tested=3 --field tests_added=2
-sahjhan event pattern_analysis_complete --field project=holtz --field run=N \
-  --field auditor=holtz --field phase=fix_loop --field step=11 \
-  --field patterns_found=2 --field siblings_found=4
 sahjhan event iteration_complete --field project=holtz --field run=N \
   --field auditor=holtz --field phase=fix_loop --field step=10 \
   --field perspective=component --field items_resolved=3 --field items_remaining=2 \
   --field test_count=50 --field tests_passed=true
 # Snapshot for gate comparison (key must match snapshot_compare reference in transitions.toml)
-sahjhan event snapshot --field key=pre_audit_edge_count --field value=28
+sahjhan event snapshot --field project=holtz --field run=N \
+  --field auditor=holtz --field key=pre_audit_edge_count --field value=28
 # mode is for audit trail only — gate checks presence, not mode value
 sahjhan event justine_dispatched --field project=holtz --field run=N \
   --field auditor=holtz --field phase=recon --field mode=full
@@ -230,8 +235,9 @@ If you catch yourself thinking any of these, STOP. You are rationalizing non-com
 
 - **Budget: ~300K is the soft ceiling, never aim for 1M.** A 1M-token context window is a limit, not a target to fill. Past ~300K every API call re-caches a large dead-weight prefix (Step-4 recon alone is ~103K), which is where session cost explodes. Treat **~300K as a soft ceiling**: as you approach it, stop at the next *natural* boundary — between findings, after a pattern-analysis point, **never mid-fix** — run `iteration_boundary`, tell the user to `/clear`, and resume. The clear is a reset, not a stop (the primer re-injects state; see Rule 6). Keeping the main context small is the whole reason fixes are delegated to subagents (below).
 - **One step, one file.** Each recon step and audit batch writes to its own file IMMEDIATELY. Write first, think later.
+- **Cap every artifact at 40 KB.** An artifact that would grow past it continues in a numbered sibling — `step2-code-signals-2.md` after `step2-code-signals.md` — with the first file linking the next. Split at the section boundary; never truncate.
 - **Don't echo artifacts.** After writing to disk, say only: "Written to `<path>`." Do not restate contents. If you need to reference the contents later, re-read the file — it's cheaper than carrying the summary in context for 200+ turns.
-- **Subagents for heavy work — scanning AND fixes.** Delegate grep/read-heavy scanning (test-file audits, module scans) *and* per-finding fix work to Agent subagents. The code they read and the hypotheses they test stay in THEIR context, not yours. A scan subagent returns a short summary + writes findings to disk; a fix subagent does the whole TDD cycle **in the enforced tree** — failing test, `test_failed_before_fix`, fix, suite, hardening — gated by the same hooks you are (it runs Sahjhan itself; the pre-edit gate is agent-agnostic), and returns a compact result. The **orchestrator** (you) then validates (re-run suite) and does the commit + `fix_commit`. Never let a fix subagent `git commit` or run a `transition` — git and protocol state stay linear in the orchestrator. See [references/phase-fix-loop.md](references/phase-fix-loop.md).
+- **Subagents for heavy work — scanning AND fixes.** Delegate grep/read-heavy scanning (test-file audits, module scans) *and* per-finding fix work to Agent subagents. The code they read and the hypotheses they test stay in THEIR context, not yours. A scan subagent returns a short summary + writes findings to disk; a fix subagent does the whole TDD cycle in **its own worktree** (`isolation: "worktree"`) — failing test, `test_failed_before_fix`, fix, suite, hardening — under the same hooks you are, with the TDD pre-edit gate **keyed on the actor** that recorded the failing test, and it runs Sahjhan itself. It **commits once in its own worktree**, rebases onto your branch, records the suite green last, and returns a compact result. The **orchestrator** (you) then `git merge --ff-only`, validates by reading the ledger, and runs `fix_commit`. A fix subagent runs no `transition` except `fix_commit` to clear its own pending-commit block — protocol state stays linear in the orchestrator. See [references/phase-fix-loop.md](references/phase-fix-loop.md).
 - **Batch independent tool calls.** When multiple checks are independent (no data dependency between them), execute them as parallel tool calls in a single turn. Do not narrate between independent operations. Each eliminated turn saves its narration text from being cached on every subsequent API call.
 - **Terse within phases.** Between tool calls within a phase, do not explain what you are about to do. Execute, then report findings. Save narrative for phase boundaries and significant discoveries. Every sentence of narration enters context permanently.
 - **Tool search threshold.** In MCP-heavy environments, set `ENABLE_TOOL_SEARCH=auto:5` to defer tool definition loading until tools exceed 5% of context (default is 10%). This reduces early-session cache burden when many MCP servers are connected.
@@ -280,10 +286,10 @@ digraph {
 
 Before starting ANY work, check for existing Sahjhan state and output files:
 
-0. **First-ever run (no `docs/holtz/.sahjhan/` directory):** Run `sahjhan init` to create the data directory and `manifest.json`. This is required before `daemon start`, `ledger create`, or any other sahjhan command. Safe to re-run on already-initialized projects.
+0. **Confirm the boundary** — `python3 "$CLAUDE_PLUGIN_ROOT/skills/holtz/scripts/boundary_check.py"`. If it does not print `BOUNDARY: confined`, stop and ask the user to type `holtz-start` (the bare word, on its own line). Nothing works until it has run. Details in [references/phase-recon.md](references/phase-recon.md).
 1. **Run `sahjhan status`:** If there's an active run, it tells you exactly where the last run stopped. Resume from that state — do not restart from Step 0.
-2. **If no Sahjhan state but `docs/holtz/recon/` dir exists:** A prior run crashed during recon (Steps 0-4). Run `sahjhan init` (safe no-op if already initialized), create the run ledger (`sahjhan ledger create --from run N --activate`) then run `sahjhan transition run_start`, then check which `docs/holtz/recon/step*.md` files exist. Resume from the first missing step.
-3. **If no Sahjhan state but `docs/holtz/PUNCHLIST.md` exists:** A prior run completed before Sahjhan was installed. Read it + any STATUS.md to determine position. Run `sahjhan init`, then initialize the ledger and advance to the appropriate state.
+2. **If no Sahjhan state but `docs/holtz/recon/` dir exists:** A prior run crashed during recon (Steps 0-4). Create the run ledger (`sahjhan ledger create --from run N --activate`) then run `sahjhan transition run_start`, then check which `docs/holtz/recon/step*.md` files exist. Resume from the first missing step.
+3. **If no Sahjhan state but `docs/holtz/PUNCHLIST.md` exists:** A prior run completed before Sahjhan was installed. Read it + any STATUS.md to determine position. Initialize the ledger and advance to the appropriate state.
 4. **If the user says "start fresh" or "re-audit":** Archive the run: move the current run's files from `docs/holtz/` to `docs/holtz/archive/{date}-run{NN}/` as a backup, then create fresh output files in `docs/holtz/`. **Exception:** `patterns-brief.md`, `patterns-brief-archive.md`, and `impact-graph.json` persist across runs — copy them from the archive back into `docs/holtz/` if they were moved. The impact graph grows richer over time and should never be discarded. The architecture baseline (`docs/holtz/architecture-baseline.md`) and living punchlist (`docs/holtz/LIVING-PUNCHLIST.md`) also persist across runs — never archive them. The living punchlist is updated at the end of each converged run, not during. The architecture baseline's Drift Log is appended during Step 0 as drift is detected; its Structural Snapshot and Documented Intent sections are updated only at convergence.
 5. **If `docs/holtz/SUMMARY.md` exists:** A prior run completed. Ask the user if they want a fresh audit or to review/extend the prior findings.
 

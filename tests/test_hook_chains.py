@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,6 +22,13 @@ import pytest
 from hook_runner import run_hook as _run_hook
 
 REPO_ROOT = Path(__file__).parent.parent
+
+# `enforcement/hooks` otherwise reaches sys.path only through the `real_daemon`
+# fixture, which this file's mock-daemon tests never request — so
+# `from _protocol_cache import stall_count` resolved or raised depending on
+# whether some *other* module had run first. Under `-k` it raised for all 35,
+# which is a collection failure wearing the costume of a RED control.
+sys.path.insert(0, str(REPO_ROOT / "enforcement" / "hooks"))
 
 # Hook paths in chain order (as defined in hooks.json)
 PRE_TOOL_LIFECYCLE = str(REPO_ROOT / "enforcement" / "hooks" / "_daemon_lifecycle.py")
@@ -179,7 +187,9 @@ class TestPostToolUseBashChain:
         assert _is_post_tool_ok(output)
 
         # Verify commit was recorded in state
-        assert "abc1234" in mock_daemon.state.get("unregistered_commits", [])
+        # Keyed by actor since P0.3/D41; this event carries no `agent_id`,
+        # so the charge lands in the orchestrator's bucket.
+        assert mock_daemon.state["unregistered_commits"] == {"": ["abc1234"]}
 
     def test_sahjhan_command_refreshes_state(self, mock_daemon, tmp_path, monkeypatch):
         """A sahjhan command triggers state refresh in protocol_tracker."""
@@ -283,7 +293,7 @@ class TestFullRoundTrip:
         # PostToolUse: tracker records the commit
         output = _run_hook(POST_TOOL_TRACKER, post_event)
         assert _is_post_tool_ok(output)
-        assert "a1b2c3d" in mock_daemon.state.get("unregistered_commits", [])
+        assert mock_daemon.state["unregistered_commits"] == {"": ["a1b2c3d"]}
 
         # Now a second commit should be blocked by commit_gate
         pre_event2 = {
@@ -441,7 +451,8 @@ class TestChickenAndEggStallBlock:
         }
         output = _run_hook(POST_TOOL_TRACKER, event)
         assert _is_post_tool_ok(output)
-        assert mock_daemon.state.get("stall") == 0, \
+        from _protocol_cache import stall_count
+        assert stall_count(mock_daemon.state) == 0, \
             "Wrapped sahjhan re-sync must reset the stall counter"
 
     def test_plain_command_increments_stall(self, mock_daemon, tmp_path):
@@ -455,8 +466,111 @@ class TestChickenAndEggStallBlock:
         }
         output = _run_hook(POST_TOOL_TRACKER, event)
         assert _is_post_tool_ok(output)
-        assert mock_daemon.state.get("stall") == 6, \
+        from _protocol_cache import stall_count
+        assert stall_count(mock_daemon.state) == 6, \
             "Plain command should increment stall, not reset it"
+
+
+@pytest.mark.hook_e2e
+class TestReadOnlyCommandsDoNotStall:
+    """Reading the tree cannot stall the protocol, so it must not tick the counter.
+
+    P3.2 states this narrowing "needs a `hook_e2e` test" — it narrows a gate
+    that is otherwise agent-agnostic, which is the case CLAUDE.md requires be
+    proven at the interface Claude Code actually uses. These drive the hook as
+    a subprocess, so the marker is the accurate one.
+
+    The counter asks "how many commands have gone by without the protocol
+    moving?" — a question about work that could have produced an event. An
+    audit subagent's whole job is ``grep``/``sed -n``/``ls``, none of which
+    has a protocol event to emit, so under the old rule a reader accrued a
+    block it had no way to avoid except by running ``sahjhan status`` purely
+    to reset a number and discarding the output. That is the same reasoning
+    that already exempts test and lint commands.
+    """
+
+    def _stall_after(self, mock_daemon, tmp_path, command, start=5):
+        mock_daemon.state = _stalled_fix_loop_state(stall=start)
+        event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "tool_response": {"exit_code": 0, "output": ""},
+            "cwd": str(tmp_path),
+        }
+        output = _run_hook(POST_TOOL_TRACKER, event)
+        assert _is_post_tool_ok(output)
+        # No agent_id on these events, so the charge is the orchestrator's.
+        from _protocol_cache import stall_count
+        return stall_count(mock_daemon.state)
+
+    @pytest.mark.parametrize("command", [
+        'grep -rn "def foo" src/',
+        "rg --files-with-matches pattern",
+        "sed -n '1,50p' src/module.py",
+        "ls -la docs/holtz/",
+        "cat pyproject.toml",
+        "head -50 README.md",
+        "find . -name '*.py'",
+        "git status --short",
+        "git log --oneline -20",
+        "git show HEAD --stat",
+        "git diff HEAD~1",
+        'grep -rn "x" . | sort | uniq -c | head -20',
+        "wc -l src/*.py",
+        "which sahjhan",
+    ])
+    def test_read_only_inspection_does_not_tick(self, mock_daemon, tmp_path, command):
+        assert self._stall_after(mock_daemon, tmp_path, command) == 5, \
+            f"Read-only inspection must not tick the stall counter: {command}"
+
+    def test_read_only_prefixed_by_cd_does_not_tick(self, mock_daemon, tmp_path):
+        """``cd repo && grep ...`` is the shape subagents actually emit."""
+        cmd = f"cd {tmp_path} && grep -rn TODO . | head -20"
+        assert self._stall_after(mock_daemon, tmp_path, cmd) == 5
+
+    @pytest.mark.parametrize("command", [
+        # A write redirect makes the line mutating whatever produced the bytes.
+        'grep -rn "x" src/ > /tmp/out.txt',
+        "cat a.txt >> b.txt",
+        # In-place edit wears a read-only command's name.
+        "sed -i 's/a/b/' src/module.py",
+        "sed -i.bak 's/a/b/' src/module.py",
+        # And its long spelling, which the prefix match does not reach:
+        # `"--in-place".startswith("-i")` is False, because the second dash
+        # comes first. Same write, same disguise, one extra character.
+        "sed --in-place 's/a/b/' src/module.py",
+        "sed --in-place=.bak 's/a/b/' src/module.py",
+        # A read-only git subcommand still writes a file when told to.
+        "git diff --output=/tmp/x HEAD",
+        # The same gap elsewhere in the read-only list: both of these take a
+        # destination and had no writing-flag entry at all.
+        "sort -o sorted.txt in.txt",
+        "sort --output=sorted.txt in.txt",
+        "tree -o listing.txt",
+        # find can execute and delete.
+        "find . -name '*.pyc' -delete",
+        "find . -name '*.py' -exec rm {} ;",
+        # git subcommands that change the repository.
+        "git checkout -b feature",
+        "git config user.name x",
+        "git tag v1.0.0",
+        # Not an inspection command at all.
+        "echo hello",
+        "mkdir -p build",
+        "touch newfile.txt",
+        "cp a.txt b.txt",
+    ])
+    def test_mutating_commands_still_tick(self, mock_daemon, tmp_path, command):
+        assert self._stall_after(mock_daemon, tmp_path, command) == 6, \
+            f"Mutating command must still tick the stall counter: {command}"
+
+    def test_read_only_does_not_reset_the_counter_either(self, mock_daemon, tmp_path):
+        """Not ticking is not the same as clearing — only a protocol event clears.
+
+        A reader that has done nothing wrong should not be able to launder
+        away a stall accrued by real unregistered work.
+        """
+        assert self._stall_after(mock_daemon, tmp_path, "ls -la", start=12) == 12
 
 
 # ---------------------------------------------------------------------------

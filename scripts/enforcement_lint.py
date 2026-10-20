@@ -44,6 +44,10 @@ H9   An item-scoped transition that does not record the item state it implies,
      forcing the agent to state the same fact twice.
 H10  A gate that delegates its check to a tool without naming the ledger event
      that tool reads, so the gate reads as a direct check everywhere else.
+H11  A gate excused by an escape-qualifier literal that names no writer it may
+     trust, so the agent can type the word that lets it through.
+H12  A gate whose printed intent names no escape — what is wrong, and nothing
+     to run — or names one that cannot run.
 ===  =========================================================================
 
 Usage::
@@ -59,6 +63,7 @@ import argparse
 import ast
 import difflib
 import json
+import os
 import re
 import sys
 import tomllib
@@ -315,6 +320,30 @@ def _gate_query_names(gate: dict) -> set[str]:
     return names
 
 
+# Gate types whose predicate lives inside the sahjhan binary, mapped to the
+# event types that predicate reads. A third kind of opaque gate, alongside
+# `command_succeeds` (predicate in the invoked script — H10) and `query`
+# (predicate in SQL): here the predicate is neither in the config nor in this
+# tree, so nothing local can discover it and the gate names no event.
+#
+# Without this table the census under-counts. `no_violations` sits on `set
+# complete perspective` and `converge` — the only two transitions that reach
+# convergence — and reads `protocol_violation`, yet the event was absent from
+# ENFORCEMENT-CONTRACT.md's posture, so the one gate that can terminate a run
+# had no row. Source: sahjhan `src/gates/ledger.rs::eval_no_violations`, which
+# counts `protocol_violation` minus `violation_resolved`. Holtz declares no
+# `violation_resolved` event (violations are permanent by design), so only the
+# declared half is listed; an undeclared event is not consumed evidence.
+_ENGINE_GATE_EVENTS: dict[str, tuple[str, ...]] = {
+    "no_violations": ("protocol_violation",),
+}
+
+# The one `since` anchor form that names an event type. sahjhan 0.24.0 closed
+# the vocabulary to this and `last_transition`; anything else is refused where
+# the config is sealed (jbrjake/sahjhan#34).
+_ANCHOR_EVENT_PREFIX = "last_event_of_type:"
+
+
 def _gate_consumed(gate: dict, queries: dict[str, dict] | None = None) -> set[str]:
     """Event types one gate depends on, across every gate shape.
 
@@ -326,6 +355,7 @@ def _gate_consumed(gate: dict, queries: dict[str, dict] | None = None) -> set[st
     consumed: set[str] = set()
     if isinstance(gate.get("event"), str):
         consumed.add(gate["event"])
+    consumed |= set(_ENGINE_GATE_EVENTS.get(gate.get("type", ""), ()))
     # A gate that shells out to a tool has its predicate in that tool's SQL,
     # where nothing here can see it — so the gate names the event instead.
     # Unknown keys land in sahjhan's `params` and are ignored by the engine,
@@ -336,6 +366,15 @@ def _gate_consumed(gate: dict, queries: dict[str, dict] | None = None) -> set[st
         consumed.add(gate["evidence"])
     if isinstance(gate.get("sql"), str):
         consumed |= _sql_event_types(gate["sql"])
+    # `since = "last_event_of_type:<type>"` makes the gate depend on <type> as
+    # surely as `event` does — one decides what fills the window, the other
+    # decides where it starts. Unwalked, an anchor-only dependency is invisible
+    # to every consumer-side check here and to the generated contract, which
+    # reported the TDD gate non-forgeable while its anchor read an
+    # agent-writable event. `last_transition` names a position, not a type.
+    since = gate.get("since")
+    if isinstance(since, str) and since.startswith(_ANCHOR_EVENT_PREFIX):
+        consumed.add(since[len(_ANCHOR_EVENT_PREFIX) :])
     if queries is not None:
         for name in _gate_query_names(gate):
             consumed |= _sql_event_types(queries.get(name, {}).get("sql", ""))
@@ -1249,6 +1288,17 @@ _ESCAPE_FORMS = (
 )
 
 
+def _argument_scoped(model: Model, query: str) -> bool:
+    """Whether a named query judges the argument the agent picked.
+
+    Its SQL binds a ``{{placeholder}}``, so its answer is about the pair the
+    agent chose (``item_open``: *this* finding), not about the run. H8 cannot
+    name one as a blocking gate's escape, and H12 does not demand an escape of
+    one — "pick another" is not a command.
+    """
+    return "{{" in model.queries.get(query, {}).get("sql", "")
+
+
 def _named_escapes(text: str, commands: set[str], own: str = "") -> list[str]:
     found = []
     for pattern in _ESCAPE_FORMS:
@@ -1309,6 +1359,9 @@ def check_h8_escape_identity(model: Model) -> list[Finding]:
     care. They agree when they are one object: a named query both sides
     reference. So the rule is nominal, not textual — the block must name the
     query its escape is gated on.
+
+    Only an escape whose readiness is a fact about the *run* can be judged this
+    way; see `_run_wide` for the escapes that are not.
     """
     findings: list[Finding] = []
     commands = {
@@ -1323,6 +1376,22 @@ def check_h8_escape_identity(model: Model) -> list[Finding]:
         for gate in transition.get("gates", []) or []:
             escape_queries.setdefault(command, set()).update(_gate_query_names(gate))
 
+    def _run_wide(names: set[str]) -> set[str]:
+        """Drop the escape's argument-validation queries.
+
+        `item_open`'s SQL is `… id='{{item_id}}'` — a fact about the pair the
+        agent picks, not about the run. A blocking gate has no arguments to
+        bind, so naming it there would leave `{{item_id}}` unresolved and the
+        gate uninstantiable: the remedy this check prints would not run. That
+        makes the parameterised half exactly as undecidable here as an inline
+        predicate, and it is dropped for the same reason.
+
+        An escape that keeps any run-wide named query is still judged on it —
+        `defer_medium` carries `medium_deferral_budget` alongside two
+        parameterised gates, and D2's block is required to reference it.
+        """
+        return {name for name in names if not _argument_scoped(model, name)}
+
     def _judge(
         where: str,
         text: str,
@@ -1331,7 +1400,31 @@ def check_h8_escape_identity(model: Model) -> list[Finding]:
         unnamed_is_finding: bool = True,
     ) -> None:
         for escape in _named_escapes(text, commands, own):
-            available = escape_queries.get(escape) or set()
+            if escape not in escape_queries:
+                # The escape carries no gates at all, so there is no state in
+                # which running it is refused and it cannot be unsatisfiable at
+                # the moment it is printed — which is the only thing this check
+                # is about. `sweep_dirty`, the `final_sweep -> fix_loop` edge
+                # every convergence conjunct points at, is the case: warning
+                # there asserts something untrue about the tree on every run.
+                #
+                # The map distinguishes this from an inline-gated escape for
+                # free: `setdefault` fires per gate, so a transition with
+                # inline gates registers an empty set and a transition with no
+                # gates registers nothing. Only the latter is exempt.
+                continue
+            named = escape_queries.get(escape) or set()
+            available = _run_wide(named)
+            if named and not available:
+                # Every predicate the escape is gated on is argument-scoped, so
+                # its readiness is a fact about the pair the agent picks and
+                # not about the run. There is nothing for a nominal check to
+                # compare, and the warning below would print a hint that is
+                # already satisfied — the predicates *are* named. Whether the
+                # block's condition entails the escape's readiness is a real
+                # question, and an end-to-end test that drives the named
+                # command from the blocked state is what answers it.
+                continue
             if not available and not unnamed_is_finding:
                 # A block whose escape is gated on inline predicates may be a
                 # perfectly good block: `fix_commit`'s gates are *more work*
@@ -1402,6 +1495,33 @@ def check_h8_escape_identity(model: Model) -> list[Finding]:
 _ABSENCE_PREDICATE = re.compile(r"count\s*\(\s*\*\s*\)\s*=\s*0", re.I)
 
 
+def _binds_the_item_id(sql: str, arg: str) -> bool:
+    """Whether the argument is the *item* — compared against an ``id`` column.
+
+    H9's subject is a transition acting on one item, so the argument has to be
+    that item: ``id='{{item_id}}'``. An argument bound to any other column
+    names a **population** instead, and the ids in it are neither the argument
+    nor the transition's to record. ``set complete perspective`` asks whether
+    the findings carrying ``perspective='{{current_perspective}}'`` are closed;
+    reading any mention of the argument as item-scope made this check demand
+    that completing a lens emit a ``finding`` whose id is the lens's *name*.
+
+    So the precondition is narrowed to what the docstring above already says.
+    Every true positive in the tree binds the id — the three deferrals through
+    ``item_open``, and ``merge_finding`` — and a transition that really does
+    close its argument cannot dodge this by renaming the argument.
+    """
+    placeholder = re.escape("{{" + arg + "}}")
+    return bool(
+        re.search(
+            rf"(?:\w+\.)?\bid\s*=\s*'{placeholder}'"
+            rf"|'{placeholder}'\s*=\s*(?:\w+\.)?\bid\b",
+            sql,
+            re.I,
+        )
+    )
+
+
 def check_h9_transition_state_decoupling(model: Model) -> list[Finding]:
     """A transition that acts on an item without recording the item's new state.
 
@@ -1435,7 +1555,7 @@ def check_h9_transition_state_decoupling(model: Model) -> list[Finding]:
             if not isinstance(sql, str):
                 continue
             # Per-item, and phrased as "none of these has happened yet".
-            if not any(f"{{{{{arg}}}}}" in sql for arg in args):
+            if not any(_binds_the_item_id(sql, arg) for arg in args):
                 continue
             if not _ABSENCE_PREDICATE.search(sql):
                 continue
@@ -1548,6 +1668,334 @@ def check_h10_delegated_gate_evidence(model: Model) -> list[Finding]:
     return findings
 
 
+# Fields that qualify *why* a row exists rather than what it says. A gate
+# filtering one of these is not reading the finding — it is reading the config's
+# account of how the row came to be, which is a claim about the writer.
+#
+# `severity` and `reachability` are deliberately out, and the reason is not
+# squeamishness: they are the audit's subject matter. The agent grading its own
+# findings is the design, and a wrong grade is governed by D25's latest-filing
+# rule (`f.seq = (SELECT MAX(g.seq) …)`), which re-reads the grade rather than
+# trusting the first one. There is no writer a `severity='CRITICAL'` filter
+# could name.
+#
+# `provenance` is the name item 22 gave to what shipped as the ledger entry
+# column `recorded_by` (sahjhan#50). It is the *discharge* below, not a thing
+# needing one — a rule demanding that a `recorded_by` filter carry a
+# `recorded_by` filter is either vacuous or infinite.
+_ESCAPE_QUALIFIER_FIELDS = frozenset({"reason", "trigger", "scope"})
+
+# `recorded_by` values the agent can produce, so naming one discharges nothing.
+# `import:<source>` is a path someone imported and validates nothing;
+# `daemon:unverified` is `record_event` with no manifest configured, which is
+# enforcement already degraded. The rest — `hook:`, `authed:`, `engine:` — are
+# writers the agent cannot be. (sahjhan 0.28.0 `src/provenance.rs`.)
+_FORGEABLE_WRITER_PREFIXES = ("agent:", "import:", "daemon:unverified")
+
+_SQL_ALIAS_TYPE = re.compile(r"\b(\w+)\.type\s*=\s*'([a-z_][a-z0-9_]*)'")
+_SQL_ALIAS_FIELD = re.compile(r"\b(\w+)\.(\w+)\s*=\s*'([^']*)'")
+
+
+def _sql_field_literals(sql: str) -> list[tuple[str, str, str, str]]:
+    """Every ``<alias>.<field> = '<literal>'`` filter, with the alias's type.
+
+    Returns ``(event_type, alias, field, literal)``. The alias is carried
+    because the discharge has to be scoped to the same one: a `recorded_by`
+    term somewhere else in the query constrains a different row and must not
+    be read as vouching for this one.
+    """
+    aliases = dict(_SQL_ALIAS_TYPE.findall(sql))
+    out = []
+    for alias, column, literal in _SQL_ALIAS_FIELD.findall(sql):
+        if column == "type" or alias not in aliases:
+            continue
+        out.append((aliases[alias], alias, column, literal))
+    return out
+
+
+def _agent_can_write(model: Model, event: str) -> bool:
+    """Whether `sahjhan event <type>` puts this row on the ledger.
+
+    Not "does it declare `agent:cli`" — `event` is on the bootstrap allowlist,
+    so the agent's path is open for any event that is neither `restricted` nor
+    denied by name. `events.toml` says it in as many words: attestation is the
+    strength of the *weakest* available path, not the intended one.
+    """
+    spec = model.events.get(event, {})
+    if spec.get("restricted"):
+        return False
+    return event not in model.agent_denied_events
+
+
+def _writer_constrained(sql: str, alias: str) -> bool:
+    """Does the predicate pin this alias's row to a writer the agent is not?"""
+    for _type, other, column, literal in _sql_field_literals(sql):
+        if (
+            other == alias
+            and column == "recorded_by"
+            and not literal.startswith(_FORGEABLE_WRITER_PREFIXES)
+        ):
+            return True
+    return False
+
+
+def _gate_predicates(model: Model, gate: dict) -> Iterator[tuple[str, str]]:
+    """(source, sql) for every predicate one gate decides on, branches included."""
+    if isinstance(gate.get("sql"), str):
+        yield "inline sql", gate["sql"]
+    for name in _gate_query_names(gate):
+        sql = model.queries.get(name, {}).get("sql")
+        if isinstance(sql, str):
+            yield f"[queries.{name}]", sql
+    for sub in _gate_branches(gate):
+        yield from _gate_predicates(model, sub)
+
+
+def check_h11_literal_provenance(model: Model) -> list[Finding]:
+    """A gate excusing itself on one word must say who is allowed to type it.
+
+    Item 18 is the bug; this is why it shipped. `all_critical_resolved` excused
+    a CRITICAL carrying a `finding_deferred` that read `reason='theoretical'`,
+    on the strength of a comment saying the courier wrote that word. The comment
+    was wrong — `finding_deferred` is `attestation = "agent"`, `event` is on the
+    bootstrap allowlist, and the `reason` pattern admits `theoretical` — so one
+    agent-typed word closed any CRITICAL. Nothing in H1–H10 asks that question:
+    H5 asks whether an event claiming *above* `agent` has an agent-writable
+    path, and this one claims `agent`, so H5 is satisfied by the very fact that
+    is the defect.
+
+    The rule: **when a gate filters an escape-qualifier field to a literal, the
+    value must be reachable only by a writer the gate is entitled to trust.**
+    Two ways to satisfy it, and they are the two the config already uses:
+
+    - the event is one the agent cannot write at all — `restricted`, or denied
+      by name in the bootstrap hook. `context_reset`'s
+      `trigger='session_start'` is this, and passes here with no special-casing
+      because `restricted = true` is a fact about the event, not a name this
+      rule knows;
+    - or the predicate pins the same row's `recorded_by` to a writer the agent
+      cannot be. That column is the engine's record of the append (sahjhan
+      0.28.0, #50); nothing declares it and no `--field` can supply it.
+
+    Scoped to the same SQL alias on purpose. A `recorded_by` term elsewhere in
+    the query constrains a different row, and reading it as vouching for this
+    one is how a check becomes a formality.
+    """
+    # claim -> the transitions that reach it. A named query reached from
+    # several transitions is one defect in one place; reporting it once per
+    # caller buries the count that matters.
+    claims: dict[tuple[str, ...], list[str]] = {}
+
+    for transition in model.transitions:
+        command = transition.get("command", "?")
+        stack = list(transition.get("gates", []) or [])
+        while stack:
+            gate = stack.pop()
+            stack.extend(_gate_branches(gate))
+
+            # The structured shape: `ledger_has_event_since` and its kin name
+            # the event outright and carry `filter = { field = "value" }`. Same
+            # claim as the SQL below, written in TOML instead, and a rule that
+            # read only SQL would call the config's own model answer clean
+            # while never having looked at it.
+            event = gate.get("event")
+            gate_filter = gate.get("filter")
+            if isinstance(event, str) and isinstance(gate_filter, dict):
+                for column, literal in sorted(gate_filter.items()):
+                    if column in _ESCAPE_QUALIFIER_FIELDS and _agent_can_write(
+                        model, event
+                    ):
+                        key = ("filter", event, "", column, str(literal))
+                        claims.setdefault(key, []).append(command)
+
+            for source, sql in _gate_predicates(model, gate):
+                for event_type, alias, column, literal in _sql_field_literals(sql):
+                    if column not in _ESCAPE_QUALIFIER_FIELDS:
+                        continue
+                    if "{{" in literal:  # a bound argument, not a literal
+                        continue
+                    if not _agent_can_write(model, event_type):
+                        continue
+                    if _writer_constrained(sql, alias):
+                        continue
+                    key = (source, event_type, alias, column, literal)
+                    claims.setdefault(key, []).append(command)
+
+    findings = []
+    for (source, event_type, alias, column, literal), commands in sorted(
+        claims.items()
+    ):
+        reached = ", ".join(f"'{c}'" for c in sorted(set(commands)))
+        if source == "filter":
+            findings.append(
+                Finding(
+                    "H11",
+                    "error",
+                    f"transitions.toml: gate on '{event_type}', "
+                    f"reached from {reached}",
+                    f"excuses itself when {column}='{literal}', and the agent "
+                    f"can record '{event_type}' with `sahjhan event` — so the "
+                    "escape is a word the agent types",
+                    f"make '{event_type}' restricted, deny it in "
+                    "BLOCKED_SAHJHAN_SUBSUB, or filter on the writer",
+                )
+            )
+            continue
+        findings.append(
+            Finding(
+                "H11",
+                "error",
+                f"protocol.toml: {source}, reached from {reached}",
+                f"excuses a row when {column}='{literal}', but the agent can "
+                f"record '{event_type}' with `sahjhan event` and nothing pins "
+                "who wrote it — the escape is a word the agent types",
+                f"add {alias}.recorded_by = '<hook:…>' to the predicate, or "
+                f"make '{event_type}' unwritable by the agent",
+            )
+        )
+    return findings
+
+
+# ── H12: every gate's printed intent names an escape ─────────────────────────
+#
+# Item 11, closed as a class (D-l, RULED Jon 2026-09-23). A gate that says what
+# is wrong and not what to run leaves the agent guessing at the moment it is
+# blocked — and a wrong guess at a protocol command is how runs wedge.
+#
+# What is judged is what the engine *prints*: the gate's own intent, else its
+# named query's, else a per-type default (sahjhan `src/gates/types.rs`, `eval`).
+# A composite prints only its own intent, so only top-level gates are judged.
+
+_BACKTICKED = re.compile(r"`([^`]+)`")
+_TEMPLATE_VAR = re.compile(r"\{\{[^}]*\}\}")
+_PROSE_VAR = re.compile(r"<[^>]*>")
+_SAHJHAN_REFERENT = re.compile(r"\b(event|transition)\s+([a-z_][a-z0-9_]*)")
+# What a person types: a prompt word, a slash command, or a `!` line (checked
+# as the command it runs).
+_HUMAN_ESCAPES = frozenset({"/clear", "/holtz", "holtz-start"})
+# Shell verbs whose escape is the act itself — amend the commit, delete the
+# file — with no referent in the config to check.
+_SHELL_ESCAPES = frozenset({"git", "rm"})
+
+
+def _printed_intent(model: Model, gate: dict) -> tuple[str, str]:
+    """The intent the engine prints for ``gate``, and where it comes from."""
+    if gate.get("intent"):
+        return str(gate["intent"]), "its own intent"
+    name = gate.get("query")
+    if gate.get("type") == "query" and isinstance(name, str):
+        text = model.queries.get(name, {}).get("intent")
+        if text:
+            return str(text), f"[queries.{name}]'s intent"
+    return "", "the engine's per-type default"
+
+
+def _script_exists(model: Model, token: str) -> bool:
+    name = os.path.basename(token.strip("\"'"))
+    return any((directory / name).is_file() for directory in model.tree.py_dirs)
+
+
+def _judge_escape(
+    model: Model, span: str, gate: dict, commands: set[str], own: str,
+) -> tuple[bool, str]:
+    """Whether a backticked span is a runnable escape, and what is wrong if not.
+
+    The second element is non-empty only when the span *claims* an escape that
+    does not exist — a wrong escape is followed, and fails, which is worse
+    than none.
+    """
+    if span.startswith("!"):
+        span = span[1:].strip()
+    if span in commands:
+        return span != own, ""
+    if span in _HUMAN_ESCAPES:
+        return True, ""
+    tokens = span.split()
+    if not tokens:
+        return False, ""
+    head = tokens[1] if tokens[0] == "python3" and len(tokens) > 1 else tokens[0]
+    if head == "sahjhan":
+        referent = _SAHJHAN_REFERENT.search(span)
+        if referent:
+            kind, name = referent.groups()
+            known = model.events if kind == "event" else commands
+            if name not in known:
+                return False, f"`{span}` names {kind} '{name}', which is not declared"
+        return True, ""
+    if head.strip("\"'").endswith(".py"):
+        if _script_exists(model, head):
+            return True, ""
+        return False, f"`{span}` names a script that is not in the tree"
+    if head in _SHELL_ESCAPES:
+        return True, ""
+    # The gate's own command or file, by hand: run the check yourself and fix
+    # what it reports, or write the file it reads.
+    own_text = _TEMPLATE_VAR.sub("", f"{gate.get('cmd', '')} {gate.get('path', '')}")
+    probe = _PROSE_VAR.sub("", span).strip()
+    return bool(probe) and probe in own_text, ""
+
+
+def check_h12_escape_named(model: Model) -> list[Finding]:
+    """A gate whose printed intent names nothing to run.
+
+    Accepted escapes: a declared transition (in backticks, or H8's ``run X`` /
+    ``transition X``); a ``sahjhan …`` or ``! sahjhan …`` line, whose
+    ``event``/``transition`` referent must be declared; a script that is in the
+    tree; a human action (``/clear``, ``/holtz``, ``holtz-start``); ``git`` or
+    ``rm``; the gate's own command or file; and for ``min_elapsed``, the wait
+    itself stated with the gate's seconds.
+
+    Argument-scoped queries are exempt, by H8's rule (``_argument_scoped``).
+    """
+    findings: list[Finding] = []
+    commands = {
+        transition.get("command", "")
+        for transition in model.transitions
+        if transition.get("command")
+    }
+    for transition in model.transitions:
+        own = transition.get("command", "")
+        for index, gate in enumerate(transition.get("gates", []) or []):
+            query = gate.get("query")
+            if gate.get("type") == "query" and isinstance(query, str) and _argument_scoped(
+                model, query,
+            ):
+                continue
+            where = (
+                f"transitions.toml: transition '{own}' "
+                f"({transition.get('from', '?')} → {transition.get('to', '?')}), "
+                f"gate {index} ({gate.get('type', '?')})"
+            )
+            text, source = _printed_intent(model, gate)
+            seconds = gate.get("seconds")
+            if gate.get("type") == "min_elapsed" and seconds is not None and re.search(
+                rf"\bwait\b.*\b{seconds}\b", text,
+            ):
+                continue
+            named = _named_escapes(text, commands, own)
+            for span in (s.strip() for s in _BACKTICKED.findall(text)):
+                ok, wrong = _judge_escape(model, span, gate, commands, own)
+                if ok:
+                    named.append(span)
+                elif wrong:
+                    findings.append(Finding(
+                        "H12", "error", where,
+                        f"names an escape that cannot run: {wrong}",
+                        "name the command as the skill files teach it",
+                    ))
+            if not named:
+                printed = f"{text!r}" if text else "nothing of its own"
+                findings.append(Finding(
+                    "H12", "error", where,
+                    f"prints {printed} ({source}) — it says what is wrong and "
+                    "names nothing to run",
+                    "end the intent with the way out: a transition, a "
+                    "`sahjhan …` line, a script, or the human action "
+                    "(`! …`, `/clear`, `holtz-start`)",
+                ))
+    return findings
+
+
 CHECKS = {
     "H1": check_h1_unsatisfiable,
     "H2": check_h2_false_declarations,
@@ -1559,6 +2007,8 @@ CHECKS = {
     "H8": check_h8_escape_identity,
     "H9": check_h9_transition_state_decoupling,
     "H10": check_h10_delegated_gate_evidence,
+    "H11": check_h11_literal_provenance,
+    "H12": check_h12_escape_named,
 }
 
 

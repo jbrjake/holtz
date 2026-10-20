@@ -2,7 +2,7 @@
 
 Read this file at the start of Step 10. This file is shared by Holtz and Justine — the fix process is disciplined regardless of how findings were discovered.
 
-**Division of labour (orchestrator vs. fix subagent).** Each finding's investigation, authoring, and verification is delegated to a **fix subagent** that works **in the enforced tree**; the **orchestrator** validates and commits (see [phase-fix-loop.md](phase-fix-loop.md) → Per-Item Fix Procedure). The triage flowchart and paths below describe what the **subagent** does inside its own context — reading code, forming and testing hypotheses, then running the enforced TDD sequence: writing the reproduction test, recording `test_failed_before_fix`, writing the fix, running the suite, and hardening. The subagent is under the **same enforcement the orchestrator is** — the TDD pre-edit gate fires on its edits too and does not look at `agent_id`, so it must run Sahjhan to unblock its own fix edit. The subagent returns a compact result (root cause, blast-radius node, test names, suite pass-count) and a triage verdict; it does **not** `git commit` and does **not** run a `transition`. The orchestrator then validates the verification (re-run suite, confirm the ledger events) and runs the commit + `fix_commit`. This keeps the read/reason-heavy work out of the main context (the ~300K budget) while git and protocol-state transitions stay linear in the orchestrator.
+**Division of labour (orchestrator vs. fix subagent).** Each finding's investigation, authoring, and verification is delegated to a **fix subagent** that works in **its own worktree** (`isolation: "worktree"`); the **orchestrator** merges and records (see [phase-fix-loop.md](phase-fix-loop.md) → Per-Item Fix Procedure). The triage flowchart and paths below describe what the **subagent** does inside its own context — reading code, forming and testing hypotheses, then running the enforced TDD sequence: writing the reproduction test, recording `test_failed_before_fix`, writing the fix, running the suite, and hardening. The subagent is under the **same enforcement the orchestrator is** — the TDD pre-edit gate fires on its edits too, **keyed on the actor** that recorded the failing test, so a sibling's failing test does not open it and the subagent must run Sahjhan to unblock its own fix edit. It **commits once in its own worktree**, rebases onto the branch it was given, records the suite green last, and returns a compact result (root cause, blast-radius node, test names, the recorded green) and a triage verdict. It runs no `transition` except `fix_commit` to clear its own pending-commit block. The orchestrator then `git merge --ff-only`, validates by reading the ledger, and runs `fix_commit`. This keeps the read/reason-heavy work out of the main context (the ~300K budget) while the branch and protocol state stay linear in the orchestrator.
 
 ## Triage Flowchart
 
@@ -10,7 +10,7 @@ Read this file at the start of Step 10. This file is shared by Holtz and Justine
 digraph {
   rankdir=TB
   node [shape=box]
-  read [label="Re-read worklist\n(MERGED if exists,\notherwise PUNCHLIST)"]
+  read [label="Re-read worklist\n(findings.py list)"]
   triage [label="Triage item\nby category"]
   fast [label="Fast Path\n(test→fix→commit)"]
   investigate [label="Investigation Path\n(layers→confidence→fix)"]
@@ -50,10 +50,8 @@ Commit format: `fix(<scope>): <desc>` with punchlist ID in body.
 
 For straightforward items where the root cause is obvious from the finding:
 
-1. Write failing test. Verify it fails. Minimal fix. Full suite. Commit.
-2. If mutation data exists from step 0e.1, re-run the mutation tool on the changed function(s) and record the before/after mutation kill rate in the punchlist item's Resolution notes (e.g., 'Mutation kill rate: 67% → 92%'). Quality check, not gate.
-3. **Update PUNCHLIST.md with resolution IMMEDIATELY after each commit** (status, commit hash, validating test).
-4. Update STATUS.md with last completed item ID. If this fix revealed a non-obvious insight, update the Strategy section's Last Insight field.
+1. Write failing test. Verify it fails. Record `test_failed_before_fix`. Minimal fix. Then Per-Fix Hardening below, then [phase-fix-loop.md](phase-fix-loop.md) A.7–A.9 for the commit, the rebase, and the one recorded run.
+2. If mutation data exists from step 0e.1, re-run the mutation tool on the changed function(s) and note the before/after mutation kill rate in the commit body (e.g., 'Mutation kill rate: 67% → 92%'). Quality check, not gate.
 
 ## Investigation Path
 
@@ -61,7 +59,7 @@ Use extended thinking (ultrathink) for this step — root cause analysis through
 
 For `bug/*` items where the root cause is not obvious, the bug is intermittent or theoretical, or multiple hypotheses need testing. See [investigation-format.md](investigation-format.md) for the investigation file format.
 
-1. Create an investigation file and link it from the punchlist item's `**Investigation:**` field.
+1. Create the investigation file at `docs/holtz/investigations/{item_id}.md`. That exact path is where `defer_cant_reproduce`'s gate looks for it.
 2. **Investigate bottom-up** through the layer stack:
 
    | Layer | Check |
@@ -78,8 +76,7 @@ For `bug/*` items where the root cause is not obvious, the bug is intermittent o
 3. **For regressions:** use `git bisect` to find the breaking commit before investigating layers.
 4. **Require HIGH confidence** before fixing. If confidence is LOW or MEDIUM, design one more check to raise it.
 5. Once root cause is confirmed at HIGH confidence: write failing test, verify it fails, minimal fix, full suite, commit.
-6. **Update punchlist** with resolution, root cause confidence, and commit hash IMMEDIATELY.
-7. Update STATUS.md. Update the Strategy section's Last Insight with the root cause finding.
+6. Record the root cause and its confidence in the investigation file.
 
 ## Can't-Reproduce Path
 
@@ -97,7 +94,6 @@ If not reproducible after structured attempts:
 
 1. Ensure reproduction attempts are documented in `docs/holtz/investigations/{item_id}.md`
 2. Run: `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" defer cant-reproduce {item_id}`
-3. Update PUNCHLIST.md status to DEFERRED
 
 The `finding_deferred` event is auto-emitted by the transition — do not record
 it by hand. One command, both facts.
@@ -124,17 +120,17 @@ HIGH and CRITICAL findings are never deferrable via priority (only via can't-rep
 
 ## Per-Fix Hardening
 
-After each fix passes the reproduction test and full suite:
+After the fix passes its reproduction test:
 
 1. **Edge variants:** Does the fix handle null, empty, boundary, and concurrent cases? If not, write tests for them.
 2. **Regression risk:** Could this specific fix regress? If the fix is in a path without existing test coverage, add a regression test beyond the reproduction test.
-3. Run full suite again after any hardening tests are added.
+3. Do not run the suite here. [phase-fix-loop.md](phase-fix-loop.md) A.9 records it, after the last write to the tree.
 
 This is per-fix robustness, not pattern analysis. Step 11 looks across fixes for systemic issues.
 
 ## Blast Radius Analysis
 
-After each fix passes the reproduction test, full suite, and per-fix hardening:
+After the fix passes its reproduction test. Order is [phase-fix-loop.md](phase-fix-loop.md) A.5-A.6 blast radius, A.7-A.8 hardening, A.9 recorded suite run.
 
 See [impact-graph-operations.md](impact-graph-operations.md) for the blast radius query commands and risk score update procedures.
 
@@ -142,4 +138,4 @@ See [impact-graph-operations.md](impact-graph-operations.md) for the blast radiu
 2. **Query** the impact graph with `blast_radius` (depth 2, or depth 3 for architectural fixes)
 3. **For each node in the blast radius:** check assumptions, update edges
 4. **Update impact graph:** lower risk scores, add/update edges
-5. **Update STATUS.md** Strategy section with blast radius findings
+5. **Record:** `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event blast_radius --field project=holtz --field run=N --field auditor=holtz --field phase=fix_loop --field step=10 --field finding_id={item_id} --field target_node=<node> --field depth=2 --field affected_count=N` — `fix_commit` gates on it.

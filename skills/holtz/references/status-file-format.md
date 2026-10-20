@@ -1,6 +1,8 @@
-# docs/holtz/STATUS.md Format
+# Hand-maintained auditor status file — format
 
-This file is Holtz's program counter. Located at `docs/holtz/STATUS.md` in the target project. It is the first file read after any context compaction and the last file updated after completing any step.
+The format for `docs/holtz/justine/STATUS.md` — Justine's program counter, hand-maintained, updated after each step.
+
+**Not** the format of `docs/holtz/STATUS.md`. Holtz's is rendered from the ledger on every transition and is read-only; `sahjhan status` is the same information.
 
 ## Template
 
@@ -37,7 +39,7 @@ This file is Holtz's program counter. Located at `docs/holtz/STATUS.md` in the t
 - [ ] Step 17: Architecture baseline update (subagent)
 - [ ] Step 18: Pattern library contribution (subagent)
 - [ ] Step 19: Living punchlist update (subagent)
-- [ ] Step 20: Write SUMMARY.md
+- [ ] Step 20: Write docs/holtz/justine/SUMMARY.md
 
 ## Next Action
 {Exactly what to do next. One sentence. Specific enough to resume without context.}

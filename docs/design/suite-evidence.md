@@ -225,8 +225,7 @@ quietly drop out of it:
 Then a second guard *after* the run: pytest exits **4** on a usage error and **5**
 on an empty collection, and neither is a statement about the code. A narrowed run
 ending that way re-runs the full suite instead of recording. **Zero tests executed
-must never satisfy a gate.** This is also what keeps exotic `$HOLTZ_PYTEST`
-overrides working — one that rejects trailing paths widens instead of wedging.
+must never satisfy a gate.**
 
 ### The recorded scope is what *ran*
 
@@ -281,10 +280,21 @@ python3 enforcement/scripts/verify_suite.py --print-affected   # empty => would 
 full suite forever is otherwise indistinguishable from one that works, and the
 cost this mechanism removes would come back unnoticed.
 
-**Non-standard test commands.** `$HOLTZ_PYTEST` overrides the suite command
-(default `python3 -m pytest -x --ff --tb=short -q`, defined once, in
-`DEFAULT_PYTEST`). Export it at run start if the target's tests need a
-venv/tox/poetry wrapper.
+**The project's interpreter.** The suite is always `<python> -m pytest -x --ff
+--tb=short -q` (`PYTEST_ARGS`, defined once); only the interpreter varies. An
+in-tree virtualenv — a `.venv/` or `venv/` holding `pyvenv.cfg`, which uv,
+virtualenv and in-project poetry all write — is used first, looked for in the
+tree being tested and then in the main checkout, since a fix subagent's linked
+worktree does not carry the gitignored venv. Otherwise `$HOLTZ_PYTHON` names an
+interpreter outside the tree (conda, poetry's cache); otherwise `python3`. There
+is no free-form command setting, so nothing can make the suite `true` (D-v).
+
+**What the courier checks before it records.** The script the command ran must
+be the plugin's own `verify_suite.py`, and its sha256 must match its row in
+`trusted-callers.toml`. A named interpreter must be a compiled executable (ELF
+or Mach-O), read and never run. The run must have passed at least one test.
+What stays out of reach is the environment itself: a fake `pytest` in the
+interpreter's own site-packages, exactly as with the default `python3`.
 
 Two flags are banned from the default and should stay that way:
 

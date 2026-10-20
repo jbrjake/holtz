@@ -34,6 +34,7 @@ import os
 from _common import (
     _daemon_request,
     _get_daemon_socket_path,
+    audit_data_dir,
     record_authed_event,
 )
 
@@ -42,7 +43,7 @@ VAULT_NAME = "quiz-bank"
 
 def get_run_number(cwd: str) -> str:
     """Current run number from the sahjhan active-ledger marker ('0' if none)."""
-    active_file = os.path.join(cwd, "docs", "holtz", ".sahjhan", "active-ledger")
+    active_file = os.path.join(audit_data_dir(cwd), "active-ledger")
     try:
         with open(active_file, encoding="utf-8") as f:
             return f.read().strip().replace("run-", "") or "0"

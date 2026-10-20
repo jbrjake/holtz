@@ -347,12 +347,21 @@ class TestTddGateBlocksWriteInFixLoop:
             f"Got: {reason!r}"
         )
 
-    def test_write_allowed_after_test_failed_before_fix_event(self, real_daemon):
-        """After recording test_failed_before_fix, the same Write should pass."""
-        _fast_forward_to_fix_loop(real_daemon)
-        _freshen_enforcement_cache(real_daemon)
+    # The command as an agent types it; the courier is triggered by the Bash
+    # line, so the test has to present the same text the host would report.
+    TDD_RECORD_COMMAND = (
+        "sahjhan event test_failed_before_fix "
+        "--field finding_id=BH-001 --field test_name=test_something "
+        "--field run=1 --field auditor=holtz --field project=holtz"
+    )
 
-        # Record the required event to release the gate.
+    def _record_failing_test(self, real_daemon, actor=None):
+        """The taught sequence: the agent records, then the courier attests.
+
+        `test_failed_before_fix` names no actor, so it cannot release an
+        actor-scoped gate on its own. `tdd_courier.py` runs outside the sandbox
+        and stamps the `agent_id` the host put on the hook event.
+        """
         _run_sahjhan(
             real_daemon, "event", "test_failed_before_fix",
             "--field", "finding_id=BH-001",
@@ -361,7 +370,24 @@ class TestTddGateBlocksWriteInFixLoop:
             "--field", "auditor=holtz",
             "--field", "project=holtz",
         )
+        courier_event = {
+            "tool_name": "Bash",
+            "tool_input": {"command": self.TDD_RECORD_COMMAND},
+            "tool_response": {"exit_code": 0, "stdout": "", "stderr": ""},
+            "cwd": real_daemon["project_root"],
+        }
+        if actor is not None:
+            courier_event["agent_id"] = actor
+        out = _invoke_hook("tdd_courier.py", courier_event, real_daemon)
+        # The courier warns rather than failing when it cannot attest. Surface
+        # that here: otherwise the gate assertion below fails with no hint that
+        # the evidence was never written.
+        assert "NOT recorded" not in json.dumps(out), (
+            f"the courier refused to attest the failing test: {out}"
+        )
+        return out
 
+    def _edit_event(self, real_daemon, actor=None):
         event = {
             "tool_name": "Write",
             "tool_input": {
@@ -370,11 +396,72 @@ class TestTddGateBlocksWriteInFixLoop:
             },
             "cwd": real_daemon["project_root"],
         }
-        output = _invoke_hook("pre_tool_hook.py", event, real_daemon)
+        if actor is not None:
+            event["agent_id"] = actor
+        return event
 
+    def test_write_allowed_after_the_courier_names_the_actor(self, real_daemon):
+        """After the failing test is recorded *and attributed*, Write passes."""
+        _fast_forward_to_fix_loop(real_daemon)
+        _freshen_enforcement_cache(real_daemon)
+
+        self._record_failing_test(real_daemon)
+
+        output = _invoke_hook(
+            "pre_tool_hook.py", self._edit_event(real_daemon), real_daemon
+        )
         hook_out = output.get("hookSpecificOutput", {})
         assert hook_out.get("permissionDecision") == "allow", (
-            f"After test_failed_before_fix event, Write should be allowed. Got: {output}"
+            f"After the courier attributed the failing test, Write should be "
+            f"allowed. Got: {output}"
+        )
+
+    def test_a_sibling_agent_cannot_ride_another_actors_failing_test(
+        self, real_daemon
+    ):
+        """P0.3's defect, stated as a test.
+
+        The gate used to read a run-global `test_failed_before_fix`, so with two
+        agents working each one's source edit was authorised by the other's
+        failing test — which is why the fix loop had to run one-at-a-time. The
+        orchestrator records here; a subagent must still be refused.
+        """
+        _fast_forward_to_fix_loop(real_daemon)
+        _freshen_enforcement_cache(real_daemon)
+
+        self._record_failing_test(real_daemon)
+
+        output = _invoke_hook(
+            "pre_tool_hook.py",
+            self._edit_event(real_daemon, actor="agent-B"),
+            real_daemon,
+        )
+        hook_out = output.get("hookSpecificOutput", {})
+        assert hook_out.get("permissionDecision") == "deny", (
+            f"agent-B recorded no failing test of its own and must not inherit "
+            f"one. Got: {output}"
+        )
+
+    def test_each_agent_is_released_by_its_own_failing_test(self, real_daemon):
+        """The other half: scoping must not make the gate unsatisfiable.
+
+        A block whose escape cannot be reached is a deadlock, so the agent that
+        does the work must be let through on its own evidence.
+        """
+        _fast_forward_to_fix_loop(real_daemon)
+        _freshen_enforcement_cache(real_daemon)
+
+        self._record_failing_test(real_daemon, actor="agent-B")
+
+        output = _invoke_hook(
+            "pre_tool_hook.py",
+            self._edit_event(real_daemon, actor="agent-B"),
+            real_daemon,
+        )
+        hook_out = output.get("hookSpecificOutput", {})
+        assert hook_out.get("permissionDecision") == "allow", (
+            f"agent-B recorded its own failing test and must be released by it. "
+            f"Got: {output}"
         )
 
     def test_write_blocked_in_recon_state_without_tdd_event(self, real_daemon):
@@ -895,6 +982,7 @@ def _record_finding(real_daemon, finding_id="BH-001", severity="HIGH"):
         "--field", f"severity={severity}", "--field", "category=bug/logic",
         "--field", "location=x.py:1", "--field", "perspective=component",
         "--field", "description=d", "--field", "predicted_by=1",
+        "--field", "reachability=user_reachable",
     )
 
 
@@ -903,22 +991,47 @@ def _record_suite_green(real_daemon):
 
     `fix_commit`'s suite gate is a ledger read (`verify_suite.py --check`), so
     driving the transition means producing the evidence rather than making a
-    trivially-true pytest command. `HOLTZ_PYTEST` stands in for the suite; the
-    hash, the daemon call, and the `restricted` write are all real — which is
-    the point, since a test that stubbed those would stop exercising the gate.
+    trivially-true pytest command. A one-test suite is the suite, run by real
+    pytest (D-v leaves no stand-in command); the hash, the daemon call, and the
+    `restricted` write are all real — which is the point, since a test that
+    stubbed those would stop exercising the gate.
+
+    Both halves of the taught sequence run: `--record` in the agent's shell,
+    which under the sandbox cannot reach the daemon, and then the PostToolUse
+    courier that turns its output into the ledger entry. Recording the event
+    directly here would leave the channel the fix loop actually uses untested,
+    which is the shape `test-the-taught-sequence-not-just-the-gate` describes.
     """
+    root = real_daemon["project_root"]
+    os.makedirs(os.path.join(root, "tests"), exist_ok=True)
+    with open(os.path.join(root, "tests", "test_green.py"), "w", encoding="utf-8") as fh:
+        fh.write("def test_green():\n    assert True\n")
+    with open(os.path.join(root, ".gitignore"), "w", encoding="utf-8") as fh:
+        fh.write("__pycache__/\n")
+    script = os.path.join(REPO_ROOT, "enforcement", "scripts", "verify_suite.py")
     env = os.environ.copy()
     env["SAHJHAN_DAEMON_SOCKET"] = real_daemon["sock_path"]
+    env["HOLTZ_PYTHON"] = sys.executable
     result = subprocess.run(
-        [sys.executable,
-         os.path.join(REPO_ROOT, "enforcement", "scripts", "verify_suite.py"),
-         "--record", "--cwd", real_daemon["project_root"]],
-        cwd=real_daemon["project_root"],
-        capture_output=True, text=True, env=env, timeout=60,
+        [sys.executable, script, "--record"],
+        cwd=root, capture_output=True, text=True, env=env, timeout=60,
     )
     assert result.returncode == 0, (
         f"verify_suite --record failed:\n{result.stdout}\n{result.stderr}"
     )
+    courier = subprocess.run(
+        [sys.executable,
+         os.path.join(REPO_ROOT, "enforcement", "hooks", "suite_courier.py")],
+        input=json.dumps({
+            "tool_name": "Bash",
+            "tool_input": {"command": f"python3 {script} --record"},
+            "tool_response": {"output": result.stdout, "exit_code": 0},
+            "cwd": root,
+        }),
+        capture_output=True, text=True, env=env, timeout=60,
+    )
+    assert courier.returncode == 0, courier.stderr
+    assert "NOT recorded" not in courier.stdout, courier.stdout
 
 
 def _satisfy_fix_commit_gates(real_daemon, finding_id="BH-001"):
@@ -986,10 +1099,9 @@ class TestFixCommitAutoEmitsFindingResolved:
 
     def _drive_to_fix_commit(self, real_daemon, monkeypatch, finding_id="BH-001"):
         # Gates run in the `sahjhan transition` subprocess env; a trivially-true
-        # test/lint command lets us exercise the transition without a real suite.
+        # lint command lets us exercise the transition without a real linter.
         # CLAUDE_PLUGIN_ROOT is how the suite gate finds verify_suite.py — the
         # gate command fails loudly rather than silently if it is unset.
-        monkeypatch.setenv("HOLTZ_PYTEST", "true")
         monkeypatch.setenv("HOLTZ_LINT", "true")
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", REPO_ROOT)
         _git_init_with_commit(
@@ -1037,17 +1149,16 @@ class TestFixCommitAutoEmitsFindingResolved:
 
 
 class TestCommitGatePatternCounterDerivation:
-    """#77: the commit gate's 'pattern analysis overdue' hard block must be
-    driven by the LEDGER (finding_resolved since the last pattern analysis) —
-    the same fact the pattern_check transition gate reads — not by a cache
-    counter that token-matching kept in a separate, drifting mirror.
+    """#77: 'pattern analysis overdue' must be driven by the LEDGER
+    (finding_resolved since the last pattern analysis) — the same fact the
+    pattern_check transition gate reads — not by a cache counter that
+    token-matching kept in a separate, drifting mirror.
 
-    The regression these guard against is a *deadlock*: the commit gate blocks a
-    legitimate fix commit and tells the auditor to run `transition
-    pattern_check`, while that transition's own gate is simultaneously blocked
-    because the ledger shows < 3 findings resolved. The printed escape is
-    unsatisfiable. Deriving the counter from the ledger makes block-condition ≡
-    escape-readiness, so that can never happen.
+    The commit gate is where that value surfaces on every Bash call, so it is
+    still where the derivation is observable. It advises rather than denies: the
+    round is owed at `iteration_boundary` and `set complete perspective`, and
+    the deadlock property (block ⇒ escape ready) belongs to those, asserted by
+    `test_iteration_boundary_and_pattern_check_are_never_both_shut` below.
 
     These assert observable *enforcement behavior* through the subprocess
     commit_gate hook (a trusted daemon caller) rather than reading the
@@ -1061,81 +1172,73 @@ class TestCommitGatePatternCounterDerivation:
             "cwd": real_daemon["project_root"],
         }, real_daemon).get("hookSpecificOutput", {})
 
-    def test_commit_gate_block_boundary_tracks_ledger(self, real_daemon):
-        """The block boundary is the ledger count: a commit is allowed at 2
-        findings resolved and blocked at 3 — proving the counter that drives the
-        gate is derived from finding_resolved events, not a token mirror."""
+    def test_the_advisory_boundary_tracks_the_ledger(self, real_daemon):
+        """The boundary is the ledger count: silent at 2 findings resolved and
+        advising at 3 — proving the value driving it is derived from
+        finding_resolved events, not a token mirror."""
         _fast_forward_to_fix_loop(real_daemon)
         _record_finding_resolved(real_daemon, "BH-001")
         _record_finding_resolved(real_daemon, "BH-002")
         _freshen_enforcement_cache(real_daemon)  # protocol_tracker derives -> 2
 
-        allowed = self._commit_decision(real_daemon, "fix: BH-002")
-        assert allowed.get("permissionDecision") == "allow", (
-            f"2 findings resolved (< 3) must not be pattern-blocked; got {allowed}"
+        quiet = self._commit_decision(real_daemon, "fix: BH-002")
+        assert "pattern_check" not in quiet.get("additionalContext", ""), (
+            f"2 findings resolved (< 3) must owe no round; got {quiet}"
         )
 
         _record_finding_resolved(real_daemon, "BH-003")
         _freshen_enforcement_cache(real_daemon)  # derives -> 3
 
-        blocked = self._commit_decision(real_daemon, "fix: BH-003")
-        assert blocked.get("permissionDecision") == "deny", (
-            f"3 findings resolved must trigger the pattern-overdue block; got {blocked}"
+        advised = self._commit_decision(real_daemon, "fix: BH-003")
+        assert advised.get("permissionDecision") == "allow", (
+            f"A verified fix must still be recordable; got {advised}"
         )
-        assert "pattern" in blocked.get("permissionDecisionReason", "").lower()
+        assert "pattern_check" in advised.get("additionalContext", ""), (
+            f"3 findings resolved must raise the pattern advisory; got {advised}"
+        )
 
     def test_diagnostics_do_not_move_the_counter(self, real_daemon):
         """Failure modes 1 & 2: read-only diagnostics that merely MENTION
         `fix_commit` / `pattern_check` as tokens must neither inflate the counter
-        (spurious block) nor reset it (silent skip)."""
+        (spurious obligation) nor reset it (silent skip)."""
         _fast_forward_to_fix_loop(real_daemon)
         _record_finding_resolved(real_daemon, "BH-001")
         _record_finding_resolved(real_daemon, "BH-002")
 
         # Mode 1: the old mirror would inflate on each `fix_commit` token. The
-        # ledger truth is 2, so the commit stays allowed after any number of them.
+        # ledger truth is 2, so nothing is owed after any number of them.
         _run_tracker(real_daemon, "sahjhan gate check fix_commit")
         _run_tracker(real_daemon, "sahjhan gate check fix_commit")
         _run_tracker(real_daemon, "sahjhan gate check fix_commit")
-        allowed = self._commit_decision(real_daemon, "fix: BH-002")
-        assert allowed.get("permissionDecision") == "allow", (
+        quiet = self._commit_decision(real_daemon, "fix: BH-002")
+        assert "pattern_check" not in quiet.get("additionalContext", ""), (
             f"diagnostics mentioning fix_commit must not inflate the counter into "
-            f"a spurious block; got {allowed}"
+            f"a spurious obligation; got {quiet}"
         )
 
         # Mode 2: a diagnostic mentioning `pattern_check` must NOT zero the
         # counter. Bring the ledger to 3, then run such a diagnostic to freshen:
-        # the derived counter is 3, so the commit is (correctly) blocked.
+        # the derived counter is 3, so the round is (correctly) still owed.
         _record_finding_resolved(real_daemon, "BH-003")
         _run_tracker(real_daemon, "sahjhan gate check pattern_check")
-        blocked = self._commit_decision(real_daemon, "fix: BH-003")
-        assert blocked.get("permissionDecision") == "deny", (
+        advised = self._commit_decision(real_daemon, "fix: BH-003")
+        assert "pattern_check" in advised.get("additionalContext", ""), (
             f"a diagnostic mentioning pattern_check must not silently reset the "
-            f"ledger-derived count of 3; got {blocked}"
+            f"ledger-derived count of 3; got {advised}"
         )
 
-    def test_hard_block_escape_is_satisfiable(self, real_daemon):
-        """The core of #77: when the commit gate hard-blocks on 'pattern
-        overdue', the escape it prints (`transition pattern_check`) must be
-        runnable at that same instant — its gate ready. No deadlock."""
+    def test_a_verified_fix_is_never_held_back_by_an_owed_round(self, real_daemon):
+        """The commit lands between a fix that is written, verified and green
+        and the ledger entry naming it. Nothing is protected by stopping there,
+        and one measured commit blocked that way turned a 4.9-min fix into 24.0."""
         _fast_forward_to_fix_loop(real_daemon)
-        _record_finding_resolved(real_daemon, "BH-001")
-        _record_finding_resolved(real_daemon, "BH-002")
-        _record_finding_resolved(real_daemon, "BH-003")
+        for finding_id in ("BH-001", "BH-002", "BH-003", "BH-004"):
+            _record_finding_resolved(real_daemon, finding_id)
         _freshen_enforcement_cache(real_daemon)
 
-        blocked = self._commit_decision(real_daemon, "fix: BH-003")
-        assert blocked.get("permissionDecision") == "deny"
-        assert "pattern" in blocked.get("permissionDecisionReason", "").lower()
-
-        # The printed escape is satisfiable: pattern_check transition succeeds NOW
-        # (exit 0). If this were the old drifting mirror, the counter could hit 3
-        # while the ledger held < 3, and this transition would exit 1 — deadlock.
-        result = _run_sahjhan(real_daemon, "transition", "pattern_check", check=False)
-        assert result.returncode == 0, (
-            "commit gate directed the auditor to `transition pattern_check`, but "
-            "its own gate rejected it — the exact #77 deadlock.\n"
-            f"exit: {result.returncode}\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        decision = self._commit_decision(real_daemon, "fix: BH-004")
+        assert decision.get("permissionDecision") == "allow", (
+            f"A pattern round was owed and the commit was denied: {decision}"
         )
 
     def test_iteration_boundary_and_pattern_check_are_never_both_shut(

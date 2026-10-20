@@ -258,3 +258,80 @@ class TestPatternBriefCLI:
         code, captured = self._run_main([str(brief_file)], capsys)
         assert code == 0
         assert "No patterns in brief" in captured.err
+
+
+def _fat_entry(pat_id: str, kilobytes: int) -> str:
+    """One entry of roughly the requested size."""
+    filler = "x" * (kilobytes * 1024)
+    return (
+        f"## {pat_id}: a name (Run 3, 2026-03-10)\n"
+        f"**What to look for:** {filler}\n"
+        "**Detection heuristic:** `grep x`\n"
+        "**Example:** somewhere\n\n"
+    )
+
+
+class TestTheSizeReport:
+    """P2.1: the brief reached 181 KB at 20 entries — 8.5 KB each against a
+    ~400 B spec, and one subagent needed five paginated reads to get through
+    it. The cap is 20 entries *and* 40 KB now, with entries over 2 KB
+    compressed and their detail moved out.
+
+    The measurement has to happen here because this is the only look at the
+    brief the round gets: step 4 forbids reading it whole, so an agent that is
+    not told the size cannot know it, and a cap nobody can measure is the cap
+    that was already being missed by 21x.
+    """
+
+    def _report(self, tmp_path, capsys, body: str) -> str:
+        brief_file = tmp_path / "patterns-brief.md"
+        brief_file.write_text(body)
+        code, captured = TestPatternBriefCLI._run_main([str(brief_file)], capsys)
+        assert code == 0
+        return captured.err
+
+    def test_a_brief_within_both_caps_reports_nothing(self, tmp_path, capsys):
+        assert self._report(tmp_path, capsys, SAMPLE_BRIEF) == ""
+
+    def test_an_oversized_brief_says_so(self, tmp_path, capsys):
+        body = SAMPLE_BRIEF + "".join(
+            _fat_entry(f"PAT-1{n:02d}", 5) for n in range(9)
+        )
+        report = self._report(tmp_path, capsys, body)
+        assert "40 KB" in report, f"the cap is not named: {report!r}"
+        assert f"{len(body.encode('utf-8')) / 1024:.0f} KB" in report, (
+            f"the brief's own size is not reported: {report!r}"
+        )
+
+    def test_an_oversized_entry_is_named(self, tmp_path, capsys):
+        body = SAMPLE_BRIEF + _fat_entry("PAT-009", 3)
+        report = self._report(tmp_path, capsys, body)
+        assert "PAT-009" in report, f"the fat entry is not named: {report!r}"
+        assert "PAT-001" not in report, (
+            f"an entry inside the cap was reported as over it: {report!r}"
+        )
+
+    def test_the_caps_are_the_ones_the_fix_loop_teaches(self):
+        """The rule lives in `phase-fix-loop.md`; the numbers live here. They
+        are two statements of one cap, so they are checked against each other
+        rather than kept in step by hand."""
+        import os
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        doc = os.path.join(repo_root, "skills", "holtz", "references",
+                           "phase-fix-loop.md")
+        with open(doc, encoding="utf-8") as fh:
+            policy = [ln for ln in fh.read().splitlines()
+                      if "Rolling policy" in ln]
+        assert policy, "phase-fix-loop.md no longer states a rolling policy"
+        line = policy[0]
+
+        assert f"{pbc.BRIEF_BYTE_CAP // 1024} KB" in line, (
+            f"the brief's byte cap is not the one the compactor measures: {line}"
+        )
+        assert f"{pbc.ENTRY_BYTE_CAP // 1024} KB" in line, (
+            f"the per-entry cap is not the one the compactor measures: {line}"
+        )
+        assert "20 active entries" in line, "the entry cap was dropped"
+        assert "pattern-round-NN.md" in line, (
+            f"the policy does not say where a compressed entry's detail goes: {line}"
+        )

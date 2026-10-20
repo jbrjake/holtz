@@ -53,12 +53,32 @@ def _rendered_basenames() -> set[str]:
 
 
 def _file_exists_gate_paths() -> list[str]:
+    """Every path a `file_exists` gate requires, at any nesting depth.
+
+    `not`, `all_of`, `any_of` and `k_of_n` carry child gates, and a positive
+    `file_exists` buried in one wedges a run exactly as hard as a top-level
+    one. Walking only the top level would have declared the config clean while
+    the unsatisfiable requirement sat one level down.
+    """
     cfg = tomllib.loads((ENFORCEMENT / "transitions.toml").read_text())
     paths: list[str] = []
-    for t in cfg.get("transitions", []):
-        for gate in t.get("gates", []):
-            if gate.get("type") == "file_exists" and "path" in gate:
+
+    def walk(gates: list[dict], negated: bool) -> None:
+        for gate in gates:
+            children = gate.get("gates", [])
+            if gate.get("type") == "not":
+                walk(children, not negated)
+                continue
+            if children:
+                walk(children, negated)
+            # Only a *positive* requirement can be unsatisfiable. Under `not`
+            # the gate asks for the file to be absent, which deleting it
+            # satisfies — and delete is what MANAGED_DOCS does not block.
+            if not negated and gate.get("type") == "file_exists" and "path" in gate:
                 paths.append(gate["path"])
+
+    for t in cfg.get("transitions", []):
+        walk(t.get("gates", []), negated=False)
     return paths
 
 
@@ -108,3 +128,74 @@ def test_no_file_exists_gate_requires_an_unsatisfiable_path():
                 f"it, so the transition is unsatisfiable (issue #60). Either "
                 f"un-manage the path (if agent-authored) or render it."
             )
+
+
+# ── The docs' own picture of the runtime tree (item 13) ──────────────────────
+#
+# `ARCHITECTURE.md`'s runtime-artifacts block is the only place a reader is
+# shown what a run leaves behind. It listed `PUNCHLIST-MERGED.md`, which P0.4
+# deleted as a concept and which `merge_done -> awaiting_clear` now gates on
+# being *absent*, and it omitted two files the hook guards. Both directions are
+# derived from config here rather than from a hand-kept list, so the block
+# cannot drift again without this going red.
+
+ARCHITECTURE = REPO_ROOT / "docs" / "ARCHITECTURE.md"
+_RUNTIME_BLOCK_HEADING = "## Runtime artifacts"
+
+
+def _runtime_artifacts_block() -> str:
+    """The fenced tree under `## Runtime artifacts`, and nothing else."""
+    text = ARCHITECTURE.read_text(encoding="utf-8")
+    start = text.index(_RUNTIME_BLOCK_HEADING)
+    fence = text.index("```", start)
+    end = text.index("```", fence + 3)
+    return text[fence:end]
+
+
+def _absent_required_paths() -> list[str]:
+    """Every path a gate requires to NOT exist, at any nesting depth.
+
+    The mirror image of `_file_exists_gate_paths`: a path under a `not` is one
+    the protocol requires deleted, so a document still presenting it as a
+    runtime artifact is telling the reader to recreate a wedge.
+    """
+    cfg = tomllib.loads((ENFORCEMENT / "transitions.toml").read_text())
+    paths: list[str] = []
+
+    def walk(gates: list[dict], negated: bool) -> None:
+        for gate in gates:
+            children = gate.get("gates", [])
+            if gate.get("type") == "not":
+                walk(children, not negated)
+                continue
+            if children:
+                walk(children, negated)
+            if negated and gate.get("type") == "file_exists" and "path" in gate:
+                paths.append(gate["path"])
+
+    for t in cfg.get("transitions", []):
+        walk(t.get("gates", []), False)
+    return paths
+
+
+def test_the_layout_block_shows_every_managed_doc() -> None:
+    block = _runtime_artifacts_block()
+    missing = sorted(name for name in _managed_basenames() if name not in block)
+    assert not missing, (
+        f"ARCHITECTURE.md's runtime-artifacts block omits {missing}. Every file "
+        f"the PreToolUse hook guards is a file a run produces, so a reader "
+        f"looking for it in this block will not find it — and will write it by "
+        f"hand and be blocked."
+    )
+
+
+def test_the_layout_block_shows_nothing_the_protocol_requires_deleted() -> None:
+    block = _runtime_artifacts_block()
+    stale = sorted({
+        Path(p).name for p in _absent_required_paths() if Path(p).name in block
+    })
+    assert not stale, (
+        f"ARCHITECTURE.md's runtime-artifacts block still lists {stale}, which "
+        f"a `not(file_exists)` gate requires absent — `merge_done -> "
+        f"awaiting_clear` refuses to fire while it exists."
+    )

@@ -75,20 +75,9 @@ class TestPhaseReconInitSequence:
     def test_sahjhan_init_with_config_dir(self):
         _assert_allowed(
             'sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" init',
-            "phase-recon.md: init with --config-dir (plugin context)",
+            "SKILL.md: init with --config-dir (plugin context)",
         )
 
-    def test_nohup_daemon_start(self):
-        _assert_allowed(
-            "nohup sahjhan daemon start > /dev/null 2>&1 &",
-            "phase-recon.md: daemon start with nohup + redirect + background (legacy)",
-        )
-
-    def test_nohup_daemon_start_with_config_dir(self):
-        _assert_allowed(
-            'nohup sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" daemon start > /tmp/sahjhan-daemon.log 2>&1 &',
-            "phase-recon.md: daemon start with --config-dir and log capture",
-        )
 
     def test_ledger_create(self):
         _assert_allowed(
@@ -164,6 +153,21 @@ class TestPhaseReconQuizStage:
         )
 
 
+class TestBoundaryCheck(TestPhaseReconQuizStage):
+    """Recon's very first command has to survive the bootstrap hook.
+
+    A block here is the worst possible one: the agent is told to run this
+    before anything else, so a refusal stops the audit at step zero with a
+    message about script readability rather than about the boundary.
+    """
+
+    def test_boundary_check(self):
+        self._assert_allowed_in_plugin(
+            'python3 "$CLAUDE_PLUGIN_ROOT/skills/holtz/scripts/boundary_check.py"',
+            "phase-recon.md and SKILL.md step 0: confirm the boundary first",
+        )
+
+
 class TestVerifySuite(TestPhaseReconQuizStage):
     """The fix loop's suite commands must survive the bootstrap hook.
 
@@ -196,6 +200,18 @@ class TestVerifySuite(TestPhaseReconQuizStage):
             "phase-fix-loop.md step 10: orchestrator validates without re-running",
         )
 
+    def test_pattern_round_record(self):
+        """Same shape, same stakes: it is the only way to close a round.
+
+        `pattern_analysis_complete` is restricted, so a block here would leave
+        the round unrecordable and `iteration_boundary` permanently blocked.
+        """
+        self._assert_allowed_in_plugin(
+            "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/pattern_round.py "
+            "--record --siblings-found 4",
+            "phase-fix-loop.md step 11.5: close the pattern round",
+        )
+
 
 # ---------------------------------------------------------------------------
 # Contract commands: extracted from SKILL.md quick reference
@@ -219,6 +235,7 @@ class TestSkillMdQuickReference:
             "--field auditor=holtz --field phase=audit --field step=7 "
             "--field id=BH-001 --field severity=HIGH --field category=doc/drift "
             '--field location="README.md:108" --field perspective=public-contract '
+            "--field reachability=user_reachable "
             '--field description="Pattern count stale" --field predicted_by=1',
             "SKILL.md: event finding",
         )
@@ -326,14 +343,6 @@ class TestSkillMdQuickReference:
             "--field auditor=holtz --field phase=fix_loop --field step=10 "
             "--field finding_id=BH-001 --field edge_cases_tested=3 --field tests_added=2",
             "SKILL.md: event hardening_complete",
-        )
-
-    def test_event_pattern_analysis_complete(self):
-        _assert_allowed(
-            "sahjhan event pattern_analysis_complete --field project=holtz --field run=1 "
-            "--field auditor=holtz --field phase=fix_loop --field step=11 "
-            "--field patterns_found=2 --field siblings_found=4",
-            "SKILL.md: event pattern_analysis_complete",
         )
 
     def test_event_iteration_complete(self):
@@ -552,6 +561,26 @@ _SHELL_CHAIN_IDIOMS = [
     ("; echo done", "semicolon chain"),
     ("&& echo ok", "and-chain"),
     ("|| echo fail", "or-chain"),
+    # W15 / item 30. The matrix carried ``&`` only as a trailing suffix
+    # (``_SHELL_IDIOMS``, "trailing ampersand") — never as the separator it
+    # also is. That gap is precisely why a split pattern omitting single
+    # ``&`` passed this file for the whole life of the guard: every guard
+    # keyed on a first token was reading ``A`` in ``A & B``.
+    ("& echo done", "ampersand chain"),
+]
+
+# Idioms that put another command *before* the sahjhan one (W12 / item 34).
+#
+# The shape a fix subagent naturally writes — run the test, then record that it
+# failed — and the one `phase-fix-loop.md` invited by teaching that step without
+# the "alone on its own Bash line" warning its three siblings carry. The
+# PreToolUse hook must keep allowing it: the line is legitimate work and
+# blocking it would be worse than not crediting it. What changed in W12 is that
+# `tdd_courier` now *says* the evidence row was not written, instead of exiting
+# 0 in silence — see `test_recorded_command_shapes.py`.
+_SHELL_PREFIX_CHAIN_IDIOMS = [
+    ("pytest -q tests/test_x.py; ", "test run before"),
+    ("ruff check . && ", "lint before"),
 ]
 
 
@@ -614,6 +643,23 @@ def test_subcmd_with_chain_idiom(base_cmd, cmd_label, chain, chain_label):
     """Every allowed subcommand + chained second command must be allowed."""
     command = f"{base_cmd} {chain}"
     _assert_allowed(command, f"{cmd_label} + {chain_label}")
+
+
+# Prefix chains (pytest ...; sahjhan ...) must work with all subcommands
+@pytest.mark.parametrize(
+    "base_cmd,cmd_label",
+    _REPRESENTATIVE_SUBCMDS,
+    ids=[label for _, label in _REPRESENTATIVE_SUBCMDS],
+)
+@pytest.mark.parametrize(
+    "prefix,prefix_label",
+    _SHELL_PREFIX_CHAIN_IDIOMS,
+    ids=[label for _, label in _SHELL_PREFIX_CHAIN_IDIOMS],
+)
+def test_subcmd_with_prefix_chain_idiom(base_cmd, cmd_label, prefix, prefix_label):
+    """Every allowed subcommand preceded by other work must still be allowed."""
+    command = f"{prefix}{base_cmd}"
+    _assert_allowed(command, f"{prefix_label} + {cmd_label}")
 
 
 # Bare sahjhan with help flags

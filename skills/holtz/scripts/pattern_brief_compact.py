@@ -21,6 +21,14 @@ from pathlib import Path
 # plan to validate format selection with actual subagent dispatches.
 DEFAULT_FORMAT = "structured"
 
+# The brief's caps, in bytes. `phase-fix-loop.md`'s rolling policy states the
+# same two numbers in KB, and a test checks the two statements against each
+# other. Measured here because the round that must obey them is told never to
+# open the brief whole: 20 entries was already the rule when the file reached
+# 181 KB, 8.5 KB an entry against a ~400 B format.
+BRIEF_BYTE_CAP = 40 * 1024
+ENTRY_BYTE_CAP = 2 * 1024
+
 
 @dataclass
 class PatternEntry:
@@ -31,6 +39,7 @@ class PatternEntry:
     what_to_look_for: str
     detection_heuristic: str
     example: str
+    size: int = 0
 
 
 def parse_brief(content: str) -> list[PatternEntry]:
@@ -86,6 +95,9 @@ def parse_brief(content: str) -> list[PatternEntry]:
             what_to_look_for=_extract("What to look for"),
             detection_heuristic=_extract("Detection heuristic"),
             example=_extract("Example"),
+            # The heading plus its body: what compressing this entry to the
+            # four-line format would have to shrink.
+            size=len(match.group(0).encode("utf-8")) + len(block.encode("utf-8")),
         ))
 
     return entries
@@ -168,6 +180,29 @@ def format_compact(entries: list[PatternEntry], *, fmt: str = DEFAULT_FORMAT) ->
     return header + separator.join(blocks) + "\n"
 
 
+def size_report(content: str, entries: list[PatternEntry]) -> str:
+    """What is over a cap, or "" when nothing is.
+
+    Silence on a compliant brief: this goes to stderr on every pattern round,
+    and a line printed every time is a line nobody reads by round 14.
+    """
+    lines = []
+    total = len(content.encode("utf-8"))
+    if total > BRIEF_BYTE_CAP:
+        lines.append(
+            f"brief is {total / 1024:.0f} KB, over the {BRIEF_BYTE_CAP // 1024} KB cap "
+            f"— compress entries to the four-line format and move their detail "
+            f"to docs/holtz/pattern-round-NN.md"
+        )
+    fat = [e for e in entries if e.size > ENTRY_BYTE_CAP]
+    if fat:
+        named = ", ".join(f"{e.pattern_id} ({e.size / 1024:.1f} KB)" for e in fat)
+        lines.append(
+            f"over the {ENTRY_BYTE_CAP // 1024} KB entry cap: {named}"
+        )
+    return "\n".join(lines)
+
+
 def main() -> None:
     import argparse
     parser = argparse.ArgumentParser(description="Compact pattern brief for subagents")
@@ -190,6 +225,10 @@ def main() -> None:
         sys.exit(0)
 
     print(format_compact(entries, fmt=args.format))
+
+    report = size_report(content, entries)
+    if report:
+        print(report, file=sys.stderr)
 
 
 if __name__ == "__main__":

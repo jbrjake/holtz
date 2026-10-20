@@ -26,14 +26,8 @@ Two modes, and the split is the whole design:
     and runs SQL; no socket anywhere), so a gate running inside a transition
     cannot re-enter the daemon that is evaluating it.
 
-Reading through ``sahjhan query`` rather than parsing ``ledger.jsonl`` here is
-deliberate. The engine resolves the active ledger through a chain — explicit
-``--ledger`` flag, then the ``active-ledger`` marker looked up in
-``ledgers.toml``, then the registry default, then ``data_dir/ledger.jsonl``.
-Reimplementing that chain in Python would be a mirror of engine logic, and a
-mirror that drifts points the gate at a different ledger than the one the
-transition evaluates. Delegating means block condition and evidence read the
-same file by construction.
+Both ledger reads go through ``_ledger_query``, so the gate's evidence and the
+baseline lookup can never resolve to different ledgers.
 
 **The agent cannot forge a ``suite_green``.** Three independent layers:
 
@@ -79,6 +73,29 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from _ledger_query import _hooks_dir, query_ledger, sahjhan_target  # noqa: E402
+from _recorded_command import (  # noqa: E402
+    CWD_HELP,
+    INTERPRETERS,
+    refuse_cwd_with_record,
+)
+
+
+def _audit_data_dir(cwd: str) -> str:
+    """``_common.audit_data_dir``, reached the way ``sahjhan_target`` reaches
+    ``resolve_config_dir``: lazily, through ``enforcement/hooks``.
+
+    Imported rather than restated. Two expressions of "where the audit state
+    lives" is what left this file reading a worktree's missing marker while
+    the socket beside it resolved correctly.
+    """
+    sys.path.insert(0, _hooks_dir())
+    from _common import audit_data_dir  # noqa: PLC0415
+
+    return str(audit_data_dir(cwd))
+
 # The suite command, in one place. `-x --ff` is the fail-fast pair T1 settled
 # on: `--lf`/`--last-failed` is banned because it runs *only* the previously
 # failing tests, so a gate using it can pass having executed a two-test subset
@@ -91,15 +108,25 @@ import tempfile
 # rather than running pytest. Do not add a second — a gate that invokes pytest
 # itself is both a duplicate default and a suite run this design exists to
 # remove (asserted by test_suite_gates_delegate_to_verify_suite).
-DEFAULT_PYTEST = "python3 -m pytest -x --ff --tb=short -q"
+#
+# Only the interpreter in front of it varies (`suite_python`), so no setting
+# can make the suite something other than pytest with these flags (D-v).
+PYTEST_ARGS = "-m pytest -x --ff --tb=short -q"
+DEFAULT_PYTEST = f"python3 {PYTEST_ARGS}"
 
-# `suite_green` is spelled out as a string literal at the write site and in the
-# gate's SQL below, deliberately, and must stay that way. `enforcement_lint.py`
-# discovers write paths by scanning for the event type as a literal argument to
-# `record_authed_event` — that scan is what falsifies the `[[producers]]`
-# declaration in events.toml. Hoisting the name into a module constant hides
-# the writer from H2/H3, and an event whose declared producer cannot be
-# confirmed is exactly the class of defect those checks exist to catch.
+# In-tree virtualenv directories, in the order they are looked for. A venv is
+# the directory holding `pyvenv.cfg`, which uv, virtualenv, venv and in-project
+# poetry all write.
+VENV_DIRS = (".venv", "venv")
+
+# `suite_green` is spelled out as a string literal in the gate's SQL below, and
+# at the write site in `enforcement/hooks/suite_courier.py`, deliberately, and
+# must stay that way in both. `enforcement_lint.py` discovers write paths by
+# scanning for the event type as a literal argument to `record_authed_event` —
+# that scan is what falsifies the `[[producers]]` declaration in events.toml.
+# Hoisting the name into a module constant hides the writer from H2/H3, and an
+# event whose declared producer cannot be confirmed is exactly the class of
+# defect those checks exist to catch.
 
 # `full` ran everything; `affected` ran the impact-graph subset for the files
 # that changed. Ordered weakest-first: a `full` run satisfies a request for
@@ -107,10 +134,19 @@ DEFAULT_PYTEST = "python3 -m pytest -x --ff --tb=short -q"
 # so a missing scope can only ever over-test.
 SCOPES: tuple[str, ...] = ("affected", "full")
 
-# STATUS.md and PUNCHLIST.md are rewritten on every fix, and the ledger itself
-# is appended to by `--record`. Neither can affect the target's tests, and
-# including them would invalidate the hash the instant it was recorded.
-EXCLUDED_PREFIXES = ("docs/holtz/",)
+# Paths holtz itself writes into the target during an audit. None of them can
+# affect the target's tests, and every one of them moves while the audit runs —
+# so a hash that saw them would be invalidated by holtz's own bookkeeping, and
+# a changed-file list that saw them would treat that bookkeeping as a source
+# change with no covering test and widen every `affected` run to the full suite.
+#
+# `docs/holtz/`: STATUS.md and PUNCHLIST.md are rewritten on every fix, and the
+# ledger is appended to by every event.
+# `.claude/`: `holtz-start` writes settings.local.json here to raise the audit
+# boundary, and `holtz-stop` removes it. Whether that file is visible to git at
+# all depends on the user's global excludes, which is exactly the kind of thing
+# that makes a green reproduce on one machine and not another.
+EXCLUDED_PREFIXES = ("docs/holtz/", ".claude/")
 
 # The only map holtz has from a changed source file to the tests that cover it.
 # It is agent-authored, which bounds what an `affected` green may claim — see
@@ -119,12 +155,16 @@ GRAPH_PATH = os.path.join("docs", "holtz", "impact-graph.json")
 
 # pytest's exit codes for "the narrowed command could not be run", as distinct
 # from "the tests ran and something failed": 4 is a usage error (a path that
-# does not collect, or a `$HOLTZ_PYTEST` override that rejects trailing paths)
-# and 5 is nothing-collected. Either way the narrowed run proved nothing, so
+# does not collect) and 5 is nothing-collected. Either way the narrowed run proved nothing, so
 # the answer is to widen to the full suite. Widening can only ever run more
 # tests, so it is always the safe direction; recording the narrow result is
 # not.
 SELECTION_FAILURE_EXITS = (4, 5)
+
+# The line `--record` prints on green and `suite_courier.py` requires before it
+# writes anything. Named here, imported there — the two ends of a channel that
+# would fail silently if they ever disagreed about the word.
+RECORD_MARKER = "SUITE-GREEN:"
 
 _PASSED_RE = re.compile(r"(\d+) passed")
 _TREE_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -286,9 +326,34 @@ def compute_tree_hash(root: str) -> str:
 # ── Shared helpers ───────────────────────────────────────────────────────────
 
 
-def suite_command() -> str:
+def _project_anchor(cwd: str) -> str:
+    """``_common.project_anchor``, reached lazily like ``_audit_data_dir``."""
+    sys.path.insert(0, _hooks_dir())
+    from _common import project_anchor  # noqa: PLC0415
+
+    return str(project_anchor(cwd))
+
+
+def suite_python(root: str, cwd: str) -> str:
+    """The interpreter the suite runs under.
+
+    An in-tree virtualenv first — in the tree being tested, then in the main
+    checkout, because a fix subagent's linked worktree does not carry the
+    gitignored venv. Then ``$HOLTZ_PYTHON``, an interpreter path for an
+    environment outside the tree (conda, poetry's cache). Then ``python3``.
+    """
+    for base in dict.fromkeys((root, _project_anchor(cwd))):
+        for name in VENV_DIRS:
+            venv = os.path.join(base, name)
+            python = os.path.join(venv, "bin", "python")
+            if os.path.isfile(os.path.join(venv, "pyvenv.cfg")) and os.path.isfile(python):
+                return python
+    return os.environ.get("HOLTZ_PYTHON") or "python3"
+
+
+def suite_command(root: str, cwd: str) -> str:
     """The suite command this run will execute (or did)."""
-    return os.environ.get("HOLTZ_PYTEST") or DEFAULT_PYTEST
+    return f"{shlex.quote(suite_python(root, cwd))} {PYTEST_ARGS}"
 
 
 def accepted_scopes(requested: str) -> tuple[str, ...]:
@@ -301,20 +366,20 @@ def accepted_scopes(requested: str) -> tuple[str, ...]:
 
 
 def _run_number(cwd: str) -> str:
-    """Current run number from sahjhan's active-ledger marker ('0' if none)."""
-    marker = os.path.join(cwd, "docs", "holtz", ".sahjhan", "active-ledger")
+    """Current run number from sahjhan's active-ledger marker ('0' if none).
+
+    Read at the project anchor, not at ``cwd``. The marker lives under the
+    gitignored audit directory, so a linked worktree does not carry it and a
+    cwd-relative read returns ``"0"`` — which ``events.toml`` accepts against
+    ``^\\d+$``. Because sahjhan's emit resolver inherits the newest ledger
+    value, one such write poisons run attribution for every event after it.
+    """
+    marker = os.path.join(_audit_data_dir(cwd), "active-ledger")
     try:
         with open(marker, encoding="utf-8") as fh:
             return fh.read().strip().replace("run-", "") or "0"
     except OSError:
         return "0"
-
-
-def _hooks_dir() -> str:
-    """``enforcement/hooks``, which is a sibling of this script's directory."""
-    return os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "hooks"
-    )
 
 
 def _record_command(scope: str) -> str:
@@ -324,6 +389,66 @@ def _record_command(scope: str) -> str:
     this names the absolute path of the very file being executed.
     """
     return f"python3 {os.path.abspath(__file__)} --record --scope {scope}"
+
+
+# One recognizer, defined beside the command it recognizes. `suite_courier.py`
+# imports it rather than carrying a second regex: the courier records only for
+# a command it can identify, so a drift between "what the skill file teaches"
+# and "what the courier accepts" would be a silent deadlock — the agent runs a
+# green suite and nothing is ever written.
+SCRIPT_TAIL = os.path.join("enforcement", "scripts", "verify_suite.py")
+
+#: The invariant head of the taught invocation — what a courier quotes back
+#: when it refuses a shape. Pinned against the document by
+#: `TestTheWarningQuotesTheTaughtForm` rather than trusted to stay in step.
+TAUGHT_PREFIX = (
+    "python3 ${CLAUDE_PLUGIN_ROOT}/enforcement/scripts/verify_suite.py --record"
+)
+_INTERPRETERS = INTERPRETERS
+
+
+def record_scope_of(segment: str) -> str | None:
+    """The scope a shell segment records for, or None if it is not that command.
+
+    Read from the command text *as typed*, which is what the host reports to a
+    PostToolUse hook — `${CLAUDE_PLUGIN_ROOT}` is still a literal at that
+    point, so the script is identified by its tail rather than by resolving a
+    path the hook cannot expand the same way the shell did.
+
+    Scope comes from here rather than from the run's own report on purpose. A
+    `--scope affected` run that could not prove a subset widens to the whole
+    suite, and recording that as `full` would let an implicit widening satisfy
+    the three transitions that demand an explicit full green. The claim the
+    command made is the conservative one, and it is the one the host saw.
+
+    `--cwd` is rejected rather than parsed. The courier hashes the tree at the
+    *event's* cwd, so a run pointed somewhere else would have this repo's hash
+    attached to another repo's result — and the flag exists for tests and
+    diagnostics, not for the recorded path.
+    """
+    try:
+        tokens = shlex.split(segment)
+    except ValueError:
+        return None
+    if len(tokens) < 3:
+        return None
+    if os.path.basename(tokens[0]) not in _INTERPRETERS:
+        return None
+    if not tokens[1].endswith(SCRIPT_TAIL):
+        return None
+
+    scope = "full"  # build_parser's default for --scope
+    rest = tokens[2:]
+    seen_record = False
+    while rest:
+        flag = rest.pop(0)
+        if flag == "--record":
+            seen_record = True
+        elif flag == "--scope" and rest and rest[0] in SCOPES:
+            scope = rest.pop(0)
+        else:
+            return None
+    return scope if seen_record else None
 
 
 def _block(reason: str, tree_hash: str, accepted: tuple[str, ...], scope: str) -> int:
@@ -347,64 +472,6 @@ def _block(reason: str, tree_hash: str, accepted: tuple[str, ...], scope: str) -
     return 1
 
 
-# ── Ledger reads ─────────────────────────────────────────────────────────────
-
-
-def _sahjhan_target(cwd: str) -> tuple[str | None, str | None, str]:
-    """Locate the sahjhan binary and the enforcement config for ``cwd``.
-
-    Returns ``(binary, config_dir, "")`` or ``(None, None, problem)``.
-    """
-    sys.path.insert(0, _hooks_dir())
-    from _common import resolve_config_dir  # noqa: PLC0415
-    from _resolve import ensure_sahjhan  # noqa: PLC0415
-
-    binary = ensure_sahjhan()
-    config_dir, found = resolve_config_dir(cwd)
-    if binary is None or not found:
-        return None, None, (
-            f"sahjhan binary={'missing' if binary is None else binary}, "
-            f"config_dir={'not found' if not found else config_dir}"
-        )
-    return binary, config_dir, ""
-
-
-def _query_ledger(
-    binary: str, config_dir: str, cwd: str, sql: str
-) -> tuple[list[dict] | None, str]:
-    """Run SQL over the active ledger, returning ``(rows, problem)``.
-
-    Daemon-free by construction — see the module docstring. Both readers go
-    through here so the gate's evidence and the baseline lookup can never
-    resolve to different ledgers.
-    """
-    try:
-        proc = subprocess.run(
-            [binary, "--config-dir", config_dir, "query", sql, "--format", "json"],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return None, f"cannot query the ledger: {exc}"
-
-    if proc.returncode != 0:
-        # A ledger that has never been initialised surfaces here as an I/O
-        # error rather than a zero count. Either way there is no evidence.
-        return None, (
-            f"ledger query failed (exit {proc.returncode}): {proc.stderr.strip()}"
-        )
-
-    try:
-        rows = json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        return None, f"cannot read the ledger query result: {exc}"
-    if not isinstance(rows, list):
-        return None, f"ledger query returned {type(rows).__name__}, not a list"
-    return rows, ""
-
-
 # ── Affected-scope selection ─────────────────────────────────────────────────
 
 
@@ -419,11 +486,11 @@ def _baseline_commit(cwd: str) -> tuple[str | None, str]:
     the untested gap to one iteration: `iteration_boundary` demands a full
     run every few fixes, and that re-bases the window.
     """
-    binary, config_dir, problem = _sahjhan_target(cwd)
+    binary, config_dir, problem = sahjhan_target(cwd)
     if binary is None or config_dir is None:
         return None, f"cannot reach the ledger — {problem}"
 
-    rows, problem = _query_ledger(
+    rows, problem = query_ledger(
         binary,
         config_dir,
         cwd,
@@ -589,7 +656,7 @@ def _suite_invocation(cwd: str, root: str, scope: str) -> tuple[str, str]:
     ``full``. Recording the request rather than the result would understate a
     full run, and ``full`` satisfies an ``affected`` check anyway.
     """
-    base = suite_command()
+    base = suite_command(root, cwd)
     if scope != "affected":
         return base, "full"
 
@@ -618,13 +685,31 @@ def _run_suite(command: str, cwd: str) -> subprocess.CompletedProcess:
 
 
 def mode_record(cwd: str, root: str, scope: str) -> int:
-    """Run the suite and, on green, record ``suite_green`` for this tree."""
-    sys.path.insert(0, _hooks_dir())
-    from _common import record_authed_event  # noqa: PLC0415
+    """Run the suite and, on green, emit the evidence a courier hook records.
 
+    This runs inside the sandbox — it is the agent's own shell — so it cannot
+    reach the daemon socket and cannot write the restricted ``suite_green``
+    event itself. It does the one thing only a process in the project can do:
+    run the tests. ``suite_courier.py``, which Claude Code fires outside the
+    sandbox, turns that into a ledger entry.
+
+    The split is not just plumbing, it is better provenance. Everything a gate
+    reads is now derived by the courier from git and from the command text the
+    host reports, rather than computed by a process the agent controls. What
+    crosses this boundary — the marker below — carries only the fields no gate
+    consults.
+    """
     tree_hash = compute_tree_hash(root)
     print(f"verify_suite: tree_hash={tree_hash}", file=sys.stderr)
+    if os.environ.get("HOLTZ_PYTEST"):
+        print(
+            "verify_suite: $HOLTZ_PYTEST is ignored — the suite is always "
+            "`<python> -m pytest`. Set $HOLTZ_PYTHON to an interpreter path "
+            "for an environment outside the tree.",
+            file=sys.stderr,
+        )
 
+    python = suite_python(root, cwd)
     command, scope = _suite_invocation(cwd, root, scope)
     proc = _run_suite(command, cwd)
 
@@ -638,7 +723,7 @@ def mode_record(cwd: str, root: str, scope: str) -> int:
             f"(exit {proc.returncode}) — widening to the full suite",
             file=sys.stderr,
         )
-        command, scope = suite_command(), "full"
+        command, scope = suite_command(root, cwd), "full"
         proc = _run_suite(command, cwd)
 
     if proc.returncode != 0:
@@ -655,33 +740,19 @@ def mode_record(cwd: str, root: str, scope: str) -> int:
         )
         return proc.returncode
 
-    fields = {
-        "project": os.path.basename(root),
-        "run": _run_number(cwd),
-        "auditor": "holtz",
-        "tree_hash": tree_hash,
-        "scope": scope,
-        "command": command,
-    }
-    # The baseline the *next* affected run measures its diff from. Recorded
-    # from `git rev-parse` here, never from a caller.
-    head = _git(["rev-parse", "HEAD"], root)
-    if head and _COMMIT_RE.match(head):
-        fields["commit_hash"] = head
+    evidence = {"command": command, "scope_ran": scope, "python": python}
     passed = _PASSED_RE.search(proc.stdout)
     if passed:
-        fields["test_count"] = passed.group(1)
+        evidence["test_count"] = passed.group(1)
 
-    try:
-        record_authed_event("suite_green", fields, cwd)
-    except (OSError, RuntimeError) as exc:
-        print(
-            f"FAIL: suite passed but recording suite_green failed: {exc}",
-            file=sys.stderr,
-        )
-        return 1
-
-    print(f"PASS: suite green, recorded suite_green scope={scope} tree_hash={tree_hash}")
+    # Printed last so it survives output truncation, and only on green — the
+    # courier requires it, which is what keeps "the host fired PostToolUse"
+    # from being the sole thing standing between a red suite and a recorded
+    # green. Claude Code 2.x omits `exit_code` from the event and fires
+    # PostToolUse only on success, so on its own that signal has no second
+    # opinion; this is the second opinion.
+    print(f"PASS: suite green scope={scope} tree_hash={tree_hash}")
+    print(f"{RECORD_MARKER} {json.dumps(evidence, sort_keys=True)}")
     return 0
 
 
@@ -702,7 +773,7 @@ def mode_check(cwd: str, root: str, scope: str) -> int:
         f"AND tree_hash='{tree_hash}' AND scope IN ({scope_list})"
     )
 
-    binary, config_dir, problem = _sahjhan_target(cwd)
+    binary, config_dir, problem = sahjhan_target(cwd)
     # Fail closed, and *without* an escape line. An unevaluable suite gate that
     # allowed the transition would be a silent false green — the thing this
     # whole mechanism exists to prevent — so a broken toolchain blocks and says
@@ -713,7 +784,7 @@ def mode_check(cwd: str, root: str, scope: str) -> int:
         print(f"FAIL: cannot evaluate the suite gate — {problem}", file=sys.stderr)
         return 1
 
-    rows, problem = _query_ledger(binary, config_dir, cwd, sql)
+    rows, problem = query_ledger(binary, config_dir, cwd, sql)
     if rows is None:
         return _block(problem, tree_hash, accepted, scope)
 
@@ -775,13 +846,15 @@ def build_parser() -> argparse.ArgumentParser:
             "that subset is complete"
         ),
     )
-    parser.add_argument("--cwd", default=".", help="target project directory")
+    parser.add_argument("--cwd", default=None, help=CWD_HELP)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    cwd = os.path.abspath(args.cwd)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    refuse_cwd_with_record(parser, args)
+    cwd = os.path.abspath(args.cwd or ".")
 
     root = repo_root(cwd)
     if root is None:

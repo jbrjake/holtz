@@ -34,4 +34,3 @@ without being implemented: "{recommendation text}".
 - Default severity is MEDIUM.
 - Upgrade to HIGH if the recommendation addresses a HIGH or CRITICAL risk (e.g., "add input sanitization" recurring across security-focused audits).
 - If no prior summaries exist, skip this step entirely.
-- Update STATUS.md with recommendation escalation completion (how many items escalated, or "skipped — no prior summaries").

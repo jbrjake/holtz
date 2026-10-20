@@ -6,42 +6,32 @@
 
 ### Step 0: Project Overview + Drift Detection
 
-#### Run Initialization (before anything else)
+#### Confirm the boundary (before anything else)
 
-Determine the run number N (check `docs/holtz/runs/` for existing runs, or start at 1). Then initialize Sahjhan, start the daemon, and set up the run ledger and protocol state — **all five commands must succeed before any events are recorded:**
+```bash
+python3 "$CLAUDE_PLUGIN_ROOT/skills/holtz/scripts/boundary_check.py"
+```
+
+**If it does not print `BOUNDARY: confined`, stop.** Tell the user to type `holtz-start` — the bare word, on its own line, in the normal input box — and wait. Only they can do it, and the audit cannot proceed without it: the daemon refuses to serve until it can confirm the boundary is up.
+
+It sandboxes your shell away from the daemon socket that holds the quiz answers. Hooks run outside the sandbox, so enforcement still works.
+
+#### Run Initialization
+
+Determine the run number N (check `docs/holtz/runs/` for existing runs, or start at 1), then set up the run ledger and protocol state — **both commands must succeed before any events are recorded:**
 
 > **`--config-dir` is required** when running as an installed plugin. The enforcement config lives in the plugin cache at `$CLAUDE_PLUGIN_ROOT/enforcement`, not in the target project. All sahjhan commands must include `--config-dir "$CLAUDE_PLUGIN_ROOT/enforcement"`. Without it, sahjhan looks for `enforcement/` relative to CWD (the target project) and fails.
 
 ```bash
-# Initialize the .sahjhan data directory and manifest.json.
-# Safe to re-run — on an already-initialized project this is a no-op.
-sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" init
-
-# sahjhan daemon start runs in the foreground — you MUST background it.
-# Use nohup + & so it survives shell exit. Stderr goes to /tmp log
-# (NOT /dev/null) so crashes can be diagnosed.
-nohup sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" daemon start \
-  > /tmp/sahjhan-daemon.log 2>&1 &
-
-# Wait for daemon to be ready (socket + PID file)
-sleep 1
-
-# Copy daemon.pid → daemon-init-pid so lifecycle hooks can detect daemon death
-cp docs/holtz/.sahjhan/daemon.pid docs/holtz/.sahjhan/daemon-init-pid
-
 sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" ledger create --from run N --activate
 sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" transition run_start
 ```
 
-> **Warning:** `sahjhan init` must run before `daemon start` on first-ever runs. Without it, `manifest.json` is never created and every subsequent sahjhan command fails with "Cannot load manifest." On projects that already have a `.sahjhan/` directory, `init` is a safe no-op.
-
 > **Warning:** Skipping `sahjhan ledger create --from run N --activate` causes "no ledger found for template 'run'; using default ledger" warnings on every subsequent `sahjhan render` and `sahjhan transition` (~20+ times per audit). Always create and activate the ledger before `run_start`.
 
-**Why nohup?** `sahjhan daemon start` is foreground-only — it does not fork. Without `nohup ... &`, the Bash tool blocks until timeout and then kills the daemon. The `daemon-init-pid` copy is required by `_daemon_lifecycle.py` to distinguish "original daemon" from "restarted daemon with different key."
-
-**Why /tmp log instead of /dev/null?** If the daemon crashes, the log file contains the error. Check `/tmp/sahjhan-daemon.log` when the daemon dies unexpectedly. The log goes to /tmp because the write guard protects `docs/holtz/.sahjhan/`.
-
 The `--activate` flag sets the active-ledger marker so all subsequent sahjhan commands automatically target this run's ledger. No `--ledger run-N` needed on individual commands.
+
+**If the daemon dies mid-run, the audit is over.** It holds the session key in memory; nothing can resume a ledger sealed against a key that no longer exists. Report it, name `/tmp/sahjhan-daemon.log` as where the crash output is, and stop. Starting a fresh run is the user's call.
 
 #### Reference Reader Subagent
 
@@ -93,7 +83,7 @@ Create `docs/holtz/` and `docs/holtz/recon/`. Read project structure, docs, CLAU
 
 Output: `docs/holtz/recon/step0-project-overview.md`
 
-**After each step:** record a `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event recon_step` with the step number and artifact path. Additionally, record significant findings as `recon_finding` events (e.g., `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event recon_finding --field topic=architecture --field content="..."`) so they are captured in the ledger alongside the markdown artifacts.
+**After each step:** record a `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event recon_step` with the step number and artifact path. Additionally, record significant findings as `recon_finding` events (e.g., `sahjhan --config-dir "$CLAUDE_PLUGIN_ROOT/enforcement" event recon_finding --field project=holtz --field run=N --field auditor=holtz --field phase=recon --field step=N --field topic=architecture --field content="..."`) so they are captured in the ledger alongside the markdown artifacts.
 
 ### Step 1: Run Toolchain (Subagent)
 
@@ -111,7 +101,11 @@ Dispatch a subagent to run in parallel:
 - Git churn analysis (top 20 most-changed files in last 50 commits)
 - Mutation scan (optional — auto-detected)
 - Find skipped/disabled tests
-- Cold file coverage scan: list all source files, scan `docs/holtz/archive/*/PUNCHLIST.md` for file paths mentioned in findings and `docs/holtz/LIVING-PUNCHLIST.md` if it exists. A file counts as "audited" if it appears in any prior punchlist finding. On first run (no archive), all files are cold. Compute `cold_file_ratio = files_never_audited / total_source_files`. Write inventory to `docs/holtz/recon/step2-cold-files.md`.
+- Cold file coverage scan: list all source files, then list the files every run's findings have named:
+  ```bash
+  python3 ${CLAUDE_PLUGIN_ROOT}/skills/holtz/scripts/findings.py audited-files
+  ```
+  A file counts as "audited" if that listing names it; the rest are cold, and on a first run the listing is empty. Compute `cold_file_ratio = files_never_audited / total_source_files`. Write inventory to `docs/holtz/recon/step2-cold-files.md`.
 
 Output: `docs/holtz/recon/step2-code-signals.md`
 
