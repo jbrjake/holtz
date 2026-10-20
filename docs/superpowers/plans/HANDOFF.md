@@ -31,20 +31,34 @@ any phrasing where one unit closing reads as the work closing.
 
 ## Status
 
-**32 of 32 units · 51 of 51 items.** Counted off the dashboard, not carried
-forward. The board is done. **Nothing is pushed and CI has never run on any
-of it** — the release is Jon's call (CLAUDE.md "Cutting a Release").
+**32 of 32 units · 51 of 51 items, released as v0.170.15** — PR #87, merge
+`9e50128`, tag `v0.170.15`, 2026-10-20. `dev` is pushed through `218724f`.
+The release notes are the merge commit's body and the GitHub Release.
 
-**The one full run: `scripts/pre-release-check.sh` at `a9956a9`, 2026-09-23 —
-exit 0, all nine checks PASS, 3271 passed + 8 skipped = 3279 = the badge,
-zero `FAILED`/`ERROR`, 27m23s.** Its coverage read 79.86% and passed only by
-rounding; the report was counting temp copies of repo files and `scripts/`.
-The report's population is fixed in `pyproject.toml`; the same run's data now
-reads **89.93%** (89.29% at `489e84d`). The check has not been re-run under
-the fix — the suite runs once. Details in W26's V3 and W28's V5.
+**The release's suite evidence is CI's full run at `218724f`:** runs
+39477318967 (pull_request) and 39477307745 (push), both `conclusion=success`,
+every step green, coverage 89.87%. **The local `scripts/pre-release-check.sh`
+at `9bcec76` did not pass:** 5 failed, 3266 passed, 8 skipped; every other
+check PASS, coverage 90.03%. All five are a `/bin/sh` stand-in overrunning a
+production 5 s timeout while another session's pytest ran; they pass alone
+and in CI. The characterisation is in `c32f095`'s message. V4's archive check
+holds on a clean clone (`218724f`).
 
 **⭐ Resume here — open for Jon, none of them board items:**
 
+- **No audit has run end to end on this release.** P1's band is "before
+  functional testing", and that run is still owed; #73's quiz path and W22's
+  seccomp run both wait on it. The release notes say so under "known gaps".
+- **README's Convergence section contradicts the release** — it says "max 15
+  fix commits" and "until two consecutive passes find nothing new". Not
+  changed: the README's voice is Jon's.
+- **Archived `recon/` is gitignored.** `.gitignore:9`'s bare `recon/` matches
+  at any depth, so 488 of `docs/holtz/archive`'s 802 files — and 11 of the 31
+  mapped runs — are absent from a clean clone. Whether to track them is Jon's
+  call.
+- **sahjhan#51 shipped in sahjhan 0.28.1**; holtz pins 0.28.0, so item 39's
+  config-fault half is a pin move (`scripts/update_sahjhan_pin.py`) plus the
+  `_common.read_hook_eval` change W25 names.
 - **The coverage gate rounds.** pytest-cov decides the exit with
   `should_fail_under(total, 80, precision=0)`, so the 80% gate trips only
   below 79.5%, while its summary line compares the raw number and can print
@@ -54,17 +68,14 @@ the fix — the suite runs once. Details in W26's V3 and W28's V5.
 - **The `__pycache__` tree-hash hazard** (W18, recorded): a project that does
   not ignore `__pycache__` changes its own tree hash by running its suite.
   Pre-existing; not fixed.
-- **Carried from before:** sahjhan#51 (W25 / item 39's config-fault half),
-  the unruled NotebookEdit PostToolUse candidate, W06's V8 sahjhan
-  question, H11's declaration-side gap, and the carried debts below.
-- **The drafted changelog entry is `0.170.15`.** Commits after `a9956a9` are
-  `docs:`/`chore:` and not in it; at release, delete the entry, re-run
-  `generate-changelog.py --write`, and carry the `### Notes` over. Local
-  `main` is stale — compare against `origin/main` (v0.141.3).
-- **W26 needs only V3**, read off the one full `--cov` run.
-- **The full suite has not run since `489e84d`, and CI has seen nothing** —
-  run it once, at the end of a session, with `--cov` (that is W26's V3).
-  Nothing is pushed.
+- **Carried from before:** the unruled NotebookEdit PostToolUse candidate,
+  W06's V8 sahjhan question, H11's declaration-side gap, and the carried debts
+  below.
+- **Pushing:** SSH to `origin` is refused from this machine's sessions
+  (`Permission denied (publickey)`). Push over HTTPS with gh as a one-command
+  credential helper: `git -c credential.helper= -c
+  'credential.helper=!gh auth git-credential' push
+  https://github.com/jbrjake/holtz.git dev:dev`.
 - **Method trap:** restoring a mutation with `git checkout -- <file>` also
   discards that file's *uncommitted* work. Undo a mutation with a reverse
   Edit when the file carries other changes. And a test that is RED while its
@@ -88,8 +99,10 @@ census showed D-q′'s verdict list missing the archive's commonest words (TRUE
   exactly that. A declared producer is what silences `sahjhan lint` L5.
 - **`migrate_legacy.py` emits only declared types** and counts the rest on
   stderr; V4 (`test_every_migrated_event_validates_against_events_toml`)
-  checks all 2810 events `--all` emits, field by field. It covers the 37
-  mapped directories, not the archive's 16 unmapped ones.
+  checks every event `--all` emits, field by field — 2810 in this working
+  copy, 923 in a clean clone (the gitignored `recon/` above) — and requires
+  every mapped directory present to produce events. It covers the 37 mapped
+  directories, not the archive's 16 unmapped ones.
 
 **W25 landed 2026-09-23** in three commits — `1795e6a` (39 + 49d), `b90d713`
 (49 a–c, e–h), `d0a0cd4` (11). It is `DONE` with a debt in its dashboard row:
