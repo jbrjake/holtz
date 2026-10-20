@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.170.16] - 2026-10-20
+
+_Changes since v0.170.15_
+
+### Notes
+
+**sahjhan is pinned at 0.28.2** (was 0.28.0). From 0.28.1, `hook eval`
+answers a config or ledger that fails to load with `ok: false` —
+`config_error` (exit 3) or `integrity_error` (exit 2) — instead of an allow,
+and both tool hooks read that as a failure: during a live audit,
+`pre_tool_hook` refuses the edit and `post_tool_hook` warns, each quoting the
+engine's message.
+
+**A run started on v0.170.15 cannot continue on this release.** This release
+changes `enforcement/trusted-callers.toml`, one of the eight files sahjhan
+seals at `init`. Such a run's ledger now refuses with `integrity_error`
+naming that file; while the run is live, Write, Edit and NotebookEdit are
+refused and every other tool call carries the warning.
+
+### Fixed
+- **enforcement:** a config or ledger that fails to load is not an allow
+
+### Documentation
+- v0.170.15 is released; the handoff names what is still open
+
+### Infrastructure
+- **store:** close ho-rd651pw, file the release as ho-t6y4jz0
+- adopt meshwork as the worklist
+
 ## [0.170.15] - 2026-10-20
 
 _Changes since v0.141.3_
