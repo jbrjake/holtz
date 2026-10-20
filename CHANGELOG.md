@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.170.15] - 2026-09-23
+## [0.170.15] - 2026-10-20
 
 _Changes since v0.141.3_
 
@@ -143,6 +143,7 @@ daemon or a wrong binary path.
 - **enforcement:** anchor manifest paths at the project root (#85)
 
 ### Documentation
+- remove the refuted security claim; draft the release changelog
 - W13 and W32 close by ruling, and item 33's design is ruled — 29 of 32 units, 47 of 51 items
 - W27 is done — 25 of 32 units, 42 of 51 items
 - W27's V9 download half ran — the vendored pin reproduces byte for byte
@@ -203,6 +204,7 @@ daemon or a wrong binary path.
 - close out the suite-cost plan at v0.141.3
 
 ### Infrastructure
+- **coverage:** report the repo's own directories, not the temp copies tests execute
 - declare the test dependencies as a PEP 735 group; pause W27 with every decision ruled
 - cross-check the sahjhan pin, and give --all a ledger per run
 - direct unit coverage for the delta's new enforcement predicates
