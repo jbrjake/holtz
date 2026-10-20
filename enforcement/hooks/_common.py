@@ -232,6 +232,16 @@ def read_hook_eval(
     binary does not know exits 2 and writes only to stderr), bytes that are
     not JSON, and JSON that is not an object — each named with the exit code
     and, when stdout is empty, the engine's own first line of stderr.
+
+    A config or ledger that fails to load is not a decision either: no rule
+    ran. The engine answers ``ok: false`` with no ``data`` — ``config_error``
+    (exit 3) for a ``protocol.toml`` that does not parse, a missing config dir
+    or an unregistered ledger; ``integrity_error`` (exit 2) for a ledger never
+    initialised or a sealed config file edited since. ``ok`` is checked before
+    ``data`` is unwrapped, because the unwrap falls back to the whole reply and
+    the hooks default a missing ``decision`` to ``allow``. The engine's message
+    is passed on whole: for a broken seal it is the only place the ways past
+    are written.
     """
     def unusable(detail: str) -> tuple[None, str]:
         return None, f"Hook eval returned no usable reply (exit {returncode}: {detail})"
@@ -243,6 +253,15 @@ def read_hook_eval(
         data = json.loads(stdout)
     except ValueError:
         return unusable("stdout is not JSON")
+    if isinstance(data, dict) and data.get("ok") is False:
+        error = data.get("error")
+        error = error if isinstance(error, dict) else {}
+        code = str(error.get("code") or "ok: false")
+        message = str(error.get("message") or "").strip()
+        return None, (
+            f"Hook eval ran no rules (exit {returncode}, {code})"
+            + (f": {message}" if message else "")
+        )
     payload = data.get("data", data) if isinstance(data, dict) else data
     if not isinstance(payload, dict):
         return unusable(f"a JSON {type(payload).__name__} where an object belongs")

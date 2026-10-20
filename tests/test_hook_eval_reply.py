@@ -12,6 +12,12 @@ correctly, so the two hooks disagreed about one command's output.
 A JSON *list* on stdout reached ``data.get`` in both hooks and raised
 ``AttributeError``, outside either except tuple: a traceback out of a hook.
 
+A config or ledger that fails to load is not a decision. The engine answers
+``ok: false`` with ``config_error`` or ``integrity_error`` and no ``data``, and
+a reader that falls back to the whole reply for a missing ``data`` takes that
+envelope for a payload whose ``decision`` defaults to ``allow`` — the same
+silence, for a malformed ``protocol.toml`` or an unopened ledger.
+
 The same two hooks disagreed about who is asking. `pre_tool_hook` always
 passes ``--agent-id``; `post_tool_hook` never did, so every PostToolUse rule
 and monitor was structurally run-global. Dormant only because no PostToolUse
@@ -20,12 +26,14 @@ that dormancy from going live silently.
 
 Every test drives the real hook as a subprocess against a stand-in binary at
 the path `sahjhan_binary()` resolves, which logs its argv so the test can read
-exactly what each hook invoked.
+exactly what each hook invoked — except the last class, which puts the pinned
+engine itself at that path, so the replies are the ones holtz ships against.
 """
 from __future__ import annotations
 
 import os
 import platform
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -55,7 +63,29 @@ UNUSABLE_REPLIES = {
     "json_list": "echo '[]'\n    exit 0",
     "data_is_a_list": "echo '{\"data\": []}'\n    exit 0",
     "not_json": "echo 'not json'\n    exit 0",
+    "config_error": (
+        "echo '{\"command\":\"hook_eval\",\"error\":{\"code\":\"config_error\","
+        "\"message\":\"Configuration error: cannot read enforcement/protocol.toml: "
+        "No such file or directory (os error 2)\"},\"ok\":false,\"schema_version\":1}'"
+        "\n    exit 3"
+    ),
+    "integrity_error": (
+        "echo '{\"command\":\"hook_eval\",\"error\":{\"code\":\"integrity_error\","
+        "\"message\":\"Cannot open ledger: I/O error: No such file or directory "
+        "(os error 2)\"},\"ok\":false,\"schema_version\":1}'\n    exit 2"
+    ),
 }
+
+#: The engine's refusal for a sealed config edited after ``init``, as sahjhan
+#: prints it: the files that moved, then the only two ways past. ``printf %s``
+#: rather than ``echo``, which expands the JSON's ``\n`` escapes under dash.
+SEAL_REFUSAL = (
+    "printf '%s\\n' '{\"command\":\"hook_eval\",\"error\":{\"code\":\"integrity_error\","
+    "\"message\":\"config integrity violation:\\n  - states.toml (expected: "
+    "f51f63fb0fbf..., found: d814618523d0...)\\n\\nRun \\u0027sahjhan reseal\\u0027 "
+    "with a valid session key to update the seal,\\nor restore the files above to "
+    "their sealed contents.\"},\"ok\":false,\"schema_version\":1}'\n    exit 2"
+)
 
 #: What the engine prints for an Edit that the auto-record rule matches.
 SUCCESS_REPLY = (
@@ -261,3 +291,88 @@ class TestTheTwoHooksAgree:
             assert "--agent-id" in argv, f"{hook} did not pass --agent-id: {argv}"
             seen[hook] = argv[argv.index("--agent-id") + 1]
         assert seen == {"pre_tool_hook.py": expected, "post_tool_hook.py": expected}
+
+
+@pytest.mark.hook_e2e
+class TestALoadFailureIsNotAnAllow:
+    """Item 39's config-fault half — ``ok: false`` is a reason, never a payload."""
+
+    @pytest.mark.parametrize(
+        ("reply", "exit_code"), [("config_error", 3), ("integrity_error", 2)],
+    )
+    def test_the_warning_names_the_exit_the_code_and_the_engine_message(
+        self, live_audit, reply, exit_code,
+    ):
+        """No rule ran, and the warning says which load failed and why."""
+        _stand_in(live_audit, UNUSABLE_REPLIES[reply])
+        output = _run("post_tool_hook.py", live_audit, _edit_event(live_audit))
+        context = _post_context(output)
+        assert output["_returncode"] == 0, output
+        assert DEGRADED in context, f"a load failure read as an allow: {output}"
+        assert f"exit {exit_code}" in context, context
+        assert reply in context, context
+        assert "No such file or directory" in context, (
+            "the engine's own message should reach the model — it names the "
+            "file that did not load"
+        )
+
+    def test_the_seal_refusal_carries_the_engine_s_way_past_it(self, live_audit):
+        """A sealed file edited mid-audit blocks, and the block names the escape.
+
+        No holtz path reseals a ledger: ``reseal`` needs the session key. The
+        engine's message is the only place the two ways past are written, so
+        it reaches the model whole rather than as its first line, which is
+        just ``config integrity violation:``.
+        """
+        _stand_in(live_audit, SEAL_REFUSAL)
+        denial = _pre_denial(_run("pre_tool_hook.py", live_audit, _edit_event(live_audit)))
+        assert DEGRADED in denial, f"a seal refusal read as an allow: {denial!r}"
+        assert "states.toml" in denial, denial
+        assert "sahjhan reseal" in denial, denial
+        assert "restore the files above" in denial, denial
+
+
+def _pinned_engine() -> str:
+    """The sahjhan `_resolve.SAHJHAN_VERSION` names, fetched if it is missing."""
+    sys.path.insert(0, ENFORCEMENT_HOOKS_DIR)
+    from _resolve import ensure_sahjhan  # noqa: PLC0415
+
+    binary = ensure_sahjhan()
+    if not binary:
+        pytest.skip("sahjhan binary not available")
+    return binary
+
+
+@pytest.mark.slow
+@pytest.mark.hook_e2e
+class TestThePinnedEngineReportsALoadFailure:
+    """Driven — the pinned engine, a project whose config or ledger will not load.
+
+    The stand-ins above prove the hooks read ``ok: false`` as a failure; this
+    proves the engine holtz pins sends one. Against an engine that answers a
+    load failure with an allow, both hooks pass the call in silence.
+    """
+
+    @pytest.mark.parametrize(
+        ("project", "code"),
+        [("malformed_protocol", "config_error"), ("ledger_never_opened", "integrity_error")],
+    )
+    def test_both_hooks_degrade(self, live_audit, project, code):
+        config = live_audit / "enforcement"
+        config.mkdir()
+        if project == "malformed_protocol":
+            (config / "protocol.toml").write_text("garbage = [\n")
+        else:
+            for toml in Path(REPO_ROOT, "enforcement").glob("*.toml"):
+                shutil.copy(toml, config / toml.name)
+        bin_dir = live_audit / "bin"
+        bin_dir.mkdir()
+        # No version marker beside it, so `ensure_sahjhan` uses it as found.
+        (bin_dir / f"sahjhan-{_triple()}").symlink_to(_pinned_engine())
+
+        pre = _pre_denial(_run("pre_tool_hook.py", live_audit, _edit_event(live_audit)))
+        post = _post_context(_run("post_tool_hook.py", live_audit, _edit_event(live_audit)))
+        assert DEGRADED in pre, f"pre_tool_hook let the call through: {pre!r}"
+        assert DEGRADED in post, f"post_tool_hook said nothing: {post!r}"
+        assert code in pre, pre
+        assert pre.split(DEGRADED, 1)[1] == post.split(DEGRADED, 1)[1]
