@@ -589,17 +589,28 @@ def _schema_failures(events: list[dict], declared: dict) -> Counter[str]:
 
 
 def test_every_migrated_event_validates_against_events_toml(tmp_path):
-    """V4: field by field over every archive, not through a lax import."""
+    """V4: field by field over every archive, not through a lax import.
+
+    "The archive migrated" is judged per mapped directory this checkout has.
+    `recon/` is gitignored, so a clean clone holds fewer mapped runs than a
+    working copy, and no single event count is right for both.
+    """
     import tomllib
 
+    archive = _REPO / "docs" / "holtz" / "archive"
     declared = tomllib.loads((_REPO / "enforcement" / "events.toml").read_text())["events"]
     out = tmp_path / "out"
-    result = _migrate("--all", "--archive-root", str(_REPO / "docs" / "holtz" / "archive"),
-                      "--out-dir", str(out))
+    result = _migrate("--all", "--archive-root", str(archive), "--out-dir", str(out))
     assert result.returncode == 0, result.stderr
-    events = [json.loads(line) for path in sorted(out.iterdir())
-              for line in path.read_text().splitlines()]
-    assert len(events) > 2000, "the archive did not migrate"
+    present = {meta["run"] for name, meta in ARCHIVE_MAP.items() if (archive / name).is_dir()}
+    present |= {run for name, run in JUSTINE_MAP.items() if (archive / name).is_dir()}
+    assert present, "no mapped archive directory is in this checkout"
+    by_run = {int(path.stem.removeprefix("run-")): path.read_text().splitlines()
+              for path in out.iterdir()}
+    assert sorted(run for run in present if not by_run.get(run)) == [], (
+        "the archive did not migrate: these runs produced no events"
+    )
+    events = [json.loads(line) for lines in by_run.values() for line in lines]
     assert _schema_failures(events, declared) == Counter()
 
 

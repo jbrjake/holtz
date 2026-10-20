@@ -204,6 +204,7 @@ daemon or a wrong binary path.
 - close out the suite-cost plan at v0.141.3
 
 ### Infrastructure
+- **migrate:** judge the archive migration per directory, not by a local event count
 - **coverage:** report the repo's own directories, not the temp copies tests execute
 - declare the test dependencies as a PEP 735 group; pause W27 with every decision ruled
 - cross-check the sahjhan pin, and give --all a ledger per run
