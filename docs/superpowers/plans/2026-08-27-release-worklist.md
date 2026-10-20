@@ -4573,7 +4573,7 @@ property 2.**
 
 ## W25 — Items 11 + 39 + 49: escapes, the PostToolUse fall-through, and the lower tail
 
-**Status:** `DONE` — every box below ticked; **item 39's config-fault half waits on the sahjhan ask** recorded under the rulings, and is not a plan clause  ·  **Tier:** D  ·  **Depends on:** W05, W14 (they fix two of item 11's four gates)
+**Status:** `DONE` — every box below ticked; **item 39's config-fault half is closed by meshwork task `ho-rd651pw`**: sahjhan 0.28.1 answered the ask below, and holtz pins 0.28.2  ·  **Tier:** D  ·  **Depends on:** W05, W14 (they fix two of item 11's four gates)
 **Commit:** `fix(enforcement): every gate names an escape, and no hook degrades in silence`
 
 ### Four rulings — RULED (Jon, 2026-09-23)
@@ -4682,9 +4682,11 @@ out of a PostToolUse hook.
       whole reply); the reason names the exit code and, for an empty stdout,
       the engine's first stderr line — `exit 2: error: unexpected argument
       '--agent-id' found` is the difference between "reinstall" and "wait".
-      ⚠️ **This closes the version-fault half only.** The config-fault half is
-      the sahjhan ask recorded under the rulings above: `hook eval` exits 0
-      with a genuine-looking allow, so no reply-reading change can see it
+      ⚠️ **This step closes the version-fault half.** The config-fault half
+      needed the sahjhan ask recorded under the rulings above, and `ho-rd651pw`
+      closes it: on the pinned 0.28.2 engine a config or ledger that fails to
+      load is `ok: false` with `config_error` or `integrity_error`, and
+      `read_hook_eval` checks `ok` before unwrapping `data`
 - [x] **4.** (39) Guard the shape: `if not isinstance(data, dict)` before `.get`.
       **Prefer the explicit check** — the except tuple is already doing too much
       → explicit, in `read_hook_eval`, on the payload *after* unwrapping
